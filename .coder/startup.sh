@@ -114,18 +114,22 @@ if [ -d "zmanim-lab/web" ]; then
     print_success "Playwright browsers installed"
 fi
 
-# Step 7: Copy .env.example to .env files if they don't exist
-print_status "Setting up environment files..."
+# Step 7: Verify environment files exist (committed in repo)
+print_status "Verifying environment files..."
 cd zmanim-lab
 
-if [ -f ".env.example" ] && [ ! -f "api/.env" ]; then
-    cp .env.example api/.env
-    print_warning "Created api/.env from template - please configure with your credentials"
+if [ -f "api/.env" ]; then
+    print_success "api/.env found"
+else
+    print_warning "api/.env not found - copy from .env.example and configure"
+    [ -f ".env.example" ] && cp .env.example api/.env
 fi
 
-if [ -f ".env.example" ] && [ ! -f "web/.env.local" ]; then
-    cp .env.example web/.env.local
-    print_warning "Created web/.env.local from template - please configure with your credentials"
+if [ -f "web/.env.local" ]; then
+    print_success "web/.env.local found"
+else
+    print_warning "web/.env.local not found - copy from .env.example and configure"
+    [ -f ".env.example" ] && cp .env.example web/.env.local
 fi
 
 cd /home/coder/workspace
