@@ -1,6 +1,12 @@
 #!/bin/bash
 # Helper script to start all Zmanim Lab services in tmux
 
+# Check for --no-attach flag (used during Coder startup)
+NO_ATTACH=false
+if [ "$1" = "--no-attach" ]; then
+    NO_ATTACH=true
+fi
+
 echo "🚀 Starting Zmanim Lab services in tmux..."
 
 # Get the project root directory
@@ -68,5 +74,7 @@ echo "  - Web App: http://localhost:${WEB_PORT:-3001}"
 echo "  - Go API:  http://localhost:8080"
 echo ""
 
-# Attach to the session
-tmux attach -t zmanim
+# Attach to the session (unless --no-attach was passed)
+if [ "$NO_ATTACH" = false ]; then
+    tmux attach -t zmanim
+fi

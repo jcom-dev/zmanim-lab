@@ -179,3 +179,19 @@ echo "  - Epics: docs/epics.md"
 echo "  - README: README.md"
 echo ""
 echo "=========================================="
+
+# Step 10: Auto-start services
+print_status "Starting services in background..."
+cd /home/coder/workspace/zmanim-lab
+if [ -f ".coder/start-services.sh" ]; then
+    chmod +x .coder/start-services.sh
+    ./.coder/start-services.sh --no-attach
+    print_success "Services started in tmux session 'zmanim'"
+    echo ""
+    echo "🎯 Services are now running!"
+    echo "   - Attach to tmux: tmux attach -t zmanim"
+    echo "   - View API logs: tmux select-window -t zmanim:api"
+    echo "   - View Web logs: tmux select-window -t zmanim:web"
+else
+    print_warning "start-services.sh not found - start services manually"
+fi
