@@ -63,7 +63,7 @@ fi
 # Step 3: Install Supabase CLI
 print_status "Installing Supabase CLI..."
 if ! command -v supabase &> /dev/null; then
-    npm install -g supabase
+    sudo npm install -g supabase
     print_success "Supabase CLI installed"
 else
     print_success "Supabase CLI already installed"
