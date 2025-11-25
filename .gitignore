@@ -29,10 +29,6 @@ dist/
 .env.test.local
 .env.production.local
 
-# Allow dev environment files (committed for Coder workspace)
-!api/.env
-!web/.env.local
-
 # Logs
 npm-debug.log*
 yarn-debug.log*
