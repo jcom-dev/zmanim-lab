@@ -74,7 +74,7 @@ cd web && npm run dev -- -p 3001
 - Go 1.25.4 - Backend development
 - Node.js 24.x LTS (Krypton) - Frontend development
 - npm 10+ - Package manager
-- Supabase CLI - Database migrations
+- Supabase CLI (via `npx supabase`) - Database migrations
 - Playwright 1.56+ - E2E testing (Chromium)
 - tmux - Service management
 
@@ -144,7 +144,7 @@ Coder Workspace
     ├── Go 1.25.4
     ├── Node.js 24.x LTS
     ├── Playwright 1.56+
-    └── Supabase CLI
+    └── Supabase CLI (npx)
 
 External Services:
 ├── Supabase (PostgreSQL)

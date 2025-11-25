@@ -60,16 +60,7 @@ else
     print_success "Node.js 24.x LTS already installed ($(node --version))"
 fi
 
-# Step 3: Install Supabase CLI
-print_status "Installing Supabase CLI..."
-if ! command -v supabase &> /dev/null; then
-    sudo npm install -g supabase
-    print_success "Supabase CLI installed"
-else
-    print_success "Supabase CLI already installed"
-fi
-
-# Step 4: Clone repository if it doesn't exist (monorepo)
+# Step 3: Clone repository if it doesn't exist (monorepo)
 print_status "Checking repository..."
 
 # Add GitHub to known hosts
@@ -96,7 +87,7 @@ if [ -n "${ZMANIM_BRANCH}" ] && [ "${ZMANIM_BRANCH}" != "main" ]; then
     cd /home/coder/workspace
 fi
 
-# Step 5: Install Go dependencies
+# Step 4: Install Go dependencies
 print_status "Installing Go dependencies..."
 if [ -d "zmanim-lab/api" ]; then
     cd zmanim-lab/api
@@ -105,7 +96,7 @@ if [ -d "zmanim-lab/api" ]; then
     print_success "Go dependencies installed"
 fi
 
-# Step 6: Install Node.js dependencies
+# Step 5: Install Node.js dependencies
 print_status "Installing Node.js dependencies..."
 if [ -d "zmanim-lab/web" ]; then
     cd zmanim-lab/web
@@ -114,7 +105,7 @@ if [ -d "zmanim-lab/web" ]; then
     print_success "Web dependencies installed"
 fi
 
-# Step 7: Install Playwright browsers for E2E testing
+# Step 6: Install Playwright browsers for E2E testing
 print_status "Installing Playwright browsers..."
 if [ -d "zmanim-lab/web" ]; then
     cd zmanim-lab/web
@@ -123,7 +114,7 @@ if [ -d "zmanim-lab/web" ]; then
     print_success "Playwright browsers installed"
 fi
 
-# Step 8: Copy .env.example to .env files if they don't exist
+# Step 7: Copy .env.example to .env files if they don't exist
 print_status "Setting up environment files..."
 cd zmanim-lab
 
@@ -139,7 +130,7 @@ fi
 
 cd /home/coder/workspace
 
-# Step 9: Install tmux for service management
+# Step 8: Install tmux for service management
 print_status "Installing tmux..."
 if ! command -v tmux &> /dev/null; then
     sudo apt-get update -qq && sudo apt-get install -y tmux > /dev/null 2>&1
@@ -148,7 +139,7 @@ else
     print_success "tmux already installed"
 fi
 
-# Step 10: Display status
+# Step 9: Display status
 echo ""
 echo "=========================================="
 echo "✅ Zmanim Lab Development Environment Ready!"
@@ -158,7 +149,7 @@ echo "📦 Installed:"
 echo "  - Go $(go version 2>/dev/null | awk '{print $3}' || echo 'not found')"
 echo "  - Node.js $(node --version 2>/dev/null || echo 'not found')"
 echo "  - npm $(npm --version 2>/dev/null || echo 'not found')"
-echo "  - Supabase CLI $(supabase --version 2>/dev/null || echo 'not found')"
+echo "  - Supabase CLI (via npx supabase)"
 echo "  - Playwright (Chromium)"
 echo ""
 echo "🗄️  External Services (configure in .env):"
