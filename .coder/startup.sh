@@ -165,7 +165,19 @@ else
     print_success "tmux already installed"
 fi
 
-# Step 9: Display status
+# Step 9: Install Claude Code CLI
+print_status "Installing Claude Code..."
+if ! command -v claude &> /dev/null; then
+    curl -fsSL https://claude.ai/install.sh | bash
+    # Add to PATH for current session
+    export PATH="$HOME/.claude/bin:$PATH"
+    echo 'export PATH="$HOME/.claude/bin:$PATH"' >> ~/.bashrc
+    print_success "Claude Code installed"
+else
+    print_success "Claude Code already installed"
+fi
+
+# Step 10: Display status
 echo ""
 echo "=========================================="
 echo "✅ Zmanim Lab Development Environment Ready!"
@@ -175,6 +187,7 @@ echo "📦 Installed:"
 echo "  - Go $(go version 2>/dev/null | awk '{print $3}' || echo 'not found')"
 echo "  - Node.js $(node --version 2>/dev/null || echo 'not found')"
 echo "  - npm $(npm --version 2>/dev/null || echo 'not found')"
+echo "  - Claude Code $(claude --version 2>/dev/null || echo 'not found')"
 echo "  - Supabase CLI (via npx supabase)"
 echo "  - Playwright (Chromium)"
 echo ""
@@ -206,7 +219,7 @@ echo "  - README: README.md"
 echo ""
 echo "=========================================="
 
-# Step 10: Auto-start services
+# Step 11: Auto-start services
 print_status "Starting services in background..."
 cd /home/coder/workspace/zmanim-lab
 if [ -f ".coder/start-services.sh" ]; then
