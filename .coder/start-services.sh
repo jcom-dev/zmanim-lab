@@ -7,6 +7,15 @@ if [ "$1" = "--no-attach" ]; then
     NO_ATTACH=true
 fi
 
+# Install Claude CLI if not installed
+if ! command -v claude &> /dev/null; then
+    echo "📦 Installing Claude CLI..."
+    curl -fsSL https://claude.ai/install.sh | bash
+    echo "✅ Claude CLI installed"
+else
+    echo "✅ Claude CLI already installed"
+fi
+
 echo "🚀 Starting Zmanim Lab services in tmux..."
 
 # Get the project root directory

@@ -1,0 +1,24 @@
+{
+  "name": "zmanim-lab-tests",
+  "version": "1.0.0",
+  "description": "E2E tests for Zmanim Lab using Playwright",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:ui": "playwright test --ui",
+    "test:debug": "playwright test --debug",
+    "test:chromium": "playwright test --project=chromium",
+    "test:mobile": "playwright test --project=mobile-chrome",
+    "report": "playwright show-report test-results/html-report",
+    "install:browsers": "playwright install chromium"
+  },
+  "keywords": ["playwright", "e2e", "testing", "zmanim"],
+  "author": "Zmanim Lab",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "@playwright/test": "^1.57.0",
+    "@types/node": "^24.10.1",
+    "typescript": "^5.9.3"
+  }
+}

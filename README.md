@@ -42,6 +42,10 @@ zmanim-lab/
 │   ├── internal/       # Business logic
 │   ├── Dockerfile
 │   └── fly.toml
+├── tests/              # E2E tests (Playwright)
+│   ├── e2e/            # Test specs
+│   ├── playwright.config.ts
+│   └── TESTING.md      # Testing guide
 ├── supabase/           # Database migrations
 │   └── migrations/
 ├── docs/               # Documentation
@@ -65,7 +69,53 @@ coder templates push zmanim-lab --directory .coder
 coder create zmanim-lab-dev --template zmanim-lab
 ```
 
-See [.coder/README.md](./.coder/README.md) for details.
+#### Starting/Restarting Services in Coder
+
+Services run in a tmux session named `zmanim` with windows for API and Web.
+
+**Start both services:**
+```bash
+./.coder/start-services.sh
+```
+
+**Restart all services:**
+```bash
+tmux kill-session -t zmanim
+./.coder/start-services.sh
+```
+
+**Restart individual service:**
+```bash
+# Restart API only
+tmux send-keys -t zmanim:api C-c
+tmux send-keys -t zmanim:api "go run cmd/api/main.go" Enter
+
+# Restart Web only
+tmux send-keys -t zmanim:web C-c
+tmux send-keys -t zmanim:web "npm run dev" Enter
+```
+
+**View logs / attach to tmux:**
+```bash
+tmux attach -t zmanim      # Attach to session
+# Ctrl+B then 0  -> API logs
+# Ctrl+B then 1  -> Web logs
+# Ctrl+B then D  -> Detach
+```
+
+**Service URLs:**
+| Service | Port | URL |
+|---------|------|-----|
+| Web App | 3001 | http://localhost:3001 |
+| Go API  | 8080 | http://localhost:8080 |
+
+**Health check:**
+```bash
+curl http://localhost:8080/health   # API
+curl http://localhost:3001          # Web
+```
+
+See [.coder/README.md](./.coder/README.md) for detailed tmux usage.
 
 ### Option 2: Local Development
 
@@ -140,6 +190,51 @@ fly deploy
 
 Connect repository to Vercel with root directory set to `web/`.
 
+## Testing
+
+Zmanim Lab uses **Playwright** for E2E testing with support for AI-assisted testing via MCP.
+
+### Quick Start
+
+```bash
+# Install test dependencies
+cd tests
+npm install
+npx playwright install chromium
+
+# Run all tests (requires app running on localhost:3001)
+npx playwright test
+
+# Run tests with UI mode
+npx playwright test --ui
+
+# View test report
+npx playwright show-report test-results/html-report
+```
+
+### Test Structure
+
+```
+tests/
+├── playwright.config.ts    # Playwright configuration
+├── e2e/                    # E2E test specs
+│   ├── home.spec.ts        # Home page tests
+│   ├── auth.spec.ts        # Authentication tests
+│   └── helpers/            # Test utilities & MCP helpers
+└── test-results/           # Output (gitignored)
+```
+
+### Common Commands
+
+| Command | Description |
+|---------|-------------|
+| `npx playwright test` | Run all tests |
+| `npx playwright test --headed` | Run with visible browser |
+| `npx playwright test --debug` | Debug mode |
+| `npx playwright test home.spec.ts` | Run specific file |
+
+For comprehensive testing documentation, see [tests/TESTING.md](./tests/TESTING.md).
+
 ## Documentation
 
 See [docs/](./docs/) for comprehensive documentation:
@@ -149,6 +244,7 @@ See [docs/](./docs/) for comprehensive documentation:
 - [API Reference](./docs/api-reference.md) - REST endpoints
 - [Data Models](./docs/data-models.md) - Database schema
 - [Deployment](./docs/deployment.md) - Deployment guide
+- [Testing Guide](./tests/TESTING.md) - E2E testing with Playwright
 
 ## Tech Stack
 

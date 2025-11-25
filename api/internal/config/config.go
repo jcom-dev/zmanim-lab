@@ -34,7 +34,9 @@ type DatabaseConfig struct {
 
 // JWTConfig holds JWT configuration
 type JWTConfig struct {
-	Secret string
+	Secret   string
+	JWKSUrl  string
+	Issuer   string
 }
 
 // CORSConfig holds CORS configuration
@@ -65,10 +67,12 @@ func Load() (*Config, error) {
 			SupabaseServiceKey: getEnv("SUPABASE_SERVICE_KEY", ""),
 		},
 		JWT: JWTConfig{
-			Secret: getEnv("JWT_SECRET", ""),
+			Secret:  getEnv("JWT_SECRET", ""),
+			JWKSUrl: getEnv("CLERK_JWKS_URL", ""),
+			Issuer:  getEnv("CLERK_ISSUER", ""),
 		},
 		CORS: CORSConfig{
-			AllowedOrigins: getEnvSlice("ALLOWED_ORIGINS", []string{"http://localhost:3000"}),
+			AllowedOrigins: getEnvSlice("ALLOWED_ORIGINS", []string{"http://localhost:3000", "http://localhost:3001"}),
 		},
 		RateLimit: RateLimitConfig{
 			Requests: getEnvInt("RATE_LIMIT_REQUESTS", 60),

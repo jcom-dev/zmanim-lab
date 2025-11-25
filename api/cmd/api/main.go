@@ -61,19 +61,60 @@ func main() {
 	// Health check endpoint
 	r.Get("/health", h.HealthCheck)
 
+	// Initialize auth middleware
+	authMiddleware := custommw.NewAuthMiddleware(cfg.JWT.JWKSUrl, cfg.JWT.Issuer)
+
+	// Initialize rate limiter
+	rateLimiter := custommw.NewDefaultRateLimiter()
+	defer rateLimiter.Stop()
+
 	// API routes
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Use(custommw.ContentType("application/json"))
 
-		// Publishers
-		r.Get("/publishers", h.GetPublishers)
-		r.Get("/publishers/{id}", h.GetPublisher)
+		// Public routes (with optional auth for rate limiting)
+		r.Group(func(r chi.Router) {
+			r.Use(authMiddleware.OptionalAuth)
+			r.Use(rateLimiter.Middleware)
 
-		// Locations
-		r.Get("/locations", h.GetLocations)
+			// Publishers
+			r.Get("/publishers", h.GetPublishers)
+			r.Get("/publishers/{id}", h.GetPublisher)
 
-		// Zmanim calculations
-		r.Post("/zmanim", h.CalculateZmanim)
+			// Locations
+			r.Get("/locations", h.GetLocations)
+
+			// Zmanim calculations
+			r.Post("/zmanim", h.CalculateZmanim)
+		})
+
+		// Publisher protected routes
+		r.Route("/publisher", func(r chi.Router) {
+			r.Use(authMiddleware.RequireRole("publisher"))
+			r.Get("/profile", h.GetPublisherProfile)
+			r.Put("/profile", h.UpdatePublisherProfile)
+			r.Get("/algorithm", h.GetPublisherAlgorithm)
+			r.Put("/algorithm", h.UpdatePublisherAlgorithm)
+		})
+
+		// Admin protected routes
+		r.Route("/admin", func(r chi.Router) {
+			r.Use(authMiddleware.RequireRole("admin"))
+
+			// Publisher management
+			r.Get("/publishers", h.AdminListPublishers)
+			r.Post("/publishers", h.AdminCreatePublisher)
+			r.Put("/publishers/{id}/verify", h.AdminVerifyPublisher)
+			r.Put("/publishers/{id}/suspend", h.AdminSuspendPublisher)
+			r.Put("/publishers/{id}/reactivate", h.AdminReactivatePublisher)
+
+			// Statistics
+			r.Get("/stats", h.AdminGetStats)
+
+			// System configuration
+			r.Get("/config", h.AdminGetConfig)
+			r.Put("/config", h.AdminUpdateConfig)
+		})
 	})
 
 	// Create server

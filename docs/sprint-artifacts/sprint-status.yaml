@@ -38,8 +38,8 @@ development_status:
   # Epic 1: Zmanim Lab MVP (11 stories, 42 FRs)
   epic-1: contexted
   1-1-coder-development-environment: review
-  1-2-foundation-authentication: ready-for-dev
-  1-3-admin-publisher-management: ready-for-dev
+  1-2-foundation-authentication: review
+  1-3-admin-publisher-management: done
   1-4-publisher-profile: ready-for-dev
   1-5-global-location-system: ready-for-dev
   1-6-publisher-coverage: ready-for-dev

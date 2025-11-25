@@ -55,18 +55,6 @@ func Timeout(timeout time.Duration) func(next http.Handler) http.Handler {
 	}
 }
 
-// RateLimiter is a simple rate limiting middleware
-// Note: This is a basic implementation. For production, consider using a more robust solution
-func RateLimiter(requestsPerMinute int) func(next http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Basic rate limiting logic would go here
-			// For production, use a proper rate limiting library or service
-			next.ServeHTTP(w, r)
-		})
-	}
-}
-
 // ContentType sets the Content-Type header
 func ContentType(contentType string) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {

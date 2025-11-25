@@ -37,16 +37,15 @@ func (h *Handlers) HealthCheck(w http.ResponseWriter, r *http.Request) {
 	dbStatus := "ok"
 	if err := h.db.Health(ctx); err != nil {
 		dbStatus = "error: " + err.Error()
-		w.WriteHeader(http.StatusServiceUnavailable)
+		RespondServiceUnavailable(w, r, "Database health check failed")
+		return
 	}
 
-	response := models.HealthResponse{
-		Status:   "ok",
-		Database: dbStatus,
-		Version:  "1.0.0",
-	}
-
-	respondJSON(w, http.StatusOK, response)
+	RespondJSON(w, r, http.StatusOK, map[string]interface{}{
+		"status":   "ok",
+		"database": dbStatus,
+		"version":  "1.0.0",
+	})
 }
 
 // GetPublishers returns a list of publishers
@@ -77,11 +76,11 @@ func (h *Handlers) GetPublishers(w http.ResponseWriter, r *http.Request) {
 
 	publishers, err := h.publisherService.GetPublishers(ctx, page, pageSize, regionPtr)
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, "Failed to get publishers", err)
+		RespondInternalError(w, r, "Failed to get publishers")
 		return
 	}
 
-	respondJSON(w, http.StatusOK, publishers)
+	RespondJSON(w, r, http.StatusOK, publishers)
 }
 
 // GetPublisher returns a single publisher by ID
@@ -90,17 +89,17 @@ func (h *Handlers) GetPublisher(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
 	if id == "" {
-		respondError(w, http.StatusBadRequest, "Publisher ID is required", nil)
+		RespondValidationError(w, r, "Publisher ID is required", nil)
 		return
 	}
 
 	publisher, err := h.publisherService.GetPublisherByID(ctx, id)
 	if err != nil {
-		respondError(w, http.StatusNotFound, "Publisher not found", err)
+		RespondNotFound(w, r, "Publisher not found")
 		return
 	}
 
-	respondJSON(w, http.StatusOK, publisher)
+	RespondJSON(w, r, http.StatusOK, publisher)
 }
 
 // CalculateZmanim calculates zmanim for a given location and date
@@ -109,34 +108,37 @@ func (h *Handlers) CalculateZmanim(w http.ResponseWriter, r *http.Request) {
 
 	var req models.ZmanimRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		respondError(w, http.StatusBadRequest, "Invalid request body", err)
+		RespondBadRequest(w, r, "Invalid request body")
 		return
 	}
 
 	// Validate request
+	validationErrors := make(map[string]string)
 	if req.Date == "" {
-		respondError(w, http.StatusBadRequest, "Date is required", nil)
-		return
+		validationErrors["date"] = "Date is required"
 	}
 	if req.Latitude < -90 || req.Latitude > 90 {
-		respondError(w, http.StatusBadRequest, "Invalid latitude", nil)
-		return
+		validationErrors["latitude"] = "Latitude must be between -90 and 90"
 	}
 	if req.Longitude < -180 || req.Longitude > 180 {
-		respondError(w, http.StatusBadRequest, "Invalid longitude", nil)
+		validationErrors["longitude"] = "Longitude must be between -180 and 180"
+	}
+	if len(validationErrors) > 0 {
+		RespondValidationError(w, r, "Invalid request parameters", validationErrors)
 		return
 	}
+
 	if req.Timezone == "" {
 		req.Timezone = "UTC"
 	}
 
 	response, err := h.zmanimService.CalculateZmanim(ctx, &req)
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, "Failed to calculate zmanim", err)
+		RespondInternalError(w, r, "Failed to calculate zmanim")
 		return
 	}
 
-	respondJSON(w, http.StatusOK, response)
+	RespondJSON(w, r, http.StatusOK, response)
 }
 
 // GetLocations returns a list of predefined locations
@@ -156,7 +158,7 @@ func (h *Handlers) GetLocations(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := h.db.Pool.Query(ctx, query)
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, "Failed to get locations", err)
+		RespondInternalError(w, r, "Failed to get locations")
 		return
 	}
 	defer rows.Close()
@@ -177,7 +179,7 @@ func (h *Handlers) GetLocations(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	respondJSON(w, http.StatusOK, map[string]interface{}{
+	RespondJSON(w, r, http.StatusOK, map[string]interface{}{
 		"locations": locations,
 		"total":     len(locations),
 	})
@@ -212,4 +214,44 @@ func parseIntParam(s string) (int, error) {
 	var i int
 	err := json.Unmarshal([]byte(s), &i)
 	return i, err
+}
+
+// GetPublisherProfile returns the current publisher's profile
+func (h *Handlers) GetPublisherProfile(w http.ResponseWriter, r *http.Request) {
+	// TODO: Implement after publisher model is complete
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"data": map[string]interface{}{
+			"message": "Publisher profile endpoint - implementation pending",
+		},
+	})
+}
+
+// UpdatePublisherProfile updates the current publisher's profile
+func (h *Handlers) UpdatePublisherProfile(w http.ResponseWriter, r *http.Request) {
+	// TODO: Implement after publisher model is complete
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"data": map[string]interface{}{
+			"message": "Publisher profile update endpoint - implementation pending",
+		},
+	})
+}
+
+// GetPublisherAlgorithm returns the current publisher's algorithm
+func (h *Handlers) GetPublisherAlgorithm(w http.ResponseWriter, r *http.Request) {
+	// TODO: Implement after algorithm model is complete
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"data": map[string]interface{}{
+			"message": "Publisher algorithm endpoint - implementation pending",
+		},
+	})
+}
+
+// UpdatePublisherAlgorithm updates the current publisher's algorithm
+func (h *Handlers) UpdatePublisherAlgorithm(w http.ResponseWriter, r *http.Request) {
+	// TODO: Implement after algorithm model is complete
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"data": map[string]interface{}{
+			"message": "Publisher algorithm update endpoint - implementation pending",
+		},
+	})
 }

@@ -78,6 +78,18 @@ variable "clerk_secret_key" {
   description = "Clerk secret key"
 }
 
+variable "clerk_jwks_url" {
+  type        = string
+  default     = "https://engaged-sloth-39.clerk.accounts.dev/.well-known/jwks.json"
+  description = "Clerk JWKS URL for JWT verification"
+}
+
+variable "clerk_issuer" {
+  type        = string
+  default     = "https://engaged-sloth-39.clerk.accounts.dev"
+  description = "Clerk issuer for JWT verification"
+}
+
 # Workspace metadata
 data "coder_workspace" "me" {}
 
@@ -104,6 +116,8 @@ resource "docker_container" "workspace" {
     "UPSTASH_REDIS_REST_URL=${var.upstash_redis_rest_url}",
     "UPSTASH_REDIS_REST_TOKEN=${var.upstash_redis_rest_token}",
     "CLERK_SECRET_KEY=${var.clerk_secret_key}",
+    "CLERK_JWKS_URL=${var.clerk_jwks_url}",
+    "CLERK_ISSUER=${var.clerk_issuer}",
     "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${var.clerk_publishable_key}",
     "NEXT_PUBLIC_SUPABASE_URL=${var.supabase_url}",
     "NEXT_PUBLIC_SUPABASE_ANON_KEY=${var.supabase_anon_key}",
@@ -118,6 +132,19 @@ resource "docker_container" "workspace" {
 
   networks_advanced {
     name = docker_network.zmanim_network.name
+  }
+
+  # Expose service ports for direct access
+  ports {
+    internal = 8080
+    external = 8080
+    protocol = "tcp"
+  }
+
+  ports {
+    internal = 3001
+    external = 3001
+    protocol = "tcp"
   }
 
   # Mount workspace directory as a persistent volume
@@ -172,10 +199,12 @@ resource "coder_metadata" "workspace_info" {
 }
 
 # Web-based access to services
+# Note: These apps are proxied through Coder's web UI
+# For direct access, use port forwarding to localhost:3001 and localhost:8080
 resource "coder_app" "web_app" {
   agent_id     = coder_agent.main.id
   slug         = "web"
-  display_name = "Web App (Next.js)"
+  display_name = "Web App"
   url          = "http://localhost:3001"
   icon         = "/icon/nextjs.svg"
   subdomain    = false
@@ -191,8 +220,8 @@ resource "coder_app" "web_app" {
 resource "coder_app" "api" {
   agent_id     = coder_agent.main.id
   slug         = "api"
-  display_name = "Go API"
-  url          = "http://localhost:8080"
+  display_name = "API"
+  url          = "http://localhost:8080/health"
   icon         = "/icon/go.svg"
   subdomain    = false
   share        = "owner"

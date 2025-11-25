@@ -68,6 +68,37 @@ cd web && npm run dev -- -p 3001
 | Web App | 3001 | Next.js frontend |
 | Go API | 8080 | REST API backend |
 
+### Accessing Services
+
+**Option 1: Direct Port Access (Recommended for Development)**
+
+If using SSH or local Coder installation:
+```bash
+# Services are accessible directly on localhost
+http://localhost:3001  # Web App
+http://localhost:8080  # API
+```
+
+**Option 2: Via Coder Web UI**
+
+Coder provides app shortcuts in the workspace UI, but these are proxied through Coder's web server:
+- Web App: Click "Web App" in workspace UI
+- API: Click "API" in workspace UI
+
+Note: These proxied URLs may look like `http://localhost:3000/@username/workspace/apps/slug/` but will redirect to the actual service.
+
+**Option 3: Port Forwarding (If Remote)**
+
+If Coder is running remotely and ports aren't exposed:
+```bash
+# Forward ports from remote workspace to local machine
+coder port-forward zmanim-lab-dev --tcp 3001:3001 --tcp 8080:8080
+
+# Then access via localhost
+http://localhost:3001  # Web App
+http://localhost:8080  # API
+```
+
 ## Development Tools
 
 **Installed in Container:**
@@ -82,11 +113,96 @@ cd web && npm run dev -- -p 3001
 
 ```bash
 # API
-curl http://localhost:8080/api/health
+curl http://localhost:8080/health
 
 # Web
 curl http://localhost:3001
 ```
+
+## Reloading / Restarting Services
+
+Services run in a tmux session named `zmanim` with two windows:
+- Window 0: `api` - Go backend
+- Window 1: `web` - Next.js frontend (port 3001)
+
+### Quick Restart (Recommended)
+
+Use the restart script when services are unresponsive or you need a clean restart:
+
+```bash
+# From the project root
+./restart.sh
+```
+
+This script will:
+- Kill all running services (tmux session + stray processes)
+- Force-free ports 8080 and 3001 if still in use
+- Restart everything in the background
+- Run health checks to verify services are up
+
+### Manual Restart
+
+```bash
+# Kill the tmux session and restart everything
+tmux kill-session -t zmanim
+./.coder/start-services.sh
+```
+
+### Restart Individual Service (via tmux)
+
+```bash
+# Attach to tmux session
+tmux attach -t zmanim
+
+# Switch to the window you want to restart:
+#   Ctrl+B then 0  -> api window
+#   Ctrl+B then 1  -> web window
+
+# Kill the running process: Ctrl+C
+# Then restart by pressing Up arrow and Enter (re-runs last command)
+# Or manually type:
+#   API:  go run cmd/api/main.go
+#   Web:  npm run dev
+
+# Detach when done: Ctrl+B then D
+```
+
+### Restart Service Without Attaching
+
+```bash
+# Restart API only (window 0)
+tmux send-keys -t zmanim:api C-c
+tmux send-keys -t zmanim:api "cd /home/coder/workspace/zmanim-lab/api && go run cmd/api/main.go" Enter
+
+# Restart Web only (window 1)
+tmux send-keys -t zmanim:web C-c
+tmux send-keys -t zmanim:web "cd /home/coder/workspace/zmanim-lab/web && npm run dev" Enter
+```
+
+### View Service Logs
+
+```bash
+# Attach to see live output
+tmux attach -t zmanim
+
+# Switch windows inside tmux:
+#   Ctrl+B then 0  -> API logs
+#   Ctrl+B then 1  -> Web logs
+#   Ctrl+B then D  -> Detach (services keep running)
+```
+
+### After Code Changes
+
+- **Go API changes**: Restart required (no hot reload) - use tmux restart above
+- **Next.js changes**: Hot Module Replacement (HMR) auto-reloads, no restart needed
+- **package.json changes**: Run `npm install` in web window, then restart
+
+### Ports Reference
+
+| Service | Port | Notes |
+|---------|------|-------|
+| Next.js Web | **3001** | Frontend app (configured in package.json) |
+| Go API | 8080 | Backend REST API |
 
 ## Testing
 
@@ -103,6 +219,7 @@ cd web && npm run test:e2e
 - `zmanim-lab-workspace.tf` - Terraform workspace definition
 - `startup.sh` - Initialization script (runs on workspace creation)
 - `start-services.sh` - Helper to start web and API in tmux
+- `../restart.sh` - Quick restart script (kills all services and restarts)
 - `README.md` - This file
 
 ## Using Your Own Fork or Branch
@@ -133,8 +250,33 @@ cat api/.env
 cat web/.env.local
 ```
 
+### Services not responding / Need clean restart
+Use the restart script:
+```bash
+cd /home/coder/workspace/zmanim-lab
+./restart.sh
+```
+
+This will kill all services, free up ports, and restart everything cleanly.
+
+### Can't access services via Coder Web UI apps
+The app shortcuts in Coder's web UI proxy through paths like:
+- `http://localhost:3000/@username/workspace/apps/web/`
+- `http://localhost:3000/@username/workspace/apps/api/`
+
+For direct access without proxy:
+1. Use SSH: `coder ssh zmanim-lab-dev` then access `http://localhost:3001` and `http://localhost:8080`
+2. Use port forwarding: `coder port-forward zmanim-lab-dev --tcp 3001:3001 --tcp 8080:8080`
+3. If using VS Code: The ports should be automatically forwarded
+
 ### Database connection fails
 Verify Supabase connection string in `DATABASE_URL` is correct.
+
+### Frontend shows "No publishers available"
+This usually means:
+1. Backend API isn't running - use `./restart.sh` to restart services
+2. Missing environment variables in `api/.env` - check `CLERK_JWKS_URL` and `CLERK_ISSUER` are set
+3. CORS issue - default allows `localhost:3000` and `localhost:3001`, update `ALLOWED_ORIGINS` in `api/.env` if using different port
 
 ## Architecture
 

@@ -82,7 +82,10 @@ class ApiClient {
       throw new Error(error.message || `API Error: ${response.status}`);
     }
 
-    return response.json();
+    const json = await response.json();
+    // Unwrap the data field from the API response
+    // Backend returns: { data: {...}, meta: {...} }
+    return json.data !== undefined ? json.data : json;
   }
 
   // Health check
