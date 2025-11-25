@@ -30,6 +30,54 @@ variable "zmanim_repo" {
   description = "Zmanim Lab repository URL"
 }
 
+# Database (Supabase)
+variable "database_url" {
+  type        = string
+  sensitive   = true
+  description = "Supabase PostgreSQL connection string"
+}
+
+variable "supabase_url" {
+  type        = string
+  description = "Supabase API URL"
+}
+
+variable "supabase_anon_key" {
+  type        = string
+  sensitive   = true
+  description = "Supabase anonymous key"
+}
+
+variable "supabase_service_key" {
+  type        = string
+  sensitive   = true
+  description = "Supabase service role key"
+}
+
+# Caching (Upstash Redis)
+variable "upstash_redis_rest_url" {
+  type        = string
+  description = "Upstash Redis REST URL"
+}
+
+variable "upstash_redis_rest_token" {
+  type        = string
+  sensitive   = true
+  description = "Upstash Redis REST token"
+}
+
+# Authentication (Clerk)
+variable "clerk_publishable_key" {
+  type        = string
+  description = "Clerk publishable key"
+}
+
+variable "clerk_secret_key" {
+  type        = string
+  sensitive   = true
+  description = "Clerk secret key"
+}
+
 # Workspace metadata
 data "coder_workspace" "me" {}
 
@@ -48,12 +96,18 @@ resource "docker_container" "workspace" {
 
   env = [
     "CODER_AGENT_TOKEN=${coder_agent.main.token}",
-    # External services (set via .env file or Coder secrets)
-    # DATABASE_URL - Supabase PostgreSQL connection string
-    # UPSTASH_REDIS_REST_URL - Upstash Redis REST endpoint
-    # UPSTASH_REDIS_REST_TOKEN - Upstash Redis auth token
-    # CLERK_SECRET_KEY - Clerk backend secret
-    # NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY - Clerk frontend key
+    # External services (from Coder template variables)
+    "DATABASE_URL=${var.database_url}",
+    "SUPABASE_URL=${var.supabase_url}",
+    "SUPABASE_ANON_KEY=${var.supabase_anon_key}",
+    "SUPABASE_SERVICE_KEY=${var.supabase_service_key}",
+    "UPSTASH_REDIS_REST_URL=${var.upstash_redis_rest_url}",
+    "UPSTASH_REDIS_REST_TOKEN=${var.upstash_redis_rest_token}",
+    "CLERK_SECRET_KEY=${var.clerk_secret_key}",
+    "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${var.clerk_publishable_key}",
+    "NEXT_PUBLIC_SUPABASE_URL=${var.supabase_url}",
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY=${var.supabase_anon_key}",
+    "NEXT_PUBLIC_API_URL=http://localhost:8080",
     # Service ports
     "WEB_PORT=3001",
     "API_PORT=8080",
