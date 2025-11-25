@@ -9,11 +9,16 @@ import (
 // Publisher represents a zmanim calculation publisher
 type Publisher struct {
 	ID              string             `json:"id"`
+	ClerkUserID     *string            `json:"clerk_user_id,omitempty"`
 	Name            string             `json:"name"`
+	Organization    *string            `json:"organization,omitempty"`
+	Email           string             `json:"email"`
 	Description     string             `json:"description"`
-	Website         string             `json:"website"`
+	Bio             *string            `json:"bio,omitempty"`
+	Website         *string            `json:"website,omitempty"`
 	ContactEmail    string             `json:"contact_email"`
 	LogoURL         *string            `json:"logo_url,omitempty"`
+	Status          string             `json:"status"`
 	IsVerified      bool               `json:"is_verified"`
 	SubscriberCount int                `json:"subscriber_count"`
 	CreatedAt       time.Time          `json:"created_at"`
@@ -140,6 +145,15 @@ type PublisherListResponse struct {
 	Total      int         `json:"total"`
 	Page       int         `json:"page"`
 	PageSize   int         `json:"page_size"`
+}
+
+// PublisherProfileUpdateRequest represents a request to update publisher profile
+type PublisherProfileUpdateRequest struct {
+	Name         *string `json:"name,omitempty"`
+	Organization *string `json:"organization,omitempty"`
+	Email        *string `json:"email,omitempty"`
+	Website      *string `json:"website,omitempty"`
+	Bio          *string `json:"bio,omitempty"`
 }
 
 // ErrorResponse represents an API error response

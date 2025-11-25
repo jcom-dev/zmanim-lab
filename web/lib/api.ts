@@ -69,22 +69,13 @@ class ApiClient {
 
   private async fetch<T>(endpoint: string, options?: RequestInit): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
-    const requestHeaders = {
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    };
-
-    console.log('[API] Request URL:', url);
-    console.log('[API] Request headers:', JSON.stringify(requestHeaders));
-    console.log('[API] Request options:', JSON.stringify({ method: options?.method || 'GET', body: options?.body }));
-
     const response = await fetch(url, {
       ...options,
-      headers: requestHeaders,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options?.headers,
+      },
     });
-
-    console.log('[API] Response status:', response.status, response.statusText);
-    console.log('[API] Response headers:', JSON.stringify(Object.fromEntries(response.headers.entries())));
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({ message: response.statusText }));
@@ -94,10 +85,7 @@ class ApiClient {
     const json = await response.json();
     // Unwrap the data field from the API response
     // Backend returns: { data: {...}, meta: {...} }
-    console.log('[API] Raw response body:', JSON.stringify(json));
-    const result = json.data !== undefined ? json.data : json;
-    console.log('[API] Unwrapped result:', JSON.stringify(result));
-    return result;
+    return json.data !== undefined ? json.data : json;
   }
 
   // Health check

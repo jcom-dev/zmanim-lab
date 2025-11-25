@@ -2,7 +2,9 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jcom-dev/zmanim-lab/internal/db"
@@ -218,22 +220,157 @@ func parseIntParam(s string) (int, error) {
 
 // GetPublisherProfile returns the current publisher's profile
 func (h *Handlers) GetPublisherProfile(w http.ResponseWriter, r *http.Request) {
-	// TODO: Implement after publisher model is complete
-	respondJSON(w, http.StatusOK, map[string]interface{}{
-		"data": map[string]interface{}{
-			"message": "Publisher profile endpoint - implementation pending",
-		},
-	})
+	ctx := r.Context()
+
+	// Get user ID from context (set by auth middleware)
+	userID, ok := ctx.Value("user_id").(string)
+	if !ok || userID == "" {
+		RespondUnauthorized(w, r, "User ID not found in context")
+		return
+	}
+
+	// Query publisher by clerk_user_id
+	query := `
+		SELECT id, clerk_user_id, name, organization, email, description, bio,
+		       website, logo_url, status, created_at, updated_at
+		FROM publishers
+		WHERE clerk_user_id = $1
+	`
+
+	var publisher models.Publisher
+	err := h.db.Pool.QueryRow(ctx, query, userID).Scan(
+		&publisher.ID,
+		&publisher.ClerkUserID,
+		&publisher.Name,
+		&publisher.Organization,
+		&publisher.Email,
+		&publisher.Description,
+		&publisher.Bio,
+		&publisher.Website,
+		&publisher.LogoURL,
+		&publisher.Status,
+		&publisher.CreatedAt,
+		&publisher.UpdatedAt,
+	)
+
+	if err != nil {
+		if err.Error() == "no rows in result set" {
+			RespondNotFound(w, r, "Publisher profile not found")
+			return
+		}
+		RespondInternalError(w, r, "Failed to fetch publisher profile")
+		return
+	}
+
+	// Set derived fields
+	publisher.IsVerified = publisher.Status == "verified"
+	publisher.ContactEmail = publisher.Email
+
+	RespondJSON(w, r, http.StatusOK, publisher)
 }
 
 // UpdatePublisherProfile updates the current publisher's profile
 func (h *Handlers) UpdatePublisherProfile(w http.ResponseWriter, r *http.Request) {
-	// TODO: Implement after publisher model is complete
-	respondJSON(w, http.StatusOK, map[string]interface{}{
-		"data": map[string]interface{}{
-			"message": "Publisher profile update endpoint - implementation pending",
-		},
-	})
+	ctx := r.Context()
+
+	// Get user ID from context
+	userID, ok := ctx.Value("user_id").(string)
+	if !ok || userID == "" {
+		RespondUnauthorized(w, r, "User ID not found in context")
+		return
+	}
+
+	// Parse request body
+	var req models.PublisherProfileUpdateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		RespondBadRequest(w, r, "Invalid request body")
+		return
+	}
+
+	// Validate required fields
+	if req.Name != nil && *req.Name == "" {
+		RespondBadRequest(w, r, "Name cannot be empty")
+		return
+	}
+	if req.Email != nil && *req.Email == "" {
+		RespondBadRequest(w, r, "Email cannot be empty")
+		return
+	}
+
+	// Build update query dynamically
+	updates := []string{}
+	args := []interface{}{}
+	argCount := 1
+
+	if req.Name != nil {
+		updates = append(updates, "name = $"+fmt.Sprint(argCount))
+		args = append(args, *req.Name)
+		argCount++
+	}
+	if req.Organization != nil {
+		updates = append(updates, "organization = $"+fmt.Sprint(argCount))
+		args = append(args, *req.Organization)
+		argCount++
+	}
+	if req.Email != nil {
+		updates = append(updates, "email = $"+fmt.Sprint(argCount))
+		args = append(args, *req.Email)
+		argCount++
+	}
+	if req.Website != nil {
+		updates = append(updates, "website = $"+fmt.Sprint(argCount))
+		args = append(args, *req.Website)
+		argCount++
+	}
+	if req.Bio != nil {
+		updates = append(updates, "bio = $"+fmt.Sprint(argCount))
+		args = append(args, *req.Bio)
+		argCount++
+	}
+
+	if len(updates) == 0 {
+		RespondBadRequest(w, r, "No fields to update")
+		return
+	}
+
+	// Add updated_at
+	updates = append(updates, "updated_at = NOW()")
+
+	// Add user_id for WHERE clause
+	args = append(args, userID)
+
+	// Execute update
+	query := "UPDATE publishers SET " + strings.Join(updates, ", ") + " WHERE clerk_user_id = $" + fmt.Sprint(argCount) + " RETURNING id, clerk_user_id, name, organization, email, description, bio, website, logo_url, status, created_at, updated_at"
+
+	var publisher models.Publisher
+	err := h.db.Pool.QueryRow(ctx, query, args...).Scan(
+		&publisher.ID,
+		&publisher.ClerkUserID,
+		&publisher.Name,
+		&publisher.Organization,
+		&publisher.Email,
+		&publisher.Description,
+		&publisher.Bio,
+		&publisher.Website,
+		&publisher.LogoURL,
+		&publisher.Status,
+		&publisher.CreatedAt,
+		&publisher.UpdatedAt,
+	)
+
+	if err != nil {
+		if err.Error() == "no rows in result set" {
+			RespondNotFound(w, r, "Publisher profile not found")
+			return
+		}
+		RespondInternalError(w, r, "Failed to update publisher profile")
+		return
+	}
+
+	publisher.IsVerified = publisher.Status == "verified"
+	publisher.ContactEmail = publisher.Email
+
+	RespondJSON(w, r, http.StatusOK, publisher)
 }
 
 // GetPublisherAlgorithm returns the current publisher's algorithm

@@ -1,0 +1,123 @@
+'use client';
+
+import { Building2, Globe, Mail, CheckCircle } from 'lucide-react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+
+interface PublisherCardProps {
+  name: string;
+  organization?: string | null;
+  logoUrl?: string | null;
+  website?: string | null;
+  email?: string | null;
+  bio?: string | null;
+  isVerified?: boolean;
+  subscriberCount?: number;
+  onClick?: () => void;
+}
+
+export function PublisherCard({
+  name,
+  organization,
+  logoUrl,
+  website,
+  email,
+  bio,
+  isVerified = false,
+  subscriberCount = 0,
+  onClick,
+}: PublisherCardProps) {
+  const handleClick = () => {
+    if (onClick) {
+      onClick();
+    }
+  };
+
+  return (
+    <Card
+      className={`hover:shadow-lg transition-shadow ${onClick ? 'cursor-pointer' : ''}`}
+      onClick={handleClick}
+    >
+      <CardHeader>
+        <div className="flex items-start gap-4">
+          {/* Logo */}
+          <div className="flex-shrink-0">
+            {logoUrl ? (
+              <img
+                src={logoUrl}
+                alt={`${name} logo`}
+                className="w-16 h-16 rounded-lg object-cover border border-slate-200"
+              />
+            ) : (
+              <div className="w-16 h-16 rounded-lg border-2 border-dashed border-slate-300 flex items-center justify-center bg-slate-50">
+                <Building2 className="w-8 h-8 text-slate-400" />
+              </div>
+            )}
+          </div>
+
+          {/* Name and Organization */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <CardTitle className="text-xl truncate">{name}</CardTitle>
+              {isVerified && (
+                <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" title="Verified Publisher" />
+              )}
+            </div>
+            {organization && (
+              <CardDescription className="mt-1 truncate">
+                {organization}
+              </CardDescription>
+            )}
+          </div>
+        </div>
+      </CardHeader>
+
+      <CardContent className="space-y-3">
+        {/* Bio */}
+        {bio && (
+          <p className="text-sm text-slate-600 line-clamp-3">
+            {bio}
+          </p>
+        )}
+
+        {/* Contact Info */}
+        <div className="space-y-2">
+          {website && (
+            <div className="flex items-center gap-2 text-sm text-slate-600">
+              <Globe className="w-4 h-4 flex-shrink-0" />
+              <a
+                href={website}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-blue-600 hover:underline truncate"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {website.replace(/^https?:\/\//, '')}
+              </a>
+            </div>
+          )}
+          {email && (
+            <div className="flex items-center gap-2 text-sm text-slate-600">
+              <Mail className="w-4 h-4 flex-shrink-0" />
+              <a
+                href={`mailto:${email}`}
+                className="hover:text-blue-600 hover:underline truncate"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {email}
+              </a>
+            </div>
+          )}
+        </div>
+
+        {/* Subscriber Count */}
+        {subscriberCount > 0 && (
+          <div className="pt-2 border-t border-slate-200">
+            <p className="text-xs text-slate-500">
+              {subscriberCount.toLocaleString()} {subscriberCount === 1 ? 'subscriber' : 'subscribers'}
+            </p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}

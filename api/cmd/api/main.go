@@ -93,6 +93,7 @@ func main() {
 			r.Use(authMiddleware.RequireRole("publisher"))
 			r.Get("/profile", h.GetPublisherProfile)
 			r.Put("/profile", h.UpdatePublisherProfile)
+			r.Post("/logo", h.UploadPublisherLogo)
 			r.Get("/algorithm", h.GetPublisherAlgorithm)
 			r.Put("/algorithm", h.UpdatePublisherAlgorithm)
 		})

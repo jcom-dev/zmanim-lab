@@ -1,6 +1,6 @@
 # Story 1.4: Publisher Profile
 
-Status: ready-for-dev
+Status: in-progress
 
 ## Story
 
