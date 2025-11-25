@@ -6,14 +6,14 @@ RUN apk add --no-cache git ca-certificates
 
 WORKDIR /app
 
-# Copy go mod files from backend directory
-COPY backend/go.mod backend/go.sum ./
+# Copy go mod files
+COPY go.mod go.sum* ./
 
 # Download dependencies
 RUN go mod download
 
-# Copy backend source code
-COPY backend/ ./
+# Copy source code
+COPY . .
 
 # Build the application
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main ./cmd/api

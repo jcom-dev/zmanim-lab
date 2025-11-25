@@ -1,10 +1,12 @@
 # Dependencies
-/node_modules
+node_modules/
 /.pnp
 .pnp.js
 
 # Testing
 /coverage
+test-results/
+playwright-report/
 
 # Next.js
 /.next/
@@ -12,30 +14,64 @@
 
 # Production
 /build
+dist/
 
-# Misc
-.DS_Store
-*.pem
+# Environment files
+.env
+.env*.local
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 
-# Debug
+# Logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+*.log
 
-# Local env files
-.env*.local
-.env
+# OS
+.DS_Store
+*.pem
+Thumbs.db
 
-# Vercel
-.vercel
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.history/
 
 # TypeScript
 *.tsbuildinfo
 next-env.d.ts
 
-# IDE
-.vscode
-.idea
+# Vercel
+.vercel
+
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+/vendor/
+/tmp/
+
+# Browsers (Playwright downloads)
+chrome/
+firefox/
+webkit/
+
+# Supabase
+supabase/.temp/
+.supabase/
+
+# Temporary files
+*.tmp
+*.bak
 *.swp
-*.swo
-*~
+*~.nib

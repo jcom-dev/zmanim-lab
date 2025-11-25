@@ -35,6 +35,9 @@ export default function ZmanimDisplay({ geoLocation, date }: ZmanimDisplayProps)
   const [sunsetMethod, setSunsetMethod] = useState<SunsetMethod>('elevation');
   const [shaahZmanisMethod, setShaahZmanisMethod] = useState<ShaahZmanisMethod>('gra');
 
+  // Formula explanation state
+  const [expandedFormulas, setExpandedFormulas] = useState<Set<string>>(new Set());
+
   useEffect(() => {
     calculateTimes();
   }, [geoLocation, date, sunriseMethod, sunsetMethod, shaahZmanisMethod]);
@@ -279,909 +282,396 @@ export default function ZmanimDisplay({ geoLocation, date }: ZmanimDisplayProps)
     );
   }
 
+  const toggleFormula = (id: string) => {
+    const newExpanded = new Set(expandedFormulas);
+    if (newExpanded.has(id)) {
+      newExpanded.delete(id);
+    } else {
+      newExpanded.add(id);
+    }
+    setExpandedFormulas(newExpanded);
+  };
+
+  const getFormulaExplanation = (id: string): string => {
+    const explanations: Record<string, string> = {
+      sunrise: `Sunrise (Netz HaChamah) is calculated when the sun's geometric center crosses the horizon. We account for atmospheric refraction (which makes the sun appear higher than it actually is) and the sun's angular radius. This means we calculate for when the sun's center is 0.833° below the geometric horizon. At your latitude of ${geoLocation.getLatitude().toFixed(4)}°, we use the spherical trigonometry formula to find the hour angle when the sun reaches this position. The hour angle is then converted to clock time by dividing by 15° (since the Earth rotates 15° per hour) and adjusting for your longitude and the equation of time.`,
+      sunset: `Sunset (Shkiah) uses the same calculation as sunrise but for the western horizon. When the sun's center is 0.833° below the horizon in the west, we consider it sunset. The calculation accounts for your location's longitude of ${geoLocation.getLongitude().toFixed(4)}° and the daily variation in the sun's declination angle. The result tells us when the upper edge of the sun disappears below the horizon.`,
+      dayLength: `Day length is simply the time difference between sunrise and sunset. This represents the total duration of the halachic day. In Jewish law, this period is divided into 12 equal "hours" (shaos zmaniyos), regardless of the actual clock time duration. During summer months, these hours are longer than 60 minutes; during winter, they're shorter.`,
+      shaahZmanis: `A Shaah Zmanis (halachic hour) is one-twelfth of the day. We take the total time from sunrise to sunset and divide it by 12. Unlike a fixed 60-minute hour, a shaah zmanis varies throughout the year. Near the equator, it stays close to 60 minutes year-round. At higher latitudes, it can be significantly longer in summer and shorter in winter. This proportional time system ensures that halachic observances remain consistent relative to the sun's position throughout the year.`,
+      alos: `Alos Hashachar (dawn) at 16.1° uses the solar depression angle method. When the sun is 16.1° below the horizon, the sky begins to lighten enough for dawn. We use the same spherical trigonometry formula as sunrise, but with -16.1° instead of -0.833°. This gives us a time before sunrise when the first light appears. The 16.1° angle is derived from correlating traditional time-based measurements (like 72 minutes) with actual solar positions at Jerusalem's latitude.`,
+      shma: `Sof Zman Krias Shema (latest time for Shema) according to the Vilna Gaon (GRA) is 3 shaos zmaniyos after sunrise. We take the shaah zmanis value (${formatDuration(shaahZmanis)}) and multiply it by 3, then add that to sunrise. This means Shema must be recited within the first quarter of the halachic day. The calculation is: Sunrise + (3 × ${Math.round(shaahZmanis)} minutes) = ${Math.round(shaahZmanis * 3)} minutes after sunrise.`,
+      tefillah: `Sof Zman Tefillah (latest time for morning prayer) is 4 shaos zmaniyos after sunrise. Using the same proportional hour system, we multiply the shaah zmanis by 4 and add it to sunrise. This gives us a time that's one-third through the halachic day. The GRA method uses sunrise and sunset as the boundaries, making it ${formatDuration(shaahZmanis * 4)} after sunrise.`,
+      chatzos: `Chatzos Hayom (solar noon) is the exact midpoint between sunrise and sunset, which also corresponds to when the sun reaches its highest point (zenith) in the sky. It's calculated as sunrise plus 6 shaos zmaniyos, or equivalently, halfway between sunrise and sunset. At this moment, the sun is directly south (in the Northern Hemisphere) or north (in the Southern Hemisphere) of your location.`,
+      minchaGedolah: `Mincha Gedolah (earliest time for afternoon prayer) begins half a shaah zmanis after Chatzos. This is traditionally calculated as 30 fixed minutes after solar noon. Once the sun begins its descent from its zenith, the time for afternoon prayer begins. This implementation uses a 30-minute fixed value for simplicity.`,
+      minchaKetanah: `Mincha Ketanah (preferred afternoon prayer time) is 9.5 shaos zmaniyos after sunrise, or equivalently, 2.5 shaos zmaniyos before sunset. At this point, we're three-quarters through the halachic day. Many communities prefer to pray Mincha after this time rather than at Mincha Gedolah.`,
+      plag: `Plag HaMincha (the split of Mincha) is 10.75 shaos zmaniyos after sunrise. This time divides the late afternoon period and has halachic significance for when certain communities may begin evening prayers. It's calculated as 1.25 shaos zmaniyos before sunset. The name "plag" means "half" - it's halfway between Mincha Ketanah and sunset.`,
+      tzeis: `Tzeis Hakochavim (nightfall) at 8.5° is when three medium stars become visible. Using the Geonim's position, we calculate when the sun is 8.5° below the geometric horizon after sunset. This is computed using the same spherical trigonometry formula as dawn, but applied to the evening. The 8.5° depression angle correlates with the sky darkness needed to see three stars of medium magnitude.`,
+      chatzosHalailah: `Chatzos HaLailah (solar midnight) is the midpoint between sunset and the following sunrise. Just as Chatzos Hayom is solar noon, this is solar midnight - when the sun is at its lowest point (nadir) below the horizon. It's exactly 12 hours of clock time after or before Chatzos Hayom, though the day and night may not be equal in length.`,
+    };
+    return explanations[id] || 'Explanation not available for this calculation.';
+  };
+
+  interface ZmanRow {
+    id: string;
+    level: number;
+    icon: string;
+    name: string;
+    time: DateTime | null;
+    method: string;
+    formula: string;
+    color: string;
+    dependencies?: string[];
+  }
+
+  const zmanimData: ZmanRow[] = [
+    {
+      id: 'sunrise',
+      level: 0,
+      icon: '🌅',
+      name: 'Sunrise (Netz)',
+      time: sunrise,
+      method: sunriseMethod === 'sealevel' ? 'Sea Level' : 'Elevation Adjusted',
+      formula: 'cos(H) = [sin(-0.833°) - sin(φ) × sin(δ)] / [cos(φ) × cos(δ)]',
+      color: 'from-orange-400 to-orange-600',
+    },
+    {
+      id: 'alos',
+      level: 1,
+      icon: '🌄',
+      name: 'Alos Hashachar',
+      time: alosTime,
+      method: 'Solar Depression 16.1°',
+      formula: 'cos(H) = [sin(-16.1°) - sin(φ) × sin(δ)] / [cos(φ) × cos(δ)]',
+      color: 'from-blue-400 to-blue-600',
+      dependencies: ['sunrise'],
+    },
+    {
+      id: 'sunset',
+      level: 0,
+      icon: '🌇',
+      name: 'Sunset (Shkiah)',
+      time: sunset,
+      method: sunsetMethod === 'sealevel' ? 'Sea Level' : 'Elevation Adjusted',
+      formula: 'cos(H) = [sin(-0.833°) - sin(φ) × sin(δ)] / [cos(φ) × cos(δ)]',
+      color: 'from-red-500 to-orange-600',
+    },
+    {
+      id: 'dayLength',
+      level: 1,
+      icon: '⏱️',
+      name: 'Day Length',
+      time: null,
+      method: 'Difference',
+      formula: 'Sunset - Sunrise',
+      color: 'from-blue-500 to-indigo-600',
+      dependencies: ['sunrise', 'sunset'],
+    },
+    {
+      id: 'shaahZmanis',
+      level: 2,
+      icon: '⏰',
+      name: 'Shaah Zmanis',
+      time: null,
+      method: shaahZmanisMethod.toUpperCase(),
+      formula: '(Sunset - Sunrise) ÷ 12',
+      color: 'from-purple-500 to-pink-600',
+      dependencies: ['dayLength'],
+    },
+    {
+      id: 'shma',
+      level: 3,
+      icon: '📖',
+      name: 'Sof Zman Shema',
+      time: sofZmanShma,
+      method: 'GRA - 3 Shaos',
+      formula: 'Sunrise + (3 × Shaah Zmanis)',
+      color: 'from-indigo-500 to-purple-600',
+      dependencies: ['sunrise', 'shaahZmanis'],
+    },
+    {
+      id: 'tefillah',
+      level: 3,
+      icon: '🙏',
+      name: 'Sof Zman Tefillah',
+      time: sofZmanTefillah,
+      method: 'GRA - 4 Shaos',
+      formula: 'Sunrise + (4 × Shaah Zmanis)',
+      color: 'from-green-500 to-emerald-600',
+      dependencies: ['sunrise', 'shaahZmanis'],
+    },
+    {
+      id: 'chatzos',
+      level: 3,
+      icon: '☀️',
+      name: 'Chatzos Hayom',
+      time: chatzos,
+      method: 'Solar Noon',
+      formula: 'Sunrise + (6 × Shaah Zmanis)',
+      color: 'from-yellow-500 to-orange-500',
+      dependencies: ['sunrise', 'shaahZmanis'],
+    },
+    {
+      id: 'minchaGedolah',
+      level: 4,
+      icon: '🕐',
+      name: 'Mincha Gedolah',
+      time: minchaGedolah,
+      method: '30 min after Chatzos',
+      formula: 'Chatzos + 30 minutes',
+      color: 'from-amber-500 to-orange-600',
+      dependencies: ['chatzos'],
+    },
+    {
+      id: 'minchaKetanah',
+      level: 4,
+      icon: '🕒',
+      name: 'Mincha Ketanah',
+      time: minchaKetanah,
+      method: '9.5 Shaos',
+      formula: 'Sunrise + (9.5 × Shaah Zmanis)',
+      color: 'from-red-400 to-pink-600',
+      dependencies: ['sunrise', 'shaahZmanis'],
+    },
+    {
+      id: 'plag',
+      level: 4,
+      icon: '🕔',
+      name: 'Plag HaMincha',
+      time: plagHamincha,
+      method: '10.75 Shaos',
+      formula: 'Sunrise + (10.75 × Shaah Zmanis)',
+      color: 'from-purple-400 to-purple-700',
+      dependencies: ['sunrise', 'shaahZmanis'],
+    },
+    {
+      id: 'tzeis',
+      level: 1,
+      icon: '🌃',
+      name: 'Tzeis Hakochavim',
+      time: tzeis,
+      method: 'Solar Depression 8.5°',
+      formula: 'cos(H) = [sin(-8.5°) - sin(φ) × sin(δ)] / [cos(φ) × cos(δ)]',
+      color: 'from-indigo-700 to-blue-900',
+      dependencies: ['sunset'],
+    },
+    {
+      id: 'chatzosHalailah',
+      level: 1,
+      icon: '🌙',
+      name: 'Chatzos HaLailah',
+      time: chatzosHalailah,
+      method: 'Solar Midnight',
+      formula: 'Sunset + (Night Length ÷ 2)',
+      color: 'from-slate-700 to-slate-900',
+      dependencies: ['sunset'],
+    },
+  ];
+
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Base Calculations Section */}
+      {/* Header Section */}
       <div className="bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 rounded-3xl shadow-apple-xl border border-white/20 overflow-hidden max-w-7xl mx-auto">
         <div className="bg-white/95 backdrop-blur-sm p-8 md:p-10">
           <div className="text-center mb-8">
             <h2 className="text-3xl font-bold text-apple-gray-900 mb-2">
-              Base Calculations
+              Zmanim Calculations
             </h2>
             <p className="text-apple-gray-600">
-              Fundamental astronomical values used to calculate all zmanim
+              Hierarchical view of all prayer times and their calculation methods
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Sunrise */}
-            <div className="bg-gradient-to-br from-orange-50 to-yellow-50 rounded-2xl p-6 border border-orange-200">
-              <div className="flex items-center mb-4">
-                <div className="w-12 h-12 bg-gradient-to-br from-orange-400 to-orange-600 rounded-full flex items-center justify-center mr-4">
-                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-                  </svg>
-                </div>
-                <div className="flex-1">
-                  <h3 className="text-xl font-semibold text-apple-gray-900">Sunrise (Netz)</h3>
-                  <p className="text-3xl font-bold text-orange-600">{formatTime(sunrise)}</p>
-                </div>
-              </div>
-              <div className="mb-4">
-                <label className="block text-xs font-semibold text-apple-gray-700 mb-2">Calculation Method</label>
-                <select
-                  value={sunriseMethod}
-                  onChange={(e) => setSunriseMethod(e.target.value as SunriseMethod)}
-                  className="w-full px-3 py-2 text-sm bg-white border border-orange-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                >
-                  <option value="elevation">Elevation-Adjusted</option>
-                  <option value="sealevel">Sea-Level</option>
-                </select>
-              </div>
-              <div className="space-y-3 text-sm">
-                <div>
-                  <h4 className="font-semibold text-apple-gray-900 mb-1">Mathematical Calculation</h4>
-                  <p className="text-apple-gray-700 leading-relaxed">
-                    Sunrise occurs when the sun's center is 0.833° below the horizon (accounting for atmospheric refraction and the sun's radius).
-                  </p>
-                </div>
-                <div className="bg-white/80 rounded-xl p-3">
-                  <p className="font-mono text-xs text-apple-gray-800 mb-2">
-                    cos(H) = [sin(-0.833°) - sin(lat) × sin(δ)] / [cos(lat) × cos(δ)]
-                  </p>
-                  <ul className="text-xs text-apple-gray-700 space-y-1">
-                    <li>• <strong>H</strong> = Hour angle (converted to time)</li>
-                    <li>• <strong>lat</strong> = Latitude: {geoLocation.getLatitude().toFixed(4)}°</li>
-                    <li>• <strong>δ</strong> = Solar declination (varies daily)</li>
-                  </ul>
-                </div>
-                <p className="text-xs text-apple-gray-600 italic">
-                  The hour angle is converted to local time by dividing by 15° per hour, then adjusted for longitude and the equation of time.
-                </p>
-              </div>
+          {/* Configuration Controls */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div className="bg-white rounded-xl p-4 border border-apple-gray-200">
+              <label className="block text-xs font-semibold text-apple-gray-700 mb-2">Sunrise Method</label>
+              <select
+                value={sunriseMethod}
+                onChange={(e) => setSunriseMethod(e.target.value as SunriseMethod)}
+                className="w-full px-3 py-2 text-sm bg-white border border-apple-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="elevation">Elevation-Adjusted</option>
+                <option value="sealevel">Sea-Level</option>
+              </select>
             </div>
+            <div className="bg-white rounded-xl p-4 border border-apple-gray-200">
+              <label className="block text-xs font-semibold text-apple-gray-700 mb-2">Sunset Method</label>
+              <select
+                value={sunsetMethod}
+                onChange={(e) => setSunsetMethod(e.target.value as SunsetMethod)}
+                className="w-full px-3 py-2 text-sm bg-white border border-apple-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="elevation">Elevation-Adjusted</option>
+                <option value="sealevel">Sea-Level</option>
+              </select>
+            </div>
+            <div className="bg-white rounded-xl p-4 border border-apple-gray-200">
+              <label className="block text-xs font-semibold text-apple-gray-700 mb-2">Shaah Zmanis Method</label>
+              <select
+                value={shaahZmanisMethod}
+                onChange={(e) => setShaahZmanisMethod(e.target.value as ShaahZmanisMethod)}
+                className="w-full px-3 py-2 text-sm bg-white border border-apple-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="gra">GRA (Sunrise to Sunset)</option>
+                <option value="mga">MGA (72-min Alos to Tzeis)</option>
+                <option value="16.1degrees">16.1° Alos to Tzeis</option>
+                <option value="18degrees">18° Alos to Tzeis</option>
+                <option value="19.8degrees">19.8° Alos to Tzeis</option>
+                <option value="90min">90-min Alos to Tzeis</option>
+                <option value="96min">96-min Alos to Tzeis</option>
+                <option value="120min">120-min Alos to Tzeis</option>
+              </select>
+            </div>
+          </div>
 
-            {/* Sunset */}
-            <div className="bg-gradient-to-br from-red-50 to-orange-50 rounded-2xl p-6 border border-red-200">
-              <div className="flex items-center mb-4">
-                <div className="w-12 h-12 bg-gradient-to-br from-red-500 to-orange-600 rounded-full flex items-center justify-center mr-4">
-                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4m0 0l4-4m-4 4l4 4" />
-                  </svg>
-                </div>
-                <div className="flex-1">
-                  <h3 className="text-xl font-semibold text-apple-gray-900">Sunset (Shkiah)</h3>
-                  <p className="text-3xl font-bold text-red-600">{formatTime(sunset)}</p>
-                </div>
-              </div>
-              <div className="mb-4">
-                <label className="block text-xs font-semibold text-apple-gray-700 mb-2">Calculation Method</label>
-                <select
-                  value={sunsetMethod}
-                  onChange={(e) => setSunsetMethod(e.target.value as SunsetMethod)}
-                  className="w-full px-3 py-2 text-sm bg-white border border-red-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                >
-                  <option value="elevation">Elevation-Adjusted</option>
-                  <option value="sealevel">Sea-Level</option>
-                </select>
-              </div>
-              <div className="space-y-3 text-sm">
-                <div>
-                  <h4 className="font-semibold text-apple-gray-900 mb-1">Mathematical Calculation</h4>
-                  <p className="text-apple-gray-700 leading-relaxed">
-                    Sunset occurs when the sun's center is 0.833° below the horizon, same calculation as sunrise but for the western horizon.
-                  </p>
-                </div>
-                <div className="bg-white/80 rounded-xl p-3">
-                  <p className="font-mono text-xs text-apple-gray-800 mb-2">
-                    cos(H) = [sin(-0.833°) - sin(lat) × sin(δ)] / [cos(lat) × cos(δ)]
-                  </p>
-                  <ul className="text-xs text-apple-gray-700 space-y-1">
-                    <li>• Same formula as sunrise</li>
-                    <li>• Calculated for evening hour angle</li>
-                    <li>• <strong>Long</strong> = Longitude: {geoLocation.getLongitude().toFixed(4)}°</li>
-                  </ul>
-                </div>
-                <p className="text-xs text-apple-gray-600 italic">
-                  The western hour angle gives us the time after solar noon when the sun sets.
-                </p>
-              </div>
-            </div>
+          {/* Zmanim Table */}
+          <div className="bg-white rounded-2xl shadow-sm border border-apple-gray-200 overflow-hidden">
+            <table className="w-full">
+              <thead className="bg-gradient-to-r from-gray-50 to-gray-100 border-b-2 border-gray-200">
+                <tr>
+                  <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                    Zman
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                    Time
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                    Method
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                    Formula
+                  </th>
+                  <th className="px-6 py-4 text-center text-xs font-bold text-gray-700 uppercase tracking-wider">
+                    Explain
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {zmanimData.map((zman) => (
+                  <>
+                    <tr
+                      key={zman.id}
+                      className="hover:bg-gray-50 transition-colors duration-150"
+                    >
+                      {/* Zman Name with Tree Structure */}
+                      <td className="px-6 py-4">
+                        <div
+                          className="flex items-center"
+                          style={{ paddingLeft: `${zman.level * 1.5}rem` }}
+                        >
+                          {zman.level > 0 && (
+                            <div className="mr-2 text-gray-400">
+                              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                              </svg>
+                            </div>
+                          )}
+                          <span className="text-2xl mr-3">{zman.icon}</span>
+                          <div>
+                            <div className="font-semibold text-gray-900">{zman.name}</div>
+                            {zman.dependencies && (
+                              <div className="text-xs text-gray-500 mt-1">
+                                Depends on: {zman.dependencies.join(', ')}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </td>
 
-            {/* Day Length */}
-            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6 border border-blue-200">
-              <div className="flex items-center mb-4">
-                <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center mr-4">
-                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-                <div>
-                  <h3 className="text-xl font-semibold text-apple-gray-900">Day Length</h3>
-                  {sunrise && sunset && (
-                    <p className="text-3xl font-bold text-blue-600">
-                      {formatDuration(sunset.diff(sunrise, 'minutes').minutes)}
-                    </p>
-                  )}
-                </div>
-              </div>
-              <div className="space-y-3 text-sm">
-                <div>
-                  <h4 className="font-semibold text-apple-gray-900 mb-1">Mathematical Calculation</h4>
-                  <p className="text-apple-gray-700 leading-relaxed">
-                    The total duration from sunrise to sunset, representing the halachic day.
-                  </p>
-                </div>
-                <div className="bg-white/80 rounded-xl p-3">
-                  <p className="font-mono text-xs text-apple-gray-800 mb-2">
-                    Day Length = Sunset - Sunrise
-                  </p>
-                  {sunrise && sunset && (
-                    <ul className="text-xs text-apple-gray-700 space-y-1">
-                      <li>• <strong>Sunrise:</strong> {formatTime(sunrise)}</li>
-                      <li>• <strong>Sunset:</strong> {formatTime(sunset)}</li>
-                      <li>• <strong>Duration:</strong> {Math.round(sunset.diff(sunrise, 'minutes').minutes)} minutes</li>
-                    </ul>
-                  )}
-                </div>
-                <p className="text-xs text-apple-gray-600 italic">
-                  This is the foundation for all shaos zmaniyos (proportional hours) calculations.
-                </p>
-              </div>
-            </div>
+                      {/* Time */}
+                      <td className="px-6 py-4">
+                        <div
+                          className={`inline-flex items-center px-4 py-2 rounded-xl bg-gradient-to-r ${zman.color} text-white font-bold text-lg shadow-md`}
+                        >
+                          {zman.id === 'dayLength' && sunrise && sunset
+                            ? formatDuration(sunset.diff(sunrise, 'minutes').minutes)
+                            : zman.id === 'shaahZmanis'
+                            ? formatDuration(shaahZmanis)
+                            : formatTime(zman.time)}
+                        </div>
+                      </td>
 
-            {/* Shaah Zmanis */}
-            <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-6 border border-purple-200">
-              <div className="flex items-center mb-4">
-                <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-600 rounded-full flex items-center justify-center mr-4">
-                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                  </svg>
-                </div>
-                <div className="flex-1">
-                  <h3 className="text-xl font-semibold text-apple-gray-900">Shaah Zmanis</h3>
-                  <p className="text-3xl font-bold text-purple-600">
-                    {formatDuration(shaahZmanis)}
-                  </p>
-                </div>
-              </div>
-              <div className="mb-4">
-                <label className="block text-xs font-semibold text-apple-gray-700 mb-2">Calculation Method</label>
-                <select
-                  value={shaahZmanisMethod}
-                  onChange={(e) => setShaahZmanisMethod(e.target.value as ShaahZmanisMethod)}
-                  className="w-full px-3 py-2 text-sm bg-white border border-purple-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                >
-                  <option value="gra">GRA (Sunrise to Sunset)</option>
-                  <option value="mga">MGA (72-min Alos to Tzeis)</option>
-                  <option value="16.1degrees">16.1° Alos to Tzeis</option>
-                  <option value="18degrees">18° Alos to Tzeis</option>
-                  <option value="19.8degrees">19.8° Alos to Tzeis</option>
-                  <option value="90min">90-min Alos to Tzeis</option>
-                  <option value="96min">96-min Alos to Tzeis</option>
-                  <option value="120min">120-min Alos to Tzeis</option>
-                </select>
-              </div>
-              <div className="space-y-3 text-sm">
-                <div>
-                  <h4 className="font-semibold text-apple-gray-900 mb-1">Mathematical Calculation</h4>
-                  <p className="text-apple-gray-700 leading-relaxed">
-                    A halachic "hour" (shaah zmanis) divides the day into 12 equal parts, regardless of the actual clock duration.
-                  </p>
-                </div>
-                <div className="bg-white/80 rounded-xl p-3">
-                  <p className="font-mono text-xs text-apple-gray-800 mb-2">
-                    Shaah Zmanis = Day Length ÷ 12
-                  </p>
-                  {sunrise && sunset && (
-                    <ul className="text-xs text-apple-gray-700 space-y-1">
-                      <li>• <strong>Day Length:</strong> {Math.round(sunset.diff(sunrise, 'minutes').minutes)} minutes</li>
-                      <li>• <strong>÷ 12 hours =</strong> {Math.round(shaahZmanis)} minutes per hour</li>
-                      <li>• <strong>Exact:</strong> {shaahZmanis.toFixed(2)} minutes</li>
-                    </ul>
-                  )}
-                </div>
-                <p className="text-xs text-apple-gray-600 italic">
-                  All time-based zmanim (Shema, Tefillah, Mincha, etc.) are calculated using multiples of this value.
-                </p>
-              </div>
-            </div>
+                      {/* Method */}
+                      <td className="px-6 py-4">
+                        <div className="text-sm font-medium text-gray-700 bg-gray-100 px-3 py-2 rounded-lg inline-block">
+                          {zman.method}
+                        </div>
+                      </td>
+
+                      {/* Formula */}
+                      <td className="px-6 py-4">
+                        <div className="font-mono text-sm text-gray-800 bg-blue-50 px-3 py-2 rounded-lg border border-blue-200">
+                          {zman.formula}
+                        </div>
+                        <div className="text-xs text-gray-500 mt-1">
+                          φ = Latitude: {geoLocation.getLatitude().toFixed(4)}°
+                          {', '}
+                          δ = Solar declination
+                        </div>
+                      </td>
+
+                      {/* Explain Button */}
+                      <td className="px-6 py-4 text-center">
+                        <button
+                          onClick={() => toggleFormula(zman.id)}
+                          className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-sm font-semibold rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all duration-200 shadow-md hover:shadow-lg"
+                        >
+                          {expandedFormulas.has(zman.id) ? (
+                            <>
+                              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                              </svg>
+                              Hide
+                            </>
+                          ) : (
+                            <>
+                              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                              Explain
+                            </>
+                          )}
+                        </button>
+                      </td>
+                    </tr>
+
+                    {/* Expanded Explanation Row */}
+                    {expandedFormulas.has(zman.id) && (
+                      <tr key={`${zman.id}-explanation`} className="bg-blue-50">
+                        <td colSpan={5} className="px-6 py-6">
+                          <div className="bg-white rounded-xl p-6 shadow-inner border border-blue-200">
+                            <div className="flex items-start">
+                              <div className="flex-shrink-0">
+                                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center">
+                                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                                  </svg>
+                                </div>
+                              </div>
+                              <div className="ml-4 flex-1">
+                                <h4 className="text-lg font-bold text-gray-900 mb-3">
+                                  How is {zman.name} calculated?
+                                </h4>
+                                <p className="text-gray-700 leading-relaxed">
+                                  {getFormulaExplanation(zman.id)}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
 
-      {/* All zmanim cards - responsive grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-7xl mx-auto">
-        {/* Alos Hashachar Card */}
-        <div className="bg-white rounded-3xl shadow-apple-lg border border-apple-gray-200 overflow-hidden">
-          <div className="h-1.5 bg-apple-blue"></div>
-          <div className="p-8 md:p-10 text-center">
-            <h2 className="text-2xl font-semibold text-apple-gray-900 mb-2">
-              Alos Hashachar
-            </h2>
-            <p className="text-sm text-apple-gray-500 mb-8">
-              Dawn at 16.1° below horizon
-            </p>
-
-            <div className="mb-6">
-              <div className="text-5xl md:text-6xl font-semibold text-apple-gray-900 tracking-tight mb-2">
-                {formatTime(alosTime)}
-              </div>
-              {alosTime && sunrise && (
-                <p className="text-base text-apple-gray-600 font-medium">
-                  {getMinutesBeforeSunrise()}
-                </p>
-              )}
-            </div>
-
-            <div className="bg-apple-gray-50 rounded-2xl p-6 text-left">
-              <div className="space-y-4">
-                <div>
-                  <h3 className="text-sm font-semibold text-apple-gray-900 mb-1">
-                    Calculation Method
-                  </h3>
-                  <p className="text-sm text-apple-gray-600">
-                    Sun at 16.1° below the horizon
-                  </p>
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-apple-gray-900 mb-1">
-                    Description
-                  </h3>
-                  <p className="text-sm text-apple-gray-600">
-                    Dawn calculated when the sun is 16.1 degrees below the horizon. This is a commonly used halachic calculation method.
-                  </p>
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-apple-gray-900 mb-1">
-                    Mathematical Calculation
-                  </h3>
-                  <p className="text-sm text-apple-gray-600 leading-relaxed space-y-2">
-                    <span className="block">
-                      The time is calculated using the solar depression angle formula. When the sun is at 16.1° below the geometric horizon,
-                      the solar altitude angle is -16.1°.
-                    </span>
-                    <span className="block mt-2">
-                      <strong>Formula:</strong> The hour angle (H) is calculated using the spherical trigonometry equation:
-                      <code className="block mt-1 bg-white px-2 py-1 rounded text-xs font-mono">
-                        cos(H) = [sin(-16.1°) - sin(latitude) × sin(declination)] / [cos(latitude) × cos(declination)]
-                      </code>
-                    </span>
-                    <span className="block mt-2">
-                      Where:
-                    </span>
-                    <ul className="text-xs ml-4 mt-1 space-y-1">
-                      <li>• <strong>Latitude:</strong> {geoLocation.getLatitude().toFixed(4)}°</li>
-                      <li>• <strong>Longitude:</strong> {geoLocation.getLongitude().toFixed(4)}°</li>
-                      <li>• <strong>Declination:</strong> Solar declination varies daily based on Earth's axial tilt</li>
-                      <li>• <strong>Hour Angle (H):</strong> Converted to time units (15° = 1 hour)</li>
-                    </ul>
-                    <span className="block mt-2">
-                      The result gives us the time before solar noon when the sun reaches -16.1°. This is then adjusted for
-                      the equation of time and local longitude to get the actual clock time for Alos Hashachar.
-                    </span>
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Sof Zman Krias Shema GRA Card */}
-        <div className="bg-white rounded-3xl shadow-apple-lg border border-apple-gray-200 overflow-hidden">
-          <div className="h-1.5" style={{ backgroundColor: '#5856D6' }}></div>
-          <div className="p-8 md:p-10 text-center">
-            <h2 className="text-2xl font-semibold text-apple-gray-900 mb-2">
-              Sof Zman Krias Shema
-            </h2>
-            <p className="text-sm text-apple-gray-500 mb-8">
-              Latest time to recite Shema (GRA)
-            </p>
-
-            <div className="mb-6">
-              <div className="text-5xl md:text-6xl font-semibold text-apple-gray-900 tracking-tight mb-2">
-                {formatTime(sofZmanShma)}
-              </div>
-              {sofZmanShma && sunrise && (
-                <p className="text-base text-apple-gray-600 font-medium">
-                  {getMinutesAfterSunrise()}
-                </p>
-              )}
-            </div>
-
-            <div className="bg-apple-gray-50 rounded-2xl p-6 text-left">
-              <div className="space-y-4">
-                <div>
-                  <h3 className="text-sm font-semibold text-apple-gray-900 mb-1">
-                    Calculation Method
-                  </h3>
-                  <p className="text-sm text-apple-gray-600">
-                    3 shaos zmaniyos (halachic hours) after sunrise
-                  </p>
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-apple-gray-900 mb-1">
-                    Description
-                  </h3>
-                  <p className="text-sm text-apple-gray-600">
-                    According to the Vilna Gaon (GRA), the latest time to recite the morning Shema is the end of the third halachic hour of the day.
-                  </p>
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-apple-gray-900 mb-1">
-                    Mathematical Calculation
-                  </h3>
-                  <p className="text-sm text-apple-gray-600 leading-relaxed space-y-2">
-                    <span className="block">
-                      The calculation uses shaos zmaniyos (proportional/halachic hours), where the day is divided into 12 equal parts
-                      from sunrise to sunset.
-                    </span>
-                    <span className="block mt-2">
-                      <strong>Formula:</strong>
-                      <code className="block mt-1 bg-white px-2 py-1 rounded text-xs font-mono">
-                        Sof Zman Shma = Sunrise + (3 × Shaah Zmanis)
-                      </code>
-                      <code className="block mt-1 bg-white px-2 py-1 rounded text-xs font-mono">
-                        Shaah Zmanis = (Sunset - Sunrise) / 12
-                      </code>
-                    </span>
-                    <span className="block mt-2">
-                      Current values:
-                    </span>
-                    <ul className="text-xs ml-4 mt-1 space-y-1">
-                      <li>• <strong>Sunrise:</strong> {formatTime(sunrise)}</li>
-                      <li>• <strong>Sunset:</strong> {formatTime(sunset)}</li>
-                      {sunrise && sunset && (
-                        <li>• <strong>Day Length:</strong> {formatDuration(sunset.diff(sunrise, 'minutes').minutes)}</li>
-                      )}
-                      <li>• <strong>Shaah Zmanis:</strong> {formatDuration(shaahZmanis)}</li>
-                      <li>• <strong>3 Shaos:</strong> {formatDuration(shaahZmanis * 3)}</li>
-                    </ul>
-                    <span className="block mt-2">
-                      This means each "hour" is {Math.round(shaahZmanis)} minutes. The latest time for Shema is at the end
-                      of the 3rd halachic hour, which equals {Math.round(shaahZmanis * 3)} minutes ({formatDuration(shaahZmanis * 3)}) after sunrise.
-                    </span>
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Chatzos Hayom Card */}
-        <div className="bg-white rounded-3xl shadow-apple-lg border border-apple-gray-200 overflow-hidden">
-          <div className="h-1.5 bg-gradient-to-r from-orange-400 to-orange-500"></div>
-          <div className="p-8 md:p-10 text-center">
-            <h2 className="text-2xl font-semibold text-apple-gray-900 mb-2">
-              Chatzos Hayom
-            </h2>
-            <p className="text-sm text-apple-gray-500 mb-8">
-              Solar noon / Midday
-            </p>
-
-            <div className="mb-6">
-              <div className="text-5xl md:text-6xl font-semibold text-apple-gray-900 tracking-tight mb-2">
-                {formatTime(chatzos)}
-              </div>
-              {chatzos && sunrise && (
-                <p className="text-base text-apple-gray-600 font-medium">
-                  {getChatzosRelativeTime()}
-                </p>
-              )}
-            </div>
-
-            <div className="bg-apple-gray-50 rounded-2xl p-6 text-left">
-              <div className="space-y-4">
-                <div>
-                  <h3 className="text-sm font-semibold text-apple-gray-900 mb-1">
-                    Calculation Method
-                  </h3>
-                  <p className="text-sm text-apple-gray-600">
-                    Midpoint between sunrise and sunset (solar noon)
-                  </p>
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-apple-gray-900 mb-1">
-                    Description
-                  </h3>
-                  <p className="text-sm text-apple-gray-600">
-                    Chatzos Hayom is the exact middle of the day when the sun reaches its highest point (zenith) in the sky.
-                    This marks the midpoint between sunrise and sunset.
-                  </p>
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-apple-gray-900 mb-1">
-                    Mathematical Calculation
-                  </h3>
-                  <p className="text-sm text-apple-gray-600 leading-relaxed space-y-2">
-                    <span className="block">
-                      Chatzos is calculated as the exact midpoint between sunrise and sunset, which also corresponds to solar noon
-                      when the sun reaches its maximum altitude (zenith).
-                    </span>
-                    <span className="block mt-2">
-                      <strong>Formula:</strong>
-                      <code className="block mt-1 bg-white px-2 py-1 rounded text-xs font-mono">
-                        Chatzos = Sunrise + (Day Length / 2)
-                      </code>
-                      <code className="block mt-1 bg-white px-2 py-1 rounded text-xs font-mono">
-                        Chatzos = Sunrise + (6 × Shaah Zmanis)
-                      </code>
-                    </span>
-                    <span className="block mt-2">
-                      Current values:
-                    </span>
-                    <ul className="text-xs ml-4 mt-1 space-y-1">
-                      <li>• <strong>Sunrise:</strong> {formatTime(sunrise)}</li>
-                      <li>• <strong>Sunset:</strong> {formatTime(sunset)}</li>
-                      {sunrise && sunset && (
-                        <>
-                          <li>• <strong>Day Length:</strong> {formatDuration(sunset.diff(sunrise, 'minutes').minutes)}</li>
-                          <li>• <strong>Half Day:</strong> {formatDuration(sunset.diff(sunrise, 'minutes').minutes / 2)}</li>
-                        </>
-                      )}
-                      <li>• <strong>6 Shaos Zmaniyos:</strong> {formatDuration(shaahZmanis * 6)}</li>
-                    </ul>
-                    <span className="block mt-2">
-                      At this time, the sun is at its highest point in the sky for the day. It occurs exactly halfway through
-                      the day ({formatDuration(shaahZmanis * 6)}) after sunrise, or 6 halachic hours into the 12-hour day.
-                    </span>
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Sof Zman Tefillah Card */}
-        <div className="bg-white rounded-3xl shadow-apple-lg border border-apple-gray-200 overflow-hidden">
-          <div className="h-1.5" style={{ backgroundColor: '#34C759' }}></div>
-          <div className="p-8 md:p-10 text-center">
-            <h2 className="text-2xl font-semibold text-apple-gray-900 mb-2">
-              Sof Zman Tefillah
-            </h2>
-            <p className="text-sm text-apple-gray-500 mb-8">
-              Latest time for morning prayer (GRA)
-            </p>
-
-            <div className="mb-6">
-              <div className="text-5xl md:text-6xl font-semibold text-apple-gray-900 tracking-tight mb-2">
-                {formatTime(sofZmanTefillah)}
-              </div>
-              {sofZmanTefillah && sunrise && (
-                <p className="text-base text-apple-gray-600 font-medium">
-                  {getTefillahRelativeTime()}
-                </p>
-              )}
-            </div>
-
-            <div className="bg-apple-gray-50 rounded-2xl p-6 text-left">
-              <div className="space-y-4">
-                <div>
-                  <h3 className="text-sm font-semibold text-apple-gray-900 mb-1">
-                    Calculation Method
-                  </h3>
-                  <p className="text-sm text-apple-gray-600">
-                    4 shaos zmaniyos after sunrise
-                  </p>
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-apple-gray-900 mb-1">
-                    Description
-                  </h3>
-                  <p className="text-sm text-apple-gray-600">
-                    According to the GRA, the latest time for Shacharis (morning prayer) is the end of the fourth halachic hour.
-                  </p>
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-apple-gray-900 mb-1">
-                    Mathematical Calculation
-                  </h3>
-                  <p className="text-sm text-apple-gray-600 leading-relaxed space-y-2">
-                    <span className="block">
-                      Similar to Sof Zman Shma, this uses shaos zmaniyos where the day is divided into 12 equal parts.
-                    </span>
-                    <span className="block mt-2">
-                      <strong>Formula:</strong>
-                      <code className="block mt-1 bg-white px-2 py-1 rounded text-xs font-mono">
-                        Sof Zman Tefillah = Sunrise + (4 × Shaah Zmanis)
-                      </code>
-                    </span>
-                    <span className="block mt-2">
-                      Current values:
-                    </span>
-                    <ul className="text-xs ml-4 mt-1 space-y-1">
-                      <li>• <strong>4 Shaos:</strong> {formatDuration(shaahZmanis * 4)}</li>
-                    </ul>
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Mincha Gedolah Card */}
-        <div className="bg-white rounded-3xl shadow-apple-lg border border-apple-gray-200 overflow-hidden">
-          <div className="h-1.5" style={{ backgroundColor: '#FF9500' }}></div>
-          <div className="p-8 md:p-10 text-center">
-            <h2 className="text-2xl font-semibold text-apple-gray-900 mb-2">
-              Mincha Gedolah
-            </h2>
-            <p className="text-sm text-apple-gray-500 mb-8">
-              Earliest time for afternoon prayer
-            </p>
-
-            <div className="mb-6">
-              <div className="text-5xl md:text-6xl font-semibold text-apple-gray-900 tracking-tight mb-2">
-                {formatTime(minchaGedolah)}
-              </div>
-              {minchaGedolah && chatzos && (
-                <p className="text-base text-apple-gray-600 font-medium">
-                  {getMinchaGedolahRelativeTime()}
-                </p>
-              )}
-            </div>
-
-            <div className="bg-apple-gray-50 rounded-2xl p-6 text-left">
-              <div className="space-y-4">
-                <div>
-                  <h3 className="text-sm font-semibold text-apple-gray-900 mb-1">
-                    Calculation Method
-                  </h3>
-                  <p className="text-sm text-apple-gray-600">
-                    30 minutes after Chatzos
-                  </p>
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-apple-gray-900 mb-1">
-                    Description
-                  </h3>
-                  <p className="text-sm text-apple-gray-600">
-                    The earliest time to pray Mincha (afternoon prayer). It begins half a shaah zmanis after Chatzos, commonly calculated as 30 minutes.
-                  </p>
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-apple-gray-900 mb-1">
-                    Mathematical Calculation
-                  </h3>
-                  <p className="text-sm text-apple-gray-600 leading-relaxed space-y-2">
-                    <span className="block">
-                      Mincha Gedolah begins half a shaah zmanis after solar noon (Chatzos).
-                    </span>
-                    <span className="block mt-2">
-                      <strong>Formula:</strong>
-                      <code className="block mt-1 bg-white px-2 py-1 rounded text-xs font-mono">
-                        Mincha Gedolah = Chatzos + 30 minutes
-                      </code>
-                    </span>
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Mincha Ketanah Card */}
-        <div className="bg-white rounded-3xl shadow-apple-lg border border-apple-gray-200 overflow-hidden">
-          <div className="h-1.5" style={{ backgroundColor: '#FF2D55' }}></div>
-          <div className="p-8 md:p-10 text-center">
-            <h2 className="text-2xl font-semibold text-apple-gray-900 mb-2">
-              Mincha Ketanah
-            </h2>
-            <p className="text-sm text-apple-gray-500 mb-8">
-              Preferred time for afternoon prayer
-            </p>
-
-            <div className="mb-6">
-              <div className="text-5xl md:text-6xl font-semibold text-apple-gray-900 tracking-tight mb-2">
-                {formatTime(minchaKetanah)}
-              </div>
-              {minchaKetanah && chatzos && (
-                <p className="text-base text-apple-gray-600 font-medium">
-                  {getMinchaKetanahRelativeTime()}
-                </p>
-              )}
-            </div>
-
-            <div className="bg-apple-gray-50 rounded-2xl p-6 text-left">
-              <div className="space-y-4">
-                <div>
-                  <h3 className="text-sm font-semibold text-apple-gray-900 mb-1">
-                    Calculation Method
-                  </h3>
-                  <p className="text-sm text-apple-gray-600">
-                    9.5 shaos zmaniyos after sunrise
-                  </p>
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-apple-gray-900 mb-1">
-                    Description
-                  </h3>
-                  <p className="text-sm text-apple-gray-600">
-                    The preferred time to begin Mincha. It occurs 2.5 shaos zmaniyos before sunset.
-                  </p>
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-apple-gray-900 mb-1">
-                    Mathematical Calculation
-                  </h3>
-                  <p className="text-sm text-apple-gray-600 leading-relaxed space-y-2">
-                    <span className="block">
-                      Mincha Ketanah is calculated as 9.5 halachic hours after sunrise.
-                    </span>
-                    <span className="block mt-2">
-                      <strong>Formula:</strong>
-                      <code className="block mt-1 bg-white px-2 py-1 rounded text-xs font-mono">
-                        Mincha Ketanah = Sunrise + (9.5 × Shaah Zmanis)
-                      </code>
-                    </span>
-                    <span className="block mt-2">
-                      Current values:
-                    </span>
-                    <ul className="text-xs ml-4 mt-1 space-y-1">
-                      <li>• <strong>9.5 Shaos:</strong> {formatDuration(shaahZmanis * 9.5)}</li>
-                    </ul>
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Plag HaMincha Card */}
-        <div className="bg-white rounded-3xl shadow-apple-lg border border-apple-gray-200 overflow-hidden">
-          <div className="h-1.5" style={{ backgroundColor: '#AF52DE' }}></div>
-          <div className="p-8 md:p-10 text-center">
-            <h2 className="text-2xl font-semibold text-apple-gray-900 mb-2">
-              Plag HaMincha
-            </h2>
-            <p className="text-sm text-apple-gray-500 mb-8">
-              Transition time for evening prayers
-            </p>
-
-            <div className="mb-6">
-              <div className="text-5xl md:text-6xl font-semibold text-apple-gray-900 tracking-tight mb-2">
-                {formatTime(plagHamincha)}
-              </div>
-              {plagHamincha && sunset && (
-                <p className="text-base text-apple-gray-600 font-medium">
-                  {getPlagRelativeTime()}
-                </p>
-              )}
-            </div>
-
-            <div className="bg-apple-gray-50 rounded-2xl p-6 text-left">
-              <div className="space-y-4">
-                <div>
-                  <h3 className="text-sm font-semibold text-apple-gray-900 mb-1">
-                    Calculation Method
-                  </h3>
-                  <p className="text-sm text-apple-gray-600">
-                    10.75 shaos zmaniyos after sunrise
-                  </p>
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-apple-gray-900 mb-1">
-                    Description
-                  </h3>
-                  <p className="text-sm text-apple-gray-600">
-                    The "division" of Mincha. Some communities can start Maariv (evening prayer) after this time, while others wait until after sunset.
-                  </p>
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-apple-gray-900 mb-1">
-                    Mathematical Calculation
-                  </h3>
-                  <p className="text-sm text-apple-gray-600 leading-relaxed space-y-2">
-                    <span className="block">
-                      Plag HaMincha is 1.25 shaos zmaniyos before sunset, or 10.75 shaos after sunrise.
-                    </span>
-                    <span className="block mt-2">
-                      <strong>Formula:</strong>
-                      <code className="block mt-1 bg-white px-2 py-1 rounded text-xs font-mono">
-                        Plag HaMincha = Sunrise + (10.75 × Shaah Zmanis)
-                      </code>
-                    </span>
-                    <span className="block mt-2">
-                      Current values:
-                    </span>
-                    <ul className="text-xs ml-4 mt-1 space-y-1">
-                      <li>• <strong>10.75 Shaos:</strong> {formatDuration(shaahZmanis * 10.75)}</li>
-                    </ul>
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Shkiah (Sunset) Card */}
-        <div className="bg-white rounded-3xl shadow-apple-lg border border-apple-gray-200 overflow-hidden">
-          <div className="h-1.5 bg-gradient-to-r from-orange-500 to-red-500"></div>
-          <div className="p-8 md:p-10 text-center">
-            <h2 className="text-2xl font-semibold text-apple-gray-900 mb-2">
-              Shkiah
-            </h2>
-            <p className="text-sm text-apple-gray-500 mb-8">
-              Sunset
-            </p>
-
-            <div className="mb-6">
-              <div className="text-5xl md:text-6xl font-semibold text-apple-gray-900 tracking-tight mb-2">
-                {formatTime(sunset)}
-              </div>
-            </div>
-
-            <div className="bg-apple-gray-50 rounded-2xl p-6 text-left">
-              <div className="space-y-4">
-                <div>
-                  <h3 className="text-sm font-semibold text-apple-gray-900 mb-1">
-                    Calculation Method
-                  </h3>
-                  <p className="text-sm text-apple-gray-600">
-                    When sun's upper edge touches the horizon
-                  </p>
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-apple-gray-900 mb-1">
-                    Description
-                  </h3>
-                  <p className="text-sm text-apple-gray-600">
-                    The moment when the upper edge of the sun touches the western horizon. This marks the end of the halachic day.
-                  </p>
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-apple-gray-900 mb-1">
-                    Mathematical Calculation
-                  </h3>
-                  <p className="text-sm text-apple-gray-600 leading-relaxed space-y-2">
-                    <span className="block">
-                      Sunset is calculated when the sun's geometric center is 0.833° below the horizon (accounting for refraction and solar radius).
-                    </span>
-                    <span className="block mt-2">
-                      <strong>Formula:</strong>
-                      <code className="block mt-1 bg-white px-2 py-1 rounded text-xs font-mono">
-                        cos(H) = [sin(-0.833°) - sin(latitude) × sin(declination)] / [cos(latitude) × cos(declination)]
-                      </code>
-                    </span>
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Tzeis Hakochavim Card */}
-        <div className="bg-white rounded-3xl shadow-apple-lg border border-apple-gray-200 overflow-hidden">
-          <div className="h-1.5" style={{ backgroundColor: '#1E3A8A' }}></div>
-          <div className="p-8 md:p-10 text-center">
-            <h2 className="text-2xl font-semibold text-apple-gray-900 mb-2">
-              Tzeis Hakochavim
-            </h2>
-            <p className="text-sm text-apple-gray-500 mb-8">
-              Nightfall at 8.5° below horizon
-            </p>
-
-            <div className="mb-6">
-              <div className="text-5xl md:text-6xl font-semibold text-apple-gray-900 tracking-tight mb-2">
-                {formatTime(tzeis)}
-              </div>
-              {tzeis && sunset && (
-                <p className="text-base text-apple-gray-600 font-medium">
-                  {getTzeisRelativeTime()}
-                </p>
-              )}
-            </div>
-
-            <div className="bg-apple-gray-50 rounded-2xl p-6 text-left">
-              <div className="space-y-4">
-                <div>
-                  <h3 className="text-sm font-semibold text-apple-gray-900 mb-1">
-                    Calculation Method
-                  </h3>
-                  <p className="text-sm text-apple-gray-600">
-                    Sun at 8.5° below the horizon
-                  </p>
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-apple-gray-900 mb-1">
-                    Description
-                  </h3>
-                  <p className="text-sm text-apple-gray-600">
-                    The emergence of three stars (nightfall). Calculated using the Geonim's position of 8.5° below the horizon.
-                  </p>
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-apple-gray-900 mb-1">
-                    Mathematical Calculation
-                  </h3>
-                  <p className="text-sm text-apple-gray-600 leading-relaxed space-y-2">
-                    <span className="block">
-                      Tzeis is calculated when the sun reaches 8.5° below the geometric horizon.
-                    </span>
-                    <span className="block mt-2">
-                      <strong>Formula:</strong>
-                      <code className="block mt-1 bg-white px-2 py-1 rounded text-xs font-mono">
-                        cos(H) = [sin(-8.5°) - sin(latitude) × sin(declination)] / [cos(latitude) × cos(declination)]
-                      </code>
-                    </span>
-                    <span className="block mt-2">
-                      The hour angle is converted to time after sunset to determine when the sun reaches this depression angle.
-                    </span>
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Chatzos HaLailah Card */}
-        <div className="bg-white rounded-3xl shadow-apple-lg border border-apple-gray-200 overflow-hidden">
-          <div className="h-1.5" style={{ backgroundColor: '#1C1C1E' }}></div>
-          <div className="p-8 md:p-10 text-center">
-            <h2 className="text-2xl font-semibold text-apple-gray-900 mb-2">
-              Chatzos HaLailah
-            </h2>
-            <p className="text-sm text-apple-gray-500 mb-8">
-              Solar midnight
-            </p>
-
-            <div className="mb-6">
-              <div className="text-5xl md:text-6xl font-semibold text-apple-gray-900 tracking-tight mb-2">
-                {formatTime(chatzosHalailah)}
-              </div>
-              {chatzosHalailah && sunset && (
-                <p className="text-base text-apple-gray-600 font-medium">
-                  {getChatzosHalailahRelativeTime()}
-                </p>
-              )}
-            </div>
-
-            <div className="bg-apple-gray-50 rounded-2xl p-6 text-left">
-              <div className="space-y-4">
-                <div>
-                  <h3 className="text-sm font-semibold text-apple-gray-900 mb-1">
-                    Calculation Method
-                  </h3>
-                  <p className="text-sm text-apple-gray-600">
-                    Midpoint between sunset and sunrise
-                  </p>
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-apple-gray-900 mb-1">
-                    Description
-                  </h3>
-                  <p className="text-sm text-apple-gray-600">
-                    The exact middle of the night when the sun is at its lowest point (nadir). This is solar midnight.
-                  </p>
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-apple-gray-900 mb-1">
-                    Mathematical Calculation
-                  </h3>
-                  <p className="text-sm text-apple-gray-600 leading-relaxed space-y-2">
-                    <span className="block">
-                      Chatzos HaLailah is calculated as the exact midpoint between sunset and the following sunrise.
-                    </span>
-                    <span className="block mt-2">
-                      <strong>Formula:</strong>
-                      <code className="block mt-1 bg-white px-2 py-1 rounded text-xs font-mono">
-                        Chatzos HaLailah = Sunset + (Night Length / 2)
-                      </code>
-                    </span>
-                    <span className="block mt-2">
-                      This represents the time when the sun is at its lowest point below the horizon (180° from solar noon).
-                    </span>
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Sunrise Reference */}
+      {/* Location Info Footer */}
       {sunrise && (
-        <div className="bg-gradient-to-br from-orange-400 to-orange-600 rounded-2xl shadow-apple p-6 text-white max-w-7xl mx-auto">
+        <div className="bg-gradient-to-br from-gray-700 to-gray-900 rounded-2xl shadow-apple p-6 text-white max-w-7xl mx-auto">
           <div className="flex items-center justify-between flex-wrap gap-4">
             <div className="flex items-center">
               <svg
@@ -1194,19 +684,25 @@ export default function ZmanimDisplay({ geoLocation, date }: ZmanimDisplayProps)
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   strokeWidth={2}
-                  d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"
+                  d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+                />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
                 />
               </svg>
               <div>
-                <p className="text-sm opacity-90 font-medium">Sunrise</p>
-                <p className="text-xl font-semibold">
-                  {formatTime(sunrise)}
-                </p>
+                <p className="text-sm opacity-90 font-medium">Location</p>
+                <p className="text-xl font-semibold">{geoLocation.getLocationName()}</p>
               </div>
             </div>
             <div className="text-right">
-              <p className="text-sm opacity-90 font-medium">Location</p>
-              <p className="text-base font-semibold">{geoLocation.getLocationName()}</p>
+              <p className="text-sm opacity-90 font-medium">Coordinates</p>
+              <p className="text-base font-semibold">
+                {geoLocation.getLatitude().toFixed(4)}°, {geoLocation.getLongitude().toFixed(4)}°
+              </p>
             </div>
           </div>
         </div>
