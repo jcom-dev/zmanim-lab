@@ -1,81 +1,52 @@
-import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
+import { clerkMiddleware, clerkClient, createRouteMatcher } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
-
-// Type augmentation for Clerk session claims with custom metadata
-interface CustomSessionClaims {
-  metadata?: {
-    role?: string;
-  };
-}
 
 // Routes that require authentication
 const isPublisherRoute = createRouteMatcher(['/publisher(.*)']);
 const isAdminRoute = createRouteMatcher(['/admin(.*)']);
 
-export default clerkMiddleware(async (auth, req) => {
-  // DEVELOPMENT MODE: Set to true to bypass role checks
-  const DEV_BYPASS_ROLES = process.env.NODE_ENV === 'development';
+// Helper to get user role from Clerk
+async function getUserRole(userId: string): Promise<string | null> {
+  try {
+    const client = await clerkClient();
+    const user = await client.users.getUser(userId);
+    return (user.publicMetadata?.role as string) || null;
+  } catch (error) {
+    console.error('Failed to fetch user:', error);
+    return null;
+  }
+}
 
+export default clerkMiddleware(async (auth, req) => {
   // Publisher routes require publisher or admin role
   if (isPublisherRoute(req)) {
-    const { userId, sessionClaims, orgRole } = await auth();
+    const { userId } = await auth();
     if (!userId) {
       const signInUrl = new URL('/sign-in', req.url);
       signInUrl.searchParams.set('redirect_url', req.url);
       return NextResponse.redirect(signInUrl);
     }
 
-    if (!DEV_BYPASS_ROLES) {
-      // Check for role in multiple places (same as admin check)
-      const claims = sessionClaims as any;
-      const role =
-        orgRole || // Clerk org role (e.g., "org:publisher")
-        claims?.metadata?.role || // Custom metadata
-        claims?.publicMetadata?.role; // Public metadata
-
-      // Normalize role: handle both "publisher" and "org:publisher" formats
-      const normalizedRole = role?.replace('org:', '');
-
-      if (normalizedRole !== 'publisher' && normalizedRole !== 'admin') {
-        return new NextResponse('Forbidden: Publisher role required', { status: 403 });
-      }
+    const role = await getUserRole(userId);
+    if (role !== 'publisher' && role !== 'admin') {
+      console.log('Publisher access denied:', { userId, role });
+      return new NextResponse('Forbidden: Publisher role required', { status: 403 });
     }
   }
 
   // Admin routes require admin role
   if (isAdminRoute(req)) {
-    const { userId, sessionClaims, orgRole } = await auth();
+    const { userId } = await auth();
     if (!userId) {
       const signInUrl = new URL('/sign-in', req.url);
       signInUrl.searchParams.set('redirect_url', req.url);
       return NextResponse.redirect(signInUrl);
     }
 
-    if (!DEV_BYPASS_ROLES) {
-      // Check for role in multiple places:
-      // 1. Clerk organization role (if using organizations)
-      // 2. Custom metadata role (if using custom claims)
-      // 3. Public metadata (alternative location)
-      const claims = sessionClaims as any;
-      const role =
-        orgRole || // Clerk org role (e.g., "org:admin")
-        claims?.metadata?.role || // Custom metadata
-        claims?.publicMetadata?.role; // Public metadata
-
-      // Normalize role: handle both "admin" and "org:admin" formats
-      const normalizedRole = role?.replace('org:', '');
-
-      if (normalizedRole !== 'admin') {
-        // Debug logging
-        console.log('Admin access denied:', {
-          userId,
-          orgRole,
-          normalizedRole,
-          metadata_role: claims?.metadata?.role,
-          publicMetadata_role: claims?.publicMetadata?.role,
-        });
-        return new NextResponse('Forbidden: Admin role required', { status: 403 });
-      }
+    const role = await getUserRole(userId);
+    if (role !== 'admin') {
+      console.log('Admin access denied:', { userId, role });
+      return new NextResponse('Forbidden: Admin role required', { status: 403 });
     }
   }
 
