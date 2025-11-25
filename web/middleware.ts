@@ -1,51 +1,45 @@
-import { clerkMiddleware, clerkClient, createRouteMatcher } from '@clerk/nextjs/server';
+import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 
 // Routes that require authentication
 const isPublisherRoute = createRouteMatcher(['/publisher(.*)']);
 const isAdminRoute = createRouteMatcher(['/admin(.*)']);
 
-// Helper to get user role from Clerk
-async function getUserRole(userId: string): Promise<string | null> {
-  try {
-    const client = await clerkClient();
-    const user = await client.users.getUser(userId);
-    return (user.publicMetadata?.role as string) || null;
-  } catch (error) {
-    console.error('Failed to fetch user:', error);
-    return null;
-  }
+// Helper to extract role from session claims
+// Clerk session token must be customized to include: {"metadata": "{{user.public_metadata}}"}
+function getRoleFromClaims(sessionClaims: any): string | null {
+  return sessionClaims?.metadata?.role || null;
 }
 
 export default clerkMiddleware(async (auth, req) => {
   // Publisher routes require publisher or admin role
   if (isPublisherRoute(req)) {
-    const { userId } = await auth();
+    const { userId, sessionClaims } = await auth();
     if (!userId) {
       const signInUrl = new URL('/sign-in', req.url);
       signInUrl.searchParams.set('redirect_url', req.url);
       return NextResponse.redirect(signInUrl);
     }
 
-    const role = await getUserRole(userId);
+    const role = getRoleFromClaims(sessionClaims);
     if (role !== 'publisher' && role !== 'admin') {
-      console.log('Publisher access denied:', { userId, role });
+      console.log('Publisher access denied:', { userId, role, sessionClaims });
       return new NextResponse('Forbidden: Publisher role required', { status: 403 });
     }
   }
 
   // Admin routes require admin role
   if (isAdminRoute(req)) {
-    const { userId } = await auth();
+    const { userId, sessionClaims } = await auth();
     if (!userId) {
       const signInUrl = new URL('/sign-in', req.url);
       signInUrl.searchParams.set('redirect_url', req.url);
       return NextResponse.redirect(signInUrl);
     }
 
-    const role = await getUserRole(userId);
+    const role = getRoleFromClaims(sessionClaims);
     if (role !== 'admin') {
-      console.log('Admin access denied:', { userId, role });
+      console.log('Admin access denied:', { userId, role, sessionClaims });
       return new NextResponse('Forbidden: Admin role required', { status: 403 });
     }
   }
