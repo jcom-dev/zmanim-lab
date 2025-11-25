@@ -1,19 +1,23 @@
+# ===================
+# Monorepo .gitignore
+# ===================
+
 # Dependencies
 node_modules/
 /.pnp
 .pnp.js
 
 # Testing
-/coverage
+coverage/
 test-results/
 playwright-report/
 
-# Next.js
-/.next/
-/out/
+# Next.js (web/)
+.next/
+out/
 
-# Production
-/build
+# Production builds
+build/
 dist/
 
 # Environment files
@@ -50,7 +54,7 @@ next-env.d.ts
 # Vercel
 .vercel
 
-# Go
+# Go (api/)
 *.exe
 *.exe~
 *.dll
@@ -58,8 +62,8 @@ next-env.d.ts
 *.dylib
 *.test
 *.out
-/vendor/
-/tmp/
+vendor/
+tmp/
 
 # Browsers (Playwright downloads)
 chrome/
@@ -73,5 +77,10 @@ supabase/.temp/
 # Temporary files
 *.tmp
 *.bak
-*.swp
 *~.nib
+
+# BMAD/Agent configs (optional - uncomment to ignore)
+# .bmad/
+# .agent/
+# .claude/
+# .gemini/

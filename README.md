@@ -1,119 +1,139 @@
-# Alos Hashachar Calculator
+# Zmanim Lab
 
-A modern Next.js application to display Alos Hashachar (dawn) times according to all calculation methods available in the kosher-zmanim library.
+**Halachic Zmanim Publishing Platform** - A portal for rabbinic authorities to publish customized Jewish prayer times with full algorithm control.
 
-## Features
+## Overview
 
-- **18+ Calculation Methods**: Display all Alos Hashachar times side-by-side
-- **Location Input**: Manual latitude/longitude entry or geolocation
-- **Date Selection**: Choose any date to calculate times
-- **Method Explanations**: Detailed descriptions and halachic sources for each method
-- **Modern Design**: Vibrant, responsive UI with Tailwind CSS
-- **Categorized Display**: Methods organized by type (Fixed Time, Proportional Hours, Solar Angles)
+Zmanim Lab enables halachic authorities to:
+- Define custom zmanim calculation algorithms using a friendly UX
+- Publish prayer times for specific geographic regions
+- Provide end users with accurate, authority-specific zmanim
 
-## Technology Stack
+## Architecture
 
-- **Framework**: Next.js 14 with TypeScript
-- **Zmanim Library**: kosher-zmanim (TypeScript port of KosherJava)
-- **Styling**: Tailwind CSS
-- **Date/Time**: Luxon (included with kosher-zmanim)
-
-## Getting Started
-
-### Prerequisites
-
-- Node.js 18+ and npm
-
-### Installation
-
-```bash
-# Install dependencies
-npm install
 ```
+┌─────────────────────────────────────────────────────────────────┐
+│                         Zmanim Lab                               │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────┐ │
+│  │   Web Frontend  │───▶│    Go API       │───▶│  Supabase   │ │
+│  │   (Next.js)     │    │   (Chi Router)  │    │ (PostgreSQL)│ │
+│  │     /web        │    │     /api        │    │   + PostGIS │ │
+│  └─────────────────┘    └─────────────────┘    └─────────────┘ │
+│         │                       │                     │         │
+│         ▼                       ▼                     ▼         │
+│      Vercel               Fly.io                Supabase.com    │
+└─────────────────────────────────────────────────────────────────┘
 
-### Development
-
-```bash
-# Run development server
-npm run dev
-```
-
-Open [http://localhost:3000](http://localhost:3000) in your browser.
-
-### Production Build
-
-```bash
-# Build for production
-npm run build
-
-# Start production server
-npm start
-```
-
-### Type Checking
-
-```bash
-# Run TypeScript type checking
-npm run type-check
+Authentication: Clerk
 ```
 
 ## Project Structure
 
 ```
-├── app/
-│   ├── globals.css          # Global styles and design system
-│   ├── layout.tsx            # Root layout component
-│   └── page.tsx              # Main application page
-├── components/
-│   ├── DatePicker.tsx        # Date selection component
-│   ├── LocationInput.tsx     # Location input component
-│   ├── MethodCard.tsx        # Individual method display card
-│   └── ZmanimDisplay.tsx     # Main results display component
-├── lib/
-│   ├── constants.ts          # Application constants
-│   ├── location.ts           # Location utilities
-│   └── zmanim.ts             # Zmanim calculation utilities
-├── next.config.js            # Next.js configuration
-├── tailwind.config.ts        # Tailwind CSS configuration
-└── tsconfig.json             # TypeScript configuration
+zmanim-lab/
+├── web/                 # Next.js frontend (Vercel)
+│   ├── app/            # App Router pages
+│   ├── components/     # React components
+│   ├── lib/            # Utilities & API client
+│   └── package.json
+├── api/                 # Go backend (Fly.io)
+│   ├── cmd/api/        # Entry point
+│   ├── internal/       # Business logic
+│   ├── Dockerfile
+│   └── fly.toml
+├── supabase/           # Database migrations
+│   └── migrations/
+├── docs/               # Documentation
+└── .github/workflows/  # CI/CD
 ```
 
-## Calculation Methods
+## Quick Start
 
-### Fixed Time Before Sunrise
-- Alos 60 Minutes
-- Alos 72 Minutes (Magen Avraham)
-- Alos 90 Minutes
-- Alos 96 Minutes
-- Alos 120 Minutes
+### Prerequisites
 
-### Proportional Hours (Zmaniyos)
-- Alos 72 Zmaniyos (1/10th of day)
-- Alos 90 Zmaniyos (1/8th of day)
-- Alos 96 Zmaniyos (1/7.5th of day)
+- Node.js 18+
+- Go 1.21+
+- Supabase account
+- Clerk account
 
-### Solar Depression Angles
-- Alos 16.1°
-- Alos 18° (Astronomical dawn)
-- Alos 19°
-- Alos 19.8°
-- Alos 26°
+### Frontend (web/)
 
-## Usage
+```bash
+cd web
+npm install
+cp .env.example .env.local
+# Edit .env.local with your API URL and Clerk keys
+npm run dev
+```
 
-1. **Set Location**: Enter latitude/longitude manually or use "Use My Location" button
-2. **Select Date**: Choose a date using the date picker or click "Today"
-3. **View Results**: All calculation methods are displayed in categorized cards
-4. **Expand Details**: Click on any method card to see detailed explanation and source
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-## Contributing
+### Backend (api/)
 
-This is a demonstration application. For production use, consider:
-- Adding more zmanim calculations
-- Implementing user preferences storage
-- Adding calendar view
-- Including shaos zmaniyos calculations
-- Adding print functionality
+```bash
+cd api
+cp .env.example .env
+# Edit .env with your Supabase credentials
+go run ./cmd/api
+```
+
+API available at [http://localhost:8080](http://localhost:8080)
+
+### Database
+
+1. Create a Supabase project at [supabase.com](https://supabase.com)
+2. Apply migrations from `supabase/migrations/`
+3. Configure environment variables with your Supabase credentials
+
+## Deployment
+
+| Component | Platform | Directory | URL |
+|-----------|----------|-----------|-----|
+| Frontend | Vercel | `web/` | TBD |
+| Backend | Fly.io | `api/` | https://zmanim-lab.fly.dev |
+| Database | Supabase | — | — |
+| Auth | Clerk | — | — |
+
+### Deploy Backend
+
+```bash
+cd api
+fly deploy
+```
+
+### Deploy Frontend
+
+Connect repository to Vercel with root directory set to `web/`.
+
+## Documentation
+
+See [docs/](./docs/) for comprehensive documentation:
+
+- [Index](./docs/index.md) - Documentation overview
+- [Architecture](./docs/ARCHITECTURE.md) - System design
+- [API Reference](./docs/api-reference.md) - REST endpoints
+- [Data Models](./docs/data-models.md) - Database schema
+- [Deployment](./docs/deployment.md) - Deployment guide
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|------------|
+| Frontend | Next.js 16, React 19, TypeScript, Tailwind CSS |
+| Backend | Go 1.21, Chi router, pgx |
+| Database | PostgreSQL + PostGIS (Supabase) |
+| Auth | Clerk |
+| Zmanim | kosher-zmanim library |
+| Hosting | Vercel, Fly.io, Supabase |
+
+## Features
+
+- **Multi-Publisher Support** - Multiple halachic authorities can publish their zmanim
+- **Algorithm DSL** - JSON-based formula definitions for custom calculations
+- **Geographic Coverage** - PostGIS-powered coverage areas per publisher
+- **Calculation Caching** - 24-hour cache for performance
+- **Verification System** - Publisher verification workflow
 
 ## Halachic Disclaimer
 
@@ -121,7 +141,7 @@ Times are calculated based on astronomical and halachic methods. Consult your lo
 
 ## License
 
-This project is for educational purposes.
+[Add license here]
 
 ## Acknowledgments
 
