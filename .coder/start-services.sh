@@ -53,7 +53,7 @@ check_service() {
 
 echo ""
 echo "🔍 Checking service health..."
-check_service "API" "http://localhost:8080/api/health"
+check_service "API" "http://localhost:8080/health"
 check_service "Web" "http://localhost:${WEB_PORT:-3001}"
 
 echo ""

@@ -198,7 +198,7 @@ resource "coder_app" "api" {
   share        = "owner"
 
   healthcheck {
-    url       = "http://localhost:8080/api/health"
+    url       = "http://localhost:8080/health"
     interval  = 5
     threshold = 6
   }
