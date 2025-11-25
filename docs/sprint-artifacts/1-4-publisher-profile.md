@@ -1,6 +1,6 @@
 # Story 1.4: Publisher Profile
 
-Status: in-progress
+Status: review
 
 ## Story
 
@@ -18,39 +18,39 @@ so that **end users can identify and trust my organization**.
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Extend publishers table for profile fields (AC: 2, 3)
-  - [ ] 1.1 Add migration for website, logo_url, bio columns
-  - [ ] 1.2 Run migration in Supabase
+- [x] Task 1: Extend publishers table for profile fields (AC: 2, 3)
+  - [x] 1.1 Add migration for website, logo_url, bio columns
+  - [x] 1.2 Run migration in Supabase
 
-- [ ] Task 2: Implement publisher profile API (AC: 1, 2)
-  - [ ] 2.1 Create api/internal/handlers/publishers.go
-  - [ ] 2.2 GET /api/publisher/profile - get own profile
-  - [ ] 2.3 PUT /api/publisher/profile - update profile
-  - [ ] 2.4 Validate required fields server-side
+- [x] Task 2: Implement publisher profile API (AC: 1, 2)
+  - [x] 2.1 Create api/internal/handlers/publishers.go
+  - [x] 2.2 GET /api/publisher/profile - get own profile
+  - [x] 2.3 PUT /api/publisher/profile - update profile
+  - [x] 2.4 Validate required fields server-side
 
-- [ ] Task 3: Implement logo upload (AC: 3)
-  - [ ] 3.1 Configure Supabase Storage bucket for logos
-  - [ ] 3.2 POST /api/publisher/logo - upload logo
-  - [ ] 3.3 Return logo_url after upload
-  - [ ] 3.4 Validate file type and size
+- [x] Task 3: Implement logo upload (AC: 3)
+  - [x] 3.1 Configure Supabase Storage bucket for logos
+  - [x] 3.2 POST /api/publisher/logo - upload logo
+  - [x] 3.3 Return logo_url after upload
+  - [x] 3.4 Validate file type and size
 
-- [ ] Task 4: Create publisher profile page (AC: 1, 2, 5)
-  - [ ] 4.1 Create web/app/publisher/profile/page.tsx
-  - [ ] 4.2 Use react-hook-form with shadcn/ui Form
-  - [ ] 4.3 Display current profile data
-  - [ ] 4.4 Inline validation errors for required fields
-  - [ ] 4.5 Success/error toast on save
+- [x] Task 4: Create publisher profile page (AC: 1, 2, 5)
+  - [x] 4.1 Create web/app/publisher/profile/page.tsx
+  - [x] 4.2 Use react-hook-form with shadcn/ui Form
+  - [x] 4.3 Display current profile data
+  - [x] 4.4 Inline validation errors for required fields
+  - [x] 4.5 Success/error toast on save
 
-- [ ] Task 5: Create logo upload component (AC: 3)
-  - [ ] 5.1 Create web/components/publisher/LogoUpload.tsx
-  - [ ] 5.2 Preview current logo
-  - [ ] 5.3 File picker with drag-drop support
-  - [ ] 5.4 Upload progress indicator
+- [x] Task 5: Create logo upload component (AC: 3)
+  - [x] 5.1 Create web/components/publisher/LogoUpload.tsx
+  - [x] 5.2 Preview current logo
+  - [x] 5.3 File picker with drag-drop support
+  - [x] 5.4 Upload progress indicator
 
-- [ ] Task 6: Create PublisherCard component (AC: 4)
-  - [ ] 6.1 Create web/components/shared/PublisherCard.tsx
-  - [ ] 6.2 Display name, organization, logo
-  - [ ] 6.3 Handle missing logo gracefully (placeholder)
+- [x] Task 6: Create PublisherCard component (AC: 4)
+  - [x] 6.1 Create web/components/shared/PublisherCard.tsx
+  - [x] 6.2 Display name, organization, logo
+  - [x] 6.3 Handle missing logo gracefully (placeholder)
 
 ## Dev Notes
 
@@ -96,7 +96,41 @@ api/internal/handlers/
 ## Dev Agent Record
 
 ### Context Reference
+None (proceeded with story file only)
+
 ### Agent Model Used
+Claude Opus 4.5 (claude-opus-4-5-20251101)
+
 ### Debug Log References
+- All 6 tasks found already implemented in codebase
+- Database schema: `supabase/migrations/20240001_initial_schema.sql` + `20240003_update_publishers_for_admin.sql`
+- Backend handlers: `api/internal/handlers/handlers.go` (GetPublisherProfile, UpdatePublisherProfile)
+- Upload handler: `api/internal/handlers/upload.go` (UploadPublisherLogo)
+- Frontend page: `web/app/publisher/profile/page.tsx`
+- Logo component: `web/components/publisher/LogoUpload.tsx`
+- Publisher card: `web/components/shared/PublisherCard.tsx`
+- Fixed TypeScript error: Changed `title` to `aria-label` on CheckCircle icon in PublisherCard
+- Created E2E tests: `web/tests/publisher-profile.spec.ts`
+
 ### Completion Notes List
+- All acceptance criteria satisfied by existing implementation
+- AC1: GET /api/v1/publisher/profile endpoint returns current profile
+- AC2: PUT /api/v1/publisher/profile updates name, organization, website, email, bio
+- AC3: POST /api/v1/publisher/logo handles logo upload with validation (5MB, JPEG/PNG/WebP)
+- AC4: PublisherCard component displays name, organization, logo with placeholder fallback
+- AC5: Profile page shows asterisk (*) on required fields, inline validation errors
+- Go API builds successfully
+- Web app builds successfully
+- E2E tests created for publisher profile feature
+
 ### File List
+- `supabase/migrations/20240001_initial_schema.sql` - Initial schema with website, logo_url columns
+- `supabase/migrations/20240003_update_publishers_for_admin.sql` - Added bio column, clerk_user_id
+- `api/internal/handlers/handlers.go` - GetPublisherProfile, UpdatePublisherProfile handlers
+- `api/internal/handlers/upload.go` - UploadPublisherLogo handler with Supabase Storage
+- `api/internal/models/models.go` - Publisher model with all profile fields
+- `api/cmd/api/main.go` - Routes: GET/PUT /api/v1/publisher/profile, POST /api/v1/publisher/logo
+- `web/app/publisher/profile/page.tsx` - Profile page with form and validation
+- `web/components/publisher/LogoUpload.tsx` - Logo upload with drag-drop and progress
+- `web/components/shared/PublisherCard.tsx` - Publisher card with logo/placeholder (fixed TypeScript error)
+- `web/tests/publisher-profile.spec.ts` - E2E tests for publisher profile feature (created)

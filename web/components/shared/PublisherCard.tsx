@@ -59,7 +59,7 @@ export function PublisherCard({
             <div className="flex items-center gap-2">
               <CardTitle className="text-xl truncate">{name}</CardTitle>
               {isVerified && (
-                <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" title="Verified Publisher" />
+                <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" aria-label="Verified Publisher" />
               )}
             </div>
             {organization && (
