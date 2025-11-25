@@ -1,10 +1,10 @@
 #!/bin/bash
 set -e
 
-# Shtetl Development Environment Startup Script
-# This script initializes the development environment with all services
+# Zmanim Lab Development Environment Startup Script
+# This script initializes the development environment for the monorepo
 
-echo "🚀 Starting Shtetl Development Environment Setup..."
+echo "🚀 Starting Zmanim Lab Development Environment Setup..."
 
 # Color codes for output
 GREEN='\033[0;32m'
@@ -33,13 +33,10 @@ print_error() {
 # Fix workspace directory ownership (needed for Docker volumes)
 sudo chown -R coder:coder /home/coder/workspace
 
-# Install netcat for service health checks (suppress output)
-sudo apt-get update -qq && sudo apt-get install -qq -y netcat-openbsd > /dev/null 2>&1
-
 # Change to workspace directory
 cd /home/coder/workspace
 
-# Step 1: Install Go 1.25.4
+# Step 1: Install Go 1.25.4 (latest)
 print_status "Installing Go 1.25.4..."
 if ! command -v go &> /dev/null || [[ $(go version | grep -o '1\.25\.4') == "" ]]; then
     wget -q https://go.dev/dl/go1.25.4.linux-amd64.tar.gz
@@ -50,217 +47,140 @@ if ! command -v go &> /dev/null || [[ $(go version | grep -o '1\.25\.4') == "" ]
     echo 'export PATH=$PATH:/usr/local/go/bin' >> ~/.bashrc
     print_success "Go 1.25.4 installed"
 else
-    print_success "Go 1.25.4 already installed"
+    print_success "Go 1.25.4 already installed ($(go version))"
 fi
 
-# Step 2: Install Node.js 24.x LTS
+# Step 2: Install Node.js 24.x LTS (Krypton - latest LTS)
 print_status "Installing Node.js 24.x LTS..."
 if ! command -v node &> /dev/null || [[ $(node --version | grep -o 'v24') == "" ]]; then
     curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash -
     sudo apt-get install -y nodejs
-    print_success "Node.js 24.x installed"
+    print_success "Node.js 24.x LTS installed"
 else
-    print_success "Node.js 24.x already installed"
+    print_success "Node.js 24.x LTS already installed ($(node --version))"
 fi
 
-# Step 3: Clone repositories if they don't exist
-print_status "Cloning repositories..."
+# Step 3: Install Supabase CLI
+print_status "Installing Supabase CLI..."
+if ! command -v supabase &> /dev/null; then
+    npm install -g supabase
+    print_success "Supabase CLI installed"
+else
+    print_success "Supabase CLI already installed"
+fi
 
-# Add GitHub to known hosts to avoid host key verification prompts
+# Step 4: Clone repository if it doesn't exist (monorepo)
+print_status "Checking repository..."
+
+# Add GitHub to known hosts
 mkdir -p ~/.ssh
 ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
 
-# Clone main shtetl repo first (check for .git to verify actual clone, not empty dir)
-if [ ! -d "shtetl/.git" ]; then
-    print_status "Cloning shtetl (main repo)..."
-    rm -rf shtetl 2>/dev/null  # Remove empty directory if exists
-    git clone ${SHTETL_REPO} shtetl || print_warning "Failed to clone shtetl"
+if [ ! -d "zmanim-lab/.git" ]; then
+    print_status "Cloning zmanim-lab repository..."
+    rm -rf zmanim-lab 2>/dev/null
+    git clone ${ZMANIM_REPO:-git@github.com:jcom-dev/zmanim-lab.git} zmanim-lab || print_warning "Failed to clone zmanim-lab"
 else
-    print_success "shtetl already cloned"
+    print_success "zmanim-lab already cloned"
 fi
 
-# Create submodules directory
-mkdir -p shtetl/submodules
-
-# Clone submodules (check for .git to verify actual clone, not empty dir)
-if [ ! -d "shtetl/submodules/shtetl-infra/.git" ]; then
-    print_status "Cloning shtetl-infra..."
-    rm -rf shtetl/submodules/shtetl-infra 2>/dev/null  # Remove empty directory if exists
-    git clone ${SHTETL_INFRA_REPO} shtetl/submodules/shtetl-infra || print_warning "Failed to clone shtetl-infra"
-else
-    print_success "shtetl-infra already cloned"
-fi
-
-if [ ! -d "shtetl/submodules/shtetl-api/.git" ]; then
-    print_status "Cloning shtetl-api..."
-    rm -rf shtetl/submodules/shtetl-api 2>/dev/null  # Remove empty directory if exists
-    git clone ${SHTETL_API_REPO} shtetl/submodules/shtetl-api || print_warning "Failed to clone shtetl-api"
-else
-    print_success "shtetl-api already cloned"
-fi
-
-if [ ! -d "shtetl/submodules/shtetl-web/.git" ]; then
-    print_status "Cloning shtetl-web..."
-    rm -rf shtetl/submodules/shtetl-web 2>/dev/null  # Remove empty directory if exists
-    git clone ${SHTETL_WEB_REPO} shtetl/submodules/shtetl-web || print_warning "Failed to clone shtetl-web"
-else
-    print_success "shtetl-web already cloned"
-fi
-
-if [ ! -d "shtetl/submodules/shtetl-mobile/.git" ]; then
-    print_status "Cloning shtetl-mobile..."
-    rm -rf shtetl/submodules/shtetl-mobile 2>/dev/null  # Remove empty directory if exists
-    git clone ${SHTETL_MOBILE_REPO} shtetl/submodules/shtetl-mobile || print_warning "Failed to clone shtetl-mobile"
-else
-    print_success "shtetl-mobile already cloned"
-fi
-
-# Checkout specified branch for all repos
-if [ -n "${SHTETL_BRANCH}" ] && [ "${SHTETL_BRANCH}" != "main" ]; then
-    print_status "Checking out branch '${SHTETL_BRANCH}' for all repositories..."
-
-    for repo in shtetl shtetl/submodules/shtetl-infra shtetl/submodules/shtetl-api shtetl/submodules/shtetl-web shtetl/submodules/shtetl-mobile; do
-        if [ -d "$repo" ]; then
-            cd "$repo"
-            if git fetch origin "${SHTETL_BRANCH}" 2>/dev/null && git checkout "${SHTETL_BRANCH}" 2>/dev/null; then
-                print_success "Checked out ${SHTETL_BRANCH} in $(basename $repo)"
-            else
-                print_warning "Branch ${SHTETL_BRANCH} not found in $(basename $repo), staying on default"
-            fi
-            cd /home/coder/workspace
-        fi
-    done
-fi
-
-# Step 4: Install Go dependencies
-print_status "Installing Go dependencies..."
-
-for service in zmanim shul kehilla; do
-    if [ -d "shtetl/submodules/shtetl-api/$service" ]; then
-        print_status "Running go mod download for $service service..."
-        cd shtetl/submodules/shtetl-api/$service
-        go mod download || print_warning "Failed to download dependencies for $service"
-        cd /home/coder/workspace
-        print_success "$service dependencies installed"
+# Checkout specified branch
+if [ -n "${ZMANIM_BRANCH}" ] && [ "${ZMANIM_BRANCH}" != "main" ]; then
+    print_status "Checking out branch '${ZMANIM_BRANCH}'..."
+    cd zmanim-lab
+    if git fetch origin "${ZMANIM_BRANCH}" 2>/dev/null && git checkout "${ZMANIM_BRANCH}" 2>/dev/null; then
+        print_success "Checked out ${ZMANIM_BRANCH}"
+    else
+        print_warning "Branch ${ZMANIM_BRANCH} not found, staying on default"
     fi
-done
+    cd /home/coder/workspace
+fi
 
-# Step 5: Install Node.js dependencies
+# Step 5: Install Go dependencies
+print_status "Installing Go dependencies..."
+if [ -d "zmanim-lab/api" ]; then
+    cd zmanim-lab/api
+    go mod download || print_warning "Failed to download Go dependencies"
+    cd /home/coder/workspace
+    print_success "Go dependencies installed"
+fi
+
+# Step 6: Install Node.js dependencies
 print_status "Installing Node.js dependencies..."
-
-if [ -d "shtetl/submodules/shtetl-web" ]; then
-    print_status "Running npm install for web app..."
-    cd shtetl/submodules/shtetl-web
+if [ -d "zmanim-lab/web" ]; then
+    cd zmanim-lab/web
     npm install || print_warning "Failed to install web dependencies"
     cd /home/coder/workspace
-    print_success "Web app dependencies installed"
+    print_success "Web dependencies installed"
 fi
 
-if [ -d "shtetl/submodules/shtetl-mobile" ]; then
-    print_status "Running npm install for mobile app..."
-    cd shtetl/submodules/shtetl-mobile
-    npm install --legacy-peer-deps || print_warning "Failed to install mobile dependencies"
+# Step 7: Install Playwright browsers for E2E testing
+print_status "Installing Playwright browsers..."
+if [ -d "zmanim-lab/web" ]; then
+    cd zmanim-lab/web
+    npx playwright install --with-deps chromium || print_warning "Failed to install Playwright browsers"
     cd /home/coder/workspace
-    print_success "Mobile app dependencies installed"
+    print_success "Playwright browsers installed"
 fi
 
-# Step 6: Wait for PostgreSQL to be ready
-print_status "Waiting for PostgreSQL to be ready..."
-max_attempts=30
-attempt=0
-pg_ready=false
-while [ $attempt -lt $max_attempts ]; do
-    if nc -z ${POSTGRES_HOST} ${POSTGRES_PORT} 2>/dev/null; then
-        pg_ready=true
-        break
-    fi
-    attempt=$((attempt + 1))
-    sleep 1
-done
-if [ "$pg_ready" = true ]; then
-    print_success "PostgreSQL is ready"
-else
-    print_error "PostgreSQL failed to start after $max_attempts attempts"
+# Step 8: Copy .env.example to .env files if they don't exist
+print_status "Setting up environment files..."
+cd zmanim-lab
+
+if [ -f ".env.example" ] && [ ! -f "api/.env" ]; then
+    cp .env.example api/.env
+    print_warning "Created api/.env from template - please configure with your credentials"
 fi
 
-# Step 7: Wait for Redis to be ready
-print_status "Waiting for Redis to be ready..."
-max_attempts=30
-attempt=0
-redis_ready=false
-while [ $attempt -lt $max_attempts ]; do
-    if nc -z ${REDIS_HOST} ${REDIS_PORT} 2>/dev/null; then
-        redis_ready=true
-        break
-    fi
-    attempt=$((attempt + 1))
-    sleep 1
-done
-if [ "$redis_ready" = true ]; then
-    print_success "Redis is ready"
-else
-    print_error "Redis failed to start after $max_attempts attempts"
+if [ -f ".env.example" ] && [ ! -f "web/.env.local" ]; then
+    cp .env.example web/.env.local
+    print_warning "Created web/.env.local from template - please configure with your credentials"
 fi
 
-# Step 8: Run database migrations (currently empty, will be populated in Story 1.8)
-print_status "Running database migrations..."
-# TODO: Add migration command when migrations are created in Story 1.8
-print_success "Database migrations complete (currently empty)"
+cd /home/coder/workspace
 
-# Step 9: Start all services in tmux
-print_status "Starting all services in tmux..."
-
-# Install tmux if not present
+# Step 9: Install tmux for service management
+print_status "Installing tmux..."
 if ! command -v tmux &> /dev/null; then
-    sudo apt-get update -qq && sudo apt-get install -y tmux
+    sudo apt-get update -qq && sudo apt-get install -y tmux > /dev/null 2>&1
+    print_success "tmux installed"
+else
+    print_success "tmux already installed"
 fi
-
-# Kill existing session if it exists
-tmux kill-session -t shtetl 2>/dev/null || true
-
-# Create tmux session and start services
-tmux new-session -d -s shtetl -n zmanim "cd /home/coder/workspace/shtetl/submodules/shtetl-api/zmanim && go run cmd/zmanim/main.go"
-tmux new-window -t shtetl -n shul "cd /home/coder/workspace/shtetl/submodules/shtetl-api/shul && go run cmd/shul/main.go"
-tmux new-window -t shtetl -n kehilla "cd /home/coder/workspace/shtetl/submodules/shtetl-api/kehilla && go run cmd/kehilla/main.go"
-tmux new-window -t shtetl -n web "cd /home/coder/workspace/shtetl/submodules/shtetl-web && npm run dev -- -p ${WEB_PORT}"
-
-# Wait a moment for services to start
-sleep 3
-
-print_success "All services started in tmux session 'shtetl'"
 
 # Step 10: Display status
 echo ""
 echo "=========================================="
-echo "✅ Shtetl Development Environment Ready!"
+echo "✅ Zmanim Lab Development Environment Ready!"
 echo "=========================================="
 echo ""
 echo "📦 Installed:"
-echo "  - Go $(go version | awk '{print $3}')"
-echo "  - Node.js $(node --version)"
-echo "  - npm $(npm --version)"
+echo "  - Go $(go version 2>/dev/null | awk '{print $3}' || echo 'not found')"
+echo "  - Node.js $(node --version 2>/dev/null || echo 'not found')"
+echo "  - npm $(npm --version 2>/dev/null || echo 'not found')"
+echo "  - Supabase CLI $(supabase --version 2>/dev/null || echo 'not found')"
+echo "  - Playwright (Chromium)"
 echo ""
-echo "🗄️  Infrastructure:"
-echo "  - PostgreSQL: ${POSTGRES_HOST}:${POSTGRES_PORT}"
-echo "  - Redis: ${REDIS_HOST}:${REDIS_PORT}"
+echo "🗄️  External Services (configure in .env):"
+echo "  - Supabase: PostgreSQL database"
+echo "  - Upstash: Redis caching"
+echo "  - Clerk: Authentication"
 echo ""
-echo "🚀 Services Running in tmux:"
-echo "  - Zmanim: REST ${ZMANIM_REST_PORT}"
-echo "  - Shul: REST ${SHUL_REST_PORT}"
-echo "  - Kehilla: REST ${KEHILLA_PORT}"
-echo "  - Web: http://localhost:${WEB_PORT}"
+echo "🚀 To Start Services:"
+echo "  cd /home/coder/workspace/zmanim-lab"
+echo "  ./.coder/start-services.sh"
 echo ""
-echo "📺 View Services:"
-echo "  tmux attach -t shtetl"
+echo "  Or manually:"
+echo "  - Web: cd web && npm run dev"
+echo "  - API: cd api && go run cmd/api/main.go"
 echo ""
-echo "  Switch windows: Ctrl+B then 0-3"
-echo "  Detach: Ctrl+B then D"
+echo "📋 Service Ports:"
+echo "  - Web App: http://localhost:3001"
+echo "  - Go API: http://localhost:8080"
 echo ""
-echo "🔍 Health Checks:"
-echo "  curl http://localhost:${ZMANIM_REST_PORT}/health  # Zmanim"
-echo "  curl http://localhost:${SHUL_REST_PORT}/health    # Shul"
-echo "  curl http://localhost:${KEHILLA_PORT}/health      # Kehilla"
-echo "  open http://localhost:${WEB_PORT}                 # Web"
+echo "🧪 Testing:"
+echo "  - Go tests: cd api && go test ./..."
+echo "  - E2E tests: cd web && npm run test:e2e"
 echo ""
 echo "📚 Documentation:"
 echo "  - Architecture: docs/architecture.md"

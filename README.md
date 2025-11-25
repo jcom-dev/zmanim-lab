@@ -50,41 +50,75 @@ zmanim-lab/
 
 ## Quick Start
 
-### Prerequisites
+### Option 1: Coder Cloud Development (Recommended)
 
-- Node.js 18+
-- Go 1.21+
+Use Coder for a fully configured cloud development environment:
+
+```bash
+# Login to Coder
+coder login http://your-coder-instance
+
+# Push template (first time only)
+coder templates push zmanim-lab --directory .coder
+
+# Create workspace
+coder create zmanim-lab-dev --template zmanim-lab
+```
+
+See [.coder/README.md](./.coder/README.md) for details.
+
+### Option 2: Local Development
+
+#### Prerequisites
+
+- Node.js 24+ LTS
+- Go 1.25+
+- npm 10+
 - Supabase account
 - Clerk account
+- Upstash account
 
-### Frontend (web/)
+#### Setup
+
+```bash
+# Clone repository
+git clone https://github.com/jcom-dev/zmanim-lab.git
+cd zmanim-lab
+
+# Copy environment template
+cp .env.example api/.env
+cp .env.example web/.env.local
+# Edit both files with your credentials
+```
+
+#### Frontend (web/)
 
 ```bash
 cd web
 npm install
-cp .env.example .env.local
-# Edit .env.local with your API URL and Clerk keys
-npm run dev
+npm run dev -- -p 3001
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+Open [http://localhost:3001](http://localhost:3001) in your browser.
 
-### Backend (api/)
+#### Backend (api/)
 
 ```bash
 cd api
-cp .env.example .env
-# Edit .env with your Supabase credentials
+go mod download
 go run ./cmd/api
 ```
 
 API available at [http://localhost:8080](http://localhost:8080)
 
-### Database
+### Environment Variables
 
-1. Create a Supabase project at [supabase.com](https://supabase.com)
-2. Apply migrations from `supabase/migrations/`
-3. Configure environment variables with your Supabase credentials
+Required services:
+- **Supabase** - PostgreSQL database ([supabase.com](https://supabase.com))
+- **Upstash** - Redis caching ([upstash.com](https://upstash.com))
+- **Clerk** - Authentication ([clerk.com](https://clerk.com))
+
+See `.env.example` for all required variables.
 
 ## Deployment
 
@@ -120,12 +154,15 @@ See [docs/](./docs/) for comprehensive documentation:
 
 | Layer | Technology |
 |-------|------------|
-| Frontend | Next.js 16, React 19, TypeScript, Tailwind CSS |
-| Backend | Go 1.21, Chi router, pgx |
-| Database | PostgreSQL + PostGIS (Supabase) |
+| Frontend | Next.js 16, React 19, TypeScript, Tailwind CSS, shadcn/ui |
+| Backend | Go 1.25, Chi router, pgx |
+| Database | PostgreSQL (Supabase) |
+| Caching | Upstash Redis (REST API, 24hr TTL) |
 | Auth | Clerk |
-| Zmanim | kosher-zmanim library |
+| Zmanim | Custom Go calculation engine |
+| Testing | Vitest (unit), Playwright (E2E) |
 | Hosting | Vercel, Fly.io, Supabase |
+| Dev Environment | Coder (cloud IDE) |
 
 ## Features
 
@@ -145,5 +182,5 @@ Times are calculated based on astronomical and halachic methods. Consult your lo
 
 ## Acknowledgments
 
-- Powered by [kosher-zmanim](https://github.com/BehindTheMath/KosherZmanim) - TypeScript port of KosherJava
-- Original KosherJava library by Eliyahu Hershfeld
+- Calculation algorithms inspired by [KosherJava](https://github.com/KosherJava/zmanim) by Eliyahu Hershfeld
+- Built with [BMad Method](https://github.com/bmad-agent/bmad-method) AI-first development methodology

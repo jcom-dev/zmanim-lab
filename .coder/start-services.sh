@@ -1,31 +1,72 @@
 #!/bin/bash
-# Helper script to start all Shtetl services in tmux
+# Helper script to start all Zmanim Lab services in tmux
 
-echo "🚀 Starting all Shtetl services in tmux..."
+echo "🚀 Starting Zmanim Lab services in tmux..."
 
-# Create a new tmux session with the first service
-tmux new-session -d -s shtetl -n zmanim "cd /home/coder/workspace/submodules/shtetl-api/zmanim && go run cmd/zmanim/main.go"
+# Get the project root directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
-# Create windows for other services
-tmux new-window -t shtetl -n shul "cd /home/coder/workspace/submodules/shtetl-api/shul && go run cmd/shul/main.go"
-tmux new-window -t shtetl -n kehilla "cd /home/coder/workspace/submodules/shtetl-api/kehilla && go run cmd/kehilla/main.go"
-tmux new-window -t shtetl -n web "cd /home/coder/workspace/submodules/shtetl-web && npm run dev"
+# Check if we're in the right place
+if [ ! -d "$PROJECT_ROOT/web" ] || [ ! -d "$PROJECT_ROOT/api" ]; then
+    echo "❌ Error: Could not find web/ and api/ directories"
+    echo "   Please run this script from the zmanim-lab repository"
+    exit 1
+fi
+
+# Kill existing session if it exists
+tmux kill-session -t zmanim 2>/dev/null || true
+
+# Create a new tmux session with the API service
+tmux new-session -d -s zmanim -n api "cd $PROJECT_ROOT/api && go run cmd/api/main.go"
+
+# Create window for web service (port 3001)
+tmux new-window -t zmanim -n web "cd $PROJECT_ROOT/web && npm run dev -- -p ${WEB_PORT:-3001}"
+
+# Wait a moment for services to start
+sleep 2
+
+# Health check function
+check_service() {
+    local name=$1
+    local url=$2
+    local max_attempts=30
+    local attempt=0
+
+    while [ $attempt -lt $max_attempts ]; do
+        if curl -s "$url" > /dev/null 2>&1; then
+            echo "✅ $name is running"
+            return 0
+        fi
+        attempt=$((attempt + 1))
+        sleep 1
+    done
+    echo "⚠️  $name may not be ready yet (check tmux)"
+    return 1
+}
+
+echo ""
+echo "🔍 Checking service health..."
+check_service "API" "http://localhost:8080/api/health"
+check_service "Web" "http://localhost:${WEB_PORT:-3001}"
+
+echo ""
+echo "✅ Services started in tmux session 'zmanim'"
+echo ""
+echo "📺 To view services:"
+echo "  tmux attach -t zmanim"
+echo ""
+echo "🔀 To switch between services:"
+echo "  Ctrl+B then 0 (api)"
+echo "  Ctrl+B then 1 (web)"
+echo ""
+echo "📤 To detach: Ctrl+B then D"
+echo "🛑 To kill all: tmux kill-session -t zmanim"
+echo ""
+echo "🌐 Service URLs:"
+echo "  - Web App: http://localhost:${WEB_PORT:-3001}"
+echo "  - Go API:  http://localhost:8080"
+echo ""
 
 # Attach to the session
-echo "✅ All services started in tmux session 'shtetl'"
-echo ""
-echo "To view services:"
-echo "  tmux attach -t shtetl"
-echo ""
-echo "To switch between services:"
-echo "  Ctrl+B then 0 (zmanim)"
-echo "  Ctrl+B then 1 (shul)"
-echo "  Ctrl+B then 2 (kehilla)"
-echo "  Ctrl+B then 3 (web)"
-echo ""
-echo "To detach: Ctrl+B then D"
-echo "To kill all: tmux kill-session -t shtetl"
-echo ""
-
-# Attach to the session
-tmux attach -t shtetl
+tmux attach -t zmanim
