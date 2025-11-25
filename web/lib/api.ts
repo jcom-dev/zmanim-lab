@@ -85,7 +85,10 @@ class ApiClient {
     const json = await response.json();
     // Unwrap the data field from the API response
     // Backend returns: { data: {...}, meta: {...} }
-    return json.data !== undefined ? json.data : json;
+    console.log('[API] Raw response:', JSON.stringify(json));
+    const result = json.data !== undefined ? json.data : json;
+    console.log('[API] Unwrapped result:', JSON.stringify(result));
+    return result;
   }
 
   // Health check
