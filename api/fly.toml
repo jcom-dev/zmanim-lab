@@ -9,6 +9,9 @@ primary_region = 'lhr'
 [build]
   dockerfile = 'Dockerfile'
 
+[env]
+  ALLOWED_ORIGINS = "http://localhost:3000,http://localhost:3001,https://zmanim-lab.vercel.app"
+
 [http_service]
   internal_port = 8080
   force_https = true
