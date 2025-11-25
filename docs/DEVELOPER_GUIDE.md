@@ -928,6 +928,118 @@ psql $DATABASE_URL -f script.sql
 
 ---
 
+## AI Dev Agent Workflow (BMad Method)
+
+This section documents the development workflow used by the AI Dev Agent when implementing stories.
+
+### Service Management
+
+**Restart Script:**
+The project uses a `restart.sh` script to manage local services:
+
+```bash
+# Restart all services (kills tmux session and starts fresh)
+./restart.sh
+```
+
+This script:
+1. Kills existing tmux session `zmanim`
+2. Stops any stray Go API or Next.js processes
+3. Frees ports 8080 and 3001
+4. Starts services in a new tmux session via `.coder/start-services.sh`
+
+**Service URLs:**
+- Web App: http://localhost:3001
+- Go API: http://localhost:8080
+
+**View Service Logs:**
+```bash
+tmux attach -t zmanim
+# Switch panes: Ctrl+B then 0 (api) or 1 (web)
+# Detach: Ctrl+B then D
+```
+
+### Playwright E2E Testing
+
+**REQUIRED:** After completing each story implementation, run Playwright E2E tests.
+
+**Test Workflow:**
+```bash
+# 1. Ensure services are running
+./restart.sh
+
+# 2. Run tests for the specific story
+cd web
+npx playwright test tests/<story-name>.spec.ts --reporter=list
+
+# 3. Run all tests to verify no regressions
+npx playwright test --reporter=list
+```
+
+**Test File Naming Convention:**
+- Story tests: `web/tests/<story-id>.spec.ts`
+- Example: `web/tests/publisher-profile.spec.ts` for Story 1.4
+
+**Playwright Configuration:**
+- Config file: `web/playwright.config.ts`
+- Base URL: http://localhost:3001
+- Test directory: `web/tests/`
+
+**Writing Tests for Protected Routes:**
+Routes protected by Clerk authentication will redirect to sign-in. Tests should:
+1. Verify route protection (redirects to sign-in)
+2. Test API endpoints return 401 without auth
+3. Verify UI components render correctly when accessible
+
+Example test structure:
+```typescript
+test.describe('Protected Feature', () => {
+  test('should redirect to sign-in without auth', async ({ page }) => {
+    await page.goto('/protected/route');
+    await page.waitForURL(/sign-in|clerk/, { timeout: 15000 });
+  });
+
+  test('API should return 401 without auth', async ({ page }) => {
+    const response = await page.request.get('http://localhost:8080/api/v1/protected');
+    expect(response.status()).toBe(401);
+  });
+});
+```
+
+### Story Completion Checklist
+
+When completing a story, the AI Dev Agent must:
+
+1. **Implement all tasks** in the story file
+2. **Run Playwright tests** for the story
+3. **Verify builds pass:**
+   ```bash
+   cd api && go build ./...
+   cd web && npm run build
+   ```
+4. **Update story file:**
+   - Mark all tasks as complete `[x]`
+   - Update Status to `review`
+   - Fill in Dev Agent Record section
+5. **Update sprint-status.yaml:**
+   - Change story status from `in-progress` to `review`
+6. **Commit and push:**
+   ```bash
+   git add .
+   git commit -m "feat(story-X.X): <description>"
+   git push origin main
+   ```
+
+### Dev Agent Commands
+
+From the Dev Agent menu:
+- `*develop-story` - Execute story implementation
+- `*story-done` - Mark story as done (moves to DONE)
+- `*code-review` - Perform code review on completed story
+- `*workflow-status` - Check current workflow status
+
+---
+
 ## Welcome to the Team! 🚀
 
 You're now ready to start developing Zmanim Lab. If you have any questions or run into issues, don't hesitate to reach out to the team. Happy coding!
