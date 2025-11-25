@@ -1,29 +1,26 @@
-import { auth } from '@clerk/nextjs/server';
+import { auth, currentUser } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 
 export async function GET() {
-  const { userId, sessionClaims, orgRole, orgId } = await auth();
+  const authResult = await auth();
+  const user = await currentUser();
 
-  if (!userId) {
+  if (!authResult.userId) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
   }
 
-  const claims = sessionClaims as any;
-
   return NextResponse.json({
-    userId,
-    orgId,
-    orgRole,
-    sessionClaims: {
-      metadata: claims?.metadata,
-      publicMetadata: claims?.publicMetadata,
-      privateMetadata: claims?.privateMetadata,
+    auth: {
+      userId: authResult.userId,
+      orgId: authResult.orgId,
+      orgRole: authResult.orgRole,
+      sessionClaims: authResult.sessionClaims,
     },
-    roleCheck: {
-      orgRole,
-      metadata_role: claims?.metadata?.role,
-      publicMetadata_role: claims?.publicMetadata?.role,
-      normalizedRole: (orgRole || claims?.metadata?.role || claims?.publicMetadata?.role)?.replace('org:', ''),
-    },
+    user: user ? {
+      id: user.id,
+      publicMetadata: user.publicMetadata,
+      privateMetadata: user.privateMetadata,
+      unsafeMetadata: user.unsafeMetadata,
+    } : null,
   });
 }
