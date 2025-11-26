@@ -94,7 +94,8 @@ func main() {
 			r.Get("/regions", h.GetRegions)
 
 			// Zmanim calculations
-			r.Post("/zmanim", h.CalculateZmanim)
+			r.Get("/zmanim", h.GetZmanimForCity)      // New: GET with cityId, date, publisherId
+			r.Post("/zmanim", h.CalculateZmanim)       // Legacy: POST with coordinates
 		})
 
 		// Publisher protected routes
@@ -110,6 +111,8 @@ func main() {
 			r.Post("/coverage", h.CreatePublisherCoverage)
 			r.Put("/coverage/{id}", h.UpdatePublisherCoverage)
 			r.Delete("/coverage/{id}", h.DeletePublisherCoverage)
+			// Cache management
+			r.Delete("/cache", h.InvalidatePublisherCache)
 		})
 
 		// Admin protected routes

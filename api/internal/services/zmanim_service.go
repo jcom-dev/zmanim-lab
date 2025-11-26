@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jcom-dev/zmanim-lab/internal/algorithm"
 	"github.com/jcom-dev/zmanim-lab/internal/db"
 	"github.com/jcom-dev/zmanim-lab/internal/models"
 )
@@ -171,34 +172,41 @@ func (s *ZmanimService) cacheResult(ctx context.Context, date time.Time, latitud
 }
 
 // calculateWithAlgorithm performs the actual zmanim calculation
-func (s *ZmanimService) calculateWithAlgorithm(ctx context.Context, date time.Time, latitude, longitude float64, timezone string, algorithm *models.Algorithm) (map[string]string, error) {
-	// This is a placeholder for actual zmanim calculation logic
-	// In production, this would use the algorithm configuration to calculate times
-	// For now, return sample data
-
+func (s *ZmanimService) calculateWithAlgorithm(ctx context.Context, date time.Time, latitude, longitude float64, timezone string, alg *models.Algorithm) (map[string]string, error) {
 	loc, err := time.LoadLocation(timezone)
 	if err != nil {
 		loc = time.UTC
 	}
 
-	dateInLoc := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, loc)
+	// Parse algorithm configuration or use default
+	var algorithmConfig *algorithm.AlgorithmConfig
+	if alg != nil {
+		// Try to marshal the configuration if it's not empty
+		configBytes, err := json.Marshal(alg.Configuration)
+		if err == nil && len(configBytes) > 2 { // More than just "{}"
+			algorithmConfig, _ = algorithm.ParseAlgorithm(configBytes)
+		}
+	}
 
-	// Sample calculation (in production, use actual astronomical calculations)
-	return map[string]string{
-		"alot_hashachar":      dateInLoc.Add(5*time.Hour + 30*time.Minute).Format("15:04:05"),
-		"misheyakir":          dateInLoc.Add(5*time.Hour + 45*time.Minute).Format("15:04:05"),
-		"sunrise":             dateInLoc.Add(6*time.Hour + 15*time.Minute).Format("15:04:05"),
-		"sof_zman_shma_gra":   dateInLoc.Add(9*time.Hour + 0*time.Minute).Format("15:04:05"),
-		"sof_zman_shma_mga":   dateInLoc.Add(8*time.Hour + 45*time.Minute).Format("15:04:05"),
-		"sof_zman_tefilla":    dateInLoc.Add(10*time.Hour + 0*time.Minute).Format("15:04:05"),
-		"chatzot":             dateInLoc.Add(12*time.Hour + 30*time.Minute).Format("15:04:05"),
-		"mincha_gedola":       dateInLoc.Add(13*time.Hour + 0*time.Minute).Format("15:04:05"),
-		"mincha_ketana":       dateInLoc.Add(15*time.Hour + 45*time.Minute).Format("15:04:05"),
-		"plag_hamincha":       dateInLoc.Add(17*time.Hour + 0*time.Minute).Format("15:04:05"),
-		"sunset":              dateInLoc.Add(18*time.Hour + 30*time.Minute).Format("15:04:05"),
-		"tzait_hakochavim":    dateInLoc.Add(19*time.Hour + 0*time.Minute).Format("15:04:05"),
-		"tzait_72":            dateInLoc.Add(19*time.Hour + 42*time.Minute).Format("15:04:05"),
-	}, nil
+	// Use default algorithm if parsing failed or no algorithm provided
+	if algorithmConfig == nil {
+		algorithmConfig = algorithm.DefaultAlgorithm()
+	}
+
+	// Create executor and run calculations
+	executor := algorithm.NewExecutor(date, latitude, longitude, loc)
+	results, err := executor.Execute(algorithmConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute algorithm: %w", err)
+	}
+
+	// Convert to simple map for backward compatibility
+	zmanim := make(map[string]string)
+	for _, zman := range results.Zmanim {
+		zmanim[zman.Key] = zman.TimeString
+	}
+
+	return zmanim, nil
 }
 
 // getAlgorithmForPublisher gets the active algorithm for a publisher

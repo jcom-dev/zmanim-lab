@@ -43,7 +43,7 @@ development_status:
   1-4-publisher-profile: review
   1-5-global-location-system: review
   1-6-publisher-coverage: review
-  1-7-calculation-engine-caching: in-progress
+  1-7-calculation-engine-caching: review
   1-8-algorithm-editor: ready-for-dev
   1-9-algorithm-publishing: ready-for-dev
   1-10-zmanim-user-experience: ready-for-dev
