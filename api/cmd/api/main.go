@@ -81,8 +81,12 @@ func main() {
 			r.Get("/publishers", h.GetPublishers)
 			r.Get("/publishers/{id}", h.GetPublisher)
 
-			// Locations
+			// Locations (legacy)
 			r.Get("/locations", h.GetLocations)
+
+			// Cities - Global location system
+			r.Get("/cities", h.SearchCities)
+			r.Get("/cities/nearby", h.GetNearbyCity)
 
 			// Zmanim calculations
 			r.Post("/zmanim", h.CalculateZmanim)

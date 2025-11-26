@@ -50,6 +50,28 @@ type GeographicRegion struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 }
 
+// City represents a city in the global cities database
+type City struct {
+	ID          string   `json:"id"`
+	Name        string   `json:"name"`
+	Country     string   `json:"country"`
+	CountryCode string   `json:"country_code"`
+	Region      *string  `json:"region,omitempty"`
+	RegionType  *string  `json:"region_type,omitempty"`
+	Latitude    float64  `json:"latitude"`
+	Longitude   float64  `json:"longitude"`
+	Timezone    string   `json:"timezone"`
+	Population  *int     `json:"population,omitempty"`
+	// Computed display field
+	DisplayName string `json:"display_name"`
+}
+
+// CitySearchResponse represents the response for city search
+type CitySearchResponse struct {
+	Cities []City `json:"cities"`
+	Total  int    `json:"total"`
+}
+
 // CoverageArea represents a publisher's coverage area
 type CoverageArea struct {
 	ID          string    `json:"id"`
