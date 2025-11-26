@@ -87,6 +87,11 @@ func main() {
 			// Cities - Global location system
 			r.Get("/cities", h.SearchCities)
 			r.Get("/cities/nearby", h.GetNearbyCity)
+			r.Get("/cities/{cityId}/publishers", h.GetPublishersForCity)
+
+			// Countries and regions for coverage selection
+			r.Get("/countries", h.GetCountries)
+			r.Get("/regions", h.GetRegions)
 
 			// Zmanim calculations
 			r.Post("/zmanim", h.CalculateZmanim)
@@ -100,6 +105,11 @@ func main() {
 			r.Post("/logo", h.UploadPublisherLogo)
 			r.Get("/algorithm", h.GetPublisherAlgorithm)
 			r.Put("/algorithm", h.UpdatePublisherAlgorithm)
+			// Coverage management
+			r.Get("/coverage", h.GetPublisherCoverage)
+			r.Post("/coverage", h.CreatePublisherCoverage)
+			r.Put("/coverage/{id}", h.UpdatePublisherCoverage)
+			r.Delete("/coverage/{id}", h.DeletePublisherCoverage)
 		})
 
 		// Admin protected routes

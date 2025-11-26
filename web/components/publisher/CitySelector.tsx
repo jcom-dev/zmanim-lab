@@ -1,0 +1,414 @@
+'use client';
+
+import { useState, useEffect, useCallback } from 'react';
+import { Button } from '@/components/ui/button';
+import { ChevronDown, Search, MapPin, Globe, Flag, Building } from 'lucide-react';
+
+interface City {
+  id: string;
+  name: string;
+  country: string;
+  country_code: string;
+  region: string | null;
+  region_type: string | null;
+  latitude: number;
+  longitude: number;
+  timezone: string;
+  display_name: string;
+}
+
+interface Country {
+  code: string;
+  name: string;
+}
+
+interface Region {
+  name: string;
+  type: string | null;
+}
+
+type CoverageLevel = 'country' | 'region' | 'city';
+
+interface CoverageSelection {
+  level: CoverageLevel;
+  countryCode?: string;
+  countryName?: string;
+  region?: string;
+  cityId?: string;
+  cityName?: string;
+  displayName: string;
+}
+
+interface CitySelectorProps {
+  onSelect: (selection: CoverageSelection) => void;
+  onCancel: () => void;
+}
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+
+export default function CitySelector({ onSelect, onCancel }: CitySelectorProps) {
+  const [level, setLevel] = useState<CoverageLevel>('country');
+  const [countries, setCountries] = useState<Country[]>([]);
+  const [regions, setRegions] = useState<Region[]>([]);
+  const [cities, setCities] = useState<City[]>([]);
+
+  const [selectedCountry, setSelectedCountry] = useState<Country | null>(null);
+  const [selectedRegion, setSelectedRegion] = useState<Region | null>(null);
+
+  const [countrySearch, setCountrySearch] = useState('');
+  const [regionSearch, setRegionSearch] = useState('');
+  const [citySearch, setCitySearch] = useState('');
+
+  const [isLoadingCountries, setIsLoadingCountries] = useState(false);
+  const [isLoadingRegions, setIsLoadingRegions] = useState(false);
+  const [isLoadingCities, setIsLoadingCities] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Fetch countries on mount
+  useEffect(() => {
+    fetchCountries();
+  }, []);
+
+  // Fetch regions when country changes
+  useEffect(() => {
+    if (selectedCountry && (level === 'region' || level === 'city')) {
+      fetchRegions(selectedCountry.code);
+    } else {
+      setRegions([]);
+    }
+    setSelectedRegion(null);
+    setCities([]);
+  }, [selectedCountry, level]);
+
+  const fetchCountries = async () => {
+    setIsLoadingCountries(true);
+    setError(null);
+    try {
+      const response = await fetch(`${API_BASE}/api/v1/countries`);
+      if (!response.ok) throw new Error('Failed to fetch countries');
+      const data = await response.json();
+      setCountries(data.data?.countries || data.countries || []);
+    } catch (err) {
+      console.error('Failed to fetch countries:', err);
+      setError('Failed to load countries');
+    } finally {
+      setIsLoadingCountries(false);
+    }
+  };
+
+  const fetchRegions = async (countryCode: string) => {
+    setIsLoadingRegions(true);
+    setError(null);
+    try {
+      const response = await fetch(`${API_BASE}/api/v1/regions?country_code=${countryCode}`);
+      if (!response.ok) throw new Error('Failed to fetch regions');
+      const data = await response.json();
+      setRegions(data.data?.regions || data.regions || []);
+    } catch (err) {
+      console.error('Failed to fetch regions:', err);
+      setError('Failed to load regions');
+    } finally {
+      setIsLoadingRegions(false);
+    }
+  };
+
+  const searchCities = useCallback(async (query: string) => {
+    if (query.length < 2) {
+      setCities([]);
+      return;
+    }
+
+    setIsLoadingCities(true);
+    try {
+      // Filter by country if selected
+      let url = `${API_BASE}/api/v1/cities?search=${encodeURIComponent(query)}&limit=20`;
+      const response = await fetch(url);
+      if (!response.ok) throw new Error('Failed to search cities');
+      const data = await response.json();
+      let fetchedCities = data.data?.cities || data.cities || [];
+
+      // Client-side filter by country/region if selected
+      if (selectedCountry) {
+        fetchedCities = fetchedCities.filter((c: City) => c.country_code === selectedCountry.code);
+      }
+      if (selectedRegion) {
+        fetchedCities = fetchedCities.filter((c: City) => c.region === selectedRegion.name);
+      }
+
+      setCities(fetchedCities);
+    } catch (err) {
+      console.error('Failed to search cities:', err);
+    } finally {
+      setIsLoadingCities(false);
+    }
+  }, [selectedCountry, selectedRegion]);
+
+  // Debounced city search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (citySearch) {
+        searchCities(citySearch);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [citySearch, searchCities]);
+
+  const handleConfirm = () => {
+    if (level === 'country' && selectedCountry) {
+      onSelect({
+        level: 'country',
+        countryCode: selectedCountry.code,
+        countryName: selectedCountry.name,
+        displayName: selectedCountry.name,
+      });
+    } else if (level === 'region' && selectedCountry && selectedRegion) {
+      onSelect({
+        level: 'region',
+        countryCode: selectedCountry.code,
+        countryName: selectedCountry.name,
+        region: selectedRegion.name,
+        displayName: `${selectedRegion.name}, ${selectedCountry.code}`,
+      });
+    }
+    // City is selected directly from the list
+  };
+
+  const handleCitySelect = (city: City) => {
+    onSelect({
+      level: 'city',
+      cityId: city.id,
+      cityName: city.name,
+      countryCode: city.country_code,
+      countryName: city.country,
+      region: city.region || undefined,
+      displayName: city.display_name,
+    });
+  };
+
+  const filteredCountries = countries.filter(c =>
+    c.name.toLowerCase().includes(countrySearch.toLowerCase()) ||
+    c.code.toLowerCase().includes(countrySearch.toLowerCase())
+  );
+
+  const filteredRegions = regions.filter(r =>
+    r.name.toLowerCase().includes(regionSearch.toLowerCase())
+  );
+
+  const canConfirm =
+    (level === 'country' && selectedCountry) ||
+    (level === 'region' && selectedCountry && selectedRegion);
+
+  return (
+    <div className="space-y-6">
+      {/* Level Selector */}
+      <div>
+        <label className="block text-sm font-medium mb-2">Coverage Level</label>
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            variant={level === 'country' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setLevel('country')}
+            className="flex items-center gap-2"
+          >
+            <Globe className="w-4 h-4" />
+            Country
+          </Button>
+          <Button
+            type="button"
+            variant={level === 'region' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setLevel('region')}
+            className="flex items-center gap-2"
+          >
+            <Flag className="w-4 h-4" />
+            Region
+          </Button>
+          <Button
+            type="button"
+            variant={level === 'city' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setLevel('city')}
+            className="flex items-center gap-2"
+          >
+            <Building className="w-4 h-4" />
+            City
+          </Button>
+        </div>
+      </div>
+
+      {/* Country Selection */}
+      <div>
+        <label className="block text-sm font-medium mb-2">
+          Country {level !== 'city' ? '*' : '(optional filter)'}
+        </label>
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input
+            type="text"
+            value={countrySearch}
+            onChange={(e) => setCountrySearch(e.target.value)}
+            placeholder="Search countries..."
+            className="w-full pl-9 pr-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+        {isLoadingCountries ? (
+          <p className="text-sm text-gray-500 mt-2">Loading countries...</p>
+        ) : (
+          <div className="mt-2 max-h-40 overflow-y-auto border rounded-md">
+            {filteredCountries.map((country) => (
+              <button
+                key={country.code}
+                type="button"
+                onClick={() => {
+                  setSelectedCountry(country);
+                  setCountrySearch('');
+                }}
+                className={`w-full text-left px-3 py-2 hover:bg-gray-100 flex items-center gap-2 ${
+                  selectedCountry?.code === country.code ? 'bg-blue-50 text-blue-700' : ''
+                }`}
+              >
+                <span className="font-medium">{country.name}</span>
+                <span className="text-gray-500 text-sm">({country.code})</span>
+              </button>
+            ))}
+            {filteredCountries.length === 0 && (
+              <p className="px-3 py-2 text-gray-500 text-sm">No countries found</p>
+            )}
+          </div>
+        )}
+        {selectedCountry && (
+          <div className="mt-2 p-2 bg-blue-50 rounded-md flex items-center justify-between">
+            <span className="text-blue-700 font-medium">{selectedCountry.name}</span>
+            <button
+              type="button"
+              onClick={() => setSelectedCountry(null)}
+              className="text-blue-500 hover:text-blue-700 text-sm"
+            >
+              Change
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Region Selection (for region/city level) */}
+      {(level === 'region' || level === 'city') && selectedCountry && (
+        <div>
+          <label className="block text-sm font-medium mb-2">
+            Region {level === 'region' ? '*' : '(optional filter)'}
+          </label>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              value={regionSearch}
+              onChange={(e) => setRegionSearch(e.target.value)}
+              placeholder="Search regions..."
+              className="w-full pl-9 pr-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          {isLoadingRegions ? (
+            <p className="text-sm text-gray-500 mt-2">Loading regions...</p>
+          ) : (
+            <div className="mt-2 max-h-40 overflow-y-auto border rounded-md">
+              {filteredRegions.map((region) => (
+                <button
+                  key={region.name}
+                  type="button"
+                  onClick={() => {
+                    setSelectedRegion(region);
+                    setRegionSearch('');
+                  }}
+                  className={`w-full text-left px-3 py-2 hover:bg-gray-100 ${
+                    selectedRegion?.name === region.name ? 'bg-blue-50 text-blue-700' : ''
+                  }`}
+                >
+                  {region.name}
+                  {region.type && <span className="text-gray-500 text-sm ml-2">({region.type})</span>}
+                </button>
+              ))}
+              {filteredRegions.length === 0 && (
+                <p className="px-3 py-2 text-gray-500 text-sm">No regions found</p>
+              )}
+            </div>
+          )}
+          {selectedRegion && (
+            <div className="mt-2 p-2 bg-blue-50 rounded-md flex items-center justify-between">
+              <span className="text-blue-700 font-medium">{selectedRegion.name}</span>
+              <button
+                type="button"
+                onClick={() => setSelectedRegion(null)}
+                className="text-blue-500 hover:text-blue-700 text-sm"
+              >
+                Change
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* City Search (for city level) */}
+      {level === 'city' && (
+        <div>
+          <label className="block text-sm font-medium mb-2">City *</label>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              value={citySearch}
+              onChange={(e) => setCitySearch(e.target.value)}
+              placeholder="Search for a city..."
+              className="w-full pl-9 pr-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          {isLoadingCities ? (
+            <p className="text-sm text-gray-500 mt-2">Searching cities...</p>
+          ) : cities.length > 0 ? (
+            <div className="mt-2 max-h-48 overflow-y-auto border rounded-md">
+              {cities.map((city) => (
+                <button
+                  key={city.id}
+                  type="button"
+                  onClick={() => handleCitySelect(city)}
+                  className="w-full text-left px-3 py-2 hover:bg-gray-100 flex items-center gap-2"
+                >
+                  <MapPin className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                  <div>
+                    <span className="font-medium">{city.name}</span>
+                    <span className="text-gray-500 text-sm ml-2">
+                      {city.region && `${city.region}, `}{city.country}
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          ) : citySearch.length >= 2 ? (
+            <p className="text-sm text-gray-500 mt-2">No cities found</p>
+          ) : (
+            <p className="text-sm text-gray-500 mt-2">Type at least 2 characters to search</p>
+          )}
+        </div>
+      )}
+
+      {error && (
+        <p className="text-sm text-red-600">{error}</p>
+      )}
+
+      {/* Action Buttons */}
+      <div className="flex gap-3 pt-4">
+        <Button type="button" variant="outline" onClick={onCancel}>
+          Cancel
+        </Button>
+        {level !== 'city' && (
+          <Button
+            type="button"
+            onClick={handleConfirm}
+            disabled={!canConfirm}
+          >
+            Add Coverage
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}

@@ -191,3 +191,58 @@ type HealthResponse struct {
 	Database string `json:"database"`
 	Version  string `json:"version"`
 }
+
+// PublisherCoverage represents a publisher's coverage area at country, region, or city level
+type PublisherCoverage struct {
+	ID            string    `json:"id"`
+	PublisherID   string    `json:"publisher_id"`
+	CoverageLevel string    `json:"coverage_level"` // country, region, city
+	CountryCode   *string   `json:"country_code,omitempty"`
+	Region        *string   `json:"region,omitempty"`
+	CityID        *string   `json:"city_id,omitempty"`
+	Priority      int       `json:"priority"`
+	IsActive      bool      `json:"is_active"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
+	// Computed fields for display
+	DisplayName string `json:"display_name,omitempty"`
+	CityName    string `json:"city_name,omitempty"`
+	Country     string `json:"country,omitempty"`
+}
+
+// PublisherCoverageCreateRequest represents a request to create coverage
+type PublisherCoverageCreateRequest struct {
+	CoverageLevel string  `json:"coverage_level"` // country, region, city
+	CountryCode   *string `json:"country_code,omitempty"`
+	Region        *string `json:"region,omitempty"`
+	CityID        *string `json:"city_id,omitempty"`
+	Priority      *int    `json:"priority,omitempty"`
+}
+
+// PublisherCoverageUpdateRequest represents a request to update coverage
+type PublisherCoverageUpdateRequest struct {
+	Priority *int  `json:"priority,omitempty"`
+	IsActive *bool `json:"is_active,omitempty"`
+}
+
+// PublisherCoverageListResponse represents a list of coverage areas
+type PublisherCoverageListResponse struct {
+	Coverage []PublisherCoverage `json:"coverage"`
+	Total    int                 `json:"total"`
+}
+
+// PublisherForCity represents a publisher found for a city search
+type PublisherForCity struct {
+	PublisherID   string `json:"publisher_id"`
+	PublisherName string `json:"publisher_name"`
+	CoverageLevel string `json:"coverage_level"`
+	Priority      int    `json:"priority"`
+	MatchType     string `json:"match_type"` // exact_city, region_match, country_match
+}
+
+// PublishersForCityResponse represents the response for publishers serving a city
+type PublishersForCityResponse struct {
+	Publishers []PublisherForCity `json:"publishers"`
+	Total      int                `json:"total"`
+	CityID     string             `json:"city_id"`
+}

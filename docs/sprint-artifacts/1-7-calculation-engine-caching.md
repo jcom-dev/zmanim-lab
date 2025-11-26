@@ -1,6 +1,6 @@
 # Story 1.7: Calculation Engine & Caching
 
-Status: ready-for-dev
+Status: in-progress
 
 ## Story
 
