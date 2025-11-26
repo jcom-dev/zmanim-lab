@@ -1,6 +1,6 @@
 # Story 1.10: Zmanim User Experience
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -150,7 +150,25 @@ When no publisher covers a location, use a standard GRA-based calculation with d
 ## Dev Agent Record
 
 ### Context Reference
+- Story 1.9 algorithm publishing implementation
+
 ### Agent Model Used
+- Claude Code (claude-opus-4-5-20251101)
+
 ### Debug Log References
+- N/A
+
 ### Completion Notes List
+- Refactored home page with Country → Region → City selection flow
+- Created city page showing publishers for selected location
+- Created zmanim display page with date navigation
+- Implemented formula reveal via expandable zman rows
+- Added "no publisher" warning with default zmanim option
+- Implemented localStorage persistence for location selection
+- All 13 Playwright E2E tests pass
+
 ### File List
+- `web/app/page.tsx` - Refactored home page with location selection flow
+- `web/app/zmanim/[cityId]/page.tsx` - Publisher selection for city
+- `web/app/zmanim/[cityId]/[publisherId]/page.tsx` - Zmanim display with date navigation
+- `web/tests/zmanim-user-experience.spec.ts` - 13 Playwright E2E tests

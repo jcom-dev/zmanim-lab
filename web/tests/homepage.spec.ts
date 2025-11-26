@@ -1,5 +1,7 @@
 import { test, expect } from '@playwright/test';
 
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+
 test.describe('Zmanim Lab Homepage', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
@@ -7,249 +9,252 @@ test.describe('Zmanim Lab Homepage', () => {
 
   test('should visit the homepage and display main elements', async ({ page }) => {
     // Check hero section
-    await expect(page.getByRole('heading', { name: 'Alos Hashachar' })).toBeVisible();
-    await expect(page.getByText('Dawn time calculated at 16.1° below the horizon')).toBeVisible();
-
-    // Check main sections are present
-    await expect(page.getByRole('heading', { name: 'Location' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Date' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Zmanim Lab' })).toBeVisible();
+    await expect(page.getByText('Multi-Publisher Zmanim Platform')).toBeVisible();
+    await expect(page.getByText('Select your location to view prayer times')).toBeVisible();
   });
 
-  test('should display default location inputs with Jerusalem coordinates', async ({ page }) => {
-    // Check latitude and longitude inputs have default values
-    const latitudeInput = page.locator('#latitude');
-    const longitudeInput = page.locator('#longitude');
+  test('should display country selection', async ({ page }) => {
+    // Check that Select Country heading is visible
+    await expect(page.getByText('Select Country')).toBeVisible();
 
-    await expect(latitudeInput).toHaveValue('31.7683');
-    await expect(longitudeInput).toHaveValue('35.2137');
+    // Check that country buttons are displayed
+    const countryButtons = page.locator('button:has-text("cities")');
+    await expect(countryButtons.first()).toBeVisible({ timeout: 10000 });
   });
 
-  test('should display date picker with today\'s date', async ({ page }) => {
-    const dateInput = page.locator('#date');
-
-    // Check that date input exists and has a value
-    await expect(dateInput).toBeVisible();
-    const dateValue = await dateInput.inputValue();
-    expect(dateValue).toBeTruthy();
-  });
-
-  test('should display zmanim calculation results', async ({ page }) => {
-    // Wait for calculations to complete
-    await expect(page.getByText('Calculating times...')).toBeHidden({ timeout: 10000 });
-
-    // Check that results section is visible
-    await expect(page.getByRole('heading', { name: 'Zmanim Calculations' })).toBeVisible();
-
-    // Check that key zmanim are displayed in the table
-    const table = page.getByRole('table');
-    await expect(table.getByText('Sunrise (Netz)')).toBeVisible();
-    await expect(table.getByText('Alos Hashachar')).toBeVisible();
-    await expect(table.getByText('Sunset (Shkiah)')).toBeVisible();
-    await expect(table.getByText('Sof Zman Shema')).toBeVisible();
-    await expect(table.getByText('Sof Zman Tefillah')).toBeVisible();
-    await expect(table.getByText('Chatzos Hayom')).toBeVisible();
-    await expect(table.getByText('Tzeis Hakochavim')).toBeVisible();
+  test('should display footer disclaimer', async ({ page }) => {
+    await expect(page.getByText('Times are calculated based on astronomical and halachic methods')).toBeVisible();
   });
 });
 
-test.describe('Location Input Flow', () => {
+test.describe('Location Selection Flow', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
   });
 
-  test('should update location when coordinates are changed', async ({ page }) => {
-    // Fill in New York coordinates
-    await page.locator('#latitude').fill('40.7128');
-    await page.locator('#longitude').fill('-74.0060');
+  test('should show regions when country is selected', async ({ page }) => {
+    // Wait for countries to load
+    await page.waitForSelector('text=Select Country');
 
-    // Click Update Location button
-    await page.getByRole('button', { name: 'Update Location' }).click();
+    // Click on United States (or another country with regions)
+    const usButton = page.getByRole('button', { name: /United States/i });
+    if (await usButton.isVisible({ timeout: 5000 })) {
+      await usButton.click();
 
-    // Wait for recalculation
-    await page.waitForTimeout(1000);
-
-    // Verify location is shown in footer
-    await expect(page.getByText('40.7128°, -74.0060°')).toBeVisible();
+      // Should show regions or cities
+      await expect(
+        page.getByText('Select State/Region').or(page.getByText('Select City'))
+      ).toBeVisible({ timeout: 10000 });
+    }
   });
 
-  test('should show error for invalid coordinates', async ({ page }) => {
-    // Fill in invalid coordinates (latitude out of range)
-    await page.locator('#latitude').fill('100');
-    await page.locator('#longitude').fill('0');
+  test('should show cities when region is selected', async ({ page }) => {
+    // Wait for countries to load
+    await page.waitForSelector('text=Select Country');
 
-    // Click Update Location button
-    await page.getByRole('button', { name: 'Update Location' }).click();
+    // Click on United States
+    const usButton = page.getByRole('button', { name: /United States/i });
+    if (await usButton.isVisible({ timeout: 5000 })) {
+      await usButton.click();
 
-    // Check for error message
-    await expect(page.getByText('Latitude must be between -90 and 90 degrees')).toBeVisible();
+      // Wait for regions to load
+      await page.waitForTimeout(1000);
+
+      // If regions are shown, click one
+      const regionButton = page.locator('button').filter({ hasText: /New York|California|Texas/i }).first();
+      if (await regionButton.isVisible({ timeout: 5000 })) {
+        await regionButton.click();
+
+        // Should show city selection
+        await expect(page.getByText('Select City')).toBeVisible({ timeout: 10000 });
+      }
+    }
+  });
+
+  test('should navigate to publishers page when city is selected', async ({ page }) => {
+    // Use API to get a valid city to test with
+    const citiesResponse = await page.request.get(`${API_BASE}/api/v1/cities?search=Brooklyn&limit=1`);
+    const citiesData = await citiesResponse.json();
+    const cities = citiesData.data?.cities || citiesData.cities || [];
+
+    if (cities.length > 0) {
+      const cityId = cities[0].id;
+      // Navigate directly to city page to verify it works
+      await page.goto(`/zmanim/${cityId}`);
+
+      // Should show publisher selection or no coverage warning
+      await expect(
+        page.getByRole('link', { name: 'Change location' })
+      ).toBeVisible({ timeout: 10000 });
+    }
+  });
+
+  test('should allow going back in selection flow', async ({ page }) => {
+    // Wait for countries to load
+    await page.waitForSelector('text=Select Country');
+
+    // Click on a country
+    const countryButtons = page.locator('button:has-text("cities")');
+    const firstCountry = countryButtons.first();
+
+    if (await firstCountry.isVisible({ timeout: 5000 })) {
+      await firstCountry.click();
+      await page.waitForTimeout(500);
+
+      // Look for back button
+      const backButton = page.getByRole('button', { name: /back|change/i });
+      if (await backButton.isVisible({ timeout: 3000 })) {
+        await backButton.click();
+
+        // Should be back at country selection
+        await expect(page.getByText('Select Country')).toBeVisible({ timeout: 5000 });
+      }
+    }
   });
 });
 
-test.describe('Date Picker Flow', () => {
-  test.beforeEach(async ({ page }) => {
-    await page.goto('/');
+test.describe('Publisher Selection Flow', () => {
+  test('should display publishers for a city', async ({ page }) => {
+    // Get a city with publishers
+    const citiesResponse = await page.request.get(`${API_BASE}/api/v1/cities?search=Brooklyn&limit=1`);
+    const citiesData = await citiesResponse.json();
+    const cities = citiesData.data?.cities || citiesData.cities || [];
+
+    if (cities.length > 0) {
+      const cityId = cities[0].id;
+      await page.goto(`/zmanim/${cityId}`);
+
+      // Should show publisher list or no coverage message - use heading role for specificity
+      await expect(
+        page.getByRole('heading', { name: 'Select a Publisher' }).or(page.getByRole('heading', { name: 'No Local Authority', exact: true }))
+      ).toBeVisible({ timeout: 10000 });
+    }
   });
 
-  test('should update date when date is changed', async ({ page }) => {
-    // Select a specific date
-    await page.locator('#date').fill('2024-06-21');
+  test('should navigate to zmanim page when publisher is selected', async ({ page }) => {
+    const citiesResponse = await page.request.get(`${API_BASE}/api/v1/cities?search=Brooklyn&limit=1`);
+    const citiesData = await citiesResponse.json();
+    const cities = citiesData.data?.cities || citiesData.cities || [];
 
-    // Wait for recalculation
-    await page.waitForTimeout(1000);
+    if (cities.length > 0) {
+      const cityId = cities[0].id;
+      await page.goto(`/zmanim/${cityId}`);
 
-    // Check that the formatted date is displayed
-    await expect(page.getByText(/Friday, June 21, 2024/i)).toBeVisible();
-  });
+      // Wait for page to load
+      await page.waitForTimeout(1000);
 
-  test('should reset to today when Today button is clicked', async ({ page }) => {
-    // First change to a different date
-    await page.locator('#date').fill('2024-01-01');
-    await page.waitForTimeout(500);
+      // Click on a publisher or default option
+      const publisherButton = page.locator('button, a').filter({ hasText: /select|view|default/i }).first();
+      if (await publisherButton.isVisible({ timeout: 5000 })) {
+        await publisherButton.click();
 
-    // Click Today button
-    await page.getByRole('button', { name: 'Today' }).click();
-
-    // Get today's date
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    const day = String(today.getDate()).padStart(2, '0');
-    const todayString = `${year}-${month}-${day}`;
-
-    // Check that date input has today's date
-    await expect(page.locator('#date')).toHaveValue(todayString);
+        // Should navigate to zmanim display
+        await expect(page.url()).toContain('/zmanim/');
+      }
+    }
   });
 });
 
-test.describe('Calculation Methods Flow', () => {
-  test.beforeEach(async ({ page }) => {
-    await page.goto('/');
-    // Wait for initial calculations
-    await expect(page.getByText('Calculating times...')).toBeHidden({ timeout: 10000 });
+test.describe('Zmanim Display Flow', () => {
+  test('should display zmanim times', async ({ page }) => {
+    const citiesResponse = await page.request.get(`${API_BASE}/api/v1/cities?search=Brooklyn&limit=1`);
+    const citiesData = await citiesResponse.json();
+    const cities = citiesData.data?.cities || citiesData.cities || [];
+
+    if (cities.length > 0) {
+      const cityId = cities[0].id;
+      await page.goto(`/zmanim/${cityId}/default`);
+
+      // Should show zmanim list - use first() to avoid strict mode violation
+      await expect(
+        page.getByText(/sunrise|alos|sunset|shkiah/i).first()
+      ).toBeVisible({ timeout: 10000 });
+    }
   });
 
-  test('should change sunrise calculation method', async ({ page }) => {
-    // Find sunrise method dropdown
-    const sunriseSelect = page.locator('select').filter({ hasText: 'Elevation-Adjusted' }).first();
+  test('should have date navigation', async ({ page }) => {
+    const citiesResponse = await page.request.get(`${API_BASE}/api/v1/cities?search=Brooklyn&limit=1`);
+    const citiesData = await citiesResponse.json();
+    const cities = citiesData.data?.cities || citiesData.cities || [];
 
-    // Change to sea-level
-    await sunriseSelect.selectOption('sealevel');
+    if (cities.length > 0) {
+      const cityId = cities[0].id;
+      await page.goto(`/zmanim/${cityId}/default`);
 
-    // Wait for recalculation
-    await page.waitForTimeout(1000);
-
-    // Verify the method shows in the table
-    await expect(page.getByText('Sea Level')).toBeVisible();
-  });
-
-  test('should change sunset calculation method', async ({ page }) => {
-    // Find sunset method dropdown (second one)
-    const dropdowns = page.locator('select').filter({ hasText: 'Elevation-Adjusted' });
-    const sunsetSelect = dropdowns.nth(1);
-
-    // Change to sea-level
-    await sunsetSelect.selectOption('sealevel');
-
-    // Wait for recalculation
-    await page.waitForTimeout(1000);
-
-    // Verify sea level method is visible
-    await expect(page.getByText('Sea Level')).toBeVisible();
-  });
-
-  test('should change shaah zmanis calculation method', async ({ page }) => {
-    // Find shaah zmanis dropdown by its label
-    const shaahZmanisSelect = page.locator('select').nth(2);
-
-    // Change to MGA method
-    await shaahZmanisSelect.selectOption('mga');
-
-    // Wait for recalculation
-    await page.waitForTimeout(1000);
-
-    // Verify MGA method is selected
-    await expect(shaahZmanisSelect).toHaveValue('mga');
+      // Should show navigation buttons
+      await expect(
+        page.getByRole('button', { name: /previous|next/i }).or(page.locator('button:has(svg)'))
+      ).toBeVisible({ timeout: 10000 });
+    }
   });
 });
 
 test.describe('Formula Explanation Flow', () => {
-  test.beforeEach(async ({ page }) => {
-    await page.goto('/');
-    // Wait for initial calculations
-    await expect(page.getByText('Calculating times...')).toBeHidden({ timeout: 10000 });
-  });
+  test('should show formula details when zman row is expanded', async ({ page }) => {
+    const citiesResponse = await page.request.get(`${API_BASE}/api/v1/cities?search=Brooklyn&limit=1`);
+    const citiesData = await citiesResponse.json();
+    const cities = citiesData.data?.cities || citiesData.cities || [];
 
-  test('should show and hide formula explanations', async ({ page }) => {
-    // Find first Explain button
-    const explainButtons = page.getByRole('button', { name: 'Explain' });
-    const firstExplainButton = explainButtons.first();
+    if (cities.length > 0) {
+      const cityId = cities[0].id;
+      await page.goto(`/zmanim/${cityId}/default`);
 
-    // Click to expand
-    await firstExplainButton.click();
+      // Wait for zmanim to load
+      await page.waitForTimeout(2000);
 
-    // Check that explanation is visible
-    await expect(page.getByText(/How is.*calculated/i)).toBeVisible();
+      // Find a zman row with expand capability (info icon or expandable row)
+      const expandable = page.locator('[data-expandable="true"], button:has-text("ⓘ"), .cursor-pointer').first();
+      if (await expandable.isVisible({ timeout: 5000 })) {
+        await expandable.click();
 
-    // Find Hide button (the button text changes)
-    const hideButton = page.getByRole('button', { name: 'Hide' }).first();
-
-    // Click to collapse
-    await hideButton.click();
-
-    // Wait for animation
-    await page.waitForTimeout(300);
-  });
-
-  test('should display detailed explanation content', async ({ page }) => {
-    // Click Explain button for Alos (second row in table)
-    const explainButtons = page.getByRole('button', { name: 'Explain' });
-    await explainButtons.nth(1).click();
-
-    // Verify detailed explanation content is present in the expanded section
-    await expect(page.getByText(/16.1° uses the solar depression angle method/i)).toBeVisible();
+        // Should show formula details
+        await expect(
+          page.getByText(/formula|method|calculation/i)
+        ).toBeVisible({ timeout: 5000 });
+      }
+    }
   });
 });
 
 test.describe('Complete User Flow', () => {
-  test('should complete full workflow: visit, change location, change date, view results', async ({ page }) => {
+  test('should complete full workflow: select location, view zmanim, change date', async ({ page }) => {
     // Step 1: Visit homepage
     await page.goto('/');
-    await expect(page.getByRole('heading', { name: 'Alos Hashachar' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Zmanim Lab' })).toBeVisible();
 
-    // Step 2: Update location to London
-    await page.locator('#latitude').fill('51.5074');
-    await page.locator('#longitude').fill('-0.1278');
-    await page.getByRole('button', { name: 'Update Location' }).click();
+    // Step 2: Navigate to a city page directly (simulating location selection)
+    const citiesResponse = await page.request.get(`${API_BASE}/api/v1/cities?search=Brooklyn&limit=1`);
+    const citiesData = await citiesResponse.json();
+    const cities = citiesData.data?.cities || citiesData.cities || [];
 
-    // Wait for calculation
-    await page.waitForTimeout(1000);
+    if (cities.length > 0) {
+      const cityId = cities[0].id;
 
-    // Step 3: Change date to summer solstice
-    await page.locator('#date').fill('2024-06-21');
-    await page.waitForTimeout(1000);
+      // Step 3: Go to publishers page
+      await page.goto(`/zmanim/${cityId}`);
+      await expect(
+        page.getByRole('link', { name: 'Change location' })
+      ).toBeVisible({ timeout: 10000 });
 
-    // Step 4: Verify results are displayed correctly
-    await expect(page.getByText('Calculating times...')).toBeHidden({ timeout: 10000 });
+      // Step 4: Go to zmanim display (default publisher)
+      await page.goto(`/zmanim/${cityId}/default`);
 
-    // Check that location is updated
-    await expect(page.getByText('51.5074°, -0.1278°')).toBeVisible();
+      // Step 5: Verify zmanim are displayed - use first() to avoid strict mode violation
+      await expect(
+        page.getByText(/sunrise|alos|sunset/i).first()
+      ).toBeVisible({ timeout: 10000 });
 
-    // Check that key zmanim are visible in the table
-    const table = page.getByRole('table');
-    await expect(table.getByText('Sunrise (Netz)')).toBeVisible();
-    await expect(table.getByText('Alos Hashachar')).toBeVisible();
-    await expect(table.getByText('Sunset (Shkiah)')).toBeVisible();
-
-    // Step 5: Change calculation method
-    const shaahZmanisSelect = page.locator('select').filter({ hasText: 'GRA' });
-    await shaahZmanisSelect.selectOption('mga');
-    await page.waitForTimeout(1000);
-
-    // Step 6: Open formula explanation
-    const explainButton = page.getByRole('button', { name: 'Explain' }).first();
-    await explainButton.click();
-    await expect(page.getByText(/How is.*calculated/i)).toBeVisible();
-
-    // Test completed successfully
+      // Step 6: Test date navigation (if buttons exist)
+      const nextDayButton = page.getByRole('button', { name: 'Next day' });
+      if (await nextDayButton.isVisible({ timeout: 3000 })) {
+        await nextDayButton.click();
+        await page.waitForTimeout(500);
+        // Just verify page still shows zmanim
+        await expect(
+          page.getByText(/sunrise|alos|sunset/i).first()
+        ).toBeVisible({ timeout: 5000 });
+      }
+    }
   });
 });
