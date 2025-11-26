@@ -57,6 +57,7 @@ next-env.d.ts
 
 # Go (api/)
 api/api
+api/main
 *.exe
 *.exe~
 *.dll
@@ -66,6 +67,9 @@ api/api
 *.out
 vendor/
 tmp/
+
+# Test files in root
+test.html
 
 # Browsers (Playwright downloads)
 chrome/
