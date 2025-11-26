@@ -159,8 +159,6 @@ Expected ready-for-dev or in-progress. Continuing anyway...
     <action>Add integration tests for component interactions where desired by test plan or story notes</action>
     <action>Include end-to-end tests for critical user flows where desired by test plan or story notes</action>
     <action>Cover edge cases and error handling scenarios noted in the test plan or story notes</action>
-    <critical>For web UI features: Write Playwright E2E tests covering each acceptance criteria in tests/e2e/ directory</critical>
-    <action>Create or update Playwright test files that validate user-facing functionality and acceptance criteria</action>
   </step>
 
   <step n="4" goal="Run validations and tests">
@@ -168,12 +166,9 @@ Expected ready-for-dev or in-progress. Continuing anyway...
     <action>Run all existing tests to ensure no regressions</action>
     <action>Run the new tests to verify implementation correctness</action>
     <action>Run linting and code quality checks if configured</action>
-    <critical>For web UI features: Run Playwright E2E tests with `npx playwright test` or equivalent</critical>
-    <action>Fix any runtime errors or failures discovered by E2E tests before marking task complete</action>
     <action>Validate implementation meets ALL story acceptance criteria; if ACs include quantitative thresholds (e.g., test pass rate), ensure they are met before marking complete</action>
     <action if="regression tests fail">STOP and fix before continuing, consider how current changes made broke regression</action>
     <action if="new tests fail">STOP and fix before continuing</action>
-    <action if="Playwright tests fail or reveal runtime errors">STOP and fix before continuing</action>
   </step>
 
   <step n="5" goal="Mark task complete, track review resolutions, and update story">
@@ -213,8 +208,7 @@ Expected ready-for-dev or in-progress. Continuing anyway...
   <step n="6" goal="Story completion and mark for review" tag="sprint-status">
     <action>Verify ALL tasks and subtasks are marked [x] (re-scan the story document now)</action>
     <action>Run the full regression suite (do not skip)</action>
-    <critical>For web UI features: Run Playwright E2E tests to verify no runtime errors and all acceptance criteria pass</critical>
-    <action>Confirm File List includes every changed file AND any new test files</action>
+    <action>Confirm File List includes every changed file</action>
     <action>Execute story definition-of-done checklist, if the story includes one</action>
     <action>Update the story Status to: review</action>
 

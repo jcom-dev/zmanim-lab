@@ -18,6 +18,18 @@ provider "coder" {}
 provider "docker" {}
 
 # Variables
+variable "web_port" {
+  type        = number
+  default     = 3001
+  description = "Port for the Web App"
+}
+
+variable "api_port" {
+  type        = number
+  default     = 8080
+  description = "Port for the API"
+}
+
 variable "zmanim_branch" {
   type        = string
   default     = "main"
@@ -98,6 +110,11 @@ resource "docker_network" "zmanim_network" {
   name = "coder-${data.coder_workspace.me.id}"
 }
 
+locals {
+  web_port = var.web_port
+  api_port = var.api_port
+}
+
 # Main development container (no local DB/Redis - using Supabase/Upstash)
 resource "docker_container" "workspace" {
   image = "codercom/enterprise-base:ubuntu"
@@ -121,10 +138,12 @@ resource "docker_container" "workspace" {
     "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${var.clerk_publishable_key}",
     "NEXT_PUBLIC_SUPABASE_URL=${var.supabase_url}",
     "NEXT_PUBLIC_SUPABASE_ANON_KEY=${var.supabase_anon_key}",
-    "NEXT_PUBLIC_API_URL=http://localhost:8080",
+    "NEXT_PUBLIC_API_URL=http://localhost:${local.api_port}",
+    # CORS configuration for API
+    "ALLOWED_ORIGINS=http://localhost:${local.web_port},http://127.0.0.1:${local.web_port},http://localhost:${local.api_port},http://127.0.0.1:${local.api_port},https://localhost:${local.web_port},https://127.0.0.1:${local.web_port},https://localhost:${local.api_port},https://127.0.0.1:${local.api_port}",
     # Service ports
-    "WEB_PORT=3001",
-    "API_PORT=8080",
+    "WEB_PORT=${local.web_port}",
+    "API_PORT=${local.api_port}",
     # Repository configuration
     "ZMANIM_REPO=${var.zmanim_repo}",
     "ZMANIM_BRANCH=${var.zmanim_branch}",
@@ -136,15 +155,17 @@ resource "docker_container" "workspace" {
 
   # Expose service ports for direct access
   ports {
-    internal = 8080
-    external = 8080
+    internal = local.api_port
+    external = local.api_port
     protocol = "tcp"
+    share    = "owner"
   }
 
   ports {
-    internal = 3001
-    external = 3001
+    internal = local.web_port
+    external = local.web_port
     protocol = "tcp"
+    share    = "owner"
   }
 
   # Mount workspace directory as a persistent volume
@@ -179,12 +200,12 @@ resource "coder_metadata" "workspace_info" {
 
   item {
     key   = "Web App"
-    value = "http://localhost:3001"
+    value = "http://localhost:${local.web_port}"
   }
 
   item {
     key   = "API"
-    value = "http://localhost:8080"
+    value = "http://localhost:${local.api_port}"
   }
 
   item {
@@ -205,13 +226,14 @@ resource "coder_app" "web_app" {
   agent_id     = coder_agent.main.id
   slug         = "web"
   display_name = "Web App"
-  url          = "http://localhost:3001"
+  url          = "http://127.0.0.1:${local.web_port}"
   icon         = "/icon/nextjs.svg"
   subdomain    = false
   share        = "owner"
+  external     = true
 
   healthcheck {
-    url       = "http://localhost:3001"
+    url       = "http://localhost:${local.web_port}"
     interval  = 10
     threshold = 6
   }
@@ -221,13 +243,14 @@ resource "coder_app" "api" {
   agent_id     = coder_agent.main.id
   slug         = "api"
   display_name = "API"
-  url          = "http://localhost:8080/health"
+  url          = "http://localhost:${local.api_port}/health"
   icon         = "/icon/go.svg"
   subdomain    = false
   share        = "owner"
+  external     = true
 
   healthcheck {
-    url       = "http://localhost:8080/health"
+    url       = "http://localhost:${local.api_port}/health"
     interval  = 5
     threshold = 6
   }

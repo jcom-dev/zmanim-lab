@@ -72,7 +72,16 @@ func Load() (*Config, error) {
 			Issuer:  getEnv("CLERK_ISSUER", ""),
 		},
 		CORS: CORSConfig{
-			AllowedOrigins: getEnvSlice("ALLOWED_ORIGINS", []string{"http://localhost:3000", "http://localhost:3001"}),
+			AllowedOrigins: getEnvSlice("ALLOWED_ORIGINS", []string{
+				"http://localhost:3000",
+				"http://localhost:3001",
+				"http://127.0.0.1:3000",
+				"http://127.0.0.1:3001",
+				"https://localhost:3000",
+				"https://localhost:3001",
+				"https://127.0.0.1:3000",
+				"https://127.0.0.1:3001",
+			}),
 		},
 		RateLimit: RateLimitConfig{
 			Requests: getEnvInt("RATE_LIMIT_REQUESTS", 60),

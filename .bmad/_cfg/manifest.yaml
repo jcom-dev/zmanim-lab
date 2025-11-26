@@ -1,7 +1,7 @@
 installation:
   version: 6.0.0-alpha.12
-  installDate: '2025-11-25T14:08:12.444Z'
-  lastUpdated: '2025-11-25T14:08:12.444Z'
+  installDate: '2025-11-26T17:34:28.266Z'
+  lastUpdated: '2025-11-26T17:34:28.266Z'
 modules:
   - core
   - bmm
@@ -10,3 +10,4 @@ ides:
   - claude-code
   - gemini
   - antigravity
+  - kilo
