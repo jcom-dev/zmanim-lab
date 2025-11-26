@@ -11,55 +11,93 @@ import (
 	"github.com/jcom-dev/zmanim-lab/internal/models"
 )
 
-// SearchCities handles city search with autocomplete
-// GET /api/v1/cities?search={query}&limit={limit}
+// SearchCities handles city search with autocomplete and filtering
+// GET /api/v1/cities?search={query}&country_code={code}&region={region}&limit={limit}
 func (h *Handlers) SearchCities(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	// Get search query
+	// Get query parameters
 	search := strings.TrimSpace(r.URL.Query().Get("search"))
-	if search == "" {
-		RespondBadRequest(w, r, "Search query is required")
+	countryCode := strings.TrimSpace(r.URL.Query().Get("country_code"))
+	region := strings.TrimSpace(r.URL.Query().Get("region"))
+
+	// At least one filter must be provided
+	if search == "" && countryCode == "" {
+		RespondBadRequest(w, r, "Either search or country_code parameter is required")
 		return
 	}
 
-	// Minimum 2 characters for search
-	if len(search) < 2 {
-		RespondJSON(w, r, http.StatusOK, models.CitySearchResponse{
-			Cities: []models.City{},
-			Total:  0,
-		})
-		return
+	// Get limit (default 10 for search, 100 for filters; max 100)
+	defaultLimit := 10
+	maxLimit := 100
+	if search == "" && countryCode != "" {
+		defaultLimit = 100
 	}
 
-	// Get limit (default 10, max 50)
-	limit := 10
+	limit := defaultLimit
 	if l := r.URL.Query().Get("limit"); l != "" {
-		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 && parsed <= 50 {
+		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 && parsed <= maxLimit {
 			limit = parsed
 		}
 	}
 
-	// Search query using trigram similarity
-	// Prioritize exact prefix matches, then fuzzy matches, sorted by population
-	query := `
+	// Build dynamic query
+	var queryBuilder strings.Builder
+	queryBuilder.WriteString(`
 		SELECT id, name, country, country_code, region, region_type,
 		       latitude, longitude, timezone, population
 		FROM cities
-		WHERE name_ascii ILIKE $1 || '%'
-		   OR name_ascii ILIKE '%' || $1 || '%'
-		   OR similarity(name_ascii, $1) > 0.3
-		ORDER BY
-			CASE WHEN name_ascii ILIKE $1 || '%' THEN 0 ELSE 1 END,
-			CASE WHEN name_ascii ILIKE $1 THEN 0 ELSE 1 END,
-			population DESC NULLS LAST,
-			name ASC
-		LIMIT $2
-	`
+		WHERE 1=1`)
 
-	rows, err := h.db.Pool.Query(ctx, query, search, limit)
+	args := make([]interface{}, 0)
+	argNum := 1
+
+	// Add country code filter
+	if countryCode != "" {
+		queryBuilder.WriteString(fmt.Sprintf(" AND country_code = $%d", argNum))
+		args = append(args, countryCode)
+		argNum++
+	}
+
+	// Add region filter
+	if region != "" {
+		queryBuilder.WriteString(fmt.Sprintf(" AND region = $%d", argNum))
+		args = append(args, region)
+		argNum++
+	}
+
+	// Add search filter
+	if search != "" && len(search) >= 2 {
+		queryBuilder.WriteString(fmt.Sprintf(` AND (
+			name_ascii ILIKE $%d || '%%'
+			OR name_ascii ILIKE '%%' || $%d || '%%'
+			OR similarity(name_ascii, $%d) > 0.3
+		)`, argNum, argNum, argNum))
+		args = append(args, search)
+		argNum++
+	}
+
+	// Add ordering
+	if search != "" && len(search) >= 2 {
+		queryBuilder.WriteString(fmt.Sprintf(`
+		ORDER BY
+			CASE WHEN name_ascii ILIKE $%d || '%%' THEN 0 ELSE 1 END,
+			CASE WHEN name_ascii ILIKE $%d THEN 0 ELSE 1 END,
+			population DESC NULLS LAST,
+			name ASC`, len(args), len(args)))
+	} else {
+		queryBuilder.WriteString(`
+		ORDER BY population DESC NULLS LAST, name ASC`)
+	}
+
+	// Add limit
+	queryBuilder.WriteString(fmt.Sprintf(" LIMIT $%d", argNum))
+	args = append(args, limit)
+
+	// Execute query
+	rows, err := h.db.Pool.Query(ctx, queryBuilder.String(), args...)
 	if err != nil {
-		slog.Error("failed to search cities", "error", err, "search", search)
+		slog.Error("failed to search cities", "error", err, "search", search, "country", countryCode, "region", region)
 		RespondInternalError(w, r, "Failed to search cities")
 		return
 	}
