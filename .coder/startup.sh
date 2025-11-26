@@ -193,7 +193,16 @@ print_status "Adding claude alias to skip permissions..."
 echo "alias claude='claude --dangerously-skip-permissions'" >> ~/.bashrc
 print_success "Claude alias added"
 
-# Step 12: Display status
+# Step 12: Configure git user identity (with Coder variable overrides)
+print_status "Configuring git user identity..."
+GIT_USER_NAME="${GIT_USER_NAME:-Daniel Niasoff}"
+GIT_USER_EMAIL="${GIT_USER_EMAIL:-4070285+dniasoff@users.noreply.github.com}"
+
+git config --global user.name "$GIT_USER_NAME"
+git config --global user.email "$GIT_USER_EMAIL"
+print_success "Git user configured: $GIT_USER_NAME <$GIT_USER_EMAIL>"
+
+# Step 13: Display status
 echo ""
 echo "=========================================="
 echo "✅ Zmanim Lab Development Environment Ready!"
@@ -208,7 +217,11 @@ echo "  - Claude Code $(claude --version 2>/dev/null || echo 'not found')"
 echo "  - Supabase CLI (via npx supabase)"
 echo "  - Playwright (Chromium)"
 echo ""
-echo "🗄️  External Services (configure in .env):"
+echo "🔧 Configuration:"
+echo "  - Git User: $(git config --global user.name 2>/dev/null || echo 'not configured')"
+echo "  - Git Email: $(git config --global user.email 2>/dev/null || echo 'not configured')"
+echo ""
+echo "�️  External Services (configure in .env):"
 echo "  - Supabase: PostgreSQL database"
 echo "  - Upstash: Redis caching"
 echo "  - Clerk: Authentication"
@@ -236,7 +249,7 @@ echo "  - README: README.md"
 echo ""
 echo "=========================================="
 
-# Step 13: Auto-start services
+# Step 14: Auto-start services
 print_status "Starting services in background..."
 cd /home/coder/workspace/zmanim-lab
 if [ -f ".coder/start-services.sh" ]; then
