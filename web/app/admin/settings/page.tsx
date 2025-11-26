@@ -125,7 +125,7 @@ export default function AdminSettingsPage() {
     <div className="container mx-auto py-8 max-w-4xl">
       <div className="mb-6">
         <h1 className="text-3xl font-bold">System Settings</h1>
-        <p className="text-gray-600 mt-1">Configure rate limits, cache settings, and feature flags</p>
+        <p className="text-muted-foreground mt-1">Configure rate limits, cache settings, and feature flags</p>
       </div>
 
       {error && (
@@ -158,9 +158,9 @@ export default function AdminSettingsPage() {
                 value={rateLimitAnonymous}
                 onChange={(e) => setRateLimitAnonymous(parseInt(e.target.value))}
                 min="0"
-                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
               />
-              <p className="mt-1 text-sm text-gray-600">
+              <p className="mt-1 text-sm text-muted-foreground">
                 Current: {config?.rate_limit_anonymous?.value.requests_per_hour || 'N/A'}
               </p>
             </div>
@@ -175,9 +175,9 @@ export default function AdminSettingsPage() {
                 value={rateLimitAuthenticated}
                 onChange={(e) => setRateLimitAuthenticated(parseInt(e.target.value))}
                 min="0"
-                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
               />
-              <p className="mt-1 text-sm text-gray-600">
+              <p className="mt-1 text-sm text-muted-foreground">
                 Current: {config?.rate_limit_authenticated?.value.requests_per_hour || 'N/A'}
               </p>
             </div>
@@ -202,12 +202,12 @@ export default function AdminSettingsPage() {
                 onChange={(e) => setCacheTTL(parseInt(e.target.value))}
                 min="1"
                 max="168"
-                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
               />
-              <p className="mt-1 text-sm text-gray-600">
+              <p className="mt-1 text-sm text-muted-foreground">
                 Current: {config?.cache_ttl_hours?.value.hours || 'N/A'} hours
               </p>
-              <p className="mt-2 text-sm text-gray-600">
+              <p className="mt-2 text-sm text-muted-foreground">
                 How long to cache zmanim calculations. Recommended: 24 hours.
               </p>
             </div>
@@ -226,7 +226,7 @@ export default function AdminSettingsPage() {
                 <label htmlFor="algorithmEditor" className="block text-sm font-medium">
                   Algorithm Editor
                 </label>
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-muted-foreground">
                   Allow publishers to create and edit custom algorithms
                 </p>
               </div>
@@ -235,7 +235,7 @@ export default function AdminSettingsPage() {
                 id="algorithmEditor"
                 checked={algorithmEditor}
                 onChange={(e) => setAlgorithmEditor(e.target.checked)}
-                className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                className="w-5 h-5 text-primary border-border rounded focus:ring-primary accent-primary"
               />
             </div>
 
@@ -244,7 +244,7 @@ export default function AdminSettingsPage() {
                 <label htmlFor="formulaReveal" className="block text-sm font-medium">
                   Formula Reveal
                 </label>
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-muted-foreground">
                   Show calculation formulas to end users
                 </p>
               </div>
@@ -253,7 +253,7 @@ export default function AdminSettingsPage() {
                 id="formulaReveal"
                 checked={formulaReveal}
                 onChange={(e) => setFormulaReveal(e.target.checked)}
-                className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                className="w-5 h-5 text-primary border-border rounded focus:ring-primary accent-primary"
               />
             </div>
           </CardContent>
@@ -266,7 +266,7 @@ export default function AdminSettingsPage() {
               <CardTitle>Last Updated</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-2 text-sm text-gray-600">
+              <div className="space-y-2 text-sm text-muted-foreground">
                 {config.rate_limit_anonymous && (
                   <div>
                     Rate Limit (Anonymous): {new Date(config.rate_limit_anonymous.updated_at).toLocaleString()}

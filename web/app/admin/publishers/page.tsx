@@ -92,7 +92,7 @@ export default function AdminPublishersPage() {
       case 'suspended':
         return 'bg-red-100 text-red-800 border-red-300';
       default:
-        return 'bg-gray-100 text-gray-800 border-gray-300';
+        return 'bg-muted text-muted-foreground border-border';
     }
   };
 
@@ -158,14 +158,14 @@ export default function AdminPublishersPage() {
                 placeholder="Search by name, organization, or email..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-2 border border-border rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
             <div>
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="px-4 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
               >
                 <option value="all">All Statuses</option>
                 <option value="pending">Pending</option>
@@ -201,13 +201,13 @@ export default function AdminPublishersPage() {
               <tbody>
                 {filteredPublishers.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="py-8 text-center text-gray-500">
+                    <td colSpan={6} className="py-8 text-center text-muted-foreground">
                       No publishers found
                     </td>
                   </tr>
                 ) : (
                   filteredPublishers.map((publisher) => (
-                    <tr key={publisher.id} className="border-b hover:bg-gray-50">
+                    <tr key={publisher.id} className="border-b hover:bg-accent/50">
                       <td className="py-4">
                         <Link href={`/admin/publishers/${publisher.id}`} className="font-medium text-blue-600 hover:underline">
                           {publisher.name}
@@ -228,7 +228,7 @@ export default function AdminPublishersPage() {
                           {publisher.status}
                         </span>
                       </td>
-                      <td className="py-4 text-sm text-gray-600">
+                      <td className="py-4 text-sm text-muted-foreground">
                         {new Date(publisher.created_at).toLocaleDateString()}
                       </td>
                       <td className="py-4 text-right">

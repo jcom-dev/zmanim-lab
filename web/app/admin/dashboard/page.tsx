@@ -228,7 +228,7 @@ export default function AdminDashboardPage() {
                   </div>
                   <div className="flex items-center gap-4">
                     <span className="font-semibold">{stats.publishers.active}</span>
-                    <span className="text-sm text-gray-600">
+                    <span className="text-sm text-muted-foreground">
                       {((stats.publishers.active / stats.publishers.total) * 100).toFixed(1)}%
                     </span>
                   </div>
@@ -241,7 +241,7 @@ export default function AdminDashboardPage() {
                   </div>
                   <div className="flex items-center gap-4">
                     <span className="font-semibold">{stats.publishers.pending}</span>
-                    <span className="text-sm text-gray-600">
+                    <span className="text-sm text-muted-foreground">
                       {((stats.publishers.pending / stats.publishers.total) * 100).toFixed(1)}%
                     </span>
                   </div>
@@ -254,7 +254,7 @@ export default function AdminDashboardPage() {
                   </div>
                   <div className="flex items-center gap-4">
                     <span className="font-semibold">{stats.publishers.suspended}</span>
-                    <span className="text-sm text-gray-600">
+                    <span className="text-sm text-muted-foreground">
                       {((stats.publishers.suspended / stats.publishers.total) * 100).toFixed(1)}%
                     </span>
                   </div>
@@ -262,7 +262,7 @@ export default function AdminDashboardPage() {
               </div>
 
               {/* Visual Bar */}
-              <div className="mt-6 h-4 bg-gray-200 rounded-full overflow-hidden flex">
+              <div className="mt-6 h-4 bg-muted rounded-full overflow-hidden flex">
                 <div
                   className="bg-green-500"
                   style={{ width: `${(stats.publishers.active / stats.publishers.total) * 100}%` }}

@@ -219,7 +219,7 @@ export default function AdminPublisherDetailPage() {
       case 'suspended':
         return 'bg-red-100 text-red-800 border-red-300';
       default:
-        return 'bg-gray-100 text-gray-800 border-gray-300';
+        return 'bg-muted text-muted-foreground border-border';
     }
   };
 
@@ -260,11 +260,11 @@ export default function AdminPublisherDetailPage() {
             <Link href="/admin/publishers" className="text-blue-600 hover:underline text-sm">
               Publishers
             </Link>
-            <span className="text-gray-400">/</span>
-            <span className="text-gray-600">{publisher.name}</span>
+            <span className="text-muted-foreground">/</span>
+            <span className="text-muted-foreground">{publisher.name}</span>
           </div>
           <h1 className="text-3xl font-bold">{publisher.name}</h1>
-          <p className="text-gray-600">{publisher.organization}</p>
+          <p className="text-muted-foreground">{publisher.organization}</p>
         </div>
         <span
           className={`inline-block px-4 py-2 rounded-full text-sm font-semibold border ${getStatusBadgeClass(
@@ -303,7 +303,7 @@ export default function AdminPublisherDetailPage() {
             </svg>
             Impersonate Publisher
           </Button>
-          <p className="text-sm text-gray-500 mt-2">
+          <p className="text-sm text-muted-foreground mt-2">
             View the dashboard as this publisher to troubleshoot issues
           </p>
         </CardContent>
@@ -317,24 +317,24 @@ export default function AdminPublisherDetailPage() {
         <CardContent>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-sm font-medium text-gray-500">Email</label>
+              <label className="text-sm font-medium text-muted-foreground">Email</label>
               <p>{publisher.email || 'Not set'}</p>
             </div>
             <div>
-              <label className="text-sm font-medium text-gray-500">Website</label>
+              <label className="text-sm font-medium text-muted-foreground">Website</label>
               <p>{publisher.website || 'Not set'}</p>
             </div>
             <div>
-              <label className="text-sm font-medium text-gray-500">Created</label>
+              <label className="text-sm font-medium text-muted-foreground">Created</label>
               <p>{new Date(publisher.created_at).toLocaleDateString()}</p>
             </div>
             <div>
-              <label className="text-sm font-medium text-gray-500">Updated</label>
+              <label className="text-sm font-medium text-muted-foreground">Updated</label>
               <p>{new Date(publisher.updated_at).toLocaleDateString()}</p>
             </div>
             {publisher.bio && (
               <div className="col-span-2">
-                <label className="text-sm font-medium text-gray-500">Bio</label>
+                <label className="text-sm font-medium text-muted-foreground">Bio</label>
                 <p>{publisher.bio}</p>
               </div>
             )}
@@ -410,7 +410,7 @@ export default function AdminPublisherDetailPage() {
         </CardHeader>
         <CardContent>
           {users.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
+            <div className="text-center py-8 text-muted-foreground">
               <p>No users have access to this publisher yet.</p>
               <p className="text-sm mt-2">Click "Invite User" to add someone.</p>
             </div>
@@ -427,7 +427,7 @@ export default function AdminPublisherDetailPage() {
                 </thead>
                 <tbody>
                   {users.map((user) => (
-                    <tr key={user.clerk_user_id} className="border-b hover:bg-gray-50">
+                    <tr key={user.clerk_user_id} className="border-b hover:bg-accent/50">
                       <td className="py-4">
                         <div className="flex items-center gap-3">
                           {user.image_url ? (
@@ -437,8 +437,8 @@ export default function AdminPublisherDetailPage() {
                               className="w-8 h-8 rounded-full"
                             />
                           ) : (
-                            <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center">
-                              <span className="text-gray-500 text-sm">
+                            <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
+                              <span className="text-muted-foreground text-sm">
                                 {user.name?.charAt(0) || user.email?.charAt(0) || '?'}
                               </span>
                             </div>
@@ -451,7 +451,7 @@ export default function AdminPublisherDetailPage() {
                           {user.email}
                         </a>
                       </td>
-                      <td className="py-4 text-sm text-gray-600">
+                      <td className="py-4 text-sm text-muted-foreground">
                         {new Date(user.created_at * 1000).toLocaleDateString()}
                       </td>
                       <td className="py-4 text-right">

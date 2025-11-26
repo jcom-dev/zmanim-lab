@@ -137,11 +137,11 @@ export function PendingRequests({ onApprove }: PendingRequestsProps) {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             Pending Requests
-            <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-sm">...</span>
+            <span className="bg-muted text-muted-foreground px-2 py-0.5 rounded-full text-sm">...</span>
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-gray-500">Loading...</p>
+          <p className="text-muted-foreground">Loading...</p>
         </CardContent>
       </Card>
     );
@@ -166,7 +166,7 @@ export function PendingRequests({ onApprove }: PendingRequestsProps) {
               </span>
             </span>
             <svg
-              className={`w-5 h-5 text-gray-500 transition-transform ${expanded ? 'rotate-180' : ''}`}
+              className={`w-5 h-5 text-muted-foreground transition-transform ${expanded ? 'rotate-180' : ''}`}
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -190,10 +190,10 @@ export function PendingRequests({ onApprove }: PendingRequestsProps) {
                   <div className="flex justify-between items-start">
                     <div>
                       <h4 className="font-medium">{request.name}</h4>
-                      <p className="text-sm text-gray-600">{request.organization}</p>
-                      <p className="text-sm text-gray-500">{request.email}</p>
+                      <p className="text-sm text-muted-foreground">{request.organization}</p>
+                      <p className="text-sm text-muted-foreground">{request.email}</p>
                     </div>
-                    <span className="text-xs text-gray-400">
+                    <span className="text-xs text-muted-foreground">
                       {new Date(request.created_at).toLocaleDateString()}
                     </span>
                   </div>
@@ -215,21 +215,21 @@ export function PendingRequests({ onApprove }: PendingRequestsProps) {
               </DialogHeader>
               <div className="space-y-4 py-4">
                 <div>
-                  <label className="text-sm font-medium text-gray-500">Name</label>
-                  <p className="text-gray-900">{selectedRequest.name}</p>
+                  <label className="text-sm font-medium text-muted-foreground">Name</label>
+                  <p className="text-foreground">{selectedRequest.name}</p>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-gray-500">Organization</label>
-                  <p className="text-gray-900">{selectedRequest.organization}</p>
+                  <label className="text-sm font-medium text-muted-foreground">Organization</label>
+                  <p className="text-foreground">{selectedRequest.organization}</p>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-gray-500">Email</label>
-                  <p className="text-gray-900">{selectedRequest.email}</p>
+                  <label className="text-sm font-medium text-muted-foreground">Email</label>
+                  <p className="text-foreground">{selectedRequest.email}</p>
                 </div>
                 {selectedRequest.website && (
                   <div>
-                    <label className="text-sm font-medium text-gray-500">Website</label>
-                    <p className="text-gray-900">
+                    <label className="text-sm font-medium text-muted-foreground">Website</label>
+                    <p className="text-foreground">
                       <a
                         href={selectedRequest.website}
                         target="_blank"
@@ -242,12 +242,12 @@ export function PendingRequests({ onApprove }: PendingRequestsProps) {
                   </div>
                 )}
                 <div>
-                  <label className="text-sm font-medium text-gray-500">Description</label>
-                  <p className="text-gray-900 whitespace-pre-wrap">{selectedRequest.description}</p>
+                  <label className="text-sm font-medium text-muted-foreground">Description</label>
+                  <p className="text-foreground whitespace-pre-wrap">{selectedRequest.description}</p>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-gray-500">Submitted</label>
-                  <p className="text-gray-900">{new Date(selectedRequest.created_at).toLocaleString()}</p>
+                  <label className="text-sm font-medium text-muted-foreground">Submitted</label>
+                  <p className="text-foreground">{new Date(selectedRequest.created_at).toLocaleString()}</p>
                 </div>
               </div>
               <DialogFooter className="gap-2">
@@ -279,7 +279,7 @@ export function PendingRequests({ onApprove }: PendingRequestsProps) {
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">
-            <label htmlFor="reason" className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="reason" className="block text-sm font-medium text-muted-foreground mb-1">
               Reason (optional)
             </label>
             <textarea
@@ -288,7 +288,7 @@ export function PendingRequests({ onApprove }: PendingRequestsProps) {
               onChange={(e) => setRejectReason(e.target.value)}
               placeholder="Enter a reason for rejection..."
               rows={3}
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-4 py-2 border border-border rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
             />
           </div>
           <DialogFooter>
