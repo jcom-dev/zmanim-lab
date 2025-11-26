@@ -116,6 +116,33 @@ func (h *Handlers) SubmitPublisherRequest(w http.ResponseWriter, r *http.Request
 		"email", req.Email,
 		"organization", req.Organization)
 
+	// Send confirmation email to applicant (non-blocking)
+	if h.emailService != nil {
+		go h.emailService.SendPublisherRequestReceived(
+			req.Email,
+			strings.TrimSpace(req.Name),
+			strings.TrimSpace(req.Organization),
+		)
+
+		// Send notification to admin (if ADMIN_EMAIL is configured)
+		adminEmail := os.Getenv("ADMIN_EMAIL")
+		if adminEmail != "" {
+			webURL := os.Getenv("WEB_URL")
+			if webURL == "" {
+				webURL = "http://localhost:3001"
+			}
+			adminURL := fmt.Sprintf("%s/admin/publishers", webURL)
+			go h.emailService.SendAdminNewPublisherRequest(
+				adminEmail,
+				strings.TrimSpace(req.Name),
+				strings.TrimSpace(req.Organization),
+				req.Email,
+				strings.TrimSpace(req.Description),
+				adminURL,
+			)
+		}
+	}
+
 	RespondJSON(w, r, http.StatusCreated, map[string]interface{}{
 		"success": true,
 		"message": "Thank you! Your request has been submitted. We'll review it and get back to you soon.",

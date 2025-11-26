@@ -24,11 +24,13 @@ type EmailService struct {
 type EmailTemplate string
 
 const (
-	TemplatePublisherInvitation EmailTemplate = "publisher-invitation"
-	TemplatePublisherApproved   EmailTemplate = "publisher-approved"
-	TemplatePublisherRejected   EmailTemplate = "publisher-rejected"
-	TemplatePasswordReset       EmailTemplate = "password-reset"
-	TemplateWelcome             EmailTemplate = "welcome"
+	TemplatePublisherInvitation      EmailTemplate = "publisher-invitation"
+	TemplatePublisherApproved        EmailTemplate = "publisher-approved"
+	TemplatePublisherRejected        EmailTemplate = "publisher-rejected"
+	TemplatePasswordReset            EmailTemplate = "password-reset"
+	TemplateWelcome                  EmailTemplate = "welcome"
+	TemplatePublisherRequestReceived EmailTemplate = "publisher-request-received"
+	TemplateAdminNewRequest          EmailTemplate = "admin-new-request"
 )
 
 // SendEmailRequest represents the Resend API request
@@ -147,6 +149,35 @@ func (s *EmailService) SendWelcome(to, userName string) error {
 
 	html := s.renderTemplate(TemplateWelcome, data)
 	return s.send(to, subject, html, []EmailTag{{Name: "template", Value: string(TemplateWelcome)}})
+}
+
+// SendPublisherRequestReceived sends a confirmation email to the applicant
+func (s *EmailService) SendPublisherRequestReceived(to, name, organization string) error {
+	subject := "We Received Your Publisher Application"
+
+	data := map[string]string{
+		"name":         name,
+		"organization": organization,
+	}
+
+	html := s.renderTemplate(TemplatePublisherRequestReceived, data)
+	return s.send(to, subject, html, []EmailTag{{Name: "template", Value: string(TemplatePublisherRequestReceived)}})
+}
+
+// SendAdminNewPublisherRequest notifies admins of a new publisher request
+func (s *EmailService) SendAdminNewPublisherRequest(to, applicantName, organization, email, description, adminURL string) error {
+	subject := fmt.Sprintf("New Publisher Request: %s", organization)
+
+	data := map[string]string{
+		"applicant_name": applicantName,
+		"organization":   organization,
+		"email":          email,
+		"description":    description,
+		"admin_url":      adminURL,
+	}
+
+	html := s.renderTemplate(TemplateAdminNewRequest, data)
+	return s.send(to, subject, html, []EmailTag{{Name: "template", Value: string(TemplateAdminNewRequest)}})
 }
 
 // send executes the email send via Resend API
@@ -343,6 +374,82 @@ func (s *EmailService) renderTemplate(templateType EmailTemplate, data map[strin
         </div>
         <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;">
         <p style="color: #718096; font-size: 12px;">Thank you for being part of our community!</p>
+    </div>
+</body>
+</html>`,
+
+		TemplatePublisherRequestReceived: `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Application Received</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+    <div style="background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 100%); padding: 30px; border-radius: 10px 10px 0 0;">
+        <h1 style="color: white; margin: 0; font-size: 24px;">Zmanim Lab</h1>
+    </div>
+    <div style="background: #ffffff; padding: 30px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 10px 10px;">
+        <h2 style="color: #1e3a5f; margin-top: 0;">Application Received!</h2>
+        <p>Dear {{.name}},</p>
+        <p>Thank you for applying to become a publisher on Zmanim Lab for <strong>{{.organization}}</strong>.</p>
+        <p>We have received your application and our team will review it shortly. You will receive an email notification once a decision has been made.</p>
+        <div style="background: #f7fafc; border-left: 4px solid #1e3a5f; padding: 15px; margin: 20px 0;">
+            <p style="margin: 0; color: #4a5568;"><strong>What happens next?</strong></p>
+            <ul style="color: #4a5568; margin: 10px 0;">
+                <li>Our team will review your application</li>
+                <li>We may reach out if we need additional information</li>
+                <li>You'll receive an email with our decision</li>
+            </ul>
+        </div>
+        <p>The review process typically takes 1-3 business days.</p>
+        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;">
+        <p style="color: #718096; font-size: 12px;">If you have any questions, please reply to this email.</p>
+    </div>
+</body>
+</html>`,
+
+		TemplateAdminNewRequest: `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>New Publisher Request</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+    <div style="background: linear-gradient(135deg, #c53030 0%, #9b2c2c 100%); padding: 30px; border-radius: 10px 10px 0 0;">
+        <h1 style="color: white; margin: 0; font-size: 24px;">Zmanim Lab Admin</h1>
+    </div>
+    <div style="background: #ffffff; padding: 30px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 10px 10px;">
+        <h2 style="color: #c53030; margin-top: 0;">New Publisher Request</h2>
+        <p>A new publisher application has been submitted and requires your review.</p>
+        <div style="background: #f7fafc; padding: 20px; border-radius: 8px; margin: 20px 0;">
+            <table style="width: 100%; border-collapse: collapse;">
+                <tr>
+                    <td style="padding: 8px 0; color: #718096; width: 120px;">Name:</td>
+                    <td style="padding: 8px 0; font-weight: 600;">{{.applicant_name}}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px 0; color: #718096;">Organization:</td>
+                    <td style="padding: 8px 0; font-weight: 600;">{{.organization}}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px 0; color: #718096;">Email:</td>
+                    <td style="padding: 8px 0;"><a href="mailto:{{.email}}" style="color: #1e3a5f;">{{.email}}</a></td>
+                </tr>
+            </table>
+        </div>
+        <div style="background: #fffbeb; border-left: 4px solid #f59e0b; padding: 15px; margin: 20px 0;">
+            <p style="margin: 0 0 5px 0; color: #92400e; font-weight: 600;">Description:</p>
+            <p style="margin: 0; color: #78350f;">{{.description}}</p>
+        </div>
+        <div style="text-align: center; margin: 30px 0;">
+            <a href="{{.admin_url}}" style="background: #c53030; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 600;">Review in Admin Portal</a>
+        </div>
+        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;">
+        <p style="color: #718096; font-size: 12px;">This is an automated notification from Zmanim Lab.</p>
     </div>
 </body>
 </html>`,
