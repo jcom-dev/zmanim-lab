@@ -102,6 +102,25 @@ variable "clerk_issuer" {
   description = "Clerk issuer for JWT verification"
 }
 
+# Email (Resend)
+variable "resend_api_key" {
+  type        = string
+  sensitive   = true
+  description = "Resend API key for transactional emails"
+}
+
+variable "resend_domain" {
+  type        = string
+  default     = "shtetl.dev"
+  description = "Resend verified domain"
+}
+
+variable "resend_from" {
+  type        = string
+  default     = "zmanim@shtetl.dev"
+  description = "Default from email address"
+}
+
 # Workspace metadata
 data "coder_workspace" "me" {}
 
@@ -139,6 +158,10 @@ resource "docker_container" "workspace" {
     "NEXT_PUBLIC_SUPABASE_URL=${var.supabase_url}",
     "NEXT_PUBLIC_SUPABASE_ANON_KEY=${var.supabase_anon_key}",
     "NEXT_PUBLIC_API_URL=http://localhost:${local.api_port}",
+    # Email (Resend)
+    "RESEND_API_KEY=${var.resend_api_key}",
+    "RESEND_DOMAIN=${var.resend_domain}",
+    "RESEND_FROM=${var.resend_from}",
     # CORS configuration for API
     "ALLOWED_ORIGINS=http://localhost:${local.web_port},http://127.0.0.1:${local.web_port},http://localhost:${local.api_port},http://127.0.0.1:${local.api_port},https://localhost:${local.web_port},https://127.0.0.1:${local.web_port},https://localhost:${local.api_port},https://127.0.0.1:${local.api_port}",
     # Service ports

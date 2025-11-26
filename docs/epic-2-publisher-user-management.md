@@ -19,10 +19,10 @@ Epic 2 transforms publisher management from entity-only to full user lifecycle. 
 
 | Metric | Value |
 |--------|-------|
-| Stories | 8 |
-| New FRs | 12 (FR43-FR54) |
+| Stories | 12 (8 original + 4 added via sprint change) |
+| New FRs | 24 (FR43-FR66) |
 | Enhanced FRs | FR1, FR16-FR20 |
-| Primary Users | Admins, Publishers |
+| Primary Users | Admins, Publishers, Users |
 
 ---
 
@@ -42,6 +42,18 @@ Epic 2 transforms publisher management from entity-only to full user lifecycle. 
 | FR52 | Publisher can view activity log of changes | 2.8 |
 | FR53 | Activity log tracks algorithm, coverage, and profile changes | 2.8 |
 | FR54 | Admin can view any publisher's activity log | 2.8 |
+| FR55 | User can submit publisher registration request | 2.9 |
+| FR56 | Admin can view pending publisher requests | 2.9 |
+| FR57 | Admin can approve/reject publisher requests | 2.9 |
+| FR58 | Publisher can view team members | 2.10 |
+| FR59 | Publisher can invite new team members via email | 2.10 |
+| FR60 | Publisher can remove team members | 2.10 |
+| FR61 | System sends transactional emails via Resend | 2.11 |
+| FR62 | Emails use Zmanim Lab branding | 2.11 |
+| FR63 | User can view profile info in header dropdown | 2.12 |
+| FR64 | User can sign out from dropdown | 2.12 |
+| FR65 | User can request password reset from dropdown | 2.12 |
+| FR66 | Email templates created in Resend dashboard | 2.11 |
 
 ---
 
@@ -56,6 +68,12 @@ Epic 2 transforms publisher management from entity-only to full user lifecycle. 
                      └── 2.6 Publisher Dashboard Hub
                           ├── 2.7 Publisher Analytics (Simple)
                           └── 2.8 Publisher Activity Log
+
+Sprint Change Additions (2025-11-26):
+2.11 Email Service (Resend)  ← Foundation for email features
+ ├── 2.9 Publisher Registration Request
+ ├── 2.10 Publisher Member Invitation
+ └── 2.12 User Profile Dropdown
 ```
 
 ---
@@ -576,6 +594,220 @@ FR52, FR53, FR54
 
 ---
 
+## Story 2.9: Publisher Registration Request
+
+**As a** potential publisher,
+**I want** to submit a registration request with my details,
+**So that** I can become a publisher on Zmanim Lab after admin approval.
+
+### Acceptance Criteria
+
+**Given** I am not logged in or logged in as a regular user
+**When** I navigate to `/become-publisher`
+**Then** I see a registration form
+
+**Given** I am viewing the registration form
+**When** I fill in: name, organization, email, website (optional), description
+**Then** I can submit the request
+
+**Given** I submit a valid registration request
+**When** the submission is processed
+**Then** I see a confirmation message
+**And** my request is stored with status "pending"
+
+**Given** I am an admin viewing `/admin/publishers`
+**When** I look at the page
+**Then** I see a "Pending Requests" section with count badge
+
+**Given** I am an admin viewing a pending request
+**When** I click "Approve"
+**Then** a publisher account is created
+**And** an approval email is sent via Resend
+**And** the request status changes to "approved"
+
+**Given** I am an admin viewing a pending request
+**When** I click "Reject"
+**Then** the request status changes to "rejected"
+**And** a rejection email is sent via Resend
+
+### Prerequisites
+
+Story 2.11 (Email Service)
+
+### Technical Notes
+
+- New page: `web/app/become-publisher/page.tsx`
+- Database: `publisher_requests` table
+- API endpoints:
+  - `POST /api/publisher-requests` - submit request (public)
+  - `GET /api/admin/publisher-requests` - list pending (admin)
+  - `POST /api/admin/publisher-requests/{id}/approve` - approve (admin)
+  - `POST /api/admin/publisher-requests/{id}/reject` - reject (admin)
+
+### FRs
+
+FR55, FR56, FR57
+
+---
+
+## Story 2.10: Publisher Member Invitation
+
+**As a** publisher,
+**I want** to invite team members to help manage my publisher account,
+**So that** I can delegate algorithm and coverage management.
+
+### Acceptance Criteria
+
+**Given** I am logged in as a publisher
+**When** I navigate to `/publisher/team`
+**Then** I see a list of current team members with their email and role
+
+**Given** I am viewing my team page
+**When** I click "Invite Member"
+**Then** I see a form with email address field
+
+**Given** I enter a valid email and submit
+**When** the invitation is created
+**Then** an invitation email is sent via Resend
+**And** the invitation is stored with status "pending"
+**And** I see the pending invitation in my team list
+
+**Given** an invitee clicks the invitation link
+**When** they sign up or sign in
+**Then** they are added to my publisher's access list
+**And** the invitation status changes to "accepted"
+
+**Given** I am viewing my team
+**When** I click "Remove" on a team member
+**Then** they are removed from my publisher's access list
+
+### Prerequisites
+
+Story 2.11 (Email Service), Story 2.1 (Publisher User Invitation pattern)
+
+### Technical Notes
+
+- New page: `web/app/publisher/team/page.tsx`
+- New page: `web/app/accept-publisher-invite/page.tsx`
+- Database: `publisher_invitations` table
+- API endpoints:
+  - `GET /api/publisher/team` - list team members
+  - `POST /api/publisher/team/invite` - send invitation
+  - `DELETE /api/publisher/team/{userId}` - remove member
+  - `POST /api/publisher/team/accept` - accept invitation (with token)
+
+### FRs
+
+FR58, FR59, FR60
+
+---
+
+## Story 2.11: Email Service Integration (Resend)
+
+**As the** system,
+**I want** to send transactional emails via Resend,
+**So that** users receive branded invitations and notifications.
+
+### Acceptance Criteria
+
+**Given** the email service is configured
+**When** an invitation is sent
+**Then** the email is delivered via Resend with Zmanim Lab branding
+
+**Given** a publisher request is approved
+**When** the approval is processed
+**Then** a welcome email is sent to the new publisher
+
+**Given** a user requests password reset
+**When** the request is submitted
+**Then** a password reset email is sent via Resend
+
+**Given** the Resend API is unavailable
+**When** an email send fails
+**Then** the error is logged
+**And** the operation continues (email is non-blocking)
+
+### Prerequisites
+
+None (foundation story)
+
+### Technical Notes
+
+- New service: `api/internal/services/email_service.go`
+- Use Resend REST API
+- Create templates in Resend Dashboard:
+  - `publisher-invitation` - Invite user to publisher team
+  - `publisher-approved` - Welcome new publisher
+  - `publisher-rejected` - Rejection notice
+  - `password-reset` - Password reset link
+  - `welcome` - Welcome new user
+- Template design: Midnight Trust color scheme (#1e3a5f)
+- Environment variables: `RESEND_API_KEY`, `RESEND_DOMAIN`, `RESEND_FROM`
+- Fallback: Local HTML templates in `api/internal/templates/email/`
+
+### FRs
+
+FR61, FR62, FR66
+
+---
+
+## Story 2.12: User Profile Dropdown
+
+**As a** logged-in user,
+**I want** to see my profile information in a dropdown menu,
+**So that** I can view my account details and sign out.
+
+### Acceptance Criteria
+
+**Given** I am logged in
+**When** I view any page
+**Then** I see a profile icon/avatar in the top-right header
+
+**Given** I click the profile icon
+**When** the dropdown opens
+**Then** I see:
+  - My display name
+  - My email address
+  - My role (admin/publisher/user)
+  - List of publishers I have access to (if any)
+  - "Change Password" link
+  - "Sign Out" button
+
+**Given** I have access to multiple publishers
+**When** I view the dropdown
+**Then** I see all publisher names listed
+
+**Given** I click "Change Password"
+**When** the action is triggered
+**Then** I receive a password reset email via Resend
+
+**Given** I click "Sign Out"
+**When** I confirm
+**Then** I am logged out and redirected to home page
+
+**Given** I am not logged in
+**When** I view the header
+**Then** I see "Sign In" button instead of profile dropdown
+
+### Prerequisites
+
+Story 2.11 (Email Service for password reset)
+
+### Technical Notes
+
+- New component: `web/components/shared/ProfileDropdown.tsx`
+- Update layout or header component
+- Use shadcn/ui DropdownMenu
+- Get user data from Clerk `useUser()` hook
+- Extract `role` and `publisher_access_list` from `publicMetadata`
+- Fetch publisher names from API for display
+
+### FRs
+
+FR63, FR64, FR65
+
+---
+
 ## FR Coverage Matrix
 
 | FR | Description | Story |
@@ -598,6 +830,18 @@ FR52, FR53, FR54
 | FR52 | Publisher activity log view | 2.8 |
 | FR53 | Activity log tracks all changes | 2.8 |
 | FR54 | Admin can view publisher activity | 2.8 |
+| FR55 | User can submit publisher registration request | 2.9 |
+| FR56 | Admin can view pending publisher requests | 2.9 |
+| FR57 | Admin can approve/reject publisher requests | 2.9 |
+| FR58 | Publisher can view team members | 2.10 |
+| FR59 | Publisher can invite new team members via email | 2.10 |
+| FR60 | Publisher can remove team members | 2.10 |
+| FR61 | System sends transactional emails via Resend | 2.11 |
+| FR62 | Emails use Zmanim Lab branding | 2.11 |
+| FR63 | User can view profile info in header dropdown | 2.12 |
+| FR64 | User can sign out from dropdown | 2.12 |
+| FR65 | User can request password reset from dropdown | 2.12 |
+| FR66 | Email templates created in Resend dashboard | 2.11 |
 
 ---
 
@@ -634,6 +878,37 @@ CREATE TABLE activity_logs (
 
 CREATE INDEX idx_activity_publisher ON activity_logs(publisher_id);
 CREATE INDEX idx_activity_created ON activity_logs(created_at DESC);
+
+-- Publisher registration requests (Story 2.9)
+CREATE TABLE publisher_requests (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL,
+    organization TEXT,
+    email TEXT NOT NULL,
+    website TEXT,
+    description TEXT,
+    status TEXT NOT NULL DEFAULT 'pending', -- pending, approved, rejected
+    reviewed_by TEXT, -- admin clerk_user_id
+    reviewed_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX idx_publisher_requests_status ON publisher_requests(status);
+
+-- Publisher team invitations (Story 2.10)
+CREATE TABLE publisher_invitations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    publisher_id UUID REFERENCES publishers(id) ON DELETE CASCADE,
+    email TEXT NOT NULL,
+    token TEXT UNIQUE NOT NULL, -- for magic link
+    status TEXT NOT NULL DEFAULT 'pending', -- pending, accepted, expired
+    invited_by TEXT NOT NULL, -- clerk_user_id
+    expires_at TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX idx_publisher_invitations_token ON publisher_invitations(token);
+CREATE INDEX idx_publisher_invitations_publisher ON publisher_invitations(publisher_id);
 ```
 
 ---
@@ -648,6 +923,9 @@ DELETE /api/admin/publishers/{id}/users/{userId} - Remove user from publisher
 POST   /api/admin/impersonate/{publisherId}      - Start impersonation
 POST   /api/admin/impersonate/exit               - End impersonation
 GET    /api/admin/publishers/{id}/activity       - View publisher activity
+GET    /api/admin/publisher-requests             - List pending requests (2.9)
+POST   /api/admin/publisher-requests/{id}/approve - Approve request (2.9)
+POST   /api/admin/publisher-requests/{id}/reject  - Reject request (2.9)
 ```
 
 ### New/Updated Publisher Endpoints
@@ -659,6 +937,20 @@ PUT    /api/publisher/coverage/{id}              - Update coverage
 DELETE /api/publisher/coverage/{id}              - Remove coverage
 GET    /api/publisher/analytics                  - Analytics data
 GET    /api/publisher/activity                   - Activity log
+GET    /api/publisher/team                       - List team members (2.10)
+POST   /api/publisher/team/invite                - Send invitation (2.10)
+DELETE /api/publisher/team/{userId}              - Remove team member (2.10)
+POST   /api/publisher/team/accept                - Accept invitation (2.10)
+```
+
+### Public Endpoints
+```
+POST   /api/publisher-requests                   - Submit registration request (2.9)
+```
+
+### User Endpoints
+```
+POST   /api/user/request-password-reset          - Request password reset email (2.12)
 ```
 
 ---
@@ -666,9 +958,9 @@ GET    /api/publisher/activity                   - Activity log
 ## Summary
 
 **Epic 2: Publisher User Management & Dashboard**
-- **Stories:** 8
-- **New FRs:** 12 (FR43-FR54)
-- **Focus:** Connect real users to publishers, comprehensive dashboard
+- **Stories:** 12 (8 original + 4 sprint change additions)
+- **New FRs:** 24 (FR43-FR66)
+- **Focus:** Connect real users to publishers, comprehensive dashboard, self-service onboarding
 
 **After Epic 2 Completion:**
 - Admins can invite users to publishers via Clerk
@@ -679,6 +971,10 @@ GET    /api/publisher/activity                   - Activity log
 - Coverage management supports country/region/city hierarchy
 - Basic analytics show usage counts
 - Activity log tracks all changes
+- **[NEW]** Potential publishers can request to join via self-service form
+- **[NEW]** Publishers can invite their own team members
+- **[NEW]** Transactional emails sent via Resend with branding
+- **[NEW]** User profile dropdown shows account info and sign out
 
 ---
 

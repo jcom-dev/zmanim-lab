@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { MapPin, ChevronRight, Building2, Globe, Loader2 } from 'lucide-react';
+import { SignInButton, UserButton, useUser } from '@clerk/nextjs';
+import { RoleNavigation } from '@/components/home/RoleNavigation';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
@@ -37,6 +39,7 @@ const STORAGE_KEY_CITY = 'zmanim_selected_city';
 
 export default function Home() {
   const router = useRouter();
+  const { isSignedIn, isLoaded: userLoaded } = useUser();
 
   // Selection state
   const [selectedCountry, setSelectedCountry] = useState<Country | null>(null);
@@ -196,8 +199,33 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-slate-900">
-      {/* Header */}
+      {/* Top Navigation Bar */}
       <div className="bg-slate-800 border-b border-slate-700">
+        <div className="container mx-auto px-4">
+          <div className="flex justify-between items-center h-16">
+            <div className="text-xl font-bold text-white">
+              Zmanim Lab
+            </div>
+            <div className="flex items-center gap-4">
+              <RoleNavigation />
+              {userLoaded && (
+                isSignedIn ? (
+                  <UserButton afterSignOutUrl="/" />
+                ) : (
+                  <SignInButton mode="modal">
+                    <button className="px-4 py-2 text-slate-300 hover:text-white transition-colors">
+                      Sign In
+                    </button>
+                  </SignInButton>
+                )
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Hero Section */}
+      <div className="bg-slate-800/50 border-b border-slate-700">
         <div className="container mx-auto px-4 py-12">
           <div className="text-center max-w-3xl mx-auto">
             <h1 className="text-4xl font-bold text-white mb-3">
@@ -403,6 +431,14 @@ export default function Home() {
             Times are calculated based on astronomical and halachic methods.
             Consult your local rabbi for practical guidance.
           </p>
+          <div className="mt-4">
+            <a
+              href="/become-publisher"
+              className="text-sm text-blue-400 hover:text-blue-300 transition-colors"
+            >
+              Become a Publisher
+            </a>
+          </div>
         </div>
       </footer>
     </main>

@@ -1,0 +1,306 @@
+'use client';
+
+import { useState, useEffect, useCallback } from 'react';
+import { useAuth } from '@clerk/nextjs';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+
+interface PublisherRequest {
+  id: string;
+  name: string;
+  organization: string;
+  email: string;
+  website?: string;
+  description: string;
+  status: string;
+  created_at: string;
+}
+
+interface PendingRequestsProps {
+  onApprove?: () => void;
+}
+
+export function PendingRequests({ onApprove }: PendingRequestsProps) {
+  const { getToken } = useAuth();
+  const [requests, setRequests] = useState<PublisherRequest[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [expanded, setExpanded] = useState(false);
+  const [selectedRequest, setSelectedRequest] = useState<PublisherRequest | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [rejectReason, setRejectReason] = useState('');
+  const [showRejectDialog, setShowRejectDialog] = useState(false);
+
+  const fetchRequests = useCallback(async () => {
+    try {
+      setLoading(true);
+      const token = await getToken();
+
+      const response = await fetch(`${API_BASE}/api/v1/admin/publisher-requests?status=pending`, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch requests');
+      }
+
+      const data = await response.json();
+      setRequests(data.data || []);
+      setPendingCount(data.meta?.pending || 0);
+    } catch (err) {
+      console.error('Error fetching requests:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [getToken]);
+
+  useEffect(() => {
+    fetchRequests();
+  }, [fetchRequests]);
+
+  const handleApprove = async (request: PublisherRequest) => {
+    setActionLoading(true);
+    try {
+      const token = await getToken();
+
+      const response = await fetch(`${API_BASE}/api/v1/admin/publisher-requests/${request.id}/approve`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.message || 'Failed to approve request');
+      }
+
+      setSelectedRequest(null);
+      fetchRequests();
+      onApprove?.();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to approve request');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleReject = async () => {
+    if (!selectedRequest) return;
+
+    setActionLoading(true);
+    try {
+      const token = await getToken();
+
+      const response = await fetch(`${API_BASE}/api/v1/admin/publisher-requests/${selectedRequest.id}/reject`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ reason: rejectReason }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.message || 'Failed to reject request');
+      }
+
+      setShowRejectDialog(false);
+      setSelectedRequest(null);
+      setRejectReason('');
+      fetchRequests();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to reject request');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            Pending Requests
+            <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-sm">...</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-gray-500">Loading...</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (pendingCount === 0) {
+    return null;
+  }
+
+  return (
+    <>
+      <Card className="mb-6 border-yellow-200 bg-yellow-50">
+        <CardHeader
+          className="cursor-pointer"
+          onClick={() => setExpanded(!expanded)}
+        >
+          <CardTitle className="flex items-center justify-between">
+            <span className="flex items-center gap-2">
+              Pending Requests
+              <span className="bg-yellow-200 text-yellow-800 px-2 py-0.5 rounded-full text-sm font-medium">
+                {pendingCount}
+              </span>
+            </span>
+            <svg
+              className={`w-5 h-5 text-gray-500 transition-transform ${expanded ? 'rotate-180' : ''}`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </CardTitle>
+          <CardDescription className="text-yellow-700">
+            {pendingCount} publisher {pendingCount === 1 ? 'application' : 'applications'} awaiting review
+          </CardDescription>
+        </CardHeader>
+        {expanded && (
+          <CardContent>
+            <div className="space-y-4">
+              {requests.map((request) => (
+                <div
+                  key={request.id}
+                  className="bg-white p-4 rounded-lg border border-yellow-200 hover:border-yellow-300 cursor-pointer"
+                  onClick={() => setSelectedRequest(request)}
+                >
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h4 className="font-medium">{request.name}</h4>
+                      <p className="text-sm text-gray-600">{request.organization}</p>
+                      <p className="text-sm text-gray-500">{request.email}</p>
+                    </div>
+                    <span className="text-xs text-gray-400">
+                      {new Date(request.created_at).toLocaleDateString()}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        )}
+      </Card>
+
+      {/* Request Details Dialog */}
+      <Dialog open={!!selectedRequest && !showRejectDialog} onOpenChange={() => setSelectedRequest(null)}>
+        <DialogContent className="max-w-lg">
+          {selectedRequest && (
+            <>
+              <DialogHeader>
+                <DialogTitle>Publisher Application</DialogTitle>
+                <DialogDescription>Review the details below</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Name</label>
+                  <p className="text-gray-900">{selectedRequest.name}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Organization</label>
+                  <p className="text-gray-900">{selectedRequest.organization}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Email</label>
+                  <p className="text-gray-900">{selectedRequest.email}</p>
+                </div>
+                {selectedRequest.website && (
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Website</label>
+                    <p className="text-gray-900">
+                      <a
+                        href={selectedRequest.website}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:underline"
+                      >
+                        {selectedRequest.website}
+                      </a>
+                    </p>
+                  </div>
+                )}
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Description</label>
+                  <p className="text-gray-900 whitespace-pre-wrap">{selectedRequest.description}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Submitted</label>
+                  <p className="text-gray-900">{new Date(selectedRequest.created_at).toLocaleString()}</p>
+                </div>
+              </div>
+              <DialogFooter className="gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowRejectDialog(true);
+                  }}
+                  disabled={actionLoading}
+                >
+                  Reject
+                </Button>
+                <Button onClick={() => handleApprove(selectedRequest)} disabled={actionLoading}>
+                  {actionLoading ? 'Processing...' : 'Approve'}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Reject Confirmation Dialog */}
+      <Dialog open={showRejectDialog} onOpenChange={setShowRejectDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reject Application</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to reject this application? You can optionally provide a reason.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <label htmlFor="reason" className="block text-sm font-medium text-gray-700 mb-1">
+              Reason (optional)
+            </label>
+            <textarea
+              id="reason"
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              placeholder="Enter a reason for rejection..."
+              rows={3}
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowRejectDialog(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleReject} disabled={actionLoading}>
+              {actionLoading ? 'Rejecting...' : 'Reject Application'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}

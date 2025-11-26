@@ -44,27 +44,27 @@ The last commit attempted to implement algorithm editor functionality and Clerk 
 ## Acceptance Criteria
 
 ### AC1: Binary File Cleanup
-- [ ] Remove `api/main` binary from repository
-- [ ] Add `api/main` to `.gitignore` if not already present
-- [ ] Verify no other binaries are tracked
+- [x] Remove `api/main` binary from repository
+- [x] Add `api/main` to `.gitignore` if not already present
+- [x] Verify no other binaries are tracked
 
 ### AC2: Clerk Service Refactor
-- [ ] Review `clerk_service.go` against Epic 2 requirements
-- [ ] Add `publisher_access_list` support to metadata (per Story 2.1)
-- [ ] Ensure invitation flow uses metadata linking, not user creation
-- [ ] Add method to UPDATE existing user's `publisher_access_list`
+- [x] Review `clerk_service.go` against Epic 2 requirements
+- [x] Add `publisher_access_list` support to metadata (per Story 2.1)
+- [x] Ensure invitation flow uses metadata linking, not user creation
+- [x] Add method to UPDATE existing user's `publisher_access_list`
 
 ### AC3: Admin Handler Alignment
-- [ ] `AdminCreatePublisher` should NOT create Clerk user
-- [ ] Add `AdminInviteUserToPublisher` for the invitation flow (Story 2.1)
-- [ ] Ensure publisher creation and user invitation are separate concerns
+- [x] `AdminCreatePublisher` should NOT create Clerk user
+- [x] Add `AdminInviteUserToPublisher` for the invitation flow (Story 2.1)
+- [x] Ensure publisher creation and user invitation are separate concerns
 
 ### AC4: Test File Organization
-- [ ] Review `test.html` - remove if temporary, move if useful
-- [ ] Ensure E2E tests align with current Epic 2 scope
+- [x] Review `test.html` - remove if temporary, move if useful
+- [x] Ensure E2E tests align with current Epic 2 scope
 
 ### AC5: Document Learnings
-- [ ] Document good patterns found for reuse:
+- [x] Document good patterns found for reuse:
   - Service pattern with dependency injection
   - Clerk SDK integration patterns
   - Error handling and logging patterns
@@ -141,36 +141,36 @@ Epic 2 flow:
 ## Implementation Checklist
 
 ### Phase 1: Cleanup
-- [ ] Remove `api/main` binary
-- [ ] Update `.gitignore`
-- [ ] Review and handle `test.html`
+- [x] Remove `api/main` binary
+- [x] Update `.gitignore`
+- [x] Review and handle `test.html`
 
 ### Phase 2: Clerk Service Refactor
-- [ ] Add `GetUserMetadata` method
-- [ ] Add `AddPublisherToUserAccessList` method
-- [ ] Modify `SendInvitation` to include publisherID in metadata
-- [ ] Remove/deprecate `CreatePublisherUser` (not needed for Epic 2 flow)
+- [x] Add `GetUserMetadata` method
+- [x] Add `AddPublisherToUserAccessList` method
+- [x] Modify `SendInvitation` to include publisherID in metadata
+- [x] Remove/deprecate `CreatePublisherUser` (not needed for Epic 2 flow)
 
 ### Phase 3: Handler Separation
-- [ ] Simplify `AdminCreatePublisher` (no Clerk calls)
-- [ ] Create `AdminInviteUserToPublisher` endpoint stub
-- [ ] Wire up routes
+- [x] Simplify `AdminCreatePublisher` (no Clerk calls)
+- [x] Create `AdminInviteUserToPublisher` endpoint stub
+- [x] Wire up routes
 
 ### Phase 4: Testing & Documentation
-- [ ] Run existing tests to ensure no regressions
-- [ ] Document patterns in a brief dev note
-- [ ] Create commit with clear message
+- [x] Run existing tests to ensure no regressions
+- [x] Document patterns in a brief dev note
+- [x] Create commit with clear message
 
 ---
 
 ## Definition of Done
 
-- [ ] Binary files removed from repo
-- [ ] Clerk service aligned with Epic 2 invitation flow
-- [ ] Publisher creation decoupled from user invitation
-- [ ] No regressions in existing functionality
-- [ ] Patterns documented for team reference
-- [ ] Clean commit created
+- [x] Binary files removed from repo
+- [x] Clerk service aligned with Epic 2 invitation flow
+- [x] Publisher creation decoupled from user invitation
+- [x] No regressions in existing functionality
+- [x] Patterns documented for team reference
+- [x] Clean commit created
 
 ---
 
@@ -187,3 +187,70 @@ Epic 2 flow:
 ## Notes
 
 This story establishes a clean foundation for Epic 2. The existing code demonstrates good patterns but needs alignment with the specified invitation/metadata flow before Stories 2.1+ can proceed.
+
+---
+
+## Dev Agent Record
+
+### Debug Log
+
+**2025-11-26:**
+- Analyzed existing code from commit ef140ee
+- Found `api/main` binary and `test.html` already handled in `.gitignore`
+- Binary is not tracked by git (verified with `git ls-files`)
+- Refactored `clerk_service.go` to support multi-publisher access pattern
+- Separated publisher creation from user invitation in `admin.go`
+
+### Completion Notes
+
+**Changes Made:**
+
+1. **`api/internal/services/clerk_service.go`** - Added 6 new methods:
+   - `GetUser()` - Retrieve Clerk user by ID
+   - `GetUserPublicMetadata()` - Parse user's public metadata
+   - `AddPublisherToUser()` - Add publisher to user's access list
+   - `RemovePublisherFromUser()` - Remove publisher from user's access list
+   - `SendPublisherInvitation()` - Send invitation with publisher context
+   - `GetUserByEmail()` - Find user by email address
+
+2. **`api/internal/handlers/admin.go`** - Refactored and added:
+   - `AdminCreatePublisher()` - Simplified to create publisher only (no Clerk)
+   - `AdminInviteUserToPublisher()` - New endpoint for user invitation
+   - `AdminRemoveUserFromPublisher()` - New endpoint for removing user access
+
+3. **`api/cmd/api/main.go`** - Added routes:
+   - `POST /api/v1/admin/publishers/{id}/users/invite`
+   - `DELETE /api/v1/admin/publishers/{id}/users/{userId}`
+
+**Key Pattern Changes:**
+
+- Old flow: Create publisher → Create Clerk user → Send invitation
+- New flow: Create publisher (no Clerk) → Invite user separately (new/existing)
+
+**Tests:** All Go tests pass, frontend builds successfully.
+
+---
+
+## File List
+
+| File | Action | Notes |
+|------|--------|-------|
+| `api/internal/services/clerk_service.go` | Modified | Added multi-publisher methods |
+| `api/internal/handlers/admin.go` | Modified | Separated publisher/user flows |
+| `api/cmd/api/main.go` | Modified | Added new admin routes |
+
+---
+
+## Change Log
+
+| Date | Change | Author |
+|------|--------|--------|
+| 2025-11-26 | Refactored Clerk service for Epic 2 multi-publisher support | Dev Agent |
+| 2025-11-26 | Separated publisher creation from user invitation | Dev Agent |
+| 2025-11-26 | Added AdminInviteUserToPublisher and AdminRemoveUserFromPublisher handlers | Dev Agent |
+
+---
+
+## Status
+
+**Status:** done

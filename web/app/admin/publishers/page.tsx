@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@clerk/nextjs';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { PendingRequests } from '@/components/admin/PendingRequests';
 import Link from 'next/link';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
@@ -30,11 +31,7 @@ export default function AdminPublishersPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
-  useEffect(() => {
-    fetchPublishers();
-  }, []);
-
-  const fetchPublishers = async () => {
+  const fetchPublishers = useCallback(async () => {
     try {
       setLoading(true);
       const token = await getToken();
@@ -51,13 +48,17 @@ export default function AdminPublishersPage() {
       }
 
       const data = await response.json();
-      setPublishers(data.data.publishers || []);
+      setPublishers(data.publishers || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setLoading(false);
     }
-  };
+  }, [getToken]);
+
+  useEffect(() => {
+    fetchPublishers();
+  }, [fetchPublishers]);
 
   const handleStatusChange = async (publisherId: string, action: 'verify' | 'suspend' | 'reactivate') => {
     try {
@@ -144,6 +145,9 @@ export default function AdminPublishersPage() {
         </Link>
       </div>
 
+      {/* Pending Requests */}
+      <PendingRequests onApprove={fetchPublishers} />
+
       {/* Filters */}
       <Card className="mb-6">
         <CardContent className="pt-6">
@@ -205,7 +209,9 @@ export default function AdminPublishersPage() {
                   filteredPublishers.map((publisher) => (
                     <tr key={publisher.id} className="border-b hover:bg-gray-50">
                       <td className="py-4">
-                        <div className="font-medium">{publisher.name}</div>
+                        <Link href={`/admin/publishers/${publisher.id}`} className="font-medium text-blue-600 hover:underline">
+                          {publisher.name}
+                        </Link>
                       </td>
                       <td className="py-4">{publisher.organization}</td>
                       <td className="py-4">
@@ -227,6 +233,11 @@ export default function AdminPublishersPage() {
                       </td>
                       <td className="py-4 text-right">
                         <div className="flex justify-end gap-2">
+                          <Link href={`/admin/publishers/${publisher.id}`}>
+                            <Button size="sm" variant="outline">
+                              View
+                            </Button>
+                          </Link>
                           {publisher.status === 'pending' && (
                             <Button
                               size="sm"

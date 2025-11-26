@@ -52,7 +52,7 @@ func main() {
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   cfg.CORS.AllowedOrigins,
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token", "X-Publisher-Id"},
 		ExposedHeaders:   []string{"Link"},
 		AllowCredentials: true,
 		MaxAge:           300,
@@ -80,6 +80,10 @@ func main() {
 			// Publishers
 			r.Get("/publishers", h.GetPublishers)
 			r.Get("/publishers/{id}", h.GetPublisher)
+			r.Get("/publishers/names", h.GetPublisherNames)
+
+			// Publisher registration requests (public)
+			r.Post("/publisher-requests", h.SubmitPublisherRequest)
 
 			// Locations (legacy)
 			r.Get("/locations", h.GetLocations)
@@ -101,6 +105,10 @@ func main() {
 		// Publisher protected routes
 		r.Route("/publisher", func(r chi.Router) {
 			r.Use(authMiddleware.RequireRole("publisher"))
+			r.Get("/accessible", h.GetAccessiblePublishers)
+			r.Get("/dashboard", h.GetPublisherDashboardSummary)
+			r.Get("/analytics", h.GetPublisherAnalytics)
+			r.Get("/activity", h.GetPublisherActivity)
 			r.Get("/profile", h.GetPublisherProfile)
 			r.Put("/profile", h.UpdatePublisherProfile)
 			r.Post("/logo", h.UploadPublisherLogo)
@@ -120,6 +128,19 @@ func main() {
 			r.Delete("/coverage/{id}", h.DeletePublisherCoverage)
 			// Cache management
 			r.Delete("/cache", h.InvalidatePublisherCache)
+			// Team management (Story 2-10)
+			r.Get("/team", h.GetPublisherTeam)
+			r.Post("/team/invite", h.InvitePublisherTeamMember)
+			r.Delete("/team/{userId}", h.RemovePublisherTeamMember)
+			r.Post("/team/invitations/{id}/resend", h.ResendPublisherInvitation)
+			r.Delete("/team/invitations/{id}", h.CancelPublisherInvitation)
+			r.Post("/team/accept", h.AcceptPublisherInvitation)
+		})
+
+		// User routes (authenticated)
+		r.Route("/user", func(r chi.Router) {
+			r.Use(authMiddleware.OptionalAuth)
+			r.Post("/request-password-reset", h.RequestPasswordReset)
 		})
 
 		// Admin protected routes
@@ -132,6 +153,16 @@ func main() {
 			r.Put("/publishers/{id}/verify", h.AdminVerifyPublisher)
 			r.Put("/publishers/{id}/suspend", h.AdminSuspendPublisher)
 			r.Put("/publishers/{id}/reactivate", h.AdminReactivatePublisher)
+
+			// Publisher user management (Epic 2)
+			r.Get("/publishers/{id}/users", h.AdminGetPublisherUsers)
+			r.Post("/publishers/{id}/users/invite", h.AdminInviteUserToPublisher)
+			r.Delete("/publishers/{id}/users/{userId}", h.AdminRemoveUserFromPublisher)
+
+			// Publisher registration requests (Story 2-9)
+			r.Get("/publisher-requests", h.AdminGetPublisherRequests)
+			r.Post("/publisher-requests/{id}/approve", h.AdminApprovePublisherRequest)
+			r.Post("/publisher-requests/{id}/reject", h.AdminRejectPublisherRequest)
 
 			// Statistics
 			r.Get("/stats", h.AdminGetStats)

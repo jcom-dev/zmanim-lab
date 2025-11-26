@@ -12,6 +12,50 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// AdminGetPublisherUsers returns all users linked to a publisher
+// GET /api/admin/publishers/{id}/users
+func (h *Handlers) AdminGetPublisherUsers(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	publisherID := chi.URLParam(r, "id")
+
+	if publisherID == "" {
+		RespondValidationError(w, r, "Publisher ID is required", nil)
+		return
+	}
+
+	// Verify publisher exists
+	var exists bool
+	err := h.db.Pool.QueryRow(ctx,
+		"SELECT EXISTS(SELECT 1 FROM publishers WHERE id = $1)", publisherID).Scan(&exists)
+	if err != nil {
+		slog.Error("failed to check publisher existence", "error", err, "publisher_id", publisherID)
+		RespondInternalError(w, r, "Failed to verify publisher")
+		return
+	}
+	if !exists {
+		RespondNotFound(w, r, "Publisher not found")
+		return
+	}
+
+	if h.clerkService == nil {
+		RespondInternalError(w, r, "Clerk service not available")
+		return
+	}
+
+	// Get users with access to this publisher from Clerk
+	users, err := h.clerkService.GetUsersWithPublisherAccess(ctx, publisherID)
+	if err != nil {
+		slog.Error("failed to get publisher users", "error", err, "publisher_id", publisherID)
+		RespondInternalError(w, r, "Failed to retrieve users")
+		return
+	}
+
+	RespondJSON(w, r, http.StatusOK, map[string]interface{}{
+		"users": users,
+		"total": len(users),
+	})
+}
+
 // AdminListPublishers returns a list of all publishers with status
 // GET /api/admin/publishers
 func (h *Handlers) AdminListPublishers(w http.ResponseWriter, r *http.Request) {
@@ -77,15 +121,16 @@ func (h *Handlers) AdminListPublishers(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// AdminCreatePublisher creates a new publisher and sends Clerk invitation
+// AdminCreatePublisher creates a new publisher entity (no Clerk user)
 // POST /api/admin/publishers
+// Note: Use AdminInviteUserToPublisher to invite users to manage this publisher
 func (h *Handlers) AdminCreatePublisher(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	var req struct {
-		Email        string  `json:"email"`
 		Name         string  `json:"name"`
 		Organization string  `json:"organization"`
+		Email        *string `json:"email"`   // Optional contact email for the publisher
 		Website      *string `json:"website"`
 		Bio          *string `json:"bio"`
 	}
@@ -97,9 +142,6 @@ func (h *Handlers) AdminCreatePublisher(w http.ResponseWriter, r *http.Request) 
 
 	// Validate required fields
 	validationErrors := make(map[string]string)
-	if req.Email == "" {
-		validationErrors["email"] = "Email is required"
-	}
 	if req.Name == "" {
 		validationErrors["name"] = "Name is required"
 	}
@@ -114,54 +156,27 @@ func (h *Handlers) AdminCreatePublisher(w http.ResponseWriter, r *http.Request) 
 	// Generate slug from organization name
 	slug := generateSlug(req.Organization)
 
-	// Create Clerk user with publisher role
-	var clerkUserID *string
-	if h.clerkService != nil {
-		userID, err := h.clerkService.CreatePublisherUser(ctx, req.Email, req.Name, req.Organization)
-		if err != nil {
-			slog.Error("failed to create Clerk user", "error", err, "email", req.Email)
-			// Continue without Clerk user ID - allows manual setup later
-		} else {
-			clerkUserID = &userID
-			slog.Info("clerk user created", "email", req.Email, "clerk_user_id", userID)
-
-			// Send invitation email
-			if inviteErr := h.clerkService.SendInvitation(ctx, req.Email); inviteErr != nil {
-				slog.Error("failed to send invitation", "error", inviteErr, "email", req.Email)
-			} else {
-				slog.Info("invitation email sent", "email", req.Email)
-			}
-		}
-	}
-
-	// Insert new publisher
+	// Insert new publisher (no Clerk involvement - Epic 2 separates creation from invitation)
 	query := `
-		INSERT INTO publishers (name, organization, slug, email, website, description, clerk_user_id, status)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending_verification')
-		RETURNING id, name, organization, email, website, description, clerk_user_id, status, created_at, updated_at
+		INSERT INTO publishers (name, organization, slug, email, website, description, status)
+		VALUES ($1, $2, $3, $4, $5, $6, 'pending_verification')
+		RETURNING id, name, organization, slug, email, website, description, status, created_at, updated_at
 	`
 
-	var id, name, organization, email, status string
-	var website, description, dbClerkUserID *string
+	var id, name, organization, resSlug, status string
+	var email, website, description *string
 	var createdAt, updatedAt time.Time
 
 	err := h.db.Pool.QueryRow(ctx, query, req.Name, req.Organization, slug, req.Email,
-		req.Website, req.Bio, clerkUserID).Scan(&id, &name, &organization, &email, &website,
-		&description, &dbClerkUserID, &status, &createdAt, &updatedAt)
+		req.Website, req.Bio).Scan(&id, &name, &organization, &resSlug, &email, &website,
+		&description, &status, &createdAt, &updatedAt)
 
 	if err != nil {
 		slog.Error("failed to create publisher", "error", err)
 
-		// If publisher creation failed but Clerk user was created, clean up
-		if clerkUserID != nil && h.clerkService != nil {
-			if cleanupErr := h.clerkService.DeleteUser(ctx, *clerkUserID); cleanupErr != nil {
-				slog.Error("failed to cleanup Clerk user", "error", cleanupErr, "clerk_user_id", *clerkUserID)
-			}
-		}
-
 		// Check for unique constraint violation
 		if strings.Contains(err.Error(), "duplicate key") || strings.Contains(err.Error(), "unique constraint") {
-			RespondConflict(w, r, "Publisher with this email already exists")
+			RespondConflict(w, r, "Publisher with this organization already exists")
 			return
 		}
 		RespondInternalError(w, r, "Failed to create publisher")
@@ -172,31 +187,175 @@ func (h *Handlers) AdminCreatePublisher(w http.ResponseWriter, r *http.Request) 
 		"id":           id,
 		"name":         name,
 		"organization": organization,
-		"email":        email,
+		"slug":         resSlug,
 		"status":       status,
 		"created_at":   createdAt,
 		"updated_at":   updatedAt,
 	}
 
+	if email != nil {
+		publisher["email"] = *email
+	}
 	if website != nil {
 		publisher["website"] = *website
 	}
 	if description != nil {
 		publisher["bio"] = *description
 	}
-	if dbClerkUserID != nil {
-		publisher["clerk_user_id"] = *dbClerkUserID
-	}
 
-	logFields := []interface{}{"id", id, "email", email, "status", status}
-	if dbClerkUserID != nil {
-		logFields = append(logFields, "clerk_user_id", *dbClerkUserID, "invitation_sent", true)
-	} else {
-		logFields = append(logFields, "invitation_sent", false)
-	}
-	slog.Info("publisher created", logFields...)
+	slog.Info("publisher created", "id", id, "organization", organization, "status", status)
 
 	RespondJSON(w, r, http.StatusCreated, publisher)
+}
+
+// AdminInviteUserToPublisher invites a user to manage a publisher
+// POST /api/admin/publishers/{id}/users/invite
+// If user exists in Clerk, adds publisher to their access list
+// If user doesn't exist, sends invitation with publisher metadata
+func (h *Handlers) AdminInviteUserToPublisher(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	publisherID := chi.URLParam(r, "id")
+
+	if publisherID == "" {
+		RespondValidationError(w, r, "Publisher ID is required", nil)
+		return
+	}
+
+	var req struct {
+		Email string `json:"email"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		RespondBadRequest(w, r, "Invalid request body")
+		return
+	}
+
+	if req.Email == "" {
+		RespondValidationError(w, r, "Email is required", map[string]string{"email": "Email is required"})
+		return
+	}
+
+	// Verify publisher exists
+	var exists bool
+	err := h.db.Pool.QueryRow(ctx,
+		"SELECT EXISTS(SELECT 1 FROM publishers WHERE id = $1)", publisherID).Scan(&exists)
+	if err != nil {
+		slog.Error("failed to check publisher existence", "error", err, "publisher_id", publisherID)
+		RespondInternalError(w, r, "Failed to verify publisher")
+		return
+	}
+	if !exists {
+		RespondNotFound(w, r, "Publisher not found")
+		return
+	}
+
+	if h.clerkService == nil {
+		RespondInternalError(w, r, "Clerk service not available")
+		return
+	}
+
+	// Check if user already exists in Clerk
+	existingUser, err := h.clerkService.GetUserByEmail(ctx, req.Email)
+	if err != nil {
+		slog.Error("failed to search for existing user", "error", err, "email", req.Email)
+		RespondInternalError(w, r, "Failed to check for existing user")
+		return
+	}
+
+	if existingUser != nil {
+		// User exists - add publisher to their access list
+		if err := h.clerkService.AddPublisherToUser(ctx, existingUser.ID, publisherID); err != nil {
+			slog.Error("failed to add publisher to user", "error", err, "user_id", existingUser.ID, "publisher_id", publisherID)
+			RespondInternalError(w, r, "Failed to add publisher access")
+			return
+		}
+
+		slog.Info("publisher access added to existing user",
+			"email", req.Email,
+			"user_id", existingUser.ID,
+			"publisher_id", publisherID)
+
+		RespondJSON(w, r, http.StatusOK, map[string]interface{}{
+			"status":       "access_granted",
+			"message":      "Publisher access added to existing user",
+			"email":        req.Email,
+			"publisher_id": publisherID,
+			"user_id":      existingUser.ID,
+		})
+		return
+	}
+
+	// User doesn't exist - send invitation with publisher metadata
+	if err := h.clerkService.SendPublisherInvitation(ctx, req.Email, publisherID); err != nil {
+		slog.Error("failed to send publisher invitation", "error", err, "email", req.Email, "publisher_id", publisherID)
+		RespondInternalError(w, r, "Failed to send invitation")
+		return
+	}
+
+	slog.Info("publisher invitation sent",
+		"email", req.Email,
+		"publisher_id", publisherID)
+
+	RespondJSON(w, r, http.StatusOK, map[string]interface{}{
+		"status":       "invitation_sent",
+		"message":      "Invitation email sent to user",
+		"email":        req.Email,
+		"publisher_id": publisherID,
+	})
+}
+
+// AdminRemoveUserFromPublisher removes a user's access to a publisher
+// DELETE /api/admin/publishers/{id}/users/{userId}
+func (h *Handlers) AdminRemoveUserFromPublisher(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	publisherID := chi.URLParam(r, "id")
+	userID := chi.URLParam(r, "userId")
+
+	if publisherID == "" {
+		RespondValidationError(w, r, "Publisher ID is required", nil)
+		return
+	}
+	if userID == "" {
+		RespondValidationError(w, r, "User ID is required", nil)
+		return
+	}
+
+	// Verify publisher exists
+	var exists bool
+	err := h.db.Pool.QueryRow(ctx,
+		"SELECT EXISTS(SELECT 1 FROM publishers WHERE id = $1)", publisherID).Scan(&exists)
+	if err != nil {
+		slog.Error("failed to check publisher existence", "error", err, "publisher_id", publisherID)
+		RespondInternalError(w, r, "Failed to verify publisher")
+		return
+	}
+	if !exists {
+		RespondNotFound(w, r, "Publisher not found")
+		return
+	}
+
+	if h.clerkService == nil {
+		RespondInternalError(w, r, "Clerk service not available")
+		return
+	}
+
+	// Remove publisher from user's access list
+	if err := h.clerkService.RemovePublisherFromUser(ctx, userID, publisherID); err != nil {
+		slog.Error("failed to remove publisher from user", "error", err, "user_id", userID, "publisher_id", publisherID)
+		RespondInternalError(w, r, "Failed to remove publisher access")
+		return
+	}
+
+	slog.Info("publisher access removed from user",
+		"user_id", userID,
+		"publisher_id", publisherID)
+
+	RespondJSON(w, r, http.StatusOK, map[string]interface{}{
+		"status":       "access_removed",
+		"message":      "Publisher access removed from user",
+		"user_id":      userID,
+		"publisher_id": publisherID,
+	})
 }
 
 // AdminVerifyPublisher verifies a pending publisher

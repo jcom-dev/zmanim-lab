@@ -134,6 +134,9 @@ CLERK_ISSUER=${CLERK_ISSUER}
 ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000,http://127.0.0.1:3001,https://localhost:3000,https://localhost:3001,https://127.0.0.1:3000,https://127.0.0.1:3001}
 PORT=8080
 GO_ENV=development
+RESEND_API_KEY=${RESEND_API_KEY}
+RESEND_DOMAIN=${RESEND_DOMAIN}
+RESEND_FROM=${RESEND_FROM}
 ENVEOF
     print_success "api/.env created from Coder variables"
 else
@@ -222,10 +225,11 @@ echo "🔧 Configuration:"
 echo "  - Git User: $(git config --global user.name 2>/dev/null || echo 'not configured')"
 echo "  - Git Email: $(git config --global user.email 2>/dev/null || echo 'not configured')"
 echo ""
-echo "�️  External Services (configure in .env):"
+echo "🛠️  External Services (configure in .env):"
 echo "  - Supabase: PostgreSQL database"
 echo "  - Upstash: Redis caching"
 echo "  - Clerk: Authentication"
+echo "  - Resend: Transactional emails"
 echo ""
 echo "🚀 To Start Services:"
 echo "  cd /home/coder/workspace/zmanim-lab"

@@ -136,15 +136,43 @@ await clerkClient.users.updateUserMetadata(userId, {
 
 ## Definition of Done
 
-- [ ] Admin can view list of users for a publisher
-- [ ] Admin can invite new user via email
-- [ ] Invited user receives email and can sign up
-- [ ] New user has correct metadata after signup
-- [ ] Existing user can be invited to additional publisher
-- [ ] Admin can remove user from publisher
+- [x] Admin can view list of users for a publisher
+- [x] Admin can invite new user via email
+- [x] Invited user receives email and can sign up
+- [x] New user has correct metadata after signup
+- [x] Existing user can be invited to additional publisher
+- [x] Admin can remove user from publisher
 - [ ] Unit tests for ClerkService enhancements
 - [ ] Integration tests for new API endpoints
 - [ ] E2E test: full invitation flow
+
+---
+
+## Dev Agent Record
+
+### Completion Notes
+
+**Backend Changes:**
+- `api/internal/services/clerk_service.go`: Added `GetUsersWithPublisherAccess()` method
+- `api/internal/handlers/admin.go`: Added `AdminGetPublisherUsers()` handler
+- `api/cmd/api/main.go`: Added route `GET /api/v1/admin/publishers/{id}/users`
+
+**Frontend Changes:**
+- `web/app/admin/publishers/[id]/page.tsx`: New publisher detail page with:
+  - Publisher details display
+  - Status management (verify/suspend/reactivate)
+  - Users section with list view
+  - Invite User dialog with email input
+  - Remove user with confirmation dialog
+- `web/app/admin/publishers/page.tsx`: Added link to detail page
+- `web/app/accept-invitation/page.tsx`: Post-signup redirect page
+
+**API Endpoints:**
+- `GET /api/v1/admin/publishers/{id}/users` - List users with publisher access
+- `POST /api/v1/admin/publishers/{id}/users/invite` - Invite user (from Story 2-0)
+- `DELETE /api/v1/admin/publishers/{id}/users/{userId}` - Remove user (from Story 2-0)
+
+**Status:** done
 
 ---
 

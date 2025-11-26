@@ -1,5 +1,5 @@
 # Sprint Status - Zmanim Lab
-# generated: 2025-11-25
+# generated: 2025-11-26
 # project: zmanim-lab
 # tracking_system: file-system
 # story_location: docs/sprint-artifacts
@@ -29,7 +29,7 @@
 # - SM typically drafts next story after previous one is 'done' to incorporate learnings
 # - Dev moves story to 'review', SM reviews, then Dev moves to 'done'
 
-generated: 2025-11-25
+generated: 2025-11-26
 project: zmanim-lab
 tracking_system: file-system
 story_location: docs/sprint-artifacts
@@ -50,15 +50,22 @@ development_status:
   1-11-formula-reveal: done
   epic-1-retrospective: skipped
 
-  # Epic 2: Publisher User Management & Dashboard (9 stories, 12 new FRs)
+  # Epic 2: Publisher User Management & Dashboard (12 stories, 24 new FRs)
+  # Original 8 stories completed, 4 new stories added via sprint change (2025-11-26)
   epic-2: contexted
-  2-0-code-review-refactor: ready-for-dev  # FIRST - Review last commit, extract good patterns
-  2-1-publisher-user-invitation: ready-for-dev
-  2-2-multi-publisher-switcher: ready-for-dev
-  2-3-admin-impersonation-mode: ready-for-dev
-  2-4-dynamic-home-navigation: ready-for-dev
-  2-5-enhanced-coverage-management: ready-for-dev
-  2-6-publisher-dashboard-hub: ready-for-dev
-  2-7-publisher-analytics-simple: ready-for-dev
-  2-8-publisher-activity-log: ready-for-dev
+  2-0-code-review-refactor: done  # FIRST - Review last commit, extract good patterns
+  2-1-publisher-user-invitation: done
+  2-2-multi-publisher-switcher: done
+  2-3-admin-impersonation-mode: done
+  2-4-dynamic-home-navigation: done
+  2-5-enhanced-coverage-management: done
+  2-6-publisher-dashboard-hub: done
+  2-7-publisher-analytics-simple: done
+  2-8-publisher-activity-log: done
+
+  # Sprint Change Additions (2025-11-26) - FR55-FR66
+  2-11-email-service-resend: review      # Foundation - email service implemented
+  2-9-publisher-registration-request: review   # Self-service publisher onboarding
+  2-10-publisher-member-invitation: review     # Publishers invite own team
+  2-12-user-profile-dropdown: review           # User account info in header
   epic-2-retrospective: optional

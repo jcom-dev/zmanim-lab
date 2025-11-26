@@ -15,6 +15,7 @@ MISSING_FILES=""
 [ ! -f "$PROJECT_ROOT/.env.supabase" ] && MISSING_FILES="$MISSING_FILES .env.supabase"
 [ ! -f "$PROJECT_ROOT/.env.upstash" ] && MISSING_FILES="$MISSING_FILES .env.upstash"
 [ ! -f "$PROJECT_ROOT/.env.clerk" ] && MISSING_FILES="$MISSING_FILES .env.clerk"
+[ ! -f "$PROJECT_ROOT/.env.resend" ] && MISSING_FILES="$MISSING_FILES .env.resend"
 
 if [ -n "$MISSING_FILES" ]; then
     echo "❌ Missing required env files:$MISSING_FILES"
@@ -26,6 +27,7 @@ fi
 source "$PROJECT_ROOT/.env.supabase"
 source "$PROJECT_ROOT/.env.upstash"
 source "$PROJECT_ROOT/.env.clerk"
+source "$PROJECT_ROOT/.env.resend"
 
 # Remove quotes from values if present
 UPSTASH_REDIS_REST_URL="${UPSTASH_REDIS_REST_URL//\"/}"
@@ -47,6 +49,10 @@ upstash_redis_rest_token = "$UPSTASH_REDIS_REST_TOKEN"
 
 clerk_publishable_key = "$NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY"
 clerk_secret_key      = "$CLERK_SECRET_KEY"
+
+resend_api_key = "$RESEND_API_KEY"
+resend_domain  = "$RESEND_DOMAIN"
+resend_from    = "$RESEND_FROM"
 EOF
 
 echo "✅ Created terraform.tfvars from env files"
