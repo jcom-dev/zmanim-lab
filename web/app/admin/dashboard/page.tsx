@@ -106,11 +106,11 @@ export default function AdminDashboardPage() {
   }
 
   return (
-    <div className="container mx-auto py-8">
-      <div className="flex justify-between items-center mb-6">
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold">Admin Dashboard</h1>
-          <p className="text-gray-600 mt-1">Platform usage statistics and metrics</p>
+          <p className="text-muted-foreground mt-1">Platform usage statistics and metrics</p>
         </div>
         <Button onClick={fetchStats} variant="outline" disabled={loading}>
           {loading ? 'Refreshing...' : 'Refresh'}
@@ -118,19 +118,21 @@ export default function AdminDashboardPage() {
       </div>
 
       {error && (
-        <div className="mb-6 p-4 bg-yellow-50 border border-yellow-300 rounded-md">
-          <p className="text-yellow-800 text-sm">
-            Could not refresh statistics. Showing last successful data.
-          </p>
-        </div>
+        <Card className="border-yellow-500/50 bg-yellow-500/10">
+          <CardContent className="pt-4">
+            <p className="text-yellow-500 text-sm">
+              Could not refresh statistics. Showing last successful data.
+            </p>
+          </CardContent>
+        </Card>
       )}
 
-      <div className="mb-6 text-sm text-gray-600">
+      <div className="text-sm text-muted-foreground">
         Last updated: {lastRefreshed.toLocaleString()}
       </div>
 
       {/* Publisher Statistics */}
-      <div className="mb-8">
+      <div>
         <h2 className="text-xl font-semibold mb-4">Publisher Statistics</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <StatCard
@@ -157,7 +159,7 @@ export default function AdminDashboardPage() {
       </div>
 
       {/* Calculation Statistics */}
-      <div className="mb-8">
+      <div>
         <h2 className="text-xl font-semibold mb-4">Calculation Statistics</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <StatCard
@@ -174,7 +176,7 @@ export default function AdminDashboardPage() {
       </div>
 
       {/* Quick Actions */}
-      <div className="mb-8">
+      <div>
         <h2 className="text-xl font-semibold mb-4">Quick Actions</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Link href="/admin/publishers">

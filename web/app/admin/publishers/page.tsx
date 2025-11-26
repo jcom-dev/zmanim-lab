@@ -134,11 +134,11 @@ export default function AdminPublishersPage() {
   }
 
   return (
-    <div className="container mx-auto py-8">
-      <div className="flex justify-between items-center mb-6">
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold">Publisher Management</h1>
-          <p className="text-gray-600 mt-1">Manage publisher accounts and permissions</p>
+          <p className="text-muted-foreground mt-1">Manage publisher accounts and permissions</p>
         </div>
         <Link href="/admin/publishers/new">
           <Button>Create New Publisher</Button>
@@ -278,3 +278,5 @@ export default function AdminPublishersPage() {
     </div>
   );
 }
+
+// Note: The admin layout handles dark mode styling via className="dark"
