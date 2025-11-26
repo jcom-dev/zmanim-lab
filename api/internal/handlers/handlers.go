@@ -17,17 +17,24 @@ type Handlers struct {
 	db               *db.DB
 	publisherService *services.PublisherService
 	zmanimService    *services.ZmanimService
+	clerkService     *services.ClerkService
 }
 
 // New creates a new handlers instance
 func New(database *db.DB) *Handlers {
 	publisherService := services.NewPublisherService(database)
 	zmanimService := services.NewZmanimService(database, publisherService)
+	clerkService, err := services.NewClerkService()
+	if err != nil {
+		// Log error but continue - Clerk features will be disabled
+		fmt.Printf("Warning: Clerk service initialization failed: %v\n", err)
+	}
 
 	return &Handlers{
 		db:               database,
 		publisherService: publisherService,
 		zmanimService:    zmanimService,
+		clerkService:     clerkService,
 	}
 }
 

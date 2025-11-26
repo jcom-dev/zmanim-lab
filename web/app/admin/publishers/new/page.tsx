@@ -1,13 +1,17 @@
 'use client';
 
 import { useState } from 'react';
+import { useAuth } from '@clerk/nextjs';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+
 export default function NewPublisherPage() {
   const router = useRouter();
+  const { getToken } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
@@ -82,11 +86,13 @@ export default function NewPublisherPage() {
         payload.bio = formData.bio.trim();
       }
 
-      const response = await fetch('/api/v1/admin/publishers', {
+      const token = await getToken();
+
+      const response = await fetch(`${API_BASE}/api/v1/admin/publishers`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          // TODO: Add Clerk auth token when implemented
+          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify(payload),
       });

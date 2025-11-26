@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -110,25 +111,56 @@ func (h *Handlers) AdminCreatePublisher(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	// Generate slug from organization name
+	slug := generateSlug(req.Organization)
+
+	// Create Clerk user with publisher role
+	var clerkUserID *string
+	if h.clerkService != nil {
+		userID, err := h.clerkService.CreatePublisherUser(ctx, req.Email, req.Name, req.Organization)
+		if err != nil {
+			slog.Error("failed to create Clerk user", "error", err, "email", req.Email)
+			// Continue without Clerk user ID - allows manual setup later
+		} else {
+			clerkUserID = &userID
+			slog.Info("clerk user created", "email", req.Email, "clerk_user_id", userID)
+
+			// Send invitation email
+			if inviteErr := h.clerkService.SendInvitation(ctx, req.Email); inviteErr != nil {
+				slog.Error("failed to send invitation", "error", inviteErr, "email", req.Email)
+			} else {
+				slog.Info("invitation email sent", "email", req.Email)
+			}
+		}
+	}
+
 	// Insert new publisher
 	query := `
-		INSERT INTO publishers (name, organization, email, website, bio, status)
-		VALUES ($1, $2, $3, $4, $5, 'pending')
-		RETURNING id, name, organization, email, website, bio, status, created_at, updated_at
+		INSERT INTO publishers (name, organization, slug, email, website, description, clerk_user_id, status)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending_verification')
+		RETURNING id, name, organization, email, website, description, clerk_user_id, status, created_at, updated_at
 	`
 
 	var id, name, organization, email, status string
-	var website, bio *string
+	var website, description, dbClerkUserID *string
 	var createdAt, updatedAt time.Time
 
-	err := h.db.Pool.QueryRow(ctx, query, req.Name, req.Organization, req.Email,
-		req.Website, req.Bio).Scan(&id, &name, &organization, &email, &website,
-		&bio, &status, &createdAt, &updatedAt)
+	err := h.db.Pool.QueryRow(ctx, query, req.Name, req.Organization, slug, req.Email,
+		req.Website, req.Bio, clerkUserID).Scan(&id, &name, &organization, &email, &website,
+		&description, &dbClerkUserID, &status, &createdAt, &updatedAt)
 
 	if err != nil {
 		slog.Error("failed to create publisher", "error", err)
+
+		// If publisher creation failed but Clerk user was created, clean up
+		if clerkUserID != nil && h.clerkService != nil {
+			if cleanupErr := h.clerkService.DeleteUser(ctx, *clerkUserID); cleanupErr != nil {
+				slog.Error("failed to cleanup Clerk user", "error", cleanupErr, "clerk_user_id", *clerkUserID)
+			}
+		}
+
 		// Check for unique constraint violation
-		if err.Error() == "duplicate key value violates unique constraint" {
+		if strings.Contains(err.Error(), "duplicate key") || strings.Contains(err.Error(), "unique constraint") {
 			RespondConflict(w, r, "Publisher with this email already exists")
 			return
 		}
@@ -149,14 +181,20 @@ func (h *Handlers) AdminCreatePublisher(w http.ResponseWriter, r *http.Request) 
 	if website != nil {
 		publisher["website"] = *website
 	}
-	if bio != nil {
-		publisher["bio"] = *bio
+	if description != nil {
+		publisher["bio"] = *description
+	}
+	if dbClerkUserID != nil {
+		publisher["clerk_user_id"] = *dbClerkUserID
 	}
 
-	// TODO: Send Clerk invitation email (Task 4)
-	// This will be implemented in the next task with Clerk SDK integration
-
-	slog.Info("publisher created", "id", id, "email", email)
+	logFields := []interface{}{"id", id, "email", email, "status", status}
+	if dbClerkUserID != nil {
+		logFields = append(logFields, "clerk_user_id", *dbClerkUserID, "invitation_sent", true)
+	} else {
+		logFields = append(logFields, "invitation_sent", false)
+	}
+	slog.Info("publisher created", logFields...)
 
 	RespondJSON(w, r, http.StatusCreated, publisher)
 }
@@ -421,4 +459,34 @@ func handlePublisherStatusError(w http.ResponseWriter, r *http.Request, result s
 		return
 	}
 	RespondInternalError(w, r, "Failed to update publisher status")
+}
+
+// generateSlug creates a URL-friendly slug from text
+func generateSlug(text string) string {
+	// Convert to lowercase
+	slug := strings.ToLower(text)
+
+	// Replace spaces and special characters with hyphens
+	slug = strings.Map(func(r rune) rune {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			return r
+		}
+		return '-'
+	}, slug)
+
+	// Remove consecutive hyphens
+	for strings.Contains(slug, "--") {
+		slug = strings.ReplaceAll(slug, "--", "-")
+	}
+
+	// Trim hyphens from start and end
+	slug = strings.Trim(slug, "-")
+
+	// Limit length to 100 characters
+	if len(slug) > 100 {
+		slug = slug[:100]
+		slug = strings.TrimRight(slug, "-")
+	}
+
+	return slug
 }
