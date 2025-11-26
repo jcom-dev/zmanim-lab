@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/jcom-dev/zmanim-lab/internal/algorithm"
 )
 
@@ -14,10 +15,24 @@ type AlgorithmResponse struct {
 	Name          string                     `json:"name"`
 	Description   string                     `json:"description"`
 	Configuration *algorithm.AlgorithmConfig `json:"configuration"`
+	Version       int                        `json:"version"`
 	Status        string                     `json:"status"`
 	IsActive      bool                       `json:"is_active"`
+	PublishedAt   *time.Time                 `json:"published_at,omitempty"`
 	CreatedAt     time.Time                  `json:"created_at"`
 	UpdatedAt     time.Time                  `json:"updated_at"`
+}
+
+// AlgorithmVersionResponse represents a version in the history
+type AlgorithmVersionResponse struct {
+	ID            string     `json:"id"`
+	Name          string     `json:"name"`
+	Version       int        `json:"version"`
+	Status        string     `json:"status"`
+	IsActive      bool       `json:"is_active"`
+	PublishedAt   *time.Time `json:"published_at,omitempty"`
+	DeprecatedAt  *time.Time `json:"deprecated_at,omitempty"`
+	CreatedAt     time.Time  `json:"created_at"`
 }
 
 // AlgorithmUpdateRequest represents the request to update an algorithm
@@ -65,25 +80,48 @@ func (h *Handlers) GetPublisherAlgorithmHandler(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	// Get algorithm for this publisher
+	// Get algorithm for this publisher (prefer draft, then published)
 	var algID, algName, description, status string
 	var configJSON []byte
 	var isActive bool
+	var version int
+	var publishedAt *time.Time
 	var createdAt, updatedAt time.Time
 
+	// First try to get draft
 	query := `
 		SELECT id, name, COALESCE(description, ''),
 		       COALESCE(configuration::text, '{}')::jsonb,
 		       COALESCE(validation_status, 'draft'), is_active,
-		       created_at, updated_at
+		       COALESCE(CAST(SPLIT_PART(version, '.', 1) AS INTEGER), 1),
+		       published_at, created_at, updated_at
 		FROM algorithms
-		WHERE publisher_id = $1
+		WHERE publisher_id = $1 AND validation_status = 'draft'
 		ORDER BY created_at DESC
 		LIMIT 1
 	`
 	err = h.db.Pool.QueryRow(ctx, query, publisherID).Scan(
-		&algID, &algName, &description, &configJSON, &status, &isActive, &createdAt, &updatedAt,
+		&algID, &algName, &description, &configJSON, &status, &isActive,
+		&version, &publishedAt, &createdAt, &updatedAt,
 	)
+	if err != nil {
+		// No draft, try to get active/published algorithm
+		query = `
+			SELECT id, name, COALESCE(description, ''),
+			       COALESCE(configuration::text, '{}')::jsonb,
+			       COALESCE(validation_status, 'draft'), is_active,
+			       COALESCE(CAST(SPLIT_PART(version, '.', 1) AS INTEGER), 1),
+			       published_at, created_at, updated_at
+			FROM algorithms
+			WHERE publisher_id = $1 AND (is_active = true OR validation_status = 'published')
+			ORDER BY created_at DESC
+			LIMIT 1
+		`
+		err = h.db.Pool.QueryRow(ctx, query, publisherID).Scan(
+			&algID, &algName, &description, &configJSON, &status, &isActive,
+			&version, &publishedAt, &createdAt, &updatedAt,
+		)
+	}
 
 	if err != nil {
 		// No algorithm exists, return default configuration
@@ -117,8 +155,10 @@ func (h *Handlers) GetPublisherAlgorithmHandler(w http.ResponseWriter, r *http.R
 		Name:          algName,
 		Description:   description,
 		Configuration: &config,
+		Version:       version,
 		Status:        status,
 		IsActive:      isActive,
+		PublishedAt:   publishedAt,
 		CreatedAt:     createdAt,
 		UpdatedAt:     updatedAt,
 	})
@@ -166,27 +206,80 @@ func (h *Handlers) UpdatePublisherAlgorithmHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
-	// Check if algorithm exists
-	var existingID string
+	// Check for existing algorithms
+	// Priority: 1. Update existing draft, 2. Create new draft if published exists, 3. Create first draft
+	var draftID, publishedID string
+	var draftStatus, publishedStatus string
+
+	// Check for existing draft
 	err = h.db.Pool.QueryRow(ctx,
-		"SELECT id FROM algorithms WHERE publisher_id = $1 LIMIT 1",
+		`SELECT id, validation_status FROM algorithms
+		 WHERE publisher_id = $1 AND validation_status = 'draft'
+		 ORDER BY created_at DESC LIMIT 1`,
 		publisherID,
-	).Scan(&existingID)
+	).Scan(&draftID, &draftStatus)
+	hasDraft := err == nil
+
+	// Check for published algorithm (if no draft)
+	if !hasDraft {
+		err = h.db.Pool.QueryRow(ctx,
+			`SELECT id, validation_status FROM algorithms
+			 WHERE publisher_id = $1 AND is_active = true
+			 ORDER BY created_at DESC LIMIT 1`,
+			publisherID,
+		).Scan(&publishedID, &publishedStatus)
+	}
+	hasPublished := publishedID != ""
 
 	var algID string
 	var createdAt, updatedAt time.Time
 
-	if err != nil {
-		// Insert new algorithm
-		algName := req.Name
-		if algName == "" {
-			algName = "Custom Algorithm"
-		}
-		description := req.Description
-		if description == "" {
-			description = "Custom zmanim calculation algorithm"
-		}
+	algName := req.Name
+	if algName == "" {
+		algName = "Custom Algorithm"
+	}
+	description := req.Description
+	if description == "" {
+		description = "Custom zmanim calculation algorithm"
+	}
 
+	if hasDraft {
+		// Update existing draft
+		updateQuery := `
+			UPDATE algorithms
+			SET configuration = $1,
+			    name = COALESCE(NULLIF($2, ''), name),
+			    description = COALESCE(NULLIF($3, ''), description),
+			    updated_at = NOW()
+			WHERE id = $4
+			RETURNING id, created_at, updated_at
+		`
+		err = h.db.Pool.QueryRow(ctx, updateQuery,
+			configJSON, req.Name, req.Description, draftID,
+		).Scan(&algID, &createdAt, &updatedAt)
+		if err != nil {
+			RespondInternalError(w, r, "Failed to update draft")
+			return
+		}
+	} else if hasPublished {
+		// Create new draft (published exists, changes saved as new draft)
+		insertQuery := `
+			INSERT INTO algorithms (
+				publisher_id, name, description, configuration,
+				version, calculation_type, validation_status, is_active
+			)
+			VALUES ($1, $2, $3, $4, '1.0.0', 'custom', 'draft', false)
+			RETURNING id, created_at, updated_at
+		`
+		err = h.db.Pool.QueryRow(ctx, insertQuery,
+			publisherID, algName, description, configJSON,
+		).Scan(&algID, &createdAt, &updatedAt)
+		if err != nil {
+			RespondInternalError(w, r, "Failed to create draft")
+			return
+		}
+	} else {
+		// No algorithm exists - create first draft
 		insertQuery := `
 			INSERT INTO algorithms (
 				publisher_id, name, description, configuration,
@@ -200,24 +293,6 @@ func (h *Handlers) UpdatePublisherAlgorithmHandler(w http.ResponseWriter, r *htt
 		).Scan(&algID, &createdAt, &updatedAt)
 		if err != nil {
 			RespondInternalError(w, r, "Failed to create algorithm")
-			return
-		}
-	} else {
-		// Update existing algorithm
-		updateQuery := `
-			UPDATE algorithms
-			SET configuration = $1,
-			    name = COALESCE(NULLIF($2, ''), name),
-			    description = COALESCE(NULLIF($3, ''), description),
-			    updated_at = NOW()
-			WHERE id = $4
-			RETURNING id, created_at, updated_at
-		`
-		err = h.db.Pool.QueryRow(ctx, updateQuery,
-			configJSON, req.Name, req.Description, existingID,
-		).Scan(&algID, &createdAt, &updatedAt)
-		if err != nil {
-			RespondInternalError(w, r, "Failed to update algorithm")
 			return
 		}
 	}
@@ -520,5 +595,319 @@ func (h *Handlers) GetZmanMethods(w http.ResponseWriter, r *http.Request) {
 
 	RespondJSON(w, r, http.StatusOK, map[string]interface{}{
 		"methods": methods,
+	})
+}
+
+// PublishAlgorithm publishes the current draft algorithm
+// POST /api/v1/publisher/algorithm/publish
+func (h *Handlers) PublishAlgorithm(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// Get user ID from context
+	userID, ok := ctx.Value("user_id").(string)
+	if !ok || userID == "" {
+		RespondUnauthorized(w, r, "User ID not found in context")
+		return
+	}
+
+	// Get publisher ID
+	var publisherID string
+	err := h.db.Pool.QueryRow(ctx,
+		"SELECT id FROM publishers WHERE clerk_user_id = $1",
+		userID,
+	).Scan(&publisherID)
+	if err != nil {
+		RespondNotFound(w, r, "Publisher not found")
+		return
+	}
+
+	// Get the draft algorithm
+	var algID, algName, description string
+	var configJSON []byte
+	var currentVersion int
+
+	query := `
+		SELECT id, name, COALESCE(description, ''),
+		       COALESCE(configuration::text, '{}')::jsonb,
+		       COALESCE(CAST(SPLIT_PART(version, '.', 1) AS INTEGER), 1)
+		FROM algorithms
+		WHERE publisher_id = $1
+		  AND (validation_status = 'draft' OR validation_status IS NULL)
+		ORDER BY created_at DESC
+		LIMIT 1
+	`
+	err = h.db.Pool.QueryRow(ctx, query, publisherID).Scan(
+		&algID, &algName, &description, &configJSON, &currentVersion,
+	)
+	if err != nil {
+		RespondNotFound(w, r, "No draft algorithm found to publish")
+		return
+	}
+
+	// Validate configuration before publishing
+	var config algorithm.AlgorithmConfig
+	if err := json.Unmarshal(configJSON, &config); err != nil {
+		RespondBadRequest(w, r, "Invalid algorithm configuration")
+		return
+	}
+
+	if err := algorithm.ValidateAlgorithm(&config); err != nil {
+		RespondValidationError(w, r, "Algorithm validation failed: "+err.Error(), nil)
+		return
+	}
+
+	// Start transaction
+	tx, err := h.db.Pool.Begin(ctx)
+	if err != nil {
+		RespondInternalError(w, r, "Failed to start transaction")
+		return
+	}
+	defer tx.Rollback(ctx)
+
+	// Archive any currently active algorithm
+	_, err = tx.Exec(ctx, `
+		UPDATE algorithms
+		SET validation_status = 'archived', is_active = false, updated_at = NOW()
+		WHERE publisher_id = $1 AND is_active = true
+	`, publisherID)
+	if err != nil {
+		RespondInternalError(w, r, "Failed to archive current algorithm")
+		return
+	}
+
+	// Publish the draft
+	newVersion := currentVersion + 1
+	var publishedAt time.Time
+	var updatedAt time.Time
+
+	err = tx.QueryRow(ctx, `
+		UPDATE algorithms
+		SET validation_status = 'published',
+		    is_active = true,
+		    version = $1,
+		    published_at = NOW(),
+		    updated_at = NOW()
+		WHERE id = $2
+		RETURNING published_at, updated_at
+	`, newVersion, algID).Scan(&publishedAt, &updatedAt)
+	if err != nil {
+		RespondInternalError(w, r, "Failed to publish algorithm")
+		return
+	}
+
+	// Commit transaction
+	if err := tx.Commit(ctx); err != nil {
+		RespondInternalError(w, r, "Failed to commit publish")
+		return
+	}
+
+	RespondJSON(w, r, http.StatusOK, AlgorithmResponse{
+		ID:            algID,
+		Name:          algName,
+		Description:   description,
+		Configuration: &config,
+		Version:       newVersion,
+		Status:        "published",
+		IsActive:      true,
+		PublishedAt:   &publishedAt,
+		UpdatedAt:     updatedAt,
+	})
+}
+
+// GetAlgorithmVersions returns the version history for the publisher's algorithm
+// GET /api/v1/publisher/algorithm/versions
+func (h *Handlers) GetAlgorithmVersions(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// Get user ID from context
+	userID, ok := ctx.Value("user_id").(string)
+	if !ok || userID == "" {
+		RespondUnauthorized(w, r, "User ID not found in context")
+		return
+	}
+
+	// Get publisher ID
+	var publisherID string
+	err := h.db.Pool.QueryRow(ctx,
+		"SELECT id FROM publishers WHERE clerk_user_id = $1",
+		userID,
+	).Scan(&publisherID)
+	if err != nil {
+		RespondNotFound(w, r, "Publisher not found")
+		return
+	}
+
+	// Get all versions
+	query := `
+		SELECT id, name,
+		       COALESCE(CAST(SPLIT_PART(version, '.', 1) AS INTEGER), 1) as ver,
+		       COALESCE(validation_status, 'draft'),
+		       is_active,
+		       published_at,
+		       deprecated_at,
+		       created_at
+		FROM algorithms
+		WHERE publisher_id = $1
+		ORDER BY created_at DESC
+	`
+
+	rows, err := h.db.Pool.Query(ctx, query, publisherID)
+	if err != nil {
+		RespondInternalError(w, r, "Failed to fetch versions")
+		return
+	}
+	defer rows.Close()
+
+	versions := []AlgorithmVersionResponse{}
+	for rows.Next() {
+		var v AlgorithmVersionResponse
+		var publishedAt, deprecatedAt *time.Time
+
+		err := rows.Scan(
+			&v.ID, &v.Name, &v.Version, &v.Status, &v.IsActive,
+			&publishedAt, &deprecatedAt, &v.CreatedAt,
+		)
+		if err != nil {
+			continue
+		}
+
+		v.PublishedAt = publishedAt
+		v.DeprecatedAt = deprecatedAt
+		versions = append(versions, v)
+	}
+
+	RespondJSON(w, r, http.StatusOK, map[string]interface{}{
+		"versions": versions,
+		"total":    len(versions),
+	})
+}
+
+// DeprecateAlgorithmVersion marks an algorithm version as deprecated
+// PUT /api/v1/publisher/algorithm/versions/{id}/deprecate
+func (h *Handlers) DeprecateAlgorithmVersion(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// Get user ID from context
+	userID, ok := ctx.Value("user_id").(string)
+	if !ok || userID == "" {
+		RespondUnauthorized(w, r, "User ID not found in context")
+		return
+	}
+
+	// Get version ID from URL using chi
+	versionID := chi.URLParam(r, "id")
+	if versionID == "" {
+		RespondBadRequest(w, r, "Version ID is required")
+		return
+	}
+
+	// Get publisher ID
+	var publisherID string
+	err := h.db.Pool.QueryRow(ctx,
+		"SELECT id FROM publishers WHERE clerk_user_id = $1",
+		userID,
+	).Scan(&publisherID)
+	if err != nil {
+		RespondNotFound(w, r, "Publisher not found")
+		return
+	}
+
+	// Verify version belongs to publisher and update
+	result, err := h.db.Pool.Exec(ctx, `
+		UPDATE algorithms
+		SET validation_status = 'deprecated',
+		    deprecated_at = NOW(),
+		    updated_at = NOW()
+		WHERE id = $1 AND publisher_id = $2
+	`, versionID, publisherID)
+	if err != nil {
+		RespondInternalError(w, r, "Failed to deprecate version")
+		return
+	}
+
+	if result.RowsAffected() == 0 {
+		RespondNotFound(w, r, "Version not found")
+		return
+	}
+
+	RespondJSON(w, r, http.StatusOK, map[string]interface{}{
+		"message":    "Version deprecated successfully",
+		"version_id": versionID,
+	})
+}
+
+// GetAlgorithmVersion returns a specific algorithm version
+// GET /api/v1/publisher/algorithm/versions/{id}
+func (h *Handlers) GetAlgorithmVersion(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// Get user ID from context
+	userID, ok := ctx.Value("user_id").(string)
+	if !ok || userID == "" {
+		RespondUnauthorized(w, r, "User ID not found in context")
+		return
+	}
+
+	// Get version ID from URL using chi
+	versionID := chi.URLParam(r, "id")
+	if versionID == "" {
+		RespondBadRequest(w, r, "Version ID is required")
+		return
+	}
+
+	// Get publisher ID
+	var publisherID string
+	err := h.db.Pool.QueryRow(ctx,
+		"SELECT id FROM publishers WHERE clerk_user_id = $1",
+		userID,
+	).Scan(&publisherID)
+	if err != nil {
+		RespondNotFound(w, r, "Publisher not found")
+		return
+	}
+
+	// Get version
+	var algID, algName, description, status string
+	var configJSON []byte
+	var version int
+	var isActive bool
+	var publishedAt, deprecatedAt *time.Time
+	var createdAt, updatedAt time.Time
+
+	query := `
+		SELECT id, name, COALESCE(description, ''),
+		       COALESCE(configuration::text, '{}')::jsonb,
+		       COALESCE(CAST(SPLIT_PART(version, '.', 1) AS INTEGER), 1),
+		       COALESCE(validation_status, 'draft'),
+		       is_active,
+		       published_at, deprecated_at,
+		       created_at, updated_at
+		FROM algorithms
+		WHERE id = $1 AND publisher_id = $2
+	`
+	err = h.db.Pool.QueryRow(ctx, query, versionID, publisherID).Scan(
+		&algID, &algName, &description, &configJSON, &version,
+		&status, &isActive, &publishedAt, &deprecatedAt,
+		&createdAt, &updatedAt,
+	)
+	if err != nil {
+		RespondNotFound(w, r, "Version not found")
+		return
+	}
+
+	var config algorithm.AlgorithmConfig
+	json.Unmarshal(configJSON, &config)
+
+	RespondJSON(w, r, http.StatusOK, AlgorithmResponse{
+		ID:            algID,
+		Name:          algName,
+		Description:   description,
+		Configuration: &config,
+		Version:       version,
+		Status:        status,
+		IsActive:      isActive,
+		PublishedAt:   publishedAt,
+		CreatedAt:     createdAt,
+		UpdatedAt:     updatedAt,
 	})
 }

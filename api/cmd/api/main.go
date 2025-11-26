@@ -109,6 +109,10 @@ func main() {
 			r.Post("/algorithm/preview", h.PreviewAlgorithm)
 			r.Get("/algorithm/templates", h.GetAlgorithmTemplates)
 			r.Get("/algorithm/methods", h.GetZmanMethods)
+			r.Post("/algorithm/publish", h.PublishAlgorithm)
+			r.Get("/algorithm/versions", h.GetAlgorithmVersions)
+			r.Get("/algorithm/versions/{id}", h.GetAlgorithmVersion)
+			r.Put("/algorithm/versions/{id}/deprecate", h.DeprecateAlgorithmVersion)
 			// Coverage management
 			r.Get("/coverage", h.GetPublisherCoverage)
 			r.Post("/coverage", h.CreatePublisherCoverage)
