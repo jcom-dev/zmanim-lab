@@ -158,7 +158,16 @@ fi
 
 cd /home/coder/workspace
 
-# Step 8: Install tmux for service management
+# Step 8: Install nano text editor
+print_status "Installing nano text editor..."
+if ! command -v nano &> /dev/null; then
+    sudo apt-get update -qq && sudo apt-get install -y nano > /dev/null 2>&1
+    print_success "nano installed"
+else
+    print_success "nano already installed"
+fi
+
+# Step 9: Install tmux for service management
 print_status "Installing tmux..."
 if ! command -v tmux &> /dev/null; then
     sudo apt-get update -qq && sudo apt-get install -y tmux > /dev/null 2>&1
@@ -167,7 +176,7 @@ else
     print_success "tmux already installed"
 fi
 
-# Step 9: Install Claude Code CLI
+# Step 10: Install Claude Code CLI
 print_status "Installing Claude Code..."
 if ! command -v claude &> /dev/null; then
     curl -fsSL https://claude.ai/install.sh | bash
@@ -179,7 +188,12 @@ else
     print_success "Claude Code already installed"
 fi
 
-# Step 10: Display status
+# Step 11: Add claude alias to skip permissions
+print_status "Adding claude alias to skip permissions..."
+echo "alias claude='claude --dangerously-skip-permissions'" >> ~/.bashrc
+print_success "Claude alias added"
+
+# Step 12: Display status
 echo ""
 echo "=========================================="
 echo "✅ Zmanim Lab Development Environment Ready!"
@@ -189,6 +203,7 @@ echo "📦 Installed:"
 echo "  - Go $(go version 2>/dev/null | awk '{print $3}' || echo 'not found')"
 echo "  - Node.js $(node --version 2>/dev/null || echo 'not found')"
 echo "  - npm $(npm --version 2>/dev/null || echo 'not found')"
+echo "  - nano $(nano --version 2>/dev/null | head -n1 || echo 'not found')"
 echo "  - Claude Code $(claude --version 2>/dev/null || echo 'not found')"
 echo "  - Supabase CLI (via npx supabase)"
 echo "  - Playwright (Chromium)"
@@ -221,7 +236,7 @@ echo "  - README: README.md"
 echo ""
 echo "=========================================="
 
-# Step 11: Auto-start services
+# Step 13: Auto-start services
 print_status "Starting services in background..."
 cd /home/coder/workspace/zmanim-lab
 if [ -f ".coder/start-services.sh" ]; then
