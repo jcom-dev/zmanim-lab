@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { DateTime } from 'luxon';
+import { FormulaPanel, type Zman, type ZmanFormula } from '@/components/zmanim/FormulaPanel';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
@@ -24,20 +25,6 @@ interface Publisher {
   name: string;
   organization: string | null;
   logo_url: string | null;
-}
-
-interface ZmanFormula {
-  method: string;
-  display_name: string;
-  parameters: Record<string, unknown>;
-  explanation: string;
-}
-
-interface Zman {
-  name: string;
-  key: string;
-  time: string;
-  formula: ZmanFormula;
 }
 
 interface ZmanimData {
@@ -91,7 +78,8 @@ export default function ZmanimPage() {
   const [data, setData] = useState<ZmanimData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [expandedZman, setExpandedZman] = useState<string | null>(null);
+  const [selectedZman, setSelectedZman] = useState<Zman | null>(null);
+  const [formulaPanelOpen, setFormulaPanelOpen] = useState(false);
 
   useEffect(() => {
     if (cityId) {
@@ -282,58 +270,39 @@ export default function ZmanimPage() {
       {/* Zmanim List */}
       <div className="container mx-auto px-4 py-6">
         <div className="space-y-2">
-          {zmanim.map((zman) => (
-            <div
-              key={zman.key}
-              className="bg-slate-800 border border-slate-700 rounded-lg overflow-hidden"
-            >
-              <button
-                onClick={() => setExpandedZman(expandedZman === zman.key ? null : zman.key)}
-                className="w-full flex items-center justify-between p-4 hover:bg-slate-700/50 transition-colors"
+          {zmanim.map((zman) => {
+            const zmanWithName = {
+              ...zman,
+              name: zman.name || formatZmanName(zman.key),
+            };
+            return (
+              <div
+                key={zman.key}
+                className="bg-slate-800 border border-slate-700 rounded-lg overflow-hidden"
               >
-                <div className="flex items-center gap-3">
-                  <span className="text-white font-medium">
-                    {zman.name || formatZmanName(zman.key)}
-                  </span>
-                  <button
-                    className="text-slate-500 hover:text-slate-300"
-                    aria-label="Show formula details"
-                  >
-                    <Info className="w-4 h-4" />
-                  </button>
-                </div>
-                <span className="text-2xl font-bold text-blue-400 tabular-nums">
-                  {zman.time}
-                </span>
-              </button>
-
-              {/* Expanded Formula Details */}
-              {expandedZman === zman.key && zman.formula && (
-                <div className="px-4 pb-4 border-t border-slate-700 pt-3">
-                  <div className="bg-slate-900/50 rounded-lg p-3 text-sm">
-                    <div className="text-slate-400 mb-1">
-                      <span className="text-slate-500">Method:</span>{' '}
-                      {zman.formula.display_name || zman.formula.method}
-                    </div>
-                    {zman.formula.explanation && (
-                      <div className="text-slate-400">
-                        <span className="text-slate-500">Details:</span>{' '}
-                        {zman.formula.explanation}
-                      </div>
-                    )}
-                    {zman.formula.parameters && Object.keys(zman.formula.parameters).length > 0 && (
-                      <div className="text-slate-400 mt-1">
-                        <span className="text-slate-500">Parameters:</span>{' '}
-                        {Object.entries(zman.formula.parameters)
-                          .map(([k, v]) => `${k}: ${v}`)
-                          .join(', ')}
-                      </div>
-                    )}
+                <div className="flex items-center justify-between p-4">
+                  <div className="flex items-center gap-3">
+                    <span className="text-white font-medium">
+                      {zmanWithName.name}
+                    </span>
+                    <button
+                      onClick={() => {
+                        setSelectedZman(zmanWithName);
+                        setFormulaPanelOpen(true);
+                      }}
+                      className="p-1 text-slate-500 hover:text-blue-400 hover:bg-slate-700 rounded transition-colors"
+                      aria-label={`Show formula details for ${zmanWithName.name}`}
+                    >
+                      <Info className="w-4 h-4" />
+                    </button>
                   </div>
+                  <span className="text-2xl font-bold text-blue-400 tabular-nums">
+                    {zman.time}
+                  </span>
                 </div>
-              )}
-            </div>
-          ))}
+              </div>
+            );
+          })}
         </div>
 
         {zmanim.length === 0 && (
@@ -342,6 +311,16 @@ export default function ZmanimPage() {
           </div>
         )}
       </div>
+
+      {/* Formula Panel */}
+      <FormulaPanel
+        zman={selectedZman}
+        open={formulaPanelOpen}
+        onClose={() => {
+          setFormulaPanelOpen(false);
+          setSelectedZman(null);
+        }}
+      />
 
       {/* Footer */}
       <footer className="mt-auto border-t border-slate-700 bg-slate-800/50">

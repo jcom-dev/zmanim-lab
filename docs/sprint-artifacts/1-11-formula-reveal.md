@@ -1,6 +1,6 @@
 # Story 1.11: Formula Reveal
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -151,7 +151,24 @@ interface ZmanFormula {
 ## Dev Agent Record
 
 ### Context Reference
+- Story 1.10 zmanim user experience implementation
+
 ### Agent Model Used
+- Claude Code (claude-opus-4-5-20251101)
+
 ### Debug Log References
+- N/A
+
 ### Completion Notes List
+- Created shadcn/ui Sheet component with responsive side variants
+- Created FormulaPanel component with desktop (right panel) and mobile (bottom sheet) layouts
+- Displays zman name, calculation method, parameters, explanation, and halachic source
+- Panel dismisses via X button, Escape key, or clicking outside
+- Updated ZmanimPage to use FormulaPanel instead of inline expansion
+- All 12 Playwright E2E tests pass
+
 ### File List
+- `web/components/ui/sheet.tsx` - shadcn/ui Sheet component
+- `web/components/zmanim/FormulaPanel.tsx` - Responsive formula reveal panel
+- `web/app/zmanim/[cityId]/[publisherId]/page.tsx` - Updated to use FormulaPanel
+- `web/tests/formula-reveal.spec.ts` - 12 Playwright E2E tests
