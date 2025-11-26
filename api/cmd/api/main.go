@@ -104,8 +104,11 @@ func main() {
 			r.Get("/profile", h.GetPublisherProfile)
 			r.Put("/profile", h.UpdatePublisherProfile)
 			r.Post("/logo", h.UploadPublisherLogo)
-			r.Get("/algorithm", h.GetPublisherAlgorithm)
-			r.Put("/algorithm", h.UpdatePublisherAlgorithm)
+			r.Get("/algorithm", h.GetPublisherAlgorithmHandler)
+			r.Put("/algorithm", h.UpdatePublisherAlgorithmHandler)
+			r.Post("/algorithm/preview", h.PreviewAlgorithm)
+			r.Get("/algorithm/templates", h.GetAlgorithmTemplates)
+			r.Get("/algorithm/methods", h.GetZmanMethods)
 			// Coverage management
 			r.Get("/coverage", h.GetPublisherCoverage)
 			r.Post("/coverage", h.CreatePublisherCoverage)

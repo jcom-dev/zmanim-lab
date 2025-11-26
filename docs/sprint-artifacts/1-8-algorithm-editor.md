@@ -1,6 +1,6 @@
 # Story 1.8: Algorithm Editor
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 
@@ -135,7 +135,28 @@ CREATE TABLE algorithms (
 ## Dev Agent Record
 
 ### Context Reference
+- Story 1.7 calculation engine implementation
+
 ### Agent Model Used
-### Debug Log References
+- Claude Code (claude-opus-4-5-20251101)
+
 ### Completion Notes List
+- Added configuration column to algorithms table via migration
+- Implemented algorithm API endpoints (GET/PUT /publisher/algorithm, templates, methods, preview)
+- Created algorithm editor page with template selector, zman list, configuration modal
+- Implemented live preview panel showing calculated times for sample location
+- Added month view component with calendar grid navigation
+- Unsaved changes warning implemented via beforeunload event
+- All 13 Playwright E2E tests pass
+
 ### File List
+- `supabase/migrations/20240008_update_algorithms_table.sql` - Database migration
+- `api/internal/handlers/publisher_algorithm.go` - Algorithm API handlers
+- `api/cmd/migrate/main.go` - Migration utility script
+- `web/app/publisher/algorithm/page.tsx` - Algorithm editor page
+- `web/components/publisher/TemplateSelector.tsx` - Template selection component
+- `web/components/publisher/ZmanList.tsx` - Zman list display component
+- `web/components/publisher/ZmanConfigModal.tsx` - Zman configuration modal with autocomplete
+- `web/components/publisher/AlgorithmPreview.tsx` - Live preview panel
+- `web/components/publisher/MonthPreview.tsx` - Month view calendar component
+- `web/tests/algorithm-editor.spec.ts` - 13 Playwright E2E tests

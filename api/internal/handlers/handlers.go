@@ -373,22 +373,3 @@ func (h *Handlers) UpdatePublisherProfile(w http.ResponseWriter, r *http.Request
 	RespondJSON(w, r, http.StatusOK, publisher)
 }
 
-// GetPublisherAlgorithm returns the current publisher's algorithm
-func (h *Handlers) GetPublisherAlgorithm(w http.ResponseWriter, r *http.Request) {
-	// TODO: Implement after algorithm model is complete
-	respondJSON(w, http.StatusOK, map[string]interface{}{
-		"data": map[string]interface{}{
-			"message": "Publisher algorithm endpoint - implementation pending",
-		},
-	})
-}
-
-// UpdatePublisherAlgorithm updates the current publisher's algorithm
-func (h *Handlers) UpdatePublisherAlgorithm(w http.ResponseWriter, r *http.Request) {
-	// TODO: Implement after algorithm model is complete
-	respondJSON(w, http.StatusOK, map[string]interface{}{
-		"data": map[string]interface{}{
-			"message": "Publisher algorithm update endpoint - implementation pending",
-		},
-	})
-}
