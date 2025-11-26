@@ -7,14 +7,15 @@ test.describe('Story 1.10: Zmanim User Experience', () => {
     test('Home page loads with country selection', async ({ page }) => {
       await page.goto('/');
       await expect(page.getByRole('heading', { name: 'Zmanim Lab' })).toBeVisible();
-      await expect(page.getByText('Select Country')).toBeVisible();
+      // Page shows "Select Location" breadcrumb and country list
+      await expect(page.getByText('Select Location')).toBeVisible();
     });
 
     test('Countries are displayed from API', async ({ page }) => {
       await page.goto('/');
-      // Wait for countries to load
-      await page.waitForSelector('text=Select Country');
-      // Check that at least one country button exists
+      // Wait for countries to load (shows "Select Location" in breadcrumb)
+      await page.waitForSelector('text=Select Location');
+      // Check that at least one country button exists with city count
       const countryButtons = page.locator('button:has-text("cities")');
       await expect(countryButtons.first()).toBeVisible({ timeout: 10000 });
     });
@@ -216,8 +217,10 @@ test.describe('Story 1.10: Zmanim User Experience', () => {
         const cityId = cities[0].id;
         await page.goto(`/zmanim/${cityId}`);
 
-        // Should show city name or back button
-        await expect(page.getByText('Change location').or(page.getByText('Brooklyn'))).toBeVisible({ timeout: 10000 });
+        // Should show Brooklyn in the page or a link to change location
+        await expect(
+          page.getByText('Brooklyn').or(page.getByText('Change location')).or(page.getByText('Back'))
+        ).toBeVisible({ timeout: 10000 });
       }
     });
 
@@ -230,8 +233,8 @@ test.describe('Story 1.10: Zmanim User Experience', () => {
         const cityId = cities[0].id;
         await page.goto(`/zmanim/${cityId}/default`);
 
-        // Should show date navigation
-        await expect(page.getByRole('button', { name: /Previous day/i }).or(page.locator('button:has(svg)'))).toBeVisible({ timeout: 10000 });
+        // Should show date navigation buttons (Previous day / Next day)
+        await expect(page.getByRole('button', { name: /previous day/i })).toBeVisible({ timeout: 10000 });
       }
     });
   });

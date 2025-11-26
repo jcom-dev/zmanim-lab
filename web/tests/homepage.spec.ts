@@ -182,9 +182,12 @@ test.describe('Zmanim Display Flow', () => {
       const cityId = cities[0].id;
       await page.goto(`/zmanim/${cityId}/default`);
 
-      // Should show navigation buttons
+      // Should show navigation buttons (Previous day / Next day)
       await expect(
-        page.getByRole('button', { name: /previous|next/i }).or(page.locator('button:has(svg)'))
+        page.getByRole('button', { name: /previous day/i })
+      ).toBeVisible({ timeout: 10000 });
+      await expect(
+        page.getByRole('button', { name: /next day/i })
       ).toBeVisible({ timeout: 10000 });
     }
   });

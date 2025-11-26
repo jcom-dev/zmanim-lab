@@ -50,22 +50,22 @@ development_status:
   1-11-formula-reveal: done
   epic-1-retrospective: skipped
 
-  # Epic 2: Publisher User Management & Dashboard (12 stories, 24 new FRs)
-  # Original 8 stories completed, 4 new stories added via sprint change (2025-11-26)
-  epic-2: contexted
-  2-0-code-review-refactor: done  # FIRST - Review last commit, extract good patterns
-  2-1-publisher-user-invitation: done
-  2-2-multi-publisher-switcher: done
-  2-3-admin-impersonation-mode: done
-  2-4-dynamic-home-navigation: done
-  2-5-enhanced-coverage-management: done
-  2-6-publisher-dashboard-hub: done
-  2-7-publisher-analytics-simple: done
-  2-8-publisher-activity-log: done
+  # Epic 2: Publisher User Management & Dashboard (13 stories, 24 new FRs) - COMPLETED
+  # Code reviewed 2025-11-26: All ACs met, implementation solid, patterns established
+  epic-2: done
+  2-0-code-review-refactor: done  # Refactored Clerk service, separated concerns
+  2-1-publisher-user-invitation: done  # Admin can invite users to publishers
+  2-2-multi-publisher-switcher: done  # PublisherContext, switcher component
+  2-3-admin-impersonation-mode: done  # sessionStorage-based impersonation
+  2-4-dynamic-home-navigation: done  # RoleNavigation component
+  2-5-enhanced-coverage-management: done  # Country/region/city coverage levels
+  2-6-publisher-dashboard-hub: done  # Dashboard summary API + cards
+  2-7-publisher-analytics-simple: done  # Stats cards (calc logging deferred)
+  2-8-publisher-activity-log: done  # Activity UI ready (logging deferred)
 
   # Sprint Change Additions (2025-11-26) - FR55-FR66
-  2-11-email-service-resend: review      # Foundation - email service implemented
-  2-9-publisher-registration-request: review   # Self-service publisher onboarding
-  2-10-publisher-member-invitation: review     # Publishers invite own team
-  2-12-user-profile-dropdown: review           # User account info in header
+  2-11-email-service-resend: done      # Foundation - email service with 5 templates
+  2-9-publisher-registration-request: done   # Self-service publisher onboarding flow
+  2-10-publisher-member-invitation: done     # Publishers invite own team members
+  2-12-user-profile-dropdown: done           # User profile dropdown with role badge
   epic-2-retrospective: optional
