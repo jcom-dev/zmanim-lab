@@ -1,6 +1,6 @@
 # Story 1.6: Publisher Coverage
 
-Status: ready-for-dev
+Status: in-progress
 
 ## Story
 

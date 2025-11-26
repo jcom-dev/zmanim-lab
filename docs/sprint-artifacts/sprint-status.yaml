@@ -42,7 +42,7 @@ development_status:
   1-3-admin-publisher-management: done
   1-4-publisher-profile: review
   1-5-global-location-system: review
-  1-6-publisher-coverage: ready-for-dev
+  1-6-publisher-coverage: in-progress
   1-7-calculation-engine-caching: ready-for-dev
   1-8-algorithm-editor: ready-for-dev
   1-9-algorithm-publishing: ready-for-dev
