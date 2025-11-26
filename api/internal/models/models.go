@@ -246,3 +246,33 @@ type PublishersForCityResponse struct {
 	Total      int                `json:"total"`
 	CityID     string             `json:"city_id"`
 }
+
+// AlgorithmResponse represents an algorithm with its configuration
+type AlgorithmResponse struct {
+	ID          string                 `json:"id"`
+	PublisherID string                 `json:"publisher_id"`
+	Name        string                 `json:"name"`
+	Description string                 `json:"description"`
+	Config      map[string]interface{} `json:"config"`
+	Status      string                 `json:"status"`
+	IsActive    bool                   `json:"is_active"`
+	Version     int                    `json:"version"`
+	CreatedAt   time.Time              `json:"created_at"`
+	UpdatedAt   time.Time              `json:"updated_at"`
+}
+
+// AlgorithmRequest represents a request to create or update an algorithm
+type AlgorithmRequest struct {
+	Name        string                 `json:"name"`
+	Description string                 `json:"description"`
+	Config      map[string]interface{} `json:"config"`
+}
+
+// AlgorithmPreviewRequest represents a request to preview algorithm calculations
+type AlgorithmPreviewRequest struct {
+	Config    map[string]interface{} `json:"config"`
+	Date      string                 `json:"date"`
+	Latitude  float64                `json:"latitude"`
+	Longitude float64                `json:"longitude"`
+	Timezone  string                 `json:"timezone"`
+}

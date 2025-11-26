@@ -1,9 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useAuth } from '@clerk/nextjs';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import Link from 'next/link';
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
 interface Publisher {
   id: string;
@@ -20,6 +23,7 @@ interface Publisher {
 }
 
 export default function AdminPublishersPage() {
+  const { getToken } = useAuth();
   const [publishers, setPublishers] = useState<Publisher[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -33,10 +37,12 @@ export default function AdminPublishersPage() {
   const fetchPublishers = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/v1/admin/publishers', {
+      const token = await getToken();
+
+      const response = await fetch(`${API_BASE}/api/v1/admin/publishers`, {
         headers: {
           'Content-Type': 'application/json',
-          // TODO: Add Clerk auth token when implemented
+          'Authorization': `Bearer ${token}`,
         },
       });
 
@@ -55,12 +61,13 @@ export default function AdminPublishersPage() {
 
   const handleStatusChange = async (publisherId: string, action: 'verify' | 'suspend' | 'reactivate') => {
     try {
-      const endpoint = `/api/v1/admin/publishers/${publisherId}/${action}`;
+      const token = await getToken();
+      const endpoint = `${API_BASE}/api/v1/admin/publishers/${publisherId}/${action}`;
       const response = await fetch(endpoint, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          // TODO: Add Clerk auth token when implemented
+          'Authorization': `Bearer ${token}`,
         },
       });
 

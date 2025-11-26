@@ -66,8 +66,8 @@ export default function Home() {
       const savedCity = localStorage.getItem(STORAGE_KEY_CITY);
       if (savedCity) {
         const city = JSON.parse(savedCity) as City;
-        // If we have a saved city, navigate directly to it
-        router.push(`/zmanim/${city.id}`);
+        setSelectedCity(city);
+        // Don't auto-redirect - let user click to navigate
       }
     } catch {
       // Invalid stored data, ignore
@@ -99,7 +99,7 @@ export default function Home() {
       setRegions([]);
       setCities([]);
 
-      const response = await fetch(`${API_BASE}/api/v1/regions?country=${countryCode}`);
+      const response = await fetch(`${API_BASE}/api/v1/regions?country_code=${countryCode}`);
       if (!response.ok) throw new Error('Failed to load regions');
 
       const data = await response.json();
@@ -123,7 +123,7 @@ export default function Home() {
       setLoadingCities(true);
       setError(null);
 
-      let url = `${API_BASE}/api/v1/cities?country=${countryCode}&limit=100`;
+      let url = `${API_BASE}/api/v1/cities?country_code=${countryCode}&limit=100`;
       if (regionName) {
         url += `&region=${encodeURIComponent(regionName)}`;
       }
