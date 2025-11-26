@@ -158,14 +158,12 @@ resource "docker_container" "workspace" {
     internal = local.api_port
     external = local.api_port
     protocol = "tcp"
-    share    = "owner"
   }
 
   ports {
     internal = local.web_port
     external = local.web_port
     protocol = "tcp"
-    share    = "owner"
   }
 
   # Mount workspace directory as a persistent volume
@@ -228,15 +226,9 @@ resource "coder_app" "web_app" {
   display_name = "Web App"
   url          = "http://127.0.0.1:${local.web_port}"
   icon         = "/icon/nextjs.svg"
-  subdomain    = false
-  share        = "owner"
   external     = true
-
-  healthcheck {
-    url       = "http://localhost:${local.web_port}"
-    interval  = 10
-    threshold = 6
-  }
+  # Note: external=true conflicts with healthcheck, subdomain, and share
+  # External apps open directly in browser, bypassing Coder proxy
 }
 
 resource "coder_app" "api" {
@@ -245,13 +237,6 @@ resource "coder_app" "api" {
   display_name = "API"
   url          = "http://localhost:${local.api_port}/health"
   icon         = "/icon/go.svg"
-  subdomain    = false
-  share        = "owner"
   external     = true
-
-  healthcheck {
-    url       = "http://localhost:${local.api_port}/health"
-    interval  = 5
-    threshold = 6
-  }
+  # Note: external=true conflicts with healthcheck, subdomain, and share
 }
