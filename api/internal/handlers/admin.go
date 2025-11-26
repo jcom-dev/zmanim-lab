@@ -431,9 +431,9 @@ func (h *Handlers) AdminGetStats(w http.ResponseWriter, r *http.Request) {
 
 	publisherQuery := `
 		SELECT
-			COUNT(*) FILTER (WHERE status IN ('verified', 'pending', 'suspended')) as total,
+			COUNT(*) FILTER (WHERE status IN ('verified', 'pending', 'pending_verification', 'suspended')) as total,
 			COUNT(*) FILTER (WHERE status = 'verified') as active,
-			COUNT(*) FILTER (WHERE status = 'pending') as pending,
+			COUNT(*) FILTER (WHERE status IN ('pending', 'pending_verification')) as pending,
 			COUNT(*) FILTER (WHERE status = 'suspended') as suspended
 		FROM publishers
 	`

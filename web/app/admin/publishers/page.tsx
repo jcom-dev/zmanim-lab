@@ -14,7 +14,7 @@ interface Publisher {
   name: string;
   organization: string;
   email: string;
-  status: 'pending' | 'verified' | 'suspended';
+  status: 'pending' | 'pending_verification' | 'verified' | 'suspended';
   clerk_user_id?: string;
   website?: string;
   logo_url?: string;
@@ -88,6 +88,7 @@ export default function AdminPublishersPage() {
       case 'verified':
         return 'bg-green-100 text-green-800 border-green-300';
       case 'pending':
+      case 'pending_verification':
         return 'bg-yellow-100 text-yellow-800 border-yellow-300';
       case 'suspended':
         return 'bg-red-100 text-red-800 border-red-300';
@@ -102,7 +103,10 @@ export default function AdminPublishersPage() {
       publisher.organization.toLowerCase().includes(searchTerm.toLowerCase()) ||
       publisher.email.toLowerCase().includes(searchTerm.toLowerCase());
 
-    const matchesStatus = statusFilter === 'all' || publisher.status === statusFilter;
+    // Match pending filter to both 'pending' and 'pending_verification' statuses
+    const matchesStatus = statusFilter === 'all' ||
+      publisher.status === statusFilter ||
+      (statusFilter === 'pending' && publisher.status === 'pending_verification');
 
     return matchesSearch && matchesStatus;
   });
@@ -238,7 +242,7 @@ export default function AdminPublishersPage() {
                               View
                             </Button>
                           </Link>
-                          {publisher.status === 'pending' && (
+                          {(publisher.status === 'pending' || publisher.status === 'pending_verification') && (
                             <Button
                               size="sm"
                               variant="outline"
