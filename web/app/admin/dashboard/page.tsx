@@ -47,7 +47,7 @@ export default function AdminDashboardPage() {
       }
 
       const data = await response.json();
-      setStats(data);
+      setStats(data.data);
       setLastRefreshed(new Date());
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
