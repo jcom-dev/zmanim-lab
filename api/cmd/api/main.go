@@ -150,6 +150,8 @@ func main() {
 			// Publisher management
 			r.Get("/publishers", h.AdminListPublishers)
 			r.Post("/publishers", h.AdminCreatePublisher)
+			r.Put("/publishers/{id}", h.AdminUpdatePublisher)
+			r.Delete("/publishers/{id}", h.AdminDeletePublisher)
 			r.Put("/publishers/{id}/verify", h.AdminVerifyPublisher)
 			r.Put("/publishers/{id}/suspend", h.AdminSuspendPublisher)
 			r.Put("/publishers/{id}/reactivate", h.AdminReactivatePublisher)

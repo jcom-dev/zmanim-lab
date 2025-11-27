@@ -565,6 +565,233 @@ func (h *Handlers) AdminReactivatePublisher(w http.ResponseWriter, r *http.Reque
 	RespondJSON(w, r, http.StatusOK, result.publisher)
 }
 
+// AdminUpdatePublisher updates a publisher's details
+// PUT /api/admin/publishers/{id}
+func (h *Handlers) AdminUpdatePublisher(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	id := chi.URLParam(r, "id")
+
+	if id == "" {
+		RespondValidationError(w, r, "Publisher ID is required", nil)
+		return
+	}
+
+	var req struct {
+		Name         *string `json:"name"`
+		Organization *string `json:"organization"`
+		Email        *string `json:"email"`
+		Website      *string `json:"website"`
+		Bio          *string `json:"bio"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		RespondBadRequest(w, r, "Invalid request body")
+		return
+	}
+
+	// Build dynamic update query
+	query := `
+		UPDATE publishers
+		SET updated_at = NOW()
+	`
+	args := []interface{}{}
+	argIndex := 1
+
+	if req.Name != nil {
+		query += fmt.Sprintf(", name = $%d", argIndex)
+		args = append(args, *req.Name)
+		argIndex++
+	}
+	if req.Organization != nil {
+		query += fmt.Sprintf(", organization = $%d", argIndex)
+		args = append(args, *req.Organization)
+		argIndex++
+		// Also update slug
+		query += fmt.Sprintf(", slug = $%d", argIndex)
+		args = append(args, generateSlug(*req.Organization))
+		argIndex++
+	}
+	if req.Email != nil {
+		query += fmt.Sprintf(", email = $%d", argIndex)
+		args = append(args, *req.Email)
+		argIndex++
+	}
+	if req.Website != nil {
+		query += fmt.Sprintf(", website = $%d", argIndex)
+		args = append(args, *req.Website)
+		argIndex++
+	}
+	if req.Bio != nil {
+		query += fmt.Sprintf(", description = $%d", argIndex)
+		args = append(args, *req.Bio)
+		argIndex++
+	}
+
+	query += fmt.Sprintf(`
+		WHERE id = $%d
+		RETURNING id, name, organization, slug, email, website, description, status, created_at, updated_at
+	`, argIndex)
+	args = append(args, id)
+
+	var resID, name, organization, slug, status string
+	var email, website, description *string
+	var createdAt, updatedAt time.Time
+
+	err := h.db.Pool.QueryRow(ctx, query, args...).Scan(
+		&resID, &name, &organization, &slug, &email, &website,
+		&description, &status, &createdAt, &updatedAt)
+
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			RespondNotFound(w, r, "Publisher not found")
+			return
+		}
+		slog.Error("failed to update publisher", "error", err, "id", id)
+		RespondInternalError(w, r, "Failed to update publisher")
+		return
+	}
+
+	publisher := map[string]interface{}{
+		"id":           resID,
+		"name":         name,
+		"organization": organization,
+		"slug":         slug,
+		"status":       status,
+		"created_at":   createdAt,
+		"updated_at":   updatedAt,
+	}
+
+	if email != nil {
+		publisher["email"] = *email
+	}
+	if website != nil {
+		publisher["website"] = *website
+	}
+	if description != nil {
+		publisher["bio"] = *description
+	}
+
+	slog.Info("publisher updated", "id", id)
+	RespondJSON(w, r, http.StatusOK, publisher)
+}
+
+// AdminDeletePublisher deletes a publisher and cleans up associated Clerk users
+// DELETE /api/admin/publishers/{id}
+func (h *Handlers) AdminDeletePublisher(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	id := chi.URLParam(r, "id")
+
+	if id == "" {
+		RespondValidationError(w, r, "Publisher ID is required", nil)
+		return
+	}
+
+	// First, get all Clerk users with access to this publisher
+	var usersToCleanup []struct {
+		ClerkUserID     string
+		PublisherCount  int
+	}
+
+	if h.clerkService != nil {
+		users, err := h.clerkService.GetUsersWithPublisherAccess(ctx, id)
+		if err != nil {
+			slog.Warn("failed to get users with publisher access", "error", err, "publisher_id", id)
+		} else {
+			// For each user, check if this is their only publisher
+			for _, user := range users {
+				metadata, err := h.clerkService.GetUserPublicMetadata(ctx, user.ClerkUserID)
+				if err != nil {
+					slog.Warn("failed to get user metadata", "error", err, "user_id", user.ClerkUserID)
+					continue
+				}
+
+				accessList, ok := metadata["publisher_access_list"].([]interface{})
+				publisherCount := 0
+				if ok {
+					publisherCount = len(accessList)
+				}
+
+				usersToCleanup = append(usersToCleanup, struct {
+					ClerkUserID    string
+					PublisherCount int
+				}{
+					ClerkUserID:    user.ClerkUserID,
+					PublisherCount: publisherCount,
+				})
+			}
+		}
+	}
+
+	// Get publisher name for logging
+	var publisherName string
+	err := h.db.Pool.QueryRow(ctx,
+		"SELECT name FROM publishers WHERE id = $1", id).Scan(&publisherName)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			RespondNotFound(w, r, "Publisher not found")
+			return
+		}
+		slog.Error("failed to get publisher", "error", err, "id", id)
+		RespondInternalError(w, r, "Failed to get publisher")
+		return
+	}
+
+	// Delete the publisher (cascading will handle related tables)
+	result, err := h.db.Pool.Exec(ctx, "DELETE FROM publishers WHERE id = $1", id)
+	if err != nil {
+		slog.Error("failed to delete publisher", "error", err, "id", id)
+		RespondInternalError(w, r, "Failed to delete publisher")
+		return
+	}
+
+	if result.RowsAffected() == 0 {
+		RespondNotFound(w, r, "Publisher not found")
+		return
+	}
+
+	slog.Info("publisher deleted", "id", id, "name", publisherName)
+
+	// Clean up Clerk users in background
+	if h.clerkService != nil && len(usersToCleanup) > 0 {
+		go func() {
+			for _, user := range usersToCleanup {
+				if user.PublisherCount <= 1 {
+					// This was their only publisher - delete the Clerk user
+					if err := h.clerkService.DeleteUser(context.Background(), user.ClerkUserID); err != nil {
+						slog.Error("failed to delete Clerk user",
+							"error", err,
+							"user_id", user.ClerkUserID,
+							"publisher_id", id)
+					} else {
+						slog.Info("deleted Clerk user who only had access to deleted publisher",
+							"user_id", user.ClerkUserID,
+							"publisher_id", id)
+					}
+				} else {
+					// User has other publishers - just remove this one from their list
+					if err := h.clerkService.RemovePublisherFromUser(context.Background(), user.ClerkUserID, id); err != nil {
+						slog.Error("failed to remove publisher from user",
+							"error", err,
+							"user_id", user.ClerkUserID,
+							"publisher_id", id)
+					} else {
+						slog.Info("removed publisher from user access list",
+							"user_id", user.ClerkUserID,
+							"publisher_id", id)
+					}
+				}
+			}
+		}()
+	}
+
+	RespondJSON(w, r, http.StatusOK, map[string]interface{}{
+		"message":        "Publisher deleted successfully",
+		"id":             id,
+		"name":           publisherName,
+		"users_affected": len(usersToCleanup),
+	})
+}
+
 // AdminGetStats returns usage statistics
 // GET /api/admin/stats
 func (h *Handlers) AdminGetStats(w http.ResponseWriter, r *http.Request) {

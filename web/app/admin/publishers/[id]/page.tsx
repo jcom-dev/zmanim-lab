@@ -63,6 +63,16 @@ export default function AdminPublisherDetailPage() {
   const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [inviteSuccess, setInviteSuccess] = useState<string | null>(null);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editLoading, setEditLoading] = useState(false);
+  const [editForm, setEditForm] = useState({
+    name: '',
+    organization: '',
+    email: '',
+    website: '',
+    bio: '',
+  });
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const fetchPublisher = useCallback(async () => {
     try {
@@ -209,6 +219,68 @@ export default function AdminPublisherDetailPage() {
     }
   };
 
+  const handleEditPublisher = async () => {
+    try {
+      setEditLoading(true);
+      const token = await getToken();
+      const response = await fetch(`${API_BASE}/api/v1/admin/publishers/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(editForm),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update publisher');
+      }
+
+      await fetchPublisher();
+      setEditDialogOpen(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setEditLoading(false);
+    }
+  };
+
+  const handleDeletePublisher = async () => {
+    try {
+      setDeleteLoading(true);
+      const token = await getToken();
+      const response = await fetch(`${API_BASE}/api/v1/admin/publishers/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete publisher');
+      }
+
+      router.push('/admin/publishers');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+      setDeleteLoading(false);
+    }
+  };
+
+  const openEditDialog = () => {
+    if (publisher) {
+      setEditForm({
+        name: publisher.name || '',
+        organization: publisher.organization || '',
+        email: publisher.email || '',
+        website: publisher.website || '',
+        bio: publisher.bio || '',
+      });
+      setEditDialogOpen(true);
+    }
+  };
+
   const getStatusBadgeClass = (status: string) => {
     switch (status) {
       case 'verified':
@@ -311,8 +383,110 @@ export default function AdminPublisherDetailPage() {
 
       {/* Publisher Details Card */}
       <Card className="mb-6">
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Publisher Details</CardTitle>
+          <div className="flex gap-2">
+            <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" size="sm" onClick={openEditDialog}>
+                  Edit
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Edit Publisher</DialogTitle>
+                  <DialogDescription>
+                    Update the publisher&apos;s information.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div>
+                    <label className="text-sm font-medium">Name</label>
+                    <Input
+                      value={editForm.name}
+                      onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                      placeholder="Publisher name"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Organization</label>
+                    <Input
+                      value={editForm.organization}
+                      onChange={(e) => setEditForm({ ...editForm, organization: e.target.value })}
+                      placeholder="Organization name"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Email</label>
+                    <Input
+                      type="email"
+                      value={editForm.email}
+                      onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                      placeholder="contact@example.com"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Website</label>
+                    <Input
+                      type="url"
+                      value={editForm.website}
+                      onChange={(e) => setEditForm({ ...editForm, website: e.target.value })}
+                      placeholder="https://example.com"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Bio</label>
+                    <textarea
+                      className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary min-h-[80px]"
+                      value={editForm.bio}
+                      onChange={(e) => setEditForm({ ...editForm, bio: e.target.value })}
+                      placeholder="About this publisher..."
+                    />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setEditDialogOpen(false)} disabled={editLoading}>
+                    Cancel
+                  </Button>
+                  <Button onClick={handleEditPublisher} disabled={editLoading}>
+                    {editLoading ? 'Saving...' : 'Save Changes'}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" size="sm">
+                  Delete
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete Publisher</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Are you sure you want to delete &quot;{publisher.name}&quot;? This action cannot be undone.
+                    <br /><br />
+                    <strong>This will:</strong>
+                    <ul className="list-disc list-inside mt-2 text-sm">
+                      <li>Delete all publisher data (algorithms, coverage, etc.)</li>
+                      <li>Remove access for all users linked to this publisher</li>
+                      <li>Delete Clerk users who only had access to this publisher</li>
+                    </ul>
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={handleDeletePublisher}
+                    disabled={deleteLoading}
+                    className="bg-red-600 hover:bg-red-700"
+                  >
+                    {deleteLoading ? 'Deleting...' : 'Delete Publisher'}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 gap-4">
