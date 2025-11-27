@@ -82,14 +82,21 @@ func NewAuthMiddleware(jwksUrl, issuer string) *AuthMiddleware {
 
 // getRoleFromClaims extracts the role from either Metadata or PublicMetadata
 func getRoleFromClaims(claims *Claims) string {
-	// Check Metadata first (legacy)
-	if role, ok := claims.Metadata["role"].(string); ok && role != "" {
-		return role
+	// Check Metadata first (Clerk default location)
+	if claims.Metadata != nil {
+		if role, ok := claims.Metadata["role"].(string); ok && role != "" {
+			slog.Debug("found role in metadata", "role", role)
+			return role
+		}
 	}
-	// Check PublicMetadata (Clerk standard)
-	if role, ok := claims.PublicMetadata["role"].(string); ok && role != "" {
-		return role
+	// Check PublicMetadata (alternative location)
+	if claims.PublicMetadata != nil {
+		if role, ok := claims.PublicMetadata["role"].(string); ok && role != "" {
+			slog.Debug("found role in public_metadata", "role", role)
+			return role
+		}
 	}
+	slog.Debug("no role found in claims", "metadata", claims.Metadata, "public_metadata", claims.PublicMetadata)
 	return ""
 }
 
@@ -126,6 +133,7 @@ func (am *AuthMiddleware) RequireRole(role string) func(http.Handler) http.Handl
 
 			// Check role in metadata (supports both legacy metadata and public_metadata)
 			userRole := getRoleFromClaims(claims)
+			slog.Info("role check", "required", role, "actual", userRole, "user_id", claims.Subject, "path", r.URL.Path)
 			if userRole != role && userRole != "admin" { // admin has access to all roles
 				slog.Warn("insufficient permissions", "required", role, "actual", userRole, "user_id", claims.Subject)
 				respondAuthError(w, http.StatusForbidden, "FORBIDDEN", fmt.Sprintf("Role '%s' is required", role))
