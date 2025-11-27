@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jcom-dev/zmanim-lab/internal/algorithm"
+	"github.com/jcom-dev/zmanim-lab/internal/middleware"
 )
 
 // AlgorithmResponse represents the algorithm configuration response
@@ -63,8 +64,8 @@ func (h *Handlers) GetPublisherAlgorithmHandler(w http.ResponseWriter, r *http.R
 	ctx := r.Context()
 
 	// Get user ID from context
-	userID, ok := ctx.Value("user_id").(string)
-	if !ok || userID == "" {
+	userID := middleware.GetUserID(ctx)
+	if userID == "" {
 		RespondUnauthorized(w, r, "User ID not found in context")
 		return
 	}
@@ -169,8 +170,8 @@ func (h *Handlers) UpdatePublisherAlgorithmHandler(w http.ResponseWriter, r *htt
 	ctx := r.Context()
 
 	// Get user ID from context
-	userID, ok := ctx.Value("user_id").(string)
-	if !ok || userID == "" {
+	userID := middleware.GetUserID(ctx)
+	if userID == "" {
 		RespondUnauthorized(w, r, "User ID not found in context")
 		return
 	}
@@ -312,13 +313,8 @@ func (h *Handlers) UpdatePublisherAlgorithmHandler(w http.ResponseWriter, r *htt
 // PreviewAlgorithm calculates zmanim using the provided algorithm configuration
 // POST /api/v1/publisher/algorithm/preview
 func (h *Handlers) PreviewAlgorithm(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-
 	// Get user ID from context (optional - preview can be used without auth for demo)
-	_, ok := ctx.Value("user_id").(string)
-	if !ok {
-		// Allow unauthenticated preview for demo purposes
-	}
+	// Allow unauthenticated preview for demo purposes
 
 	// Parse request body
 	var req AlgorithmPreviewRequest
@@ -604,8 +600,8 @@ func (h *Handlers) PublishAlgorithm(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	// Get user ID from context
-	userID, ok := ctx.Value("user_id").(string)
-	if !ok || userID == "" {
+	userID := middleware.GetUserID(ctx)
+	if userID == "" {
 		RespondUnauthorized(w, r, "User ID not found in context")
 		return
 	}
@@ -720,8 +716,8 @@ func (h *Handlers) GetAlgorithmVersions(w http.ResponseWriter, r *http.Request) 
 	ctx := r.Context()
 
 	// Get user ID from context
-	userID, ok := ctx.Value("user_id").(string)
-	if !ok || userID == "" {
+	userID := middleware.GetUserID(ctx)
+	if userID == "" {
 		RespondUnauthorized(w, r, "User ID not found in context")
 		return
 	}
@@ -788,8 +784,8 @@ func (h *Handlers) DeprecateAlgorithmVersion(w http.ResponseWriter, r *http.Requ
 	ctx := r.Context()
 
 	// Get user ID from context
-	userID, ok := ctx.Value("user_id").(string)
-	if !ok || userID == "" {
+	userID := middleware.GetUserID(ctx)
+	if userID == "" {
 		RespondUnauthorized(w, r, "User ID not found in context")
 		return
 	}
@@ -842,8 +838,8 @@ func (h *Handlers) GetAlgorithmVersion(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	// Get user ID from context
-	userID, ok := ctx.Value("user_id").(string)
-	if !ok || userID == "" {
+	userID := middleware.GetUserID(ctx)
+	if userID == "" {
 		RespondUnauthorized(w, r, "User ID not found in context")
 		return
 	}

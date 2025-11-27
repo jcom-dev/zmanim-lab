@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/jcom-dev/zmanim-lab/internal/algorithm"
+	"github.com/jcom-dev/zmanim-lab/internal/middleware"
 	"github.com/jcom-dev/zmanim-lab/internal/models"
 )
 
@@ -212,8 +213,8 @@ func (h *Handlers) InvalidatePublisherCache(w http.ResponseWriter, r *http.Reque
 	ctx := r.Context()
 
 	// Get user ID from context
-	userID, ok := ctx.Value("user_id").(string)
-	if !ok || userID == "" {
+	userID := middleware.GetUserID(ctx)
+	if userID == "" {
 		RespondUnauthorized(w, r, "User ID not found in context")
 		return
 	}

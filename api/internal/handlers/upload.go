@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 
 	"github.com/google/uuid"
+	"github.com/jcom-dev/zmanim-lab/internal/middleware"
 )
 
 const (
@@ -29,8 +30,8 @@ func (h *Handlers) UploadPublisherLogo(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	// Get user ID from context
-	userID, ok := ctx.Value("user_id").(string)
-	if !ok || userID == "" {
+	userID := middleware.GetUserID(ctx)
+	if userID == "" {
 		RespondUnauthorized(w, r, "User ID not found in context")
 		return
 	}

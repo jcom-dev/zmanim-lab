@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jcom-dev/zmanim-lab/internal/middleware"
 	"github.com/jcom-dev/zmanim-lab/internal/models"
 )
 
@@ -14,8 +15,8 @@ func (h *Handlers) GetPublisherCoverage(w http.ResponseWriter, r *http.Request) 
 	ctx := r.Context()
 
 	// Get user ID from context (set by auth middleware)
-	userID, ok := ctx.Value("user_id").(string)
-	if !ok || userID == "" {
+	userID := middleware.GetUserID(ctx)
+	if userID == "" {
 		RespondUnauthorized(w, r, "User ID not found in context")
 		return
 	}
@@ -92,8 +93,8 @@ func (h *Handlers) CreatePublisherCoverage(w http.ResponseWriter, r *http.Reques
 	ctx := r.Context()
 
 	// Get user ID from context
-	userID, ok := ctx.Value("user_id").(string)
-	if !ok || userID == "" {
+	userID := middleware.GetUserID(ctx)
+	if userID == "" {
 		RespondUnauthorized(w, r, "User ID not found in context")
 		return
 	}
@@ -215,8 +216,8 @@ func (h *Handlers) UpdatePublisherCoverage(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Get user ID from context
-	userID, ok := ctx.Value("user_id").(string)
-	if !ok || userID == "" {
+	userID := middleware.GetUserID(ctx)
+	if userID == "" {
 		RespondUnauthorized(w, r, "User ID not found in context")
 		return
 	}
@@ -306,8 +307,8 @@ func (h *Handlers) DeletePublisherCoverage(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Get user ID from context
-	userID, ok := ctx.Value("user_id").(string)
-	if !ok || userID == "" {
+	userID := middleware.GetUserID(ctx)
+	if userID == "" {
 		RespondUnauthorized(w, r, "User ID not found in context")
 		return
 	}

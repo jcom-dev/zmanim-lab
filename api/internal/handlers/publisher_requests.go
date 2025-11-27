@@ -13,6 +13,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
+	"github.com/jcom-dev/zmanim-lab/internal/middleware"
 )
 
 // PublisherRequest represents a publisher registration request
@@ -220,7 +221,7 @@ func (h *Handlers) AdminApprovePublisherRequest(w http.ResponseWriter, r *http.R
 	}
 
 	// Get admin user ID from context
-	adminUserID, _ := ctx.Value("user_id").(string)
+	adminUserID := middleware.GetUserID(ctx)
 
 	// Get the request details
 	var req PublisherRequest
@@ -328,7 +329,7 @@ func (h *Handlers) AdminRejectPublisherRequest(w http.ResponseWriter, r *http.Re
 	json.NewDecoder(r.Body).Decode(&reqBody)
 
 	// Get admin user ID from context
-	adminUserID, _ := ctx.Value("user_id").(string)
+	adminUserID := middleware.GetUserID(ctx)
 
 	// Get the request details first
 	var req PublisherRequest

@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jcom-dev/zmanim-lab/internal/db"
+	"github.com/jcom-dev/zmanim-lab/internal/middleware"
 	"github.com/jcom-dev/zmanim-lab/internal/models"
 	"github.com/jcom-dev/zmanim-lab/internal/services"
 )
@@ -233,8 +234,8 @@ func (h *Handlers) GetPublisherProfile(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	// Get user ID from context (set by auth middleware)
-	userID, ok := ctx.Value("user_id").(string)
-	if !ok || userID == "" {
+	userID := middleware.GetUserID(ctx)
+	if userID == "" {
 		RespondUnauthorized(w, r, "User ID not found in context")
 		return
 	}
@@ -285,8 +286,8 @@ func (h *Handlers) GetAccessiblePublishers(w http.ResponseWriter, r *http.Reques
 	ctx := r.Context()
 
 	// Get user ID from context (set by auth middleware)
-	userID, ok := ctx.Value("user_id").(string)
-	if !ok || userID == "" {
+	userID := middleware.GetUserID(ctx)
+	if userID == "" {
 		RespondUnauthorized(w, r, "User ID not found in context")
 		return
 	}
@@ -405,8 +406,8 @@ func (h *Handlers) UpdatePublisherProfile(w http.ResponseWriter, r *http.Request
 	ctx := r.Context()
 
 	// Get user ID from context
-	userID, ok := ctx.Value("user_id").(string)
-	if !ok || userID == "" {
+	userID := middleware.GetUserID(ctx)
+	if userID == "" {
 		RespondUnauthorized(w, r, "User ID not found in context")
 		return
 	}
@@ -510,8 +511,8 @@ func (h *Handlers) GetPublisherActivity(w http.ResponseWriter, r *http.Request) 
 	ctx := r.Context()
 
 	// Get user ID from context
-	userID, ok := ctx.Value("user_id").(string)
-	if !ok || userID == "" {
+	userID := middleware.GetUserID(ctx)
+	if userID == "" {
 		RespondUnauthorized(w, r, "User ID not found in context")
 		return
 	}
@@ -567,8 +568,8 @@ func (h *Handlers) GetPublisherAnalytics(w http.ResponseWriter, r *http.Request)
 	ctx := r.Context()
 
 	// Get user ID from context
-	userID, ok := ctx.Value("user_id").(string)
-	if !ok || userID == "" {
+	userID := middleware.GetUserID(ctx)
+	if userID == "" {
 		RespondUnauthorized(w, r, "User ID not found in context")
 		return
 	}
@@ -631,8 +632,8 @@ func (h *Handlers) GetPublisherDashboardSummary(w http.ResponseWriter, r *http.R
 	ctx := r.Context()
 
 	// Get user ID from context
-	userID, ok := ctx.Value("user_id").(string)
-	if !ok || userID == "" {
+	userID := middleware.GetUserID(ctx)
+	if userID == "" {
 		RespondUnauthorized(w, r, "User ID not found in context")
 		return
 	}

@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
+	"github.com/jcom-dev/zmanim-lab/internal/middleware"
 )
 
 // PublisherInvitation represents a team invitation
@@ -40,8 +41,8 @@ type TeamMember struct {
 func (h *Handlers) GetPublisherTeam(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	userID, ok := ctx.Value("user_id").(string)
-	if !ok || userID == "" {
+	userID := middleware.GetUserID(ctx)
+	if userID == "" {
 		RespondUnauthorized(w, r, "User ID not found in context")
 		return
 	}
@@ -140,8 +141,8 @@ func (h *Handlers) GetPublisherTeam(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) InvitePublisherTeamMember(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	userID, ok := ctx.Value("user_id").(string)
-	if !ok || userID == "" {
+	userID := middleware.GetUserID(ctx)
+	if userID == "" {
 		RespondUnauthorized(w, r, "User ID not found in context")
 		return
 	}
@@ -282,8 +283,8 @@ func (h *Handlers) InvitePublisherTeamMember(w http.ResponseWriter, r *http.Requ
 func (h *Handlers) RemovePublisherTeamMember(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	currentUserID, ok := ctx.Value("user_id").(string)
-	if !ok || currentUserID == "" {
+	currentUserID := middleware.GetUserID(ctx)
+	if currentUserID == "" {
 		RespondUnauthorized(w, r, "User ID not found in context")
 		return
 	}
@@ -346,8 +347,8 @@ func (h *Handlers) RemovePublisherTeamMember(w http.ResponseWriter, r *http.Requ
 func (h *Handlers) ResendPublisherInvitation(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	userID, ok := ctx.Value("user_id").(string)
-	if !ok || userID == "" {
+	userID := middleware.GetUserID(ctx)
+	if userID == "" {
 		RespondUnauthorized(w, r, "User ID not found in context")
 		return
 	}
@@ -439,8 +440,8 @@ func (h *Handlers) ResendPublisherInvitation(w http.ResponseWriter, r *http.Requ
 func (h *Handlers) CancelPublisherInvitation(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	userID, ok := ctx.Value("user_id").(string)
-	if !ok || userID == "" {
+	userID := middleware.GetUserID(ctx)
+	if userID == "" {
 		RespondUnauthorized(w, r, "User ID not found in context")
 		return
 	}
@@ -483,8 +484,8 @@ func (h *Handlers) CancelPublisherInvitation(w http.ResponseWriter, r *http.Requ
 func (h *Handlers) AcceptPublisherInvitation(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	userID, ok := ctx.Value("user_id").(string)
-	if !ok || userID == "" {
+	userID := middleware.GetUserID(ctx)
+	if userID == "" {
 		RespondUnauthorized(w, r, "Please sign in to accept this invitation")
 		return
 	}
