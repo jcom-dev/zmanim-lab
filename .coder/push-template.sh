@@ -1,7 +1,8 @@
 #!/bin/bash
 # Push Coder template with secrets from local .env files
-# This script reads from .env.supabase, .env.upstash, .env.clerk
+# This script reads from .env.clerk, .env.resend, .env.mailslurp
 # and creates terraform.tfvars, then pushes the template
+# Note: Database uses local postgres (no external Supabase needed)
 
 set -e
 
@@ -12,7 +13,6 @@ echo "🚀 Pushing Coder template with secrets..."
 
 # Check for required env files
 MISSING_FILES=""
-[ ! -f "$PROJECT_ROOT/.env.supabase" ] && MISSING_FILES="$MISSING_FILES .env.supabase"
 [ ! -f "$PROJECT_ROOT/.env.clerk" ] && MISSING_FILES="$MISSING_FILES .env.clerk"
 [ ! -f "$PROJECT_ROOT/.env.resend" ] && MISSING_FILES="$MISSING_FILES .env.resend"
 [ ! -f "$PROJECT_ROOT/.env.mailslurp" ] && MISSING_FILES="$MISSING_FILES .env.mailslurp"
@@ -25,23 +25,9 @@ if [ -n "$MISSING_FILES" ]; then
 fi
 
 # Source env files
-source "$PROJECT_ROOT/.env.supabase"
 source "$PROJECT_ROOT/.env.clerk"
 source "$PROJECT_ROOT/.env.resend"
 source "$PROJECT_ROOT/.env.mailslurp"
-
-# Optional: Upstash Redis (for production cache - can use local Redis instead)
-if [ -f "$PROJECT_ROOT/.env.upstash" ]; then
-    source "$PROJECT_ROOT/.env.upstash"
-    # Remove quotes from values if present
-    UPSTASH_REDIS_REST_URL="${UPSTASH_REDIS_REST_URL//\"/}"
-    UPSTASH_REDIS_REST_TOKEN="${UPSTASH_REDIS_REST_TOKEN//\"/}"
-    echo "ℹ️  Using Upstash Redis for production cache"
-else
-    echo "⚠️  Upstash not configured - using local Redis only"
-    UPSTASH_REDIS_REST_URL=""
-    UPSTASH_REDIS_REST_TOKEN=""
-fi
 
 # Create terraform.tfvars (will be ignored by git)
 cat > "$SCRIPT_DIR/terraform.tfvars" << EOF
@@ -49,17 +35,7 @@ cat > "$SCRIPT_DIR/terraform.tfvars" << EOF
 zmanim_branch = "main"
 zmanim_repo   = "git@github.com:jcom-dev/zmanim-lab.git"
 
-# Production Database
-database_url         = "$DATABASE_URL"
-supabase_url         = "$SUPABASE_URL"
-supabase_anon_key    = "$SUPABASE_ANON_KEY"
-supabase_service_key = "$SUPABASE_SERVICE_KEY"
-
-# Production Cache
-upstash_redis_rest_url   = "$UPSTASH_REDIS_REST_URL"
-upstash_redis_rest_token = "$UPSTASH_REDIS_REST_TOKEN"
-
-# Production Clerk
+# Clerk Authentication
 clerk_publishable_key = "$NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY"
 clerk_secret_key      = "$CLERK_SECRET_KEY"
 clerk_jwks_url        = "$CLERK_JWKS_URL"
