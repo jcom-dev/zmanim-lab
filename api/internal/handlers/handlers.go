@@ -240,16 +240,37 @@ func (h *Handlers) GetPublisherProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Query publisher by clerk_user_id
-	query := `
-		SELECT id, clerk_user_id, name, organization, email, description, bio,
-		       website, logo_url, status, created_at, updated_at
-		FROM publishers
-		WHERE clerk_user_id = $1
-	`
+	// Get publisher ID from header or query param
+	publisherID := r.Header.Get("X-Publisher-Id")
+	if publisherID == "" {
+		publisherID = r.URL.Query().Get("publisher_id")
+	}
+
+	var query string
+	var queryArg interface{}
+
+	if publisherID != "" {
+		// Query by publisher ID
+		query = `
+			SELECT id, clerk_user_id, name, organization, email, description, bio,
+			       website, logo_url, status, created_at, updated_at
+			FROM publishers
+			WHERE id = $1
+		`
+		queryArg = publisherID
+	} else {
+		// Fall back to query by clerk_user_id
+		query = `
+			SELECT id, clerk_user_id, name, organization, email, description, bio,
+			       website, logo_url, status, created_at, updated_at
+			FROM publishers
+			WHERE clerk_user_id = $1
+		`
+		queryArg = userID
+	}
 
 	var publisher models.Publisher
-	err := h.db.Pool.QueryRow(ctx, query, userID).Scan(
+	err := h.db.Pool.QueryRow(ctx, query, queryArg).Scan(
 		&publisher.ID,
 		&publisher.ClerkUserID,
 		&publisher.Name,
@@ -412,6 +433,12 @@ func (h *Handlers) UpdatePublisherProfile(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	// Get publisher ID from header or query param
+	publisherID := r.Header.Get("X-Publisher-Id")
+	if publisherID == "" {
+		publisherID = r.URL.Query().Get("publisher_id")
+	}
+
 	// Parse request body
 	var req models.PublisherProfileUpdateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -468,11 +495,15 @@ func (h *Handlers) UpdatePublisherProfile(w http.ResponseWriter, r *http.Request
 	// Add updated_at
 	updates = append(updates, "updated_at = NOW()")
 
-	// Add user_id for WHERE clause
-	args = append(args, userID)
-
-	// Execute update
-	query := "UPDATE publishers SET " + strings.Join(updates, ", ") + " WHERE clerk_user_id = $" + fmt.Sprint(argCount) + " RETURNING id, clerk_user_id, name, organization, email, description, bio, website, logo_url, status, created_at, updated_at"
+	// Build WHERE clause based on whether we have publisherID or userID
+	var query string
+	if publisherID != "" {
+		args = append(args, publisherID)
+		query = "UPDATE publishers SET " + strings.Join(updates, ", ") + " WHERE id = $" + fmt.Sprint(argCount) + " RETURNING id, clerk_user_id, name, organization, email, description, bio, website, logo_url, status, created_at, updated_at"
+	} else {
+		args = append(args, userID)
+		query = "UPDATE publishers SET " + strings.Join(updates, ", ") + " WHERE clerk_user_id = $" + fmt.Sprint(argCount) + " RETURNING id, clerk_user_id, name, organization, email, description, bio, website, logo_url, status, created_at, updated_at"
+	}
 
 	var publisher models.Publisher
 	err := h.db.Pool.QueryRow(ctx, query, args...).Scan(

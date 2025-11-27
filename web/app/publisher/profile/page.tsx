@@ -1,11 +1,15 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@clerk/nextjs';
+import { usePublisherContext } from '@/providers/PublisherContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { LogoUpload } from '@/components/publisher/LogoUpload';
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
 interface PublisherProfile {
   id: string;
@@ -20,6 +24,8 @@ interface PublisherProfile {
 
 export default function PublisherProfilePage() {
   const router = useRouter();
+  const { getToken } = useAuth();
+  const { selectedPublisher } = usePublisherContext();
   const [profile, setProfile] = useState<PublisherProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -33,21 +39,20 @@ export default function PublisherProfilePage() {
   const [website, setWebsite] = useState('');
   const [bio, setBio] = useState('');
 
-  useEffect(() => {
-    loadProfile();
-  }, []);
+  const loadProfile = useCallback(async () => {
+    if (!selectedPublisher) return;
 
-  const loadProfile = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
-      const response = await fetch(`${apiBaseUrl}/api/v1/publisher/profile`, {
+      const token = await getToken();
+      const response = await fetch(`${API_BASE}/api/v1/publisher/profile`, {
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'X-Publisher-Id': selectedPublisher.id,
         },
-        credentials: 'include',
       });
 
       if (!response.ok) {
@@ -69,7 +74,13 @@ export default function PublisherProfilePage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [getToken, selectedPublisher]);
+
+  useEffect(() => {
+    if (selectedPublisher) {
+      loadProfile();
+    }
+  }, [selectedPublisher, loadProfile]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -86,16 +97,22 @@ export default function PublisherProfilePage() {
       return;
     }
 
+    if (!selectedPublisher) {
+      setError('No publisher selected');
+      return;
+    }
+
     try {
       setSaving(true);
 
-      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
-      const response = await fetch(`${apiBaseUrl}/api/v1/publisher/profile`, {
+      const token = await getToken();
+      const response = await fetch(`${API_BASE}/api/v1/publisher/profile`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'X-Publisher-Id': selectedPublisher.id,
         },
-        credentials: 'include',
         body: JSON.stringify({
           name,
           organization: organization || null,
