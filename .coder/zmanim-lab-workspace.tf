@@ -42,42 +42,6 @@ variable "zmanim_repo" {
   description = "Zmanim Lab repository URL"
 }
 
-# Database (Supabase)
-variable "database_url" {
-  type        = string
-  sensitive   = true
-  description = "Supabase PostgreSQL connection string"
-}
-
-variable "supabase_url" {
-  type        = string
-  description = "Supabase API URL"
-}
-
-variable "supabase_anon_key" {
-  type        = string
-  sensitive   = true
-  description = "Supabase anonymous key"
-}
-
-variable "supabase_service_key" {
-  type        = string
-  sensitive   = true
-  description = "Supabase service role key"
-}
-
-# Caching (Upstash Redis)
-variable "upstash_redis_rest_url" {
-  type        = string
-  description = "Upstash Redis REST URL"
-}
-
-variable "upstash_redis_rest_token" {
-  type        = string
-  sensitive   = true
-  description = "Upstash Redis REST token"
-}
-
 # Authentication (Clerk)
 variable "clerk_publishable_key" {
   type        = string
@@ -152,36 +116,28 @@ resource "docker_network" "zmanim_network" {
 }
 
 locals {
-  web_port         = var.web_port
-  api_port         = var.api_port
-  postgres_port    = 5433  # Use non-standard port to avoid conflicts
-  redis_port       = 6380  # Use non-standard port to avoid conflicts
-  test_db_name     = "zmanim_test"
-  test_db_user     = "zmanim_test"
-  test_db_password = "test_password_${data.coder_workspace.me.id}"
+  web_port    = var.web_port
+  api_port    = var.api_port
+  db_name     = "zmanim"
+  db_user     = "zmanim"
+  db_password = "zmanim_dev_${data.coder_workspace.me.id}"
 }
 
-# PostgreSQL container for E2E testing
-resource "docker_container" "postgres_test" {
+# PostgreSQL container
+resource "docker_container" "postgres" {
   image    = "postgres:16-alpine"
   name     = "coder-${data.coder_workspace.me.id}-postgres"
   hostname = "postgres"
 
   env = [
-    "POSTGRES_DB=${local.test_db_name}",
-    "POSTGRES_USER=${local.test_db_user}",
-    "POSTGRES_PASSWORD=${local.test_db_password}",
+    "POSTGRES_DB=${local.db_name}",
+    "POSTGRES_USER=${local.db_user}",
+    "POSTGRES_PASSWORD=${local.db_password}",
     "PGDATA=/var/lib/postgresql/data/pgdata"
   ]
 
   networks_advanced {
     name = docker_network.zmanim_network.name
-  }
-
-  ports {
-    internal = 5432
-    external = local.postgres_port
-    protocol = "tcp"
   }
 
   volumes {
@@ -191,15 +147,15 @@ resource "docker_container" "postgres_test" {
 
   # Health check
   healthcheck {
-    test     = ["CMD-SHELL", "pg_isready -U ${local.test_db_user}"]
+    test     = ["CMD-SHELL", "pg_isready -U ${local.db_user}"]
     interval = "10s"
     timeout  = "5s"
     retries  = 5
   }
 }
 
-# Redis container for E2E testing
-resource "docker_container" "redis_test" {
+# Redis container
+resource "docker_container" "redis" {
   image    = "redis:7-alpine"
   name     = "coder-${data.coder_workspace.me.id}-redis"
   hostname = "redis"
@@ -208,12 +164,6 @@ resource "docker_container" "redis_test" {
 
   networks_advanced {
     name = docker_network.zmanim_network.name
-  }
-
-  ports {
-    internal = 6379
-    external = local.redis_port
-    protocol = "tcp"
   }
 
   volumes {
@@ -240,28 +190,20 @@ resource "docker_container" "workspace" {
 
   env = [
     "CODER_AGENT_TOKEN=${coder_agent.main.token}",
-    # Production services (from Coder template variables)
-    "DATABASE_URL=${var.database_url}",
-    "SUPABASE_URL=${var.supabase_url}",
-    "SUPABASE_ANON_KEY=${var.supabase_anon_key}",
-    "SUPABASE_SERVICE_KEY=${var.supabase_service_key}",
-    "UPSTASH_REDIS_REST_URL=${var.upstash_redis_rest_url}",
-    "UPSTASH_REDIS_REST_TOKEN=${var.upstash_redis_rest_token}",
+    # Clerk Authentication
     "CLERK_SECRET_KEY=${var.clerk_secret_key}",
     "CLERK_JWKS_URL=${var.clerk_jwks_url}",
     "CLERK_ISSUER=${var.clerk_issuer}",
     "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${var.clerk_publishable_key}",
-    "NEXT_PUBLIC_SUPABASE_URL=${var.supabase_url}",
-    "NEXT_PUBLIC_SUPABASE_ANON_KEY=${var.supabase_anon_key}",
     "NEXT_PUBLIC_API_URL=http://localhost:${local.api_port}",
     # Local database and cache (via Docker network hostnames)
-    "DATABASE_URL=postgresql://${local.test_db_user}:${local.test_db_password}@postgres:5432/${local.test_db_name}",
+    "DATABASE_URL=postgresql://${local.db_user}:${local.db_password}@postgres:5432/${local.db_name}",
     "REDIS_URL=redis://redis:6379",
     "POSTGRES_HOST=postgres",
     "POSTGRES_PORT=5432",
-    "POSTGRES_DB=${local.test_db_name}",
-    "POSTGRES_USER=${local.test_db_user}",
-    "POSTGRES_PASSWORD=${local.test_db_password}",
+    "POSTGRES_DB=${local.db_name}",
+    "POSTGRES_USER=${local.db_user}",
+    "POSTGRES_PASSWORD=${local.db_password}",
     "REDIS_HOST=redis",
     "REDIS_PORT=6379",
     # Test Clerk instance (for E2E tests)
@@ -287,10 +229,10 @@ resource "docker_container" "workspace" {
     name = docker_network.zmanim_network.name
   }
 
-  # Depends on test database and cache
+  # Depends on database and cache
   depends_on = [
-    docker_container.postgres_test,
-    docker_container.redis_test
+    docker_container.postgres,
+    docker_container.redis
   ]
 
   # Expose service ports for direct access
@@ -347,13 +289,8 @@ resource "coder_metadata" "workspace_info" {
   }
 
   item {
-    key   = "Database (Production)"
-    value = "Supabase (external)"
-  }
-
-  item {
     key   = "Database"
-    value = "PostgreSQL postgres:5432"
+    value = "PostgreSQL postgres:5432 (local Docker)"
   }
 
   item {
@@ -363,7 +300,7 @@ resource "coder_metadata" "workspace_info" {
 
   item {
     key   = "DB Connection"
-    value = "postgresql://${local.test_db_user}:***@postgres:5432/${local.test_db_name}"
+    value = "postgresql://${local.db_user}:***@postgres:5432/${local.db_name}"
   }
 }
 
