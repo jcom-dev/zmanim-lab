@@ -1,9 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useAuth } from '@clerk/nextjs';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import Link from 'next/link';
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
 interface AdminStats {
   publishers: {
@@ -20,6 +23,7 @@ interface AdminStats {
 }
 
 export default function AdminDashboardPage() {
+  const { getToken } = useAuth();
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -30,10 +34,11 @@ export default function AdminDashboardPage() {
       setLoading(true);
       setError(null);
 
-      const response = await fetch('/api/v1/admin/stats', {
+      const token = await getToken();
+      const response = await fetch(`${API_BASE}/api/v1/admin/stats`, {
         headers: {
           'Content-Type': 'application/json',
-          // TODO: Add Clerk auth token when implemented
+          'Authorization': `Bearer ${token}`,
         },
       });
 
@@ -42,7 +47,7 @@ export default function AdminDashboardPage() {
       }
 
       const data = await response.json();
-      setStats(data.data);
+      setStats(data);
       setLastRefreshed(new Date());
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
@@ -53,7 +58,7 @@ export default function AdminDashboardPage() {
 
   useEffect(() => {
     fetchStats();
-  }, []);
+  }, [getToken]);
 
   const StatCard = ({
     title,
