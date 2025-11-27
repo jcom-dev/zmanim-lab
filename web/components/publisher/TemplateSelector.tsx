@@ -45,7 +45,7 @@ export function TemplateSelector({ onSelect }: TemplateSelectorProps) {
 
       if (response.ok) {
         const data = await response.json();
-        setTemplates(data.templates || []);
+        setTemplates(data.data?.templates || data.templates || []);
       }
     } catch (err) {
       console.error('Failed to load templates:', err);

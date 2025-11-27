@@ -79,8 +79,8 @@ export default function PublisherTeamPage() {
       }
 
       const data = await response.json();
-      setMembers(data.members || []);
-      setInvitations(data.pending_invitations || []);
+      setMembers(data.data?.members || data.members || []);
+      setInvitations(data.data?.pending_invitations || data.pending_invitations || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {

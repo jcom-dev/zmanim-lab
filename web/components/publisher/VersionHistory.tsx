@@ -45,7 +45,7 @@ export function VersionHistory({ onClose }: VersionHistoryProps) {
       }
 
       const data = await response.json();
-      setVersions(data.versions || []);
+      setVersions(data.data?.versions || data.versions || []);
     } catch (err) {
       console.error('Failed to load versions:', err);
       setError('Failed to load version history');

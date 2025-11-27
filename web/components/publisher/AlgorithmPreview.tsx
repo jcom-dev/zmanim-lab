@@ -76,7 +76,7 @@ export function AlgorithmPreview({ configuration }: AlgorithmPreviewProps) {
       }
 
       const data = await response.json();
-      setPreview(data.zmanim || []);
+      setPreview(data.data?.zmanim || data.zmanim || []);
     } catch (err) {
       console.error('Failed to load preview:', err);
       setError('Failed to calculate preview');

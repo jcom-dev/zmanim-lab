@@ -43,7 +43,7 @@ export function ProfileDropdown() {
       const response = await fetch(`${API_BASE}/api/v1/publishers/names?ids=${ids.join(',')}`);
       if (response.ok) {
         const data = await response.json();
-        setPublishers(data.publishers || []);
+        setPublishers(data.data?.publishers || data.publishers || []);
       }
     } catch (error) {
       console.error('Failed to fetch publisher names:', error);

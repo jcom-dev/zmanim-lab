@@ -84,7 +84,7 @@ export function ZmanConfigModal({
 
       if (response.ok) {
         const data = await response.json();
-        setMethods(data.methods || []);
+        setMethods(data.data?.methods || data.methods || []);
       }
     } catch (err) {
       console.error('Failed to load methods:', err);
