@@ -21,20 +21,22 @@ func (h *Handlers) GetPublisherCoverage(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// First get the publisher ID for this user
-	var publisherID string
-	err := h.db.Pool.QueryRow(ctx,
-		"SELECT id FROM publishers WHERE clerk_user_id = $1",
-		userID,
-	).Scan(&publisherID)
+	// Get publisher ID from header or query param
+	publisherID := r.Header.Get("X-Publisher-Id")
+	if publisherID == "" {
+		publisherID = r.URL.Query().Get("publisher_id")
+	}
 
-	if err != nil {
-		if err.Error() == "no rows in result set" {
+	// If no publisher ID provided, fall back to database lookup by clerk_user_id
+	if publisherID == "" {
+		err := h.db.Pool.QueryRow(ctx,
+			"SELECT id FROM publishers WHERE clerk_user_id = $1",
+			userID,
+		).Scan(&publisherID)
+		if err != nil {
 			RespondNotFound(w, r, "Publisher not found")
 			return
 		}
-		RespondInternalError(w, r, "Failed to fetch publisher")
-		return
 	}
 
 	// Query coverage areas with display names
@@ -99,20 +101,22 @@ func (h *Handlers) CreatePublisherCoverage(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Get publisher ID
-	var publisherID string
-	err := h.db.Pool.QueryRow(ctx,
-		"SELECT id FROM publishers WHERE clerk_user_id = $1",
-		userID,
-	).Scan(&publisherID)
+	// Get publisher ID from header or query param
+	publisherID := r.Header.Get("X-Publisher-Id")
+	if publisherID == "" {
+		publisherID = r.URL.Query().Get("publisher_id")
+	}
 
-	if err != nil {
-		if err.Error() == "no rows in result set" {
+	// If no publisher ID provided, fall back to database lookup by clerk_user_id
+	if publisherID == "" {
+		err := h.db.Pool.QueryRow(ctx,
+			"SELECT id FROM publishers WHERE clerk_user_id = $1",
+			userID,
+		).Scan(&publisherID)
+		if err != nil {
 			RespondNotFound(w, r, "Publisher not found")
 			return
 		}
-		RespondInternalError(w, r, "Failed to fetch publisher")
-		return
 	}
 
 	// Parse request body
@@ -172,7 +176,7 @@ func (h *Handlers) CreatePublisherCoverage(w http.ResponseWriter, r *http.Reques
 		RETURNING id, publisher_id, coverage_level, country_code, region, city_id, priority, is_active, created_at, updated_at
 	`
 
-	err = h.db.Pool.QueryRow(ctx, query,
+	insertErr := h.db.Pool.QueryRow(ctx, query,
 		publisherID, req.CoverageLevel, req.CountryCode, req.Region, req.CityID, priority,
 	).Scan(
 		&coverage.ID, &coverage.PublisherID, &coverage.CoverageLevel,
@@ -180,9 +184,9 @@ func (h *Handlers) CreatePublisherCoverage(w http.ResponseWriter, r *http.Reques
 		&coverage.Priority, &coverage.IsActive, &coverage.CreatedAt, &coverage.UpdatedAt,
 	)
 
-	if err != nil {
+	if insertErr != nil {
 		// Check for unique constraint violation
-		if err.Error() != "" {
+		if insertErr.Error() != "" {
 			RespondBadRequest(w, r, "Coverage already exists for this area")
 			return
 		}
@@ -222,19 +226,37 @@ func (h *Handlers) UpdatePublisherCoverage(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Verify ownership
-	var publisherID string
-	err := h.db.Pool.QueryRow(ctx,
-		`SELECT pc.publisher_id
-		 FROM publisher_coverage pc
-		 JOIN publishers p ON pc.publisher_id = p.id
-		 WHERE pc.id = $1 AND p.clerk_user_id = $2`,
-		coverageID, userID,
-	).Scan(&publisherID)
+	// Get publisher ID from header or query param
+	publisherID := r.Header.Get("X-Publisher-Id")
+	if publisherID == "" {
+		publisherID = r.URL.Query().Get("publisher_id")
+	}
 
-	if err != nil {
-		RespondNotFound(w, r, "Coverage not found or not owned by user")
-		return
+	// Verify ownership - either by X-Publisher-Id or by clerk_user_id
+	var verifiedPublisherID string
+	if publisherID != "" {
+		// Verify the coverage belongs to the specified publisher
+		err := h.db.Pool.QueryRow(ctx,
+			`SELECT publisher_id FROM publisher_coverage WHERE id = $1 AND publisher_id = $2`,
+			coverageID, publisherID,
+		).Scan(&verifiedPublisherID)
+		if err != nil {
+			RespondNotFound(w, r, "Coverage not found or not owned by publisher")
+			return
+		}
+	} else {
+		// Fall back to clerk_user_id lookup
+		err := h.db.Pool.QueryRow(ctx,
+			`SELECT pc.publisher_id
+			 FROM publisher_coverage pc
+			 JOIN publishers p ON pc.publisher_id = p.id
+			 WHERE pc.id = $1 AND p.clerk_user_id = $2`,
+			coverageID, userID,
+		).Scan(&verifiedPublisherID)
+		if err != nil {
+			RespondNotFound(w, r, "Coverage not found or not owned by user")
+			return
+		}
 	}
 
 	// Parse request body
@@ -282,13 +304,13 @@ func (h *Handlers) UpdatePublisherCoverage(w http.ResponseWriter, r *http.Reques
 	query += " RETURNING id, publisher_id, coverage_level, country_code, region, city_id, priority, is_active, created_at, updated_at"
 
 	var coverage models.PublisherCoverage
-	err = h.db.Pool.QueryRow(ctx, query, args...).Scan(
+	updateErr := h.db.Pool.QueryRow(ctx, query, args...).Scan(
 		&coverage.ID, &coverage.PublisherID, &coverage.CoverageLevel,
 		&coverage.CountryCode, &coverage.Region, &coverage.CityID,
 		&coverage.Priority, &coverage.IsActive, &coverage.CreatedAt, &coverage.UpdatedAt,
 	)
 
-	if err != nil {
+	if updateErr != nil {
 		RespondInternalError(w, r, "Failed to update coverage")
 		return
 	}
@@ -313,13 +335,30 @@ func (h *Handlers) DeletePublisherCoverage(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Delete with ownership check
-	result, err := h.db.Pool.Exec(ctx,
-		`DELETE FROM publisher_coverage pc
-		 USING publishers p
-		 WHERE pc.id = $1 AND pc.publisher_id = p.id AND p.clerk_user_id = $2`,
-		coverageID, userID,
-	)
+	// Get publisher ID from header or query param
+	publisherID := r.Header.Get("X-Publisher-Id")
+	if publisherID == "" {
+		publisherID = r.URL.Query().Get("publisher_id")
+	}
+
+	var result interface{ RowsAffected() int64 }
+	var err error
+
+	if publisherID != "" {
+		// Delete with X-Publisher-Id ownership check
+		result, err = h.db.Pool.Exec(ctx,
+			`DELETE FROM publisher_coverage WHERE id = $1 AND publisher_id = $2`,
+			coverageID, publisherID,
+		)
+	} else {
+		// Fall back to clerk_user_id ownership check
+		result, err = h.db.Pool.Exec(ctx,
+			`DELETE FROM publisher_coverage pc
+			 USING publishers p
+			 WHERE pc.id = $1 AND pc.publisher_id = p.id AND p.clerk_user_id = $2`,
+			coverageID, userID,
+		)
+	}
 
 	if err != nil {
 		RespondInternalError(w, r, "Failed to delete coverage")
