@@ -290,7 +290,7 @@ func (s *ClerkService) SendPublisherInvitation(ctx context.Context, email, publi
 	params := &clerkInvitation.CreateParams{
 		EmailAddress:   email,
 		PublicMetadata: clerk.JSONRawMessage(metadataJSON),
-		RedirectURL:    clerk.String(fmt.Sprintf("%s/publisher?invited=%s", webURL, publisherID)),
+		RedirectURL:    clerk.String(fmt.Sprintf("%s/publisher/dashboard", webURL)),
 	}
 
 	invitation, err := clerkInvitation.Create(ctx, params)
