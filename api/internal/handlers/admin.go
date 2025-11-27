@@ -860,6 +860,40 @@ func (h *Handlers) AdminGetStats(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) AdminGetConfig(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
+	// Check if table exists first
+	var tableExists bool
+	err := h.db.Pool.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT FROM information_schema.tables
+			WHERE table_schema = 'public' AND table_name = 'system_config'
+		)
+	`).Scan(&tableExists)
+
+	if err != nil || !tableExists {
+		// Return default config if table doesn't exist
+		slog.Warn("system_config table does not exist, returning defaults")
+		defaultConfig := map[string]interface{}{
+			"rate_limit_anonymous": map[string]interface{}{
+				"value":       map[string]interface{}{"requests_per_hour": 100},
+				"description": "Rate limit for anonymous API requests",
+			},
+			"rate_limit_authenticated": map[string]interface{}{
+				"value":       map[string]interface{}{"requests_per_hour": 1000},
+				"description": "Rate limit for authenticated API requests",
+			},
+			"cache_ttl_hours": map[string]interface{}{
+				"value":       map[string]interface{}{"hours": 24},
+				"description": "Cache TTL in hours for zmanim calculations",
+			},
+			"feature_flags": map[string]interface{}{
+				"value":       map[string]interface{}{"algorithm_editor": true, "formula_reveal": true},
+				"description": "Feature flags for platform capabilities",
+			},
+		}
+		RespondJSON(w, r, http.StatusOK, defaultConfig)
+		return
+	}
+
 	query := `
 		SELECT key, value, description, updated_at
 		FROM system_config
@@ -876,21 +910,59 @@ func (h *Handlers) AdminGetConfig(w http.ResponseWriter, r *http.Request) {
 
 	config := make(map[string]interface{})
 	for rows.Next() {
-		var key, description string
-		var value map[string]interface{}
-		var updatedAt time.Time
+		var key string
+		var description *string
+		var value []byte
+		var updatedAt *time.Time
 
 		err := rows.Scan(&key, &value, &description, &updatedAt)
 		if err != nil {
-			slog.Error("failed to scan config row", "error", err)
+			slog.Error("failed to scan config row", "error", err, "key", key)
 			continue
 		}
 
-		config[key] = map[string]interface{}{
-			"value":       value,
-			"description": description,
-			"updated_at":  updatedAt,
+		// Parse JSONB value
+		var parsedValue map[string]interface{}
+		if err := json.Unmarshal(value, &parsedValue); err != nil {
+			slog.Error("failed to parse config value", "error", err, "key", key)
+			continue
 		}
+
+		configEntry := map[string]interface{}{
+			"value": parsedValue,
+		}
+		if description != nil {
+			configEntry["description"] = *description
+		}
+		if updatedAt != nil {
+			configEntry["updated_at"] = *updatedAt
+		}
+
+		config[key] = configEntry
+	}
+
+	// If config is empty, return defaults
+	if len(config) == 0 {
+		defaultConfig := map[string]interface{}{
+			"rate_limit_anonymous": map[string]interface{}{
+				"value":       map[string]interface{}{"requests_per_hour": 100},
+				"description": "Rate limit for anonymous API requests",
+			},
+			"rate_limit_authenticated": map[string]interface{}{
+				"value":       map[string]interface{}{"requests_per_hour": 1000},
+				"description": "Rate limit for authenticated API requests",
+			},
+			"cache_ttl_hours": map[string]interface{}{
+				"value":       map[string]interface{}{"hours": 24},
+				"description": "Cache TTL in hours for zmanim calculations",
+			},
+			"feature_flags": map[string]interface{}{
+				"value":       map[string]interface{}{"algorithm_editor": true, "formula_reveal": true},
+				"description": "Feature flags for platform capabilities",
+			},
+		}
+		RespondJSON(w, r, http.StatusOK, defaultConfig)
+		return
 	}
 
 	RespondJSON(w, r, http.StatusOK, config)
