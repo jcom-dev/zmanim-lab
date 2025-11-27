@@ -626,7 +626,7 @@ export default function AdminPublisherDetailPage() {
                         </a>
                       </td>
                       <td className="py-4 text-sm text-muted-foreground">
-                        {new Date(user.created_at * 1000).toLocaleDateString()}
+                        {new Date(user.created_at).toLocaleDateString()}
                       </td>
                       <td className="py-4 text-right">
                         <AlertDialog>
