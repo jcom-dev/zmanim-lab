@@ -123,9 +123,9 @@ locals {
   db_password = "zmanim_dev_${data.coder_workspace.me.id}"
 }
 
-# PostgreSQL container
+# PostgreSQL container with PostGIS
 resource "docker_container" "postgres" {
-  image    = "postgres:16-alpine"
+  image    = "postgis/postgis:16-3.4-alpine"
   name     = "coder-${data.coder_workspace.me.id}-postgres"
   hostname = "postgres"
 

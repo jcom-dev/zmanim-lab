@@ -101,12 +101,7 @@ func (c *Config) Validate() error {
 	if c.Database.URL == "" {
 		return fmt.Errorf("DATABASE_URL is required")
 	}
-	if c.Database.SupabaseURL == "" {
-		return fmt.Errorf("SUPABASE_URL is required")
-	}
-	if c.Database.SupabaseAnonKey == "" {
-		return fmt.Errorf("SUPABASE_ANON_KEY is required")
-	}
+	// Supabase config is optional - local postgres can be used instead
 	if c.JWT.Secret == "" && c.Server.Environment == "production" {
 		return fmt.Errorf("JWT_SECRET is required in production")
 	}

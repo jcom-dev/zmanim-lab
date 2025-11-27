@@ -336,7 +336,18 @@ echo "  - README: README.md"
 echo ""
 echo "=========================================="
 
-# Step 15: Auto-start services
+# Step 15: Run database migrations
+print_status "Running database migrations..."
+cd /home/coder/workspace/zmanim-lab
+if [ -f "api/scripts/init-db.sh" ]; then
+    chmod +x api/scripts/init-db.sh
+    ./api/scripts/init-db.sh || print_warning "Migration failed - database may need manual setup"
+    print_success "Database migrations complete"
+else
+    print_warning "init-db.sh not found - run migrations manually"
+fi
+
+# Step 16: Auto-start services
 print_status "Starting services in background..."
 cd /home/coder/workspace/zmanim-lab
 if [ -f ".coder/start-services.sh" ]; then

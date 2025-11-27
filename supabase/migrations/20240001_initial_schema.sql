@@ -14,7 +14,8 @@ CREATE TABLE publishers (
     contact_info JSONB DEFAULT '{}',
     status VARCHAR(20) NOT NULL DEFAULT 'pending_verification',
     verified_at TIMESTAMP WITH TIME ZONE,
-    verified_by UUID REFERENCES auth.users(id),
+    verified_by UUID,  -- ID of admin who verified (Clerk user ID stored as UUID or NULL)
+    clerk_user_id VARCHAR(255),  -- Clerk user ID for the publisher owner
     metadata JSONB DEFAULT '{}',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -24,6 +25,7 @@ CREATE TABLE publishers (
 
 CREATE INDEX idx_publishers_status ON publishers(status);
 CREATE INDEX idx_publishers_slug ON publishers(slug);
+CREATE INDEX idx_publishers_clerk_user_id ON publishers(clerk_user_id);
 
 -- Algorithms table
 CREATE TABLE algorithms (
@@ -33,6 +35,7 @@ CREATE TABLE algorithms (
     version VARCHAR(50) NOT NULL,
     description TEXT,
     formula_definition JSONB NOT NULL,
+    configuration JSONB,  -- Additional algorithm configuration
     calculation_type VARCHAR(50) NOT NULL,
     validation_status VARCHAR(20) DEFAULT 'pending',
     validation_results JSONB,
@@ -97,9 +100,9 @@ CREATE INDEX idx_coverage_boundary ON coverage_areas USING GIST(boundary);
 CREATE INDEX idx_coverage_center ON coverage_areas USING GIST(center_point);
 CREATE INDEX idx_coverage_active ON coverage_areas(is_active);
 
--- User Profiles table
+-- User Profiles table (uses Clerk user ID as string, not UUID)
 CREATE TABLE user_profiles (
-    id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    id VARCHAR(255) PRIMARY KEY,  -- Clerk user ID
     display_name VARCHAR(255),
     avatar_url VARCHAR(500),
     preferences JSONB DEFAULT '{}',
@@ -110,7 +113,7 @@ CREATE TABLE user_profiles (
 -- User Subscriptions table
 CREATE TABLE user_subscriptions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    user_id VARCHAR(255) NOT NULL,  -- Clerk user ID
     publisher_id UUID NOT NULL REFERENCES publishers(id) ON DELETE CASCADE,
     subscribed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     CONSTRAINT user_subscriptions_unique UNIQUE (user_id, publisher_id)
@@ -141,7 +144,7 @@ CREATE TABLE audit_logs (
     entity_type VARCHAR(50) NOT NULL,
     entity_id UUID NOT NULL,
     action VARCHAR(50) NOT NULL,
-    actor_id UUID REFERENCES auth.users(id),
+    actor_id VARCHAR(255),  -- Clerk user ID
     changes JSONB,
     metadata JSONB DEFAULT '{}',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()

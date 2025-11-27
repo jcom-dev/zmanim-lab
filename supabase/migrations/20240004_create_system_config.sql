@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS system_config (
     value JSONB NOT NULL,
     description TEXT,
     updated_at TIMESTAMPTZ DEFAULT now(),
-    updated_by UUID REFERENCES auth.users(id)
+    updated_by VARCHAR(255)  -- Clerk user ID
 );
 
 -- Add index for faster lookups
