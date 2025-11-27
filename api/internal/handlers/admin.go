@@ -3,8 +3,10 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -204,6 +206,45 @@ func (h *Handlers) AdminCreatePublisher(w http.ResponseWriter, r *http.Request) 
 	}
 
 	slog.Info("publisher created", "id", id, "organization", organization, "status", status)
+
+	// Send admin notification email (non-blocking)
+	adminEmail := os.Getenv("ADMIN_EMAIL")
+	if h.emailService != nil && adminEmail != "" {
+		publisherEmail := ""
+		if email != nil {
+			publisherEmail = *email
+		}
+		publisherDesc := ""
+		if description != nil {
+			publisherDesc = *description
+		}
+		webURL := os.Getenv("WEB_URL")
+		if webURL == "" {
+			webURL = "http://localhost:3001"
+		}
+		adminURL := fmt.Sprintf("%s/admin/publishers/%s", webURL, id)
+
+		go func() {
+			err := h.emailService.SendAdminNewPublisherRequest(
+				adminEmail,
+				name,
+				organization,
+				publisherEmail,
+				publisherDesc,
+				adminURL,
+			)
+			if err != nil {
+				slog.Error("failed to send admin notification for new publisher",
+					"error", err,
+					"publisher_id", id,
+					"organization", organization)
+			} else {
+				slog.Info("admin notification sent for new publisher",
+					"publisher_id", id,
+					"organization", organization)
+			}
+		}()
+	}
 
 	RespondJSON(w, r, http.StatusCreated, publisher)
 }
