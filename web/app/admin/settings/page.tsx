@@ -1,8 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useAuth } from '@clerk/nextjs';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
 interface SystemConfig {
   [key: string]: {
@@ -13,6 +16,7 @@ interface SystemConfig {
 }
 
 export default function AdminSettingsPage() {
+  const { getToken } = useAuth();
   const [config, setConfig] = useState<SystemConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -26,19 +30,16 @@ export default function AdminSettingsPage() {
   const [algorithmEditor, setAlgorithmEditor] = useState<boolean>(true);
   const [formulaReveal, setFormulaReveal] = useState<boolean>(true);
 
-  useEffect(() => {
-    fetchConfig();
-  }, []);
-
   const fetchConfig = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      const response = await fetch('/api/v1/admin/config', {
+      const token = await getToken();
+      const response = await fetch(`${API_BASE}/api/v1/admin/config`, {
         headers: {
           'Content-Type': 'application/json',
-          // TODO: Add Clerk auth token when implemented
+          'Authorization': `Bearer ${token}`,
         },
       });
 
@@ -71,12 +72,17 @@ export default function AdminSettingsPage() {
     }
   };
 
+  useEffect(() => {
+    fetchConfig();
+  }, []);
+
   const updateConfig = async (key: string, value: Record<string, any>) => {
-    const response = await fetch('/api/v1/admin/config', {
+    const token = await getToken();
+    const response = await fetch(`${API_BASE}/api/v1/admin/config`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
-        // TODO: Add Clerk auth token when implemented
+        'Authorization': `Bearer ${token}`,
       },
       body: JSON.stringify({ key, value }),
     });
