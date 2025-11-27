@@ -3,20 +3,18 @@
 import { useUser } from '@clerk/nextjs';
 import Link from 'next/link';
 import { Settings, Building2, UserPlus } from 'lucide-react';
+import type { ClerkPublicMetadata } from '@/types/clerk';
+import { isAdmin as checkIsAdmin, isPublisher as checkIsPublisher, hasPublisherAccess as checkHasPublisherAccess } from '@/types/clerk';
 
 export function RoleNavigation() {
   const { user, isLoaded } = useUser();
 
   if (!isLoaded || !user) return null;
 
-  const metadata = user.publicMetadata as {
-    role?: string;
-    publisher_access_list?: string[];
-  };
-
-  const isAdmin = metadata.role === 'admin';
-  const isPublisher = metadata.role === 'publisher';
-  const hasPublisherAccess = (metadata.publisher_access_list?.length || 0) > 0;
+  const metadata = user.publicMetadata as ClerkPublicMetadata;
+  const isAdmin = checkIsAdmin(metadata);
+  const isPublisher = checkIsPublisher(metadata);
+  const hasPublisherAccess = checkHasPublisherAccess(metadata);
 
   // Show "Become a Publisher" for signed-in users without publisher access
   const showBecomePublisher = !isAdmin && !isPublisher && !hasPublisherAccess;

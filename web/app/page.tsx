@@ -6,7 +6,7 @@ import { MapPin, ChevronRight, Building2, Globe, Loader2 } from 'lucide-react';
 import { SignInButton, UserButton, useUser } from '@clerk/nextjs';
 import { RoleNavigation } from '@/components/home/RoleNavigation';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+import { API_BASE } from '@/lib/api';
 
 interface Country {
   code: string;

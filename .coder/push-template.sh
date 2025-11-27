@@ -13,25 +13,35 @@ echo "🚀 Pushing Coder template with secrets..."
 # Check for required env files
 MISSING_FILES=""
 [ ! -f "$PROJECT_ROOT/.env.supabase" ] && MISSING_FILES="$MISSING_FILES .env.supabase"
-[ ! -f "$PROJECT_ROOT/.env.upstash" ] && MISSING_FILES="$MISSING_FILES .env.upstash"
 [ ! -f "$PROJECT_ROOT/.env.clerk" ] && MISSING_FILES="$MISSING_FILES .env.clerk"
 [ ! -f "$PROJECT_ROOT/.env.resend" ] && MISSING_FILES="$MISSING_FILES .env.resend"
+[ ! -f "$PROJECT_ROOT/.env.mailslurp" ] && MISSING_FILES="$MISSING_FILES .env.mailslurp"
 
 if [ -n "$MISSING_FILES" ]; then
     echo "❌ Missing required env files:$MISSING_FILES"
     echo "   Create these files in the project root with your credentials"
+    echo "   Use .env.*.example files as templates"
     exit 1
 fi
 
 # Source env files
 source "$PROJECT_ROOT/.env.supabase"
-source "$PROJECT_ROOT/.env.upstash"
 source "$PROJECT_ROOT/.env.clerk"
 source "$PROJECT_ROOT/.env.resend"
+source "$PROJECT_ROOT/.env.mailslurp"
 
-# Remove quotes from values if present
-UPSTASH_REDIS_REST_URL="${UPSTASH_REDIS_REST_URL//\"/}"
-UPSTASH_REDIS_REST_TOKEN="${UPSTASH_REDIS_REST_TOKEN//\"/}"
+# Optional: Upstash Redis (for production cache - can use local Redis instead)
+if [ -f "$PROJECT_ROOT/.env.upstash" ]; then
+    source "$PROJECT_ROOT/.env.upstash"
+    # Remove quotes from values if present
+    UPSTASH_REDIS_REST_URL="${UPSTASH_REDIS_REST_URL//\"/}"
+    UPSTASH_REDIS_REST_TOKEN="${UPSTASH_REDIS_REST_TOKEN//\"/}"
+    echo "ℹ️  Using Upstash Redis for production cache"
+else
+    echo "⚠️  Upstash not configured - using local Redis only"
+    UPSTASH_REDIS_REST_URL=""
+    UPSTASH_REDIS_REST_TOKEN=""
+fi
 
 # Create terraform.tfvars (will be ignored by git)
 cat > "$SCRIPT_DIR/terraform.tfvars" << EOF
@@ -39,20 +49,31 @@ cat > "$SCRIPT_DIR/terraform.tfvars" << EOF
 zmanim_branch = "main"
 zmanim_repo   = "git@github.com:jcom-dev/zmanim-lab.git"
 
+# Production Database
 database_url         = "$DATABASE_URL"
 supabase_url         = "$SUPABASE_URL"
 supabase_anon_key    = "$SUPABASE_ANON_KEY"
 supabase_service_key = "$SUPABASE_SERVICE_KEY"
 
+# Production Cache
 upstash_redis_rest_url   = "$UPSTASH_REDIS_REST_URL"
 upstash_redis_rest_token = "$UPSTASH_REDIS_REST_TOKEN"
 
+# Production Clerk
 clerk_publishable_key = "$NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY"
 clerk_secret_key      = "$CLERK_SECRET_KEY"
+clerk_jwks_url        = "$CLERK_JWKS_URL"
+clerk_issuer          = "$CLERK_ISSUER"
 
-resend_api_key = "$RESEND_API_KEY"
-resend_domain  = "$RESEND_DOMAIN"
-resend_from    = "$RESEND_FROM"
+# Test Clerk Instance
+clerk_test_publishable_key = "$CLERK_TEST_PUBLISHABLE_KEY"
+clerk_test_secret_key      = "$CLERK_TEST_SECRET_KEY"
+
+# Email Services
+resend_api_key    = "$RESEND_API_KEY"
+resend_domain     = "$RESEND_DOMAIN"
+resend_from       = "$RESEND_FROM"
+mailslurp_api_key = "$MAILSLURP_API_KEY"
 EOF
 
 echo "✅ Created terraform.tfvars from env files"

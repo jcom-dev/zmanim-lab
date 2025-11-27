@@ -14,8 +14,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+import { API_BASE } from '@/lib/api';
+import type { ClerkPublicMetadata } from '@/types/clerk';
 
 interface Publisher {
   id: string;
@@ -30,8 +30,9 @@ export function ProfileDropdown() {
   const [publishers, setPublishers] = useState<Publisher[]>([]);
   const [isResettingPassword, setIsResettingPassword] = useState(false);
 
-  const role = (user?.publicMetadata?.role as string) || 'user';
-  const publisherAccessList = (user?.publicMetadata?.publisher_access_list as string[]) || [];
+  const metadata = user?.publicMetadata as ClerkPublicMetadata;
+  const role = metadata?.role || 'user';
+  const publisherAccessList = metadata?.publisher_access_list || [];
 
   const fetchPublisherNames = useCallback(async (ids: string[]) => {
     if (ids.length === 0) {
@@ -45,8 +46,8 @@ export function ProfileDropdown() {
         const data = await response.json();
         setPublishers(data.data?.publishers || data.publishers || []);
       }
-    } catch (error) {
-      console.error('Failed to fetch publisher names:', error);
+    } catch {
+      // Silently fail - publisher names are optional UI enhancement
     }
   }, []);
 
@@ -76,8 +77,7 @@ export function ProfileDropdown() {
       } else {
         alert('Failed to send password reset email. Please try again.');
       }
-    } catch (error) {
-      console.error('Password reset error:', error);
+    } catch {
       alert('Failed to send password reset email. Please try again.');
     } finally {
       setIsResettingPassword(false);

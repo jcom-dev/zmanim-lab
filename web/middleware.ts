@@ -23,7 +23,7 @@ export default clerkMiddleware(async (auth, req) => {
 
     const role = getRoleFromClaims(sessionClaims);
     if (role !== 'publisher' && role !== 'admin') {
-      console.log('Publisher access denied:', { userId, role, sessionClaims });
+      // Access denied - role check failed
       return new NextResponse('Forbidden: Publisher role required', { status: 403 });
     }
   }
@@ -39,7 +39,7 @@ export default clerkMiddleware(async (auth, req) => {
 
     const role = getRoleFromClaims(sessionClaims);
     if (role !== 'admin') {
-      console.log('Admin access denied:', { userId, role, sessionClaims });
+      // Access denied - admin role required
       return new NextResponse('Forbidden: Admin role required', { status: 403 });
     }
   }

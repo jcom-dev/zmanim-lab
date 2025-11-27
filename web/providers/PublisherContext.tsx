@@ -3,8 +3,8 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback, Suspense } from 'react';
 import { useUser, useAuth } from '@clerk/nextjs';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+import { API_BASE } from '@/lib/api';
+import type { ClerkPublicMetadata } from '@/types/clerk';
 
 interface Publisher {
   id: string;
@@ -47,11 +47,7 @@ function PublisherProviderInner({ children }: { children: ReactNode }) {
   const [impersonatedPublisher, setImpersonatedPublisher] = useState<Publisher | null>(null);
 
   // Extract publisher IDs from Clerk metadata
-  const metadata = user?.publicMetadata as {
-    role?: string;
-    publisher_access_list?: string[];
-    primary_publisher_id?: string;
-  } | undefined;
+  const metadata = user?.publicMetadata as ClerkPublicMetadata | undefined;
   const publisherIds = metadata?.publisher_access_list || [];
   const primaryPublisherId = metadata?.primary_publisher_id;
 

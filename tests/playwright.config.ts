@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
+import * as path from 'path';
 
 /**
  * Playwright Configuration for Zmanim Lab E2E Tests
@@ -9,6 +10,11 @@ import { defineConfig, devices } from '@playwright/test';
  * - CI/CD pipelines
  * - Playwright MCP server for AI-assisted testing
  *
+ * Features:
+ * - Global setup/teardown for test user management
+ * - Clerk auth helpers for authenticated testing
+ * - Database fixtures for test data
+ *
  * @see https://playwright.dev/docs/test-configuration
  */
 
@@ -16,6 +22,12 @@ import { defineConfig, devices } from '@playwright/test';
 const baseURL = process.env.BASE_URL || 'http://localhost:3001';
 
 export default defineConfig({
+  // Global setup - runs once before all tests
+  globalSetup: path.resolve(__dirname, './e2e/setup/global-setup.ts'),
+
+  // Global teardown - runs once after all tests (cleanup)
+  globalTeardown: path.resolve(__dirname, './e2e/setup/global-teardown.ts'),
+
   // Test directory
   testDir: './e2e',
 

@@ -932,6 +932,195 @@ supabase db push
 
 ---
 
+## Testing Infrastructure (Story 3.0 & 3.1)
+
+### Overview
+
+Zmanim Lab uses Playwright for comprehensive E2E testing with Clerk authentication injection. The testing infrastructure was built in Stories 3.0 and 3.1, providing 130+ test scenarios covering admin, publisher, and user flows.
+
+**Test Stack:**
+| Technology | Purpose |
+|------------|---------|
+| Playwright | E2E browser automation |
+| @clerk/testing | Clerk auth injection |
+| MailSlurp | Email testing |
+| Supabase client | Test fixture creation |
+
+### Test Organization
+
+```
+tests/
+├── e2e/
+│   ├── admin/                  # Admin flow tests (15+ scenarios)
+│   │   ├── dashboard.spec.ts
+│   │   ├── publishers.spec.ts
+│   │   └── impersonation.spec.ts
+│   ├── publisher/              # Publisher flow tests (20+ scenarios)
+│   │   ├── dashboard.spec.ts
+│   │   ├── algorithm.spec.ts
+│   │   ├── coverage.spec.ts
+│   │   └── profile.spec.ts
+│   ├── user/                   # End user tests (10+ scenarios)
+│   │   ├── location.spec.ts
+│   │   └── zmanim.spec.ts
+│   ├── registration/           # Registration flows
+│   ├── email/                  # Email flow tests (MailSlurp)
+│   ├── errors/                 # Error handling tests
+│   ├── setup/                  # Global setup/teardown
+│   │   ├── global-setup.ts
+│   │   └── global-teardown.ts
+│   └── utils/                  # Shared utilities
+│       ├── clerk-auth.ts       # Auth injection helpers
+│       ├── test-fixtures.ts    # Database fixtures
+│       ├── email-testing.ts    # MailSlurp helpers
+│       ├── cleanup.ts          # Cleanup utilities
+│       └── index.ts            # Re-exports
+```
+
+### Authentication Pattern
+
+The testing infrastructure uses `@clerk/testing/playwright` for programmatic authentication:
+
+```typescript
+import { setupClerkTestingToken, clerk } from '@clerk/testing/playwright';
+
+// Setup testing token (bypasses bot detection)
+await setupClerkTestingToken({ page });
+
+// Sign in with credentials
+await clerk.signIn({
+  page,
+  signInParams: {
+    strategy: 'password',
+    identifier: email,
+    password: 'TestPassword123!',
+  },
+});
+```
+
+**Auth Helper Functions:**
+| Function | Purpose |
+|----------|---------|
+| `loginAsAdmin(page)` | Inject admin auth |
+| `loginAsPublisher(page, publisherId)` | Inject publisher auth linked to publisher |
+| `loginAsUser(page)` | Inject regular user auth |
+| `createTestAdmin()` | Create admin user in Clerk |
+| `createTestPublisher(publisherId)` | Create publisher user in Clerk |
+| `createTestUser()` | Create regular user in Clerk |
+
+**Reference:** `tests/e2e/utils/clerk-auth.ts`
+
+### Test Data Patterns
+
+**Naming Convention:**
+- Entity prefix: `TEST_` (e.g., `TEST_E2E_Publisher_Name`)
+- Email domain: `test-zmanim.example.com` (Clerk-compatible)
+
+**Fixture Functions:**
+```typescript
+// Create test publisher in database
+const publisher = await createTestPublisherEntity({
+  name: 'TEST_E2E_Publisher',
+  organization: 'TEST_E2E_Org',
+  status: 'verified',
+});
+
+// Create test algorithm
+const algorithm = await createTestAlgorithm(publisher.id);
+
+// Create test coverage
+const coverage = await createTestCoverage(publisher.id, cityId);
+```
+
+**Caching:** Fixtures use a Map-based cache to avoid recreation:
+```typescript
+const testEntityCache = new Map<string, any>();
+```
+
+**Reference:** `tests/e2e/utils/test-fixtures.ts`
+
+### Cleanup Pattern
+
+Cleanup is idempotent and runs in `globalTeardown`:
+
+```typescript
+// Clean test users from Clerk
+await cleanupTestUsers();
+
+// Clean test data from database (TEST_ prefix)
+await cleanupTestData();
+
+// Clean MailSlurp inboxes
+await cleanupAllInboxes();
+```
+
+**Characteristics:**
+- Safe to run multiple times
+- Uses `TEST_` prefix to identify test data
+- Uses `test-zmanim.example.com` domain filter
+
+**Reference:** `tests/e2e/utils/cleanup.ts`
+
+### Email Testing (MailSlurp)
+
+For flows requiring email verification (invitations, password reset):
+
+```typescript
+// Create test inbox
+const inbox = await createTestInbox('test-user');
+
+// Wait for email
+const email = await waitForEmail(inbox.id, { timeout: 30000 });
+
+// Extract links
+const links = extractLinksFromEmail(email.body);
+```
+
+**Email Helpers:**
+| Function | Purpose |
+|----------|---------|
+| `createTestInbox(name)` | Create MailSlurp inbox |
+| `waitForEmail(inboxId)` | Wait for email arrival |
+| `waitForInvitationEmail(inboxId)` | Wait for invitation email |
+| `waitForPasswordResetEmail(inboxId)` | Wait for reset email |
+| `extractLinksFromEmail(body)` | Extract URLs from email body |
+
+**Reference:** `tests/e2e/utils/email-testing.ts`
+
+### Running Tests
+
+```bash
+# Run all E2E tests
+npm test
+
+# Run specific test file
+npx playwright test tests/e2e/admin/publishers.spec.ts
+
+# Run with UI mode
+npx playwright test --ui
+
+# Run headed (visible browser)
+npx playwright test --headed
+
+# Cleanup test data manually
+npx tsx tests/cleanup-clerk-users.ts
+```
+
+### Coverage Summary (Story 3.1)
+
+| Category | Scenarios | Status |
+|----------|-----------|--------|
+| Admin flows | 15+ | ✅ |
+| Publisher flows | 20+ | ✅ |
+| User flows | 10+ | ✅ |
+| Registration | 5+ | ✅ |
+| Email flows | 5+ | ✅ |
+| Error handling | 10+ | ✅ |
+| **Total** | **130+** | ✅ |
+
+---
+
 _Generated by BMAD Decision Architecture Workflow v1.0_
 _Date: 2025-11-25_
+_Updated: 2025-11-27 (Testing Infrastructure section added)_
 _For: BMad_

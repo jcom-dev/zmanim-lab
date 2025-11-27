@@ -5,8 +5,7 @@ import Link from 'next/link';
 import { useAuth } from '@clerk/nextjs';
 import { User, MapPin, Code, BarChart3, AlertTriangle, Clock, Loader2, Plus, CheckCircle } from 'lucide-react';
 import { usePublisherContext } from '@/providers/PublisherContext';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+import { API_BASE } from '@/lib/api';
 
 interface DashboardSummary {
   profile: {

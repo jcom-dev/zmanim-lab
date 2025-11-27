@@ -1,6 +1,23 @@
-// API client for the Zmanim Lab backend
+/**
+ * API Client for Zmanim Lab Backend
+ *
+ * Centralized API configuration and client.
+ * Use API_BASE for direct fetch calls or the api singleton for typed requests.
+ *
+ * @example Direct fetch:
+ * const response = await fetch(`${API_BASE}/api/v1/endpoint`, {
+ *   headers: { 'Authorization': `Bearer ${token}` }
+ * });
+ *
+ * @example With api client:
+ * const publishers = await api.getPublishers();
+ */
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+/** Base URL for API requests. Use this instead of hardcoding URLs. */
+export const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+
+// Legacy alias for backward compatibility
+const API_BASE_URL = API_BASE;
 
 export interface Publisher {
   id: string;

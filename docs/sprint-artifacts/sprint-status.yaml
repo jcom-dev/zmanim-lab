@@ -48,7 +48,7 @@ development_status:
   1-9-algorithm-publishing: done
   1-10-zmanim-user-experience: done
   1-11-formula-reveal: done
-  epic-1-retrospective: skipped
+  epic-1-retrospective: done  # Combined with Epic 2 retro on 2025-11-27
 
   # Epic 2: Publisher User Management & Dashboard (13 stories, 24 new FRs) - COMPLETED
   # Code reviewed 2025-11-26: All ACs met, implementation solid, patterns established
@@ -68,4 +68,15 @@ development_status:
   2-9-publisher-registration-request: done   # Self-service publisher onboarding flow
   2-10-publisher-member-invitation: done     # Publishers invite own team members
   2-12-user-profile-dropdown: done           # User profile dropdown with role badge
-  epic-2-retrospective: optional
+  epic-2-retrospective: done  # Combined retro 2025-11-27: epic-1-2-retro-2025-11-27.md
+
+  # Epic 3: Consolidation & Quality - COMPLETED 2025-11-27
+  # Focus: Testing infrastructure, E2E coverage, codebase audit, coding standards, refactor
+  # Epic defined: docs/epic-3-consolidation-quality.md
+  epic-3: done
+  3-0-testing-infrastructure: done  # Clerk auth helpers, test fixtures - COMPLETED 2025-11-27
+  3-1-comprehensive-e2e-test-suite: done  # 130+ E2E scenarios - COMPLETED 2025-11-27
+  3-2-codebase-audit-documentation: done  # Pattern inventory, debt list - COMPLETED 2025-11-27
+  3-3-coding-standards-architecture: done  # Formalize patterns - COMPLETED 2025-11-27
+  3-4-refactor-to-standards: done  # Apply standards, cleanup - COMPLETED 2025-11-27
+  epic-3-retrospective: optional

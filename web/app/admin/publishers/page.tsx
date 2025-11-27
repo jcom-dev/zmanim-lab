@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { PendingRequests } from '@/components/admin/PendingRequests';
 import Link from 'next/link';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+import { API_BASE } from '@/lib/api';
 
 interface Publisher {
   id: string;
