@@ -238,7 +238,7 @@ func (h *Handlers) AdminCreatePublisher(w http.ResponseWriter, r *http.Request) 
 			}()
 		}
 
-		// Send Clerk invitation
+		// Create Clerk user or add publisher to existing user
 		if h.clerkService != nil {
 			go func() {
 				// Check if user already exists in Clerk
@@ -264,15 +264,17 @@ func (h *Handlers) AdminCreatePublisher(w http.ResponseWriter, r *http.Request) 
 							"publisher_id", id)
 					}
 				} else {
-					// User doesn't exist - send invitation
-					if err := h.clerkService.SendPublisherInvitation(context.Background(), publisherEmail, id); err != nil {
-						slog.Error("failed to send publisher invitation",
+					// User doesn't exist - create them directly (works with Restricted mode)
+					newUser, err := h.clerkService.CreatePublisherUserDirectly(context.Background(), publisherEmail, name, id)
+					if err != nil {
+						slog.Error("failed to create publisher user",
 							"error", err,
 							"email", publisherEmail,
 							"publisher_id", id)
 					} else {
-						slog.Info("publisher invitation sent",
+						slog.Info("publisher user created",
 							"email", publisherEmail,
+							"user_id", newUser.ID,
 							"publisher_id", id)
 					}
 				}
@@ -487,11 +489,11 @@ func (h *Handlers) AdminVerifyPublisher(w http.ResponseWriter, r *http.Request) 
 			}()
 		}
 
-		// Automatically invite the publisher's email to manage this account
+		// Automatically create user or add publisher to existing user
 		if h.clerkService != nil {
 			go func() {
 				// Check if user already exists in Clerk
-				existingUser, err := h.clerkService.GetUserByEmail(ctx, publisherEmail)
+				existingUser, err := h.clerkService.GetUserByEmail(context.Background(), publisherEmail)
 				if err != nil {
 					slog.Error("failed to check for existing user during verification",
 						"error", err,
@@ -501,7 +503,7 @@ func (h *Handlers) AdminVerifyPublisher(w http.ResponseWriter, r *http.Request) 
 
 				if existingUser != nil {
 					// User exists - add publisher to their access list
-					if err := h.clerkService.AddPublisherToUser(ctx, existingUser.ID, id); err != nil {
+					if err := h.clerkService.AddPublisherToUser(context.Background(), existingUser.ID, id); err != nil {
 						slog.Error("failed to add publisher to existing user",
 							"error", err,
 							"user_id", existingUser.ID,
@@ -513,15 +515,17 @@ func (h *Handlers) AdminVerifyPublisher(w http.ResponseWriter, r *http.Request) 
 							"publisher_id", id)
 					}
 				} else {
-					// User doesn't exist - send invitation
-					if err := h.clerkService.SendPublisherInvitation(ctx, publisherEmail, id); err != nil {
-						slog.Error("failed to send publisher invitation",
+					// User doesn't exist - create them directly (works with Restricted mode)
+					newUser, err := h.clerkService.CreatePublisherUserDirectly(context.Background(), publisherEmail, publisherName, id)
+					if err != nil {
+						slog.Error("failed to create publisher user",
 							"error", err,
 							"email", publisherEmail,
 							"publisher_id", id)
 					} else {
-						slog.Info("publisher invitation sent",
+						slog.Info("publisher user created",
 							"email", publisherEmail,
+							"user_id", newUser.ID,
 							"publisher_id", id)
 					}
 				}

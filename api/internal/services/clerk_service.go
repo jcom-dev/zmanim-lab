@@ -306,6 +306,43 @@ func (s *ClerkService) SendPublisherInvitation(ctx context.Context, email, publi
 	return nil
 }
 
+// CreatePublisherUserDirectly creates a Clerk user directly with publisher metadata
+// This bypasses the invitation flow and works with Restricted mode
+// The user will receive a password reset email to set up their account
+func (s *ClerkService) CreatePublisherUserDirectly(ctx context.Context, email, name, publisherID string) (*clerk.User, error) {
+	// Create public metadata for the user
+	publicMetadata := map[string]interface{}{
+		"role":                  "publisher",
+		"publisher_access_list": []string{publisherID},
+		"primary_publisher_id":  publisherID,
+	}
+
+	metadataJSON, err := json.Marshal(publicMetadata)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal metadata: %w", err)
+	}
+
+	// Create the user directly
+	params := &clerkUser.CreateParams{
+		EmailAddresses:          &[]string{email},
+		FirstName:               clerk.String(name),
+		PublicMetadata:          clerk.JSONRawMessage(metadataJSON),
+		SkipPasswordRequirement: clerk.Bool(true),
+	}
+
+	user, err := clerkUser.Create(ctx, params)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create user: %w", err)
+	}
+
+	slog.Info("publisher user created directly",
+		"email", email,
+		"user_id", user.ID,
+		"publisher_id", publisherID)
+
+	return user, nil
+}
+
 // GetUserByEmail finds a Clerk user by email address
 // Returns nil if user not found (not an error)
 func (s *ClerkService) GetUserByEmail(ctx context.Context, email string) (*clerk.User, error) {
