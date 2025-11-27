@@ -31,6 +31,7 @@ const (
 	TemplateWelcome                  EmailTemplate = "welcome"
 	TemplatePublisherRequestReceived EmailTemplate = "publisher-request-received"
 	TemplateAdminNewRequest          EmailTemplate = "admin-new-request"
+	TemplatePublisherCreated         EmailTemplate = "publisher-created"
 )
 
 // SendEmailRequest represents the Resend API request
@@ -162,6 +163,20 @@ func (s *EmailService) SendPublisherRequestReceived(to, name, organization strin
 
 	html := s.renderTemplate(TemplatePublisherRequestReceived, data)
 	return s.send(to, subject, html, []EmailTag{{Name: "template", Value: string(TemplatePublisherRequestReceived)}})
+}
+
+// SendPublisherCreated notifies the publisher that their account has been created
+func (s *EmailService) SendPublisherCreated(to, name, organization string) error {
+	subject := fmt.Sprintf("Your Publisher Account Has Been Created - %s", organization)
+
+	data := map[string]string{
+		"name":         name,
+		"organization": organization,
+		"web_url":      s.webURL,
+	}
+
+	html := s.renderTemplate(TemplatePublisherCreated, data)
+	return s.send(to, subject, html, []EmailTag{{Name: "template", Value: string(TemplatePublisherCreated)}})
 }
 
 // SendAdminNewPublisherRequest notifies admins of a new publisher request
@@ -450,6 +465,42 @@ func (s *EmailService) renderTemplate(templateType EmailTemplate, data map[strin
         </div>
         <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;">
         <p style="color: #718096; font-size: 12px;">This is an automated notification from Zmanim Lab.</p>
+    </div>
+</body>
+</html>`,
+
+		TemplatePublisherCreated: `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Publisher Account Created</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+    <div style="background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 100%); padding: 30px; border-radius: 10px 10px 0 0;">
+        <h1 style="color: white; margin: 0; font-size: 24px;">Zmanim Lab</h1>
+    </div>
+    <div style="background: #ffffff; padding: 30px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 10px 10px;">
+        <h2 style="color: #1e3a5f; margin-top: 0;">Your Publisher Account Has Been Created!</h2>
+        <p>Dear {{.name}},</p>
+        <p>Great news! A publisher account has been created for <strong>{{.organization}}</strong> on Zmanim Lab.</p>
+        <p>Your account is currently pending verification. Once verified, you will be able to:</p>
+        <ul style="color: #4a5568;">
+            <li>Set up your calculation algorithms</li>
+            <li>Define your coverage areas</li>
+            <li>Invite team members to help manage your account</li>
+            <li>Publish your zmanim for your community</li>
+        </ul>
+        <div style="background: #f7fafc; border-left: 4px solid #1e3a5f; padding: 15px; margin: 20px 0;">
+            <p style="margin: 0; color: #4a5568;"><strong>What happens next?</strong></p>
+            <p style="margin: 10px 0 0 0; color: #4a5568;">You will receive an email once your account has been verified by our team. This typically takes 1-2 business days.</p>
+        </div>
+        <div style="text-align: center; margin: 30px 0;">
+            <a href="{{.web_url}}" style="background: #1e3a5f; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 600;">Visit Zmanim Lab</a>
+        </div>
+        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;">
+        <p style="color: #718096; font-size: 12px;">If you have any questions, please reply to this email.</p>
     </div>
 </body>
 </html>`,
