@@ -158,10 +158,10 @@ func (h *Handlers) AdminCreatePublisher(w http.ResponseWriter, r *http.Request) 
 	// Generate slug from organization name
 	slug := generateSlug(req.Organization)
 
-	// Insert new publisher (no Clerk involvement - Epic 2 separates creation from invitation)
+	// Insert new publisher as verified (admin-created publishers are auto-verified)
 	query := `
 		INSERT INTO publishers (name, organization, slug, email, website, description, status)
-		VALUES ($1, $2, $3, $4, $5, $6, 'pending_verification')
+		VALUES ($1, $2, $3, $4, $5, $6, 'verified')
 		RETURNING id, name, organization, slug, email, website, description, status, created_at, updated_at
 	`
 
@@ -207,65 +207,74 @@ func (h *Handlers) AdminCreatePublisher(w http.ResponseWriter, r *http.Request) 
 
 	slog.Info("publisher created", "id", id, "organization", organization, "status", status)
 
-	// Send emails (non-blocking)
-	if h.emailService != nil {
-		publisherEmail := ""
-		if email != nil {
-			publisherEmail = *email
-		}
+	// Get publisher email for invite
+	publisherEmail := ""
+	if email != nil {
+		publisherEmail = *email
+	}
 
-		// Send notification to publisher if they have an email
-		if publisherEmail != "" {
+	// Send approval email and invite (non-blocking)
+	if publisherEmail != "" {
+		webURL := os.Getenv("WEB_URL")
+		if webURL == "" {
+			webURL = "http://localhost:3001"
+		}
+		dashboardURL := fmt.Sprintf("%s/publisher/dashboard", webURL)
+
+		// Send approval/welcome email
+		if h.emailService != nil {
 			go func() {
-				err := h.emailService.SendPublisherCreated(
-					publisherEmail,
-					name,
-					organization,
-				)
+				err := h.emailService.SendPublisherApproved(publisherEmail, name, dashboardURL)
 				if err != nil {
-					slog.Error("failed to send publisher notification",
+					slog.Error("failed to send publisher welcome email",
 						"error", err,
 						"publisher_id", id,
 						"email", publisherEmail)
 				} else {
-					slog.Info("publisher notification sent",
+					slog.Info("publisher welcome email sent",
 						"publisher_id", id,
 						"email", publisherEmail)
 				}
 			}()
 		}
 
-		// Send notification to admin
-		adminEmail := os.Getenv("ADMIN_EMAIL")
-		if adminEmail != "" {
-			publisherDesc := ""
-			if description != nil {
-				publisherDesc = *description
-			}
-			webURL := os.Getenv("WEB_URL")
-			if webURL == "" {
-				webURL = "http://localhost:3001"
-			}
-			adminURL := fmt.Sprintf("%s/admin/publishers/%s", webURL, id)
-
+		// Send Clerk invitation
+		if h.clerkService != nil {
 			go func() {
-				err := h.emailService.SendAdminNewPublisherRequest(
-					adminEmail,
-					name,
-					organization,
-					publisherEmail,
-					publisherDesc,
-					adminURL,
-				)
+				// Check if user already exists in Clerk
+				existingUser, err := h.clerkService.GetUserByEmail(context.Background(), publisherEmail)
 				if err != nil {
-					slog.Error("failed to send admin notification for new publisher",
+					slog.Error("failed to check for existing user",
 						"error", err,
-						"publisher_id", id,
-						"organization", organization)
+						"email", publisherEmail)
+					return
+				}
+
+				if existingUser != nil {
+					// User exists - add publisher to their access list
+					if err := h.clerkService.AddPublisherToUser(context.Background(), existingUser.ID, id); err != nil {
+						slog.Error("failed to add publisher to existing user",
+							"error", err,
+							"user_id", existingUser.ID,
+							"publisher_id", id)
+					} else {
+						slog.Info("publisher access granted to existing user",
+							"email", publisherEmail,
+							"user_id", existingUser.ID,
+							"publisher_id", id)
+					}
 				} else {
-					slog.Info("admin notification sent for new publisher",
-						"publisher_id", id,
-						"organization", organization)
+					// User doesn't exist - send invitation
+					if err := h.clerkService.SendPublisherInvitation(context.Background(), publisherEmail, id); err != nil {
+						slog.Error("failed to send publisher invitation",
+							"error", err,
+							"email", publisherEmail,
+							"publisher_id", id)
+					} else {
+						slog.Info("publisher invitation sent",
+							"email", publisherEmail,
+							"publisher_id", id)
+					}
 				}
 			}()
 		}

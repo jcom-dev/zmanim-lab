@@ -51,8 +51,8 @@ export default function BecomePublisherPage() {
     }
     if (!formData.description.trim()) {
       newErrors.description = 'Description is required';
-    } else if (formData.description.trim().length < 50) {
-      newErrors.description = 'Please provide at least 50 characters describing your organization';
+    } else if (formData.description.trim().length < 10) {
+      newErrors.description = 'Please provide at least 10 characters describing your organization';
     }
 
     setErrors(newErrors);
@@ -283,7 +283,7 @@ export default function BecomePublisherPage() {
                 />
                 {errors.description && <p className="mt-1 text-sm text-red-500">{errors.description}</p>}
                 <p className="mt-1 text-sm text-gray-500">
-                  {formData.description.length}/50 characters minimum
+                  {formData.description.length}/10 characters minimum
                 </p>
               </div>
 

@@ -260,13 +260,13 @@ export default function NewPublisherPage() {
         </CardContent>
       </Card>
 
-      <div className="mt-6 p-4 bg-blue-50 border border-blue-300 rounded-md">
-        <h3 className="font-semibold text-blue-900 mb-2">What happens next?</h3>
-        <ul className="text-sm text-blue-800 space-y-1 list-disc list-inside">
-          <li>Publisher account will be created with "pending" status</li>
-          <li>Invitation email will be sent via Clerk (when implemented)</li>
-          <li>Publisher can accept invitation and set up their account</li>
-          <li>Admin must verify the publisher before they can publish algorithms</li>
+      <div className="mt-6 p-4 bg-green-50 border border-green-300 rounded-md">
+        <h3 className="font-semibold text-green-900 mb-2">What happens next?</h3>
+        <ul className="text-sm text-green-800 space-y-1 list-disc list-inside">
+          <li>Publisher account will be created and automatically verified</li>
+          <li>Welcome email will be sent to the publisher</li>
+          <li>Clerk invitation will be sent so they can sign in</li>
+          <li>Publisher can immediately start configuring their algorithms</li>
         </ul>
       </div>
     </div>
