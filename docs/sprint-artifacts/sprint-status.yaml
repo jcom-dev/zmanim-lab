@@ -80,3 +80,23 @@ development_status:
   3-3-coding-standards-architecture: done  # Formalize patterns - COMPLETED 2025-11-27
   3-4-refactor-to-standards: done  # Apply standards, cleanup - COMPLETED 2025-11-27
   epic-3-retrospective: optional
+
+  # Epic 4: Intuitive Zmanim Algorithm Editor with AI-Powered DSL (14 stories)
+  # Focus: Apple-quality UX, DSL for calculations, AI formula generation, Hebrew calendar
+  # Epic defined: docs/epic-4-algorithm-editor-ux.md
+  # Tech spec: docs/sprint-artifacts/tech-spec-epic-4.md
+  epic-4: contexted  # Tech spec created 2025-11-27
+  4-0-postgres-pgvector-image: in-progress  # Infrastructure: PostgreSQL 17 + PostGIS + pgvector
+  4-1-zmanim-dsl-design: ready-for-dev        # Research all zmanim, design DSL syntax
+  4-2-zmanim-dsl-parser: ready-for-dev        # Implement lexer/parser/compiler
+  4-3-bilingual-naming: ready-for-dev         # Mandatory Hebrew + English names
+  4-4-guided-formula-builder: ready-for-dev   # shadcn/ui visual formula construction
+  4-5-halachic-documentation: ready-for-dev   # Comments field with Hebrew/Markdown
+  4-6-advanced-mode-editor: ready-for-dev     # CodeMirror 6 with DSL support
+  4-7-ai-context-system-rag: ready-for-dev    # pgvector-based retrieval for AI
+  4-8-ai-formula-service: ready-for-dev       # Claude API for NL→formula
+  4-9-ai-explanation-generator: ready-for-dev # Human-readable formula explanations
+  4-10-weekly-preview-hebrew: ready-for-dev   # hebcal-go, 44 Jewish events, bilingual dates
+  4-11-publisher-onboarding: ready-for-dev    # First-time setup wizard
+  4-12-algorithm-collaboration: ready-for-dev # Copy/fork from other publishers
+  4-13-formula-version-history: ready-for-dev # Visual diff and rollback

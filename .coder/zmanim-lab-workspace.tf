@@ -107,6 +107,21 @@ variable "mailslurp_api_key" {
   description = "MailSlurp API key for E2E email testing"
 }
 
+# AI Services (Epic 4)
+variable "openai_api_key" {
+  type        = string
+  sensitive   = true
+  default     = ""
+  description = "OpenAI API key for embeddings (text-embedding-3-small)"
+}
+
+variable "anthropic_api_key" {
+  type        = string
+  sensitive   = true
+  default     = ""
+  description = "Anthropic API key for Claude AI (formula generation)"
+}
+
 # Workspace metadata
 data "coder_workspace" "me" {}
 
@@ -123,9 +138,21 @@ locals {
   db_password = "zmanim_dev_${data.coder_workspace.me.id}"
 }
 
-# PostgreSQL container with PostGIS
+# Custom PostgreSQL image with PostGIS + pgvector
+# Built from .coder/docker/Dockerfile.postgres
+resource "docker_image" "postgres" {
+  name = "zmanim-postgres:17-postgis-pgvector"
+
+  build {
+    context    = "${path.module}/docker"
+    dockerfile = "Dockerfile.postgres"
+    tag        = ["zmanim-postgres:17-postgis-pgvector"]
+  }
+}
+
+# PostgreSQL container with PostGIS + pgvector
 resource "docker_container" "postgres" {
-  image    = "postgis/postgis:16-3.4-alpine"
+  image    = docker_image.postgres.image_id
   name     = "coder-${data.coder_workspace.me.id}-postgres"
   hostname = "postgres"
 
@@ -215,6 +242,9 @@ resource "docker_container" "workspace" {
     "RESEND_API_KEY=${var.resend_api_key}",
     "RESEND_DOMAIN=${var.resend_domain}",
     "RESEND_FROM=${var.resend_from}",
+    # AI Services (Epic 4)
+    "OPENAI_API_KEY=${var.openai_api_key}",
+    "ANTHROPIC_API_KEY=${var.anthropic_api_key}",
     # CORS configuration for API
     "ALLOWED_ORIGINS=http://localhost:${local.web_port},http://127.0.0.1:${local.web_port},http://localhost:${local.api_port},http://127.0.0.1:${local.api_port},https://localhost:${local.web_port},https://127.0.0.1:${local.web_port},https://localhost:${local.api_port},https://127.0.0.1:${local.api_port}",
     # Service ports

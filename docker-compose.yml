@@ -1,9 +1,12 @@
 version: '3.8'
 
 services:
-  # PostgreSQL for E2E Testing
+  # PostgreSQL for E2E Testing (with PostGIS + pgvector)
   postgres-test:
-    image: postgres:16-alpine
+    build:
+      context: ./.coder/docker
+      dockerfile: Dockerfile.postgres
+    image: zmanim-postgres:17-postgis-pgvector-test
     container_name: zmanim-postgres-test
     ports:
       - "5433:5432"

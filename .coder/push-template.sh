@@ -1,6 +1,6 @@
 #!/bin/bash
 # Push Coder template with secrets from local .env files
-# This script reads from .env.clerk, .env.resend, .env.mailslurp
+# This script reads from .env.clerk, .env.resend, .env.mailslurp, .env.openai, .env.claude
 # and creates terraform.tfvars, then pushes the template
 # Note: Database uses local postgres (no external Supabase needed)
 
@@ -24,10 +24,25 @@ if [ -n "$MISSING_FILES" ]; then
     exit 1
 fi
 
-# Source env files
+# Check for optional AI env files (required for Epic 4)
+OPTIONAL_MISSING=""
+[ ! -f "$PROJECT_ROOT/.env.openai" ] && OPTIONAL_MISSING="$OPTIONAL_MISSING .env.openai"
+[ ! -f "$PROJECT_ROOT/.env.claude" ] && OPTIONAL_MISSING="$OPTIONAL_MISSING .env.claude"
+
+if [ -n "$OPTIONAL_MISSING" ]; then
+    echo "⚠️  Optional AI env files not found:$OPTIONAL_MISSING"
+    echo "   AI features (Epic 4) will not work without these keys"
+    echo "   Create these files with OPENAI_API_KEY and ANTHROPIC_API_KEY"
+fi
+
+# Source required env files
 source "$PROJECT_ROOT/.env.clerk"
 source "$PROJECT_ROOT/.env.resend"
 source "$PROJECT_ROOT/.env.mailslurp"
+
+# Source optional AI env files if they exist
+[ -f "$PROJECT_ROOT/.env.openai" ] && source "$PROJECT_ROOT/.env.openai"
+[ -f "$PROJECT_ROOT/.env.claude" ] && source "$PROJECT_ROOT/.env.claude"
 
 # Create terraform.tfvars (will be ignored by git)
 cat > "$SCRIPT_DIR/terraform.tfvars" << EOF
@@ -50,12 +65,33 @@ resend_api_key    = "$RESEND_API_KEY"
 resend_domain     = "$RESEND_DOMAIN"
 resend_from       = "$RESEND_FROM"
 mailslurp_api_key = "$MAILSLURP_API_KEY"
+
+# AI Services (Epic 4)
+openai_api_key    = "${OPENAI_API_KEY:-}"
+anthropic_api_key = "${ANTHROPIC_API_KEY:-}"
 EOF
 
 echo "✅ Created terraform.tfvars from env files"
 
+# Copy Claude Code config if it exists (for AI-assisted development)
+if [ -f "$HOME/.claude.json" ]; then
+    cp "$HOME/.claude.json" "$SCRIPT_DIR/claude.json"
+    echo "✅ Copied ~/.claude.json to template directory"
+else
+    echo "ℹ️  No ~/.claude.json found (optional - for Claude Code config)"
+fi
+
+# Verify Dockerfile exists for custom postgres image
+if [ ! -f "$SCRIPT_DIR/docker/Dockerfile.postgres" ]; then
+    echo "❌ Missing Dockerfile.postgres in .coder/docker/"
+    echo "   This is required for PostgreSQL 17 + PostGIS + pgvector"
+    exit 1
+fi
+echo "✅ Found custom PostgreSQL Dockerfile (PostGIS + pgvector)"
+
 # Push the template
 echo "📤 Pushing template to Coder..."
+echo "   Note: Terraform will build PostgreSQL 17 + PostGIS + pgvector image"
 cd "$SCRIPT_DIR"
 coder templates push zmanim-lab --directory . --yes
 

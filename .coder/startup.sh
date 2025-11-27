@@ -299,6 +299,13 @@ print_status "Adding claude alias to skip permissions..."
 echo "alias claude='claude --dangerously-skip-permissions'" >> ~/.bashrc
 print_success "Claude alias added"
 
+# Step 12b: Copy Claude Code config if included in template
+if [ -f "/home/coder/workspace/zmanim-lab/.coder/claude.json" ]; then
+    print_status "Copying Claude Code config..."
+    cp /home/coder/workspace/zmanim-lab/.coder/claude.json ~/.claude.json
+    print_success "~/.claude.json copied from template"
+fi
+
 # Step 13: Configure git user identity (with Coder variable overrides)
 print_status "Configuring git user identity..."
 GIT_USER_NAME="${GIT_USER_NAME:-Daniel Niasoff}"
