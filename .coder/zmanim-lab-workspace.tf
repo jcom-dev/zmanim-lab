@@ -163,8 +163,9 @@ locals {
 
 # PostgreSQL container for E2E testing
 resource "docker_container" "postgres_test" {
-  image = "postgres:16-alpine"
-  name  = "coder-${data.coder_workspace.me.id}-postgres"
+  image    = "postgres:16-alpine"
+  name     = "coder-${data.coder_workspace.me.id}-postgres"
+  hostname = "postgres"
 
   env = [
     "POSTGRES_DB=${local.test_db_name}",
@@ -199,8 +200,9 @@ resource "docker_container" "postgres_test" {
 
 # Redis container for E2E testing
 resource "docker_container" "redis_test" {
-  image = "redis:7-alpine"
-  name  = "coder-${data.coder_workspace.me.id}-redis"
+  image    = "redis:7-alpine"
+  name     = "coder-${data.coder_workspace.me.id}-redis"
+  hostname = "redis"
 
   command = ["redis-server", "--appendonly", "yes"]
 
@@ -252,16 +254,16 @@ resource "docker_container" "workspace" {
     "NEXT_PUBLIC_SUPABASE_URL=${var.supabase_url}",
     "NEXT_PUBLIC_SUPABASE_ANON_KEY=${var.supabase_anon_key}",
     "NEXT_PUBLIC_API_URL=http://localhost:${local.api_port}",
-    # Test environment - local database and cache
-    "TEST_DATABASE_URL=postgresql://${local.test_db_user}:${local.test_db_password}@localhost:${local.postgres_port}/${local.test_db_name}",
-    "TEST_REDIS_URL=redis://localhost:${local.redis_port}",
-    "TEST_POSTGRES_HOST=localhost",
-    "TEST_POSTGRES_PORT=${local.postgres_port}",
-    "TEST_POSTGRES_DB=${local.test_db_name}",
-    "TEST_POSTGRES_USER=${local.test_db_user}",
-    "TEST_POSTGRES_PASSWORD=${local.test_db_password}",
-    "TEST_REDIS_HOST=localhost",
-    "TEST_REDIS_PORT=${local.redis_port}",
+    # Local database and cache (via Docker network hostnames)
+    "DATABASE_URL=postgresql://${local.test_db_user}:${local.test_db_password}@postgres:5432/${local.test_db_name}",
+    "REDIS_URL=redis://redis:6379",
+    "POSTGRES_HOST=postgres",
+    "POSTGRES_PORT=5432",
+    "POSTGRES_DB=${local.test_db_name}",
+    "POSTGRES_USER=${local.test_db_user}",
+    "POSTGRES_PASSWORD=${local.test_db_password}",
+    "REDIS_HOST=redis",
+    "REDIS_PORT=6379",
     # Test Clerk instance (for E2E tests)
     "CLERK_TEST_SECRET_KEY=${var.clerk_test_secret_key}",
     "CLERK_TEST_PUBLISHABLE_KEY=${var.clerk_test_publishable_key}",
@@ -276,8 +278,6 @@ resource "docker_container" "workspace" {
     # Service ports
     "WEB_PORT=${local.web_port}",
     "API_PORT=${local.api_port}",
-    "POSTGRES_PORT=${local.postgres_port}",
-    "REDIS_PORT=${local.redis_port}",
     # Repository configuration
     "ZMANIM_REPO=${var.zmanim_repo}",
     "ZMANIM_BRANCH=${var.zmanim_branch}",
@@ -352,23 +352,18 @@ resource "coder_metadata" "workspace_info" {
   }
 
   item {
-    key   = "Database (Test)"
-    value = "PostgreSQL localhost:${local.postgres_port}"
+    key   = "Database"
+    value = "PostgreSQL postgres:5432"
   }
 
   item {
-    key   = "Cache (Production)"
-    value = "Upstash Redis (external)"
+    key   = "Cache"
+    value = "Redis redis:6379"
   }
 
   item {
-    key   = "Cache (Test)"
-    value = "Redis localhost:${local.redis_port}"
-  }
-
-  item {
-    key   = "Test DB Connection"
-    value = "postgresql://${local.test_db_user}:***@localhost:${local.postgres_port}/${local.test_db_name}"
+    key   = "DB Connection"
+    value = "postgresql://${local.test_db_user}:***@postgres:5432/${local.test_db_name}"
   }
 }
 
