@@ -435,6 +435,16 @@ func (h *Handlers) AdminVerifyPublisher(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	// Get publisher details before updating status (for email)
+	var publisherEmail, publisherName string
+	err := h.db.Pool.QueryRow(ctx,
+		"SELECT email, name FROM publishers WHERE id = $1", id).Scan(&publisherEmail, &publisherName)
+	if err != nil {
+		slog.Error("failed to get publisher for verification", "error", err, "id", id)
+		RespondNotFound(w, r, "Publisher not found")
+		return
+	}
+
 	result := h.updatePublisherStatus(ctx, id, "verified")
 	if result.err != nil {
 		handlePublisherStatusError(w, r, result)
@@ -442,6 +452,74 @@ func (h *Handlers) AdminVerifyPublisher(w http.ResponseWriter, r *http.Request) 
 	}
 
 	slog.Info("publisher verified", "id", id)
+
+	// Send approval email and invite user (non-blocking)
+	if publisherEmail != "" {
+		webURL := os.Getenv("WEB_URL")
+		if webURL == "" {
+			webURL = "http://localhost:3001"
+		}
+		dashboardURL := fmt.Sprintf("%s/publisher/dashboard", webURL)
+
+		// Send approval email
+		if h.emailService != nil {
+			go func() {
+				err := h.emailService.SendPublisherApproved(publisherEmail, publisherName, dashboardURL)
+				if err != nil {
+					slog.Error("failed to send publisher approval email",
+						"error", err,
+						"publisher_id", id,
+						"email", publisherEmail)
+				} else {
+					slog.Info("publisher approval email sent",
+						"publisher_id", id,
+						"email", publisherEmail)
+				}
+			}()
+		}
+
+		// Automatically invite the publisher's email to manage this account
+		if h.clerkService != nil {
+			go func() {
+				// Check if user already exists in Clerk
+				existingUser, err := h.clerkService.GetUserByEmail(ctx, publisherEmail)
+				if err != nil {
+					slog.Error("failed to check for existing user during verification",
+						"error", err,
+						"email", publisherEmail)
+					return
+				}
+
+				if existingUser != nil {
+					// User exists - add publisher to their access list
+					if err := h.clerkService.AddPublisherToUser(ctx, existingUser.ID, id); err != nil {
+						slog.Error("failed to add publisher to existing user",
+							"error", err,
+							"user_id", existingUser.ID,
+							"publisher_id", id)
+					} else {
+						slog.Info("publisher access granted to existing user",
+							"email", publisherEmail,
+							"user_id", existingUser.ID,
+							"publisher_id", id)
+					}
+				} else {
+					// User doesn't exist - send invitation
+					if err := h.clerkService.SendPublisherInvitation(ctx, publisherEmail, id); err != nil {
+						slog.Error("failed to send publisher invitation",
+							"error", err,
+							"email", publisherEmail,
+							"publisher_id", id)
+					} else {
+						slog.Info("publisher invitation sent",
+							"email", publisherEmail,
+							"publisher_id", id)
+					}
+				}
+			}()
+		}
+	}
+
 	RespondJSON(w, r, http.StatusOK, result.publisher)
 }
 
