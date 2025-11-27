@@ -236,6 +236,29 @@ else
     print_success "nano already installed"
 fi
 
+# Step 8b: Install PostgreSQL client
+print_status "Installing PostgreSQL client..."
+if ! command -v psql &> /dev/null; then
+    sudo apt-get update -qq && sudo apt-get install -y postgresql-client > /dev/null 2>&1
+    print_success "PostgreSQL client installed"
+else
+    print_success "PostgreSQL client already installed"
+fi
+
+# Step 8c: Install Redis client
+print_status "Installing Redis client..."
+if ! command -v redis-cli &> /dev/null; then
+    sudo apt-get update -qq && sudo apt-get install -y redis-tools > /dev/null 2>&1
+    print_success "Redis client installed"
+else
+    print_success "Redis client already installed"
+fi
+
+# Step 8d: Install network utilities (ping, nslookup, telnet)
+print_status "Installing network utilities..."
+sudo apt-get update -qq && sudo apt-get install -y iputils-ping dnsutils telnet > /dev/null 2>&1
+print_success "Network utilities installed (ping, nslookup, telnet)"
+
 # Step 9: Install tmux for service management
 print_status "Installing tmux..."
 if ! command -v tmux &> /dev/null; then

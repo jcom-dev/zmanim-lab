@@ -17,6 +17,7 @@ export {
   clearUserCache,
   getTestPassword,
   getTestEmailDomain,
+  logout,
 } from './clerk-auth';
 
 // Database Fixtures
@@ -29,6 +30,9 @@ export {
   cleanupTestData,
   clearEntityCache,
   getTestPrefix,
+  isDatabaseConfigured,
+  closePool,
+  linkClerkUserToPublisher,
 } from './test-fixtures';
 
 // Email Testing (MailSlurp)

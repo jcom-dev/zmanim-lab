@@ -26,30 +26,46 @@ async function globalTeardown(config: FullConfig) {
     return;
   }
 
+  // Clean up Clerk users
   try {
-    // Import cleanup utilities
-    const { cleanupTestUsers } = await import('../utils/clerk-auth');
-    const { cleanupTestData } = await import('../utils/test-fixtures');
-    const { cleanupAllInboxes, isMailSlurpConfigured } = await import('../utils/email-testing');
-
-    // Clean up Clerk users
     console.log('Cleaning up Clerk test users...');
-    await cleanupTestUsers();
-
-    // Clean up database data
-    console.log('Cleaning up database test data...');
-    await cleanupTestData();
-
-    // Clean up MailSlurp inboxes if configured
-    if (isMailSlurpConfigured()) {
-      console.log('Cleaning up MailSlurp inboxes...');
-      await cleanupAllInboxes();
+    const clerkAuth = await import('../utils/clerk-auth');
+    if (typeof clerkAuth.cleanupTestUsers === 'function') {
+      await clerkAuth.cleanupTestUsers();
+    } else {
+      console.log('cleanupTestUsers not available, skipping Clerk cleanup');
     }
-
-    console.log('All cleanup complete');
   } catch (error) {
-    console.error('Error during cleanup:', error);
-    // Don't fail the test run due to cleanup errors
+    console.error('Error cleaning up Clerk users:', error);
+  }
+
+  // Clean up database data
+  try {
+    console.log('Cleaning up database test data...');
+    const testFixtures = await import('../utils/test-fixtures');
+    if (typeof testFixtures.cleanupTestData === 'function') {
+      await testFixtures.cleanupTestData();
+    }
+    // Close pool
+    if (typeof testFixtures.closePool === 'function') {
+      console.log('Closing database connection pool...');
+      await testFixtures.closePool();
+    }
+  } catch (error) {
+    console.error('Error cleaning up database data:', error);
+  }
+
+  // Clean up MailSlurp inboxes
+  try {
+    const emailTesting = await import('../utils/email-testing');
+    if (typeof emailTesting.isMailSlurpConfigured === 'function' && emailTesting.isMailSlurpConfigured()) {
+      console.log('Cleaning up MailSlurp inboxes...');
+      if (typeof emailTesting.cleanupAllInboxes === 'function') {
+        await emailTesting.cleanupAllInboxes();
+      }
+    }
+  } catch (error) {
+    console.error('Error cleaning up email inboxes:', error);
   }
 
   console.log('\n========================================');

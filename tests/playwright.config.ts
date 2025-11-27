@@ -64,11 +64,11 @@ export default defineConfig({
     // Record video on failure
     video: 'on-first-retry',
 
-    // Default timeout for actions
-    actionTimeout: 10000,
+    // Default timeout for actions (increased for Clerk sign-in)
+    actionTimeout: 30000,
 
-    // Default navigation timeout
-    navigationTimeout: 30000,
+    // Default navigation timeout (increased for slow loads)
+    navigationTimeout: 60000,
   },
 
   // Configure projects for major browsers
@@ -113,11 +113,11 @@ export default defineConfig({
         timeout: 120000,
       },
 
-  // Global timeout for each test
-  timeout: 60000,
+  // Global timeout for each test (increased for Clerk auth flows)
+  timeout: 120000,
 
-  // Expect timeout
+  // Expect timeout (increased for dynamic content)
   expect: {
-    timeout: 10000,
+    timeout: 30000,
   },
 });

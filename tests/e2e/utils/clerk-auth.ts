@@ -1,15 +1,17 @@
 /**
  * Clerk Authentication Helpers for E2E Tests
  *
+ * Creates dedicated test users at the start of each test run,
+ * and cleans them up at the end.
+ *
  * Uses @clerk/testing package for reliable authentication in Playwright tests.
- * This approach uses testing tokens to bypass bot detection and provides
- * programmatic sign-in capabilities.
  */
 
 import { createClerkClient } from '@clerk/backend';
 import { setupClerkTestingToken, clerk } from '@clerk/testing/playwright';
-import type { Page, BrowserContext } from '@playwright/test';
+import type { Page } from '@playwright/test';
 import { createTestInbox } from './email-testing';
+import { linkClerkUserToPublisher } from './test-fixtures';
 
 // Initialize Clerk client
 const getClerkClient = () => {
@@ -22,35 +24,74 @@ const getClerkClient = () => {
 
 const TEST_PASSWORD = 'TestPassword123!';
 
-// Cache for created test users to avoid recreating
-const testUserCache = new Map<string, { id: string; email: string; inboxId: string }>();
+// Test user session - created once per test run
+interface TestUserSession {
+  adminUser: { id: string; email: string } | null;
+  publisherUser: { id: string; email: string; publisherId: string } | null;
+  regularUser: { id: string; email: string } | null;
+}
+
+const testSession: TestUserSession = {
+  adminUser: null,
+  publisherUser: null,
+  regularUser: null,
+};
+
+// Track all users created in this session for cleanup
+const createdUserIds: string[] = [];
 
 /**
- * Generate a unique test email address using MailSlurp
- * This creates a real, functioning email address that Clerk will accept
+ * Generate a unique test email using MailSlurp (real email addresses)
+ * Falls back to a known working test format if MailSlurp unavailable
  */
-async function generateTestEmail(prefix: string): Promise<{ email: string; inboxId: string }> {
-  const inbox = await createTestInbox(`clerk-${prefix}-${Date.now()}`);
-  return {
-    email: inbox.emailAddress,
-    inboxId: inbox.id,
-  };
+async function generateTestEmail(role: string): Promise<string> {
+  try {
+    // Use MailSlurp for real, deliverable email addresses
+    const inbox = await createTestInbox(`e2e-${role}`);
+    return inbox.emailAddress;
+  } catch (error) {
+    // Fallback: Use a timestamp-based email that Clerk will accept
+    const timestamp = Date.now();
+    const random = Math.random().toString(36).substring(2, 8);
+    // Use mailslurp.dev domain which is typically whitelisted
+    return `e2e-${role}-${timestamp}-${random}@mailslurp.dev`;
+  }
 }
 
 /**
  * Create a test admin user in Clerk
+ * If user already exists with that email, return the existing user
  */
 export async function createTestAdmin(): Promise<{ id: string; email: string }> {
-  const cacheKey = 'admin';
-  if (testUserCache.has(cacheKey)) {
-    const cached = testUserCache.get(cacheKey)!;
-    return { id: cached.id, email: cached.email };
+  // Return cached user if exists
+  if (testSession.adminUser) {
+    return testSession.adminUser;
   }
 
-  const { email, inboxId } = await generateTestEmail('test-admin');
+  const email = await generateTestEmail('admin');
   const clerkClient = getClerkClient();
 
   try {
+    // First check if user already exists
+    const existingUsers = await clerkClient.users.getUserList({
+      emailAddress: [email],
+    });
+
+    if (existingUsers.data.length > 0) {
+      const existingUser = existingUsers.data[0];
+      // Ensure admin role is set
+      await clerkClient.users.updateUser(existingUser.id, {
+        publicMetadata: {
+          ...existingUser.publicMetadata,
+          role: 'admin',
+        },
+      });
+      testSession.adminUser = { id: existingUser.id, email };
+      console.log(`Reusing existing admin (updated role): ${email}`);
+      return testSession.adminUser;
+    }
+
+    // Create new user
     const user = await clerkClient.users.createUser({
       emailAddress: [email],
       password: TEST_PASSWORD,
@@ -61,11 +102,23 @@ export async function createTestAdmin(): Promise<{ id: string; email: string }> 
       skipPasswordRequirement: true,
     });
 
-    const result = { id: user.id, email, inboxId };
-    testUserCache.set(cacheKey, result);
-    return { id: user.id, email };
+    createdUserIds.push(user.id);
+    testSession.adminUser = { id: user.id, email };
+    console.log(`Created test admin: ${email}`);
+    return testSession.adminUser;
   } catch (error: any) {
-    // Log the full error for debugging
+    // If error is "email taken", try to find and return existing user
+    if (error?.errors?.[0]?.code === 'form_identifier_exists') {
+      const existingUsers = await clerkClient.users.getUserList({
+        emailAddress: [email],
+      });
+      if (existingUsers.data.length > 0) {
+        const existingUser = existingUsers.data[0];
+        testSession.adminUser = { id: existingUser.id, email };
+        console.log(`Found existing admin after conflict: ${email}`);
+        return testSession.adminUser;
+      }
+    }
     console.error('Clerk createUser error:', error?.errors || error?.message || error);
     throw error;
   }
@@ -73,20 +126,41 @@ export async function createTestAdmin(): Promise<{ id: string; email: string }> 
 
 /**
  * Create a test publisher user in Clerk linked to a publisher
+ * If user already exists with that email, return the existing user
  */
 export async function createTestPublisher(
   publisherId: string
 ): Promise<{ id: string; email: string }> {
-  const cacheKey = `publisher-${publisherId}`;
-  if (testUserCache.has(cacheKey)) {
-    const cached = testUserCache.get(cacheKey)!;
-    return { id: cached.id, email: cached.email };
+  // Return cached user if exists and matches publisher
+  if (testSession.publisherUser && testSession.publisherUser.publisherId === publisherId) {
+    return { id: testSession.publisherUser.id, email: testSession.publisherUser.email };
   }
 
-  const { email, inboxId } = await generateTestEmail('test-publisher');
+  const email = await generateTestEmail('publisher');
   const clerkClient = getClerkClient();
 
   try {
+    // First check if user already exists
+    const existingUsers = await clerkClient.users.getUserList({
+      emailAddress: [email],
+    });
+
+    if (existingUsers.data.length > 0) {
+      const existingUser = existingUsers.data[0];
+      // Update metadata to include publisher access
+      await clerkClient.users.updateUser(existingUser.id, {
+        publicMetadata: {
+          ...existingUser.publicMetadata,
+          role: 'publisher',
+          publisher_access_list: [publisherId],
+        },
+      });
+      testSession.publisherUser = { id: existingUser.id, email, publisherId };
+      console.log(`Reusing existing publisher user: ${email}`);
+      return { id: existingUser.id, email };
+    }
+
+    // Create new user
     const user = await clerkClient.users.createUser({
       emailAddress: [email],
       password: TEST_PASSWORD,
@@ -98,10 +172,23 @@ export async function createTestPublisher(
       skipPasswordRequirement: true,
     });
 
-    const result = { id: user.id, email, inboxId };
-    testUserCache.set(cacheKey, result);
+    createdUserIds.push(user.id);
+    testSession.publisherUser = { id: user.id, email, publisherId };
+    console.log(`Created test publisher: ${email} for publisher ${publisherId}`);
     return { id: user.id, email };
   } catch (error: any) {
+    // If error is "email taken", try to find and return existing user
+    if (error?.errors?.[0]?.code === 'form_identifier_exists') {
+      const existingUsers = await clerkClient.users.getUserList({
+        emailAddress: [email],
+      });
+      if (existingUsers.data.length > 0) {
+        const existingUser = existingUsers.data[0];
+        testSession.publisherUser = { id: existingUser.id, email, publisherId };
+        console.log(`Found existing publisher after conflict: ${email}`);
+        return { id: existingUser.id, email };
+      }
+    }
     console.error('Clerk createUser error:', error?.errors || error?.message || error);
     throw error;
   }
@@ -109,18 +196,38 @@ export async function createTestPublisher(
 
 /**
  * Create a test regular user in Clerk (no special roles)
+ * If user already exists with that email, return the existing user
  */
 export async function createTestUser(): Promise<{ id: string; email: string }> {
-  const cacheKey = 'user';
-  if (testUserCache.has(cacheKey)) {
-    const cached = testUserCache.get(cacheKey)!;
-    return { id: cached.id, email: cached.email };
+  // Return cached user if exists
+  if (testSession.regularUser) {
+    return testSession.regularUser;
   }
 
-  const { email, inboxId } = await generateTestEmail('test-user');
+  const email = await generateTestEmail('user');
   const clerkClient = getClerkClient();
 
   try {
+    // First check if user already exists
+    const existingUsers = await clerkClient.users.getUserList({
+      emailAddress: [email],
+    });
+
+    if (existingUsers.data.length > 0) {
+      const existingUser = existingUsers.data[0];
+      // Ensure user role is set
+      await clerkClient.users.updateUser(existingUser.id, {
+        publicMetadata: {
+          ...existingUser.publicMetadata,
+          role: 'user',
+        },
+      });
+      testSession.regularUser = { id: existingUser.id, email };
+      console.log(`Reusing existing user (updated role): ${email}`);
+      return testSession.regularUser;
+    }
+
+    // Create new user
     const user = await clerkClient.users.createUser({
       emailAddress: [email],
       password: TEST_PASSWORD,
@@ -131,10 +238,23 @@ export async function createTestUser(): Promise<{ id: string; email: string }> {
       skipPasswordRequirement: true,
     });
 
-    const result = { id: user.id, email, inboxId };
-    testUserCache.set(cacheKey, result);
-    return { id: user.id, email };
+    createdUserIds.push(user.id);
+    testSession.regularUser = { id: user.id, email };
+    console.log(`Created test user: ${email}`);
+    return testSession.regularUser;
   } catch (error: any) {
+    // If error is "email taken", try to find and return existing user
+    if (error?.errors?.[0]?.code === 'form_identifier_exists') {
+      const existingUsers = await clerkClient.users.getUserList({
+        emailAddress: [email],
+      });
+      if (existingUsers.data.length > 0) {
+        const existingUser = existingUsers.data[0];
+        testSession.regularUser = { id: existingUser.id, email };
+        console.log(`Found existing user after conflict: ${email}`);
+        return testSession.regularUser;
+      }
+    }
     console.error('Clerk createUser error:', error?.errors || error?.message || error);
     throw error;
   }
@@ -152,25 +272,24 @@ async function performClerkSignIn(page: Page, email: string): Promise<void> {
   await page.waitForLoadState('domcontentloaded');
 
   // Setup testing token to bypass bot detection
-  // This must be done after navigating to the page
   try {
     await setupClerkTestingToken({ page });
   } catch (error: any) {
     console.warn('Warning: setupClerkTestingToken failed:', error?.message);
-    // Continue anyway - the global setup may have already set it up
   }
 
-  // Wait for Clerk to be loaded
-  await page.waitForFunction(() => {
-    return typeof (window as any).Clerk !== 'undefined';
-  }, { timeout: 30000 });
+  // Wait for Clerk to be loaded with extended timeout
+  await page.waitForFunction(
+    () => typeof (window as any).Clerk !== 'undefined',
+    { timeout: 60000 }
+  );
 
-  await page.waitForFunction(() => {
-    return (window as any).Clerk?.loaded === true;
-  }, { timeout: 30000 });
+  await page.waitForFunction(
+    () => (window as any).Clerk?.loaded === true,
+    { timeout: 60000 }
+  );
 
   // Sign in using the email address
-  // The @clerk/testing package handles creating a sign-in token internally
   try {
     await clerk.signIn({
       page,
@@ -189,19 +308,18 @@ async function performClerkSignIn(page: Page, email: string): Promise<void> {
     });
   }
 
-  // Wait for authentication to complete
-  await page.waitForFunction(() => {
-    return (window as any).Clerk?.user !== null;
-  }, { timeout: 30000 });
+  // Wait for authentication to complete with extended timeout
+  await page.waitForFunction(
+    () => (window as any).Clerk?.user !== null,
+    { timeout: 60000 }
+  );
 
   // Give the app a moment to update state
-  await page.waitForTimeout(1000);
+  await page.waitForTimeout(2000);
 }
 
 /**
  * Inject admin authentication into a Playwright page
- *
- * Strategy: Use @clerk/testing for reliable programmatic authentication
  */
 export async function loginAsAdmin(page: Page): Promise<void> {
   const user = await createTestAdmin();
@@ -210,12 +328,18 @@ export async function loginAsAdmin(page: Page): Promise<void> {
 
 /**
  * Inject publisher authentication into a Playwright page
+ * Also links the Clerk user to the publisher in the database
  */
 export async function loginAsPublisher(
   page: Page,
   publisherId: string
 ): Promise<void> {
   const user = await createTestPublisher(publisherId);
+
+  // Link the Clerk user to the publisher in the database
+  // This is necessary for the app to know which publisher this user owns
+  await linkClerkUserToPublisher(user.id, publisherId);
+
   await performClerkSignIn(page, user.email);
 }
 
@@ -234,7 +358,6 @@ export async function logout(page: Page): Promise<void> {
   try {
     await clerk.signOut({ page });
   } catch (error) {
-    // If clerk.signOut fails, navigate to sign-out URL
     const baseUrl = process.env.BASE_URL || 'http://localhost:3001';
     await page.goto(`${baseUrl}/sign-out`);
   }
@@ -249,61 +372,73 @@ export async function cleanupTestUsers(): Promise<void> {
 
   const clerkClient = getClerkClient();
 
-  // Test email domains to identify test users
-  const testDomains = [
-    '@mailslurp.xyz',
-    '@mailslurp.world',
-    '@mailslurp.com',
-    '@tempsmtp.com',
-    '@test-zmanim.example.com', // Old test domain
-    '@zmanim-e2e-test.com', // Another old test domain
-    '@clerk.test', // Another old test domain
-  ];
+  // First, delete users we explicitly created in this session
+  for (const userId of createdUserIds) {
+    try {
+      await clerkClient.users.deleteUser(userId);
+      console.log(`Deleted session user: ${userId}`);
+    } catch (error: any) {
+      // User may already be deleted
+      if (!error?.message?.includes('not found')) {
+        console.warn(`Failed to delete user ${userId}:`, error?.message);
+      }
+    }
+  }
 
-  // Get all users (paginated)
+  // Also clean up any orphaned test users (from previous failed runs)
+  const testDomains = ['@clerk.test', '@mailslurp.xyz', '@mailslurp.world', '@tempsmtp.com', '@mailslurp.info'];
   let offset = 0;
   const limit = 100;
   let hasMore = true;
   let deletedCount = 0;
 
   while (hasMore) {
-    const response = await clerkClient.users.getUserList({
-      limit,
-      offset,
-    });
+    try {
+      const response = await clerkClient.users.getUserList({ limit, offset });
 
-    // Filter for test users using test domains
-    const testUsers = response.data.filter((user) =>
-      user.emailAddresses.some((email) =>
-        testDomains.some((domain) => email.emailAddress.endsWith(domain))
-      )
-    );
+      const testUsers = response.data.filter((user) =>
+        user.emailAddresses.some((email) =>
+          testDomains.some((domain) => email.emailAddress.endsWith(domain)) ||
+          email.emailAddress.startsWith('e2e-')
+        )
+      );
 
-    for (const user of testUsers) {
-      try {
-        await clerkClient.users.deleteUser(user.id);
-        deletedCount++;
-        const userEmail = user.emailAddresses[0]?.emailAddress || user.id;
-        console.log(`Deleted test user: ${userEmail}`);
-      } catch (error) {
-        console.error(`Failed to delete user ${user.id}:`, error);
+      for (const user of testUsers) {
+        if (!createdUserIds.includes(user.id)) {
+          try {
+            await clerkClient.users.deleteUser(user.id);
+            deletedCount++;
+            console.log(`Deleted orphaned test user: ${user.emailAddresses[0]?.emailAddress}`);
+          } catch {
+            // Ignore errors for orphaned users
+          }
+        }
       }
-    }
 
-    hasMore = response.data.length === limit;
-    offset += limit;
+      hasMore = response.data.length === limit;
+      offset += limit;
+    } catch (error) {
+      console.warn('Error listing users for cleanup:', error);
+      break;
+    }
   }
 
-  // Clear the cache
-  testUserCache.clear();
-  console.log(`Test user cleanup complete. Deleted ${deletedCount} test users.`);
+  // Clear session
+  testSession.adminUser = null;
+  testSession.publisherUser = null;
+  testSession.regularUser = null;
+  createdUserIds.length = 0;
+
+  console.log(`Test user cleanup complete. Deleted ${deletedCount} orphaned users.`);
 }
 
 /**
  * Clear the test user cache (useful between test files)
  */
 export function clearUserCache(): void {
-  testUserCache.clear();
+  testSession.adminUser = null;
+  testSession.publisherUser = null;
+  testSession.regularUser = null;
 }
 
 /**
@@ -314,8 +449,8 @@ export function getTestPassword(): string {
 }
 
 /**
- * Get the test email domains (MailSlurp uses multiple domains)
+ * Get the test email domain
  */
-export function getTestEmailDomains(): string[] {
-  return ['mailslurp.xyz', 'mailslurp.world', 'mailslurp.com', 'tempsmtp.com'];
+export function getTestEmailDomain(): string {
+  return 'clerk.test';
 }

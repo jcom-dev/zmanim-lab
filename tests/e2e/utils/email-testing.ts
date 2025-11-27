@@ -31,6 +31,10 @@ function getMailSlurp(): MailSlurp {
 /**
  * Create a test inbox for receiving emails
  * Returns a real email address that can receive emails
+ *
+ * NOTE: To avoid exceeding free tier limits (30 inboxes/month), this function
+ * reuses existing inboxes. It first checks cache, then looks for existing
+ * inboxes by name, then reuses any available inbox.
  */
 export async function createTestInbox(
   name?: string
@@ -41,7 +45,46 @@ export async function createTestInbox(
     return inboxCache.get(cacheKey)!;
   }
 
-  const inbox = await getMailSlurp().inboxController.createInboxWithDefaults();
+  // Get all existing inboxes
+  const existingInboxes = await getMailSlurp().inboxController.getInboxes({});
+
+  // Try to find an existing inbox with this name first
+  let existingInbox = existingInboxes.find(
+    (inbox) => inbox.name === cacheKey || inbox.name === `e2e-${cacheKey}`
+  );
+
+  // If no named inbox found, reuse any available inbox not already in cache
+  if (!existingInbox && existingInboxes.length > 0) {
+    const usedInboxIds = new Set([...inboxCache.values()].map((i) => i.id));
+    existingInbox = existingInboxes.find((inbox) => !usedInboxIds.has(inbox.id));
+  }
+
+  if (existingInbox) {
+    const result = {
+      id: existingInbox.id,
+      emailAddress: existingInbox.emailAddress!,
+    };
+    inboxCache.set(cacheKey, result);
+    console.log(`Reusing existing inbox for "${cacheKey}": ${result.emailAddress}`);
+
+    // Clear any old emails in this inbox to start fresh
+    try {
+      await getMailSlurp().inboxController.deleteAllInboxEmails({ inboxId: existingInbox.id });
+    } catch {
+      // Ignore cleanup errors
+    }
+
+    return result;
+  }
+
+  // Only create new inbox if absolutely no inboxes exist (shouldn't happen with free tier)
+  console.log(`Creating new inbox for "${cacheKey}"...`);
+  const inbox = await getMailSlurp().inboxController.createInbox({
+    createInboxDto: {
+      name: `e2e-${cacheKey}`,
+      description: 'E2E test inbox - reusable',
+    },
+  });
 
   const result = {
     id: inbox.id,
@@ -56,13 +99,53 @@ export async function createTestInbox(
 
 /**
  * Create a named test inbox (useful for specific test scenarios)
+ * Reuses existing inbox with same name if available, or any available inbox.
  */
 export async function createNamedInbox(
   name: string
 ): Promise<{ id: string; emailAddress: string }> {
+  // Check cache first
+  if (inboxCache.has(name)) {
+    return inboxCache.get(name)!;
+  }
+
+  // Get all existing inboxes
+  const existingInboxes = await getMailSlurp().inboxController.getInboxes({});
+
+  // Try to find existing inbox with this name
+  let existingInbox = existingInboxes.find(
+    (inbox) => inbox.name === name || inbox.name === `e2e-${name}`
+  );
+
+  // If no named inbox found, reuse any available inbox not already in cache
+  if (!existingInbox && existingInboxes.length > 0) {
+    const usedInboxIds = new Set([...inboxCache.values()].map((i) => i.id));
+    existingInbox = existingInboxes.find((inbox) => !usedInboxIds.has(inbox.id));
+  }
+
+  if (existingInbox) {
+    const result = {
+      id: existingInbox.id,
+      emailAddress: existingInbox.emailAddress!,
+    };
+    inboxCache.set(name, result);
+    console.log(`Reusing inbox for "${name}": ${result.emailAddress}`);
+
+    // Clear any old emails
+    try {
+      await getMailSlurp().inboxController.deleteAllInboxEmails({ inboxId: existingInbox.id });
+    } catch {
+      // Ignore cleanup errors
+    }
+
+    return result;
+  }
+
+  // Create new inbox only if none exists (should rarely happen)
+  console.log(`Creating new inbox for "${name}"...`);
   const inbox = await getMailSlurp().inboxController.createInbox({
     createInboxDto: {
-      name,
+      name: `e2e-${name}`,
       description: `Test inbox for: ${name}`,
     },
   });
@@ -301,17 +384,20 @@ export async function deleteInbox(inboxId: string): Promise<void> {
 }
 
 /**
- * Delete all test inboxes (cleanup)
+ * Clean up test inboxes
+ * NOTE: We clear emails but DON'T delete inboxes to avoid exceeding
+ * free tier inbox creation limits (30/month).
  */
 export async function cleanupAllInboxes(): Promise<void> {
-  console.log('Cleaning up test email inboxes...');
+  console.log('Cleaning up test email inboxes (clearing emails, preserving inboxes)...');
 
   for (const [name, inbox] of inboxCache.entries()) {
     try {
-      await getMailSlurp().inboxController.deleteInbox({ inboxId: inbox.id });
-      console.log(`Deleted inbox: ${name} (${inbox.emailAddress})`);
+      // Clear emails instead of deleting inbox
+      await getMailSlurp().inboxController.deleteAllInboxEmails({ inboxId: inbox.id });
+      console.log(`Cleared emails in inbox: ${name} (${inbox.emailAddress})`);
     } catch (error) {
-      console.warn(`Failed to delete inbox ${name}:`, error);
+      console.warn(`Failed to clear inbox ${name}:`, error);
     }
   }
 

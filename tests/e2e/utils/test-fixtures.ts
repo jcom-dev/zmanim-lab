@@ -3,15 +3,32 @@
  *
  * Provides utilities to create test data in the database
  * for E2E testing scenarios.
+ *
+ * Uses native PostgreSQL client (pg) instead of Supabase.
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { Pool, PoolClient } from 'pg';
 
-// Initialize Supabase client with service role key for admin access
-const supabase = createClient(
-  process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_KEY!
-);
+// Lazy initialization of pool - only created when needed
+let pool: Pool | null = null;
+
+function getPool(): Pool {
+  if (!pool) {
+    const databaseUrl = process.env.DATABASE_URL;
+    if (!databaseUrl) {
+      throw new Error('DATABASE_URL is required for test fixtures');
+    }
+    pool = new Pool({ connectionString: databaseUrl });
+  }
+  return pool;
+}
+
+/**
+ * Check if database is configured
+ */
+export function isDatabaseConfigured(): boolean {
+  return !!process.env.DATABASE_URL;
+}
 
 // Test data prefix - used to identify and cleanup test data
 const TEST_PREFIX = 'TEST_';
@@ -39,6 +56,10 @@ export async function createTestPublisherEntity(
   email: string;
   status: string;
 }> {
+  if (!isDatabaseConfigured()) {
+    throw new Error('Database not configured - cannot create test publisher');
+  }
+
   const cacheKey = 'publisher-entity';
   if (testEntityCache.has(cacheKey) && !Object.keys(overrides).length) {
     return testEntityCache.get(cacheKey);
@@ -47,31 +68,42 @@ export async function createTestPublisherEntity(
   const timestamp = Date.now();
   const random = Math.random().toString(36).substring(2, 8);
   const testPublisher = {
-    name: `${TEST_PREFIX}Publisher ${timestamp}`,
-    organization: `${TEST_PREFIX}Organization`,
-    email: `test-publisher-${timestamp}@${TEST_EMAIL_DOMAIN}`,
+    name: overrides.name || `${TEST_PREFIX}Publisher ${timestamp}`,
+    organization: overrides.organization || `${TEST_PREFIX}Organization`,
+    email: overrides.email || `test-publisher-${timestamp}@${TEST_EMAIL_DOMAIN}`,
     slug: `test-publisher-${timestamp}-${random}`,
-    status: 'verified',
-    website: 'https://test.example.com',
-    bio: 'Test publisher for E2E testing',
-    ...overrides,
+    status: overrides.status || 'verified',
+    website: overrides.website || 'https://test.example.com',
+    bio: overrides.bio || 'Test publisher for E2E testing',
   };
 
-  const { data, error } = await supabase
-    .from('publishers')
-    .insert(testPublisher)
-    .select()
-    .single();
+  const client = await getPool().connect();
+  try {
+    const result = await client.query(
+      `INSERT INTO publishers (name, organization, email, slug, status, website, bio)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING id, name, organization, email, status`,
+      [
+        testPublisher.name,
+        testPublisher.organization,
+        testPublisher.email,
+        testPublisher.slug,
+        testPublisher.status,
+        testPublisher.website,
+        testPublisher.bio,
+      ]
+    );
 
-  if (error) {
-    throw new Error(`Failed to create test publisher: ${error.message}`);
+    const data = result.rows[0];
+
+    if (!Object.keys(overrides).length) {
+      testEntityCache.set(cacheKey, data);
+    }
+
+    return data;
+  } finally {
+    client.release();
   }
-
-  if (!Object.keys(overrides).length) {
-    testEntityCache.set(cacheKey, data);
-  }
-
-  return data;
 }
 
 /**
@@ -91,66 +123,83 @@ export async function createTestAlgorithm(
   status: string;
   config: object;
 }> {
+  if (!isDatabaseConfigured()) {
+    throw new Error('Database not configured - cannot create test algorithm');
+  }
+
   const cacheKey = `algorithm-${publisherId}`;
   if (testEntityCache.has(cacheKey) && !Object.keys(overrides).length) {
     return testEntityCache.get(cacheKey);
   }
 
-  const testAlgorithm = {
-    publisher_id: publisherId,
-    name: `${TEST_PREFIX}Algorithm`,
-    status: 'published',
-    config: {
-      name: 'Test GRA Algorithm',
-      description: 'Test algorithm for E2E testing',
-      zmanim: {
-        alos: { method: 'solar_angle', params: { degrees: 16.1 } },
-        misheyakir: { method: 'solar_angle', params: { degrees: 11.5 } },
-        sunrise: { method: 'sunrise', params: {} },
-        sof_zman_shma_gra: {
-          method: 'proportional',
-          params: { hours: 3, base: 'gra' },
-        },
-        sof_zman_tefillah_gra: {
-          method: 'proportional',
-          params: { hours: 4, base: 'gra' },
-        },
-        chatzos: { method: 'midday', params: {} },
-        mincha_gedola: {
-          method: 'proportional',
-          params: { hours: 6.5, base: 'gra' },
-        },
-        mincha_ketana: {
-          method: 'proportional',
-          params: { hours: 9.5, base: 'gra' },
-        },
-        plag_hamincha: {
-          method: 'proportional',
-          params: { hours: 10.75, base: 'gra' },
-        },
-        sunset: { method: 'sunset', params: {} },
-        tzeis: { method: 'solar_angle', params: { degrees: 8.5 } },
-        tzeis_rt: { method: 'fixed_minutes', params: { minutes: 72 } },
+  const defaultConfig = {
+    name: 'Test GRA Algorithm',
+    description: 'Test algorithm for E2E testing',
+    zmanim: {
+      alos: { method: 'solar_angle', params: { degrees: 16.1 } },
+      misheyakir: { method: 'solar_angle', params: { degrees: 11.5 } },
+      sunrise: { method: 'sunrise', params: {} },
+      sof_zman_shma_gra: {
+        method: 'proportional',
+        params: { hours: 3, base: 'gra' },
       },
+      sof_zman_tefillah_gra: {
+        method: 'proportional',
+        params: { hours: 4, base: 'gra' },
+      },
+      chatzos: { method: 'midday', params: {} },
+      mincha_gedola: {
+        method: 'proportional',
+        params: { hours: 6.5, base: 'gra' },
+      },
+      mincha_ketana: {
+        method: 'proportional',
+        params: { hours: 9.5, base: 'gra' },
+      },
+      plag_hamincha: {
+        method: 'proportional',
+        params: { hours: 10.75, base: 'gra' },
+      },
+      sunset: { method: 'sunset', params: {} },
+      tzeis: { method: 'solar_angle', params: { degrees: 8.5 } },
+      tzeis_rt: { method: 'fixed_minutes', params: { minutes: 72 } },
     },
-    ...overrides,
   };
 
-  const { data, error } = await supabase
-    .from('algorithms')
-    .insert(testAlgorithm)
-    .select()
-    .single();
+  const testAlgorithm = {
+    publisher_id: publisherId,
+    name: overrides.name || `${TEST_PREFIX}Algorithm`,
+    status: overrides.status || 'published',
+    config: overrides.config || defaultConfig,
+  };
 
-  if (error) {
-    throw new Error(`Failed to create test algorithm: ${error.message}`);
+  const client = await getPool().connect();
+  try {
+    const result = await client.query(
+      `INSERT INTO algorithms (publisher_id, name, status, config, version, formula_definition, calculation_type)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING id, publisher_id, name, status, config`,
+      [
+        testAlgorithm.publisher_id,
+        testAlgorithm.name,
+        testAlgorithm.status,
+        JSON.stringify(testAlgorithm.config),
+        1, // version
+        JSON.stringify(testAlgorithm.config), // formula_definition
+        'proportional', // calculation_type (valid: solar_depression, fixed_minutes, proportional, custom)
+      ]
+    );
+
+    const data = result.rows[0];
+
+    if (!Object.keys(overrides).length) {
+      testEntityCache.set(cacheKey, data);
+    }
+
+    return data;
+  } finally {
+    client.release();
   }
-
-  if (!Object.keys(overrides).length) {
-    testEntityCache.set(cacheKey, data);
-  }
-
-  return data;
 }
 
 /**
@@ -172,6 +221,10 @@ export async function createTestCoverage(
   priority: number;
   is_active: boolean;
 }> {
+  if (!isDatabaseConfigured()) {
+    throw new Error('Database not configured - cannot create test coverage');
+  }
+
   const cacheKey = `coverage-${publisherId}-${cityId}`;
   if (testEntityCache.has(cacheKey) && !Object.keys(overrides).length) {
     return testEntityCache.get(cacheKey);
@@ -180,27 +233,36 @@ export async function createTestCoverage(
   const testCoverage = {
     publisher_id: publisherId,
     city_id: cityId,
-    level: 'city',
-    priority: 5,
-    is_active: true,
-    ...overrides,
+    level: overrides.level || 'city',
+    priority: overrides.priority ?? 5,
+    is_active: overrides.is_active ?? true,
   };
 
-  const { data, error } = await supabase
-    .from('publisher_coverage')
-    .insert(testCoverage)
-    .select()
-    .single();
+  const client = await getPool().connect();
+  try {
+    const result = await client.query(
+      `INSERT INTO publisher_coverage (publisher_id, city_id, level, priority, is_active)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, publisher_id, city_id, level, priority, is_active`,
+      [
+        testCoverage.publisher_id,
+        testCoverage.city_id,
+        testCoverage.level,
+        testCoverage.priority,
+        testCoverage.is_active,
+      ]
+    );
 
-  if (error) {
-    throw new Error(`Failed to create test coverage: ${error.message}`);
+    const data = result.rows[0];
+
+    if (!Object.keys(overrides).length) {
+      testEntityCache.set(cacheKey, data);
+    }
+
+    return data;
+  } finally {
+    client.release();
   }
-
-  if (!Object.keys(overrides).length) {
-    testEntityCache.set(cacheKey, data);
-  }
-
-  return data;
 }
 
 /**
@@ -210,20 +272,58 @@ export async function createTestCoverage(
 export async function getTestCity(
   name?: string
 ): Promise<{ id: string; name: string; country: string } | null> {
-  let query = supabase.from('cities').select('id, name, country').limit(1);
-
-  if (name) {
-    query = query.ilike('name', `%${name}%`);
-  }
-
-  const { data, error } = await query.single();
-
-  if (error) {
-    console.warn(`Could not find test city: ${error.message}`);
+  if (!isDatabaseConfigured()) {
+    console.warn('Database not configured - cannot get test city');
     return null;
   }
 
-  return data;
+  const client = await getPool().connect();
+  try {
+    let result;
+    if (name) {
+      result = await client.query(
+        `SELECT id, name, country FROM cities WHERE name ILIKE $1 LIMIT 1`,
+        [`%${name}%`]
+      );
+    } else {
+      result = await client.query(
+        `SELECT id, name, country FROM cities LIMIT 1`
+      );
+    }
+
+    if (result.rows.length === 0) {
+      console.warn(`Could not find test city${name ? ` matching "${name}"` : ''}`);
+      return null;
+    }
+
+    return result.rows[0];
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Link a Clerk user ID to a publisher in the database
+ */
+export async function linkClerkUserToPublisher(
+  clerkUserId: string,
+  publisherId: string
+): Promise<void> {
+  if (!isDatabaseConfigured()) {
+    console.warn('Database not configured - cannot link user to publisher');
+    return;
+  }
+
+  const client = await getPool().connect();
+  try {
+    await client.query(
+      `UPDATE publishers SET clerk_user_id = $1 WHERE id = $2`,
+      [clerkUserId, publisherId]
+    );
+    console.log(`Linked Clerk user ${clerkUserId} to publisher ${publisherId}`);
+  } finally {
+    client.release();
+  }
 }
 
 /**
@@ -255,58 +355,48 @@ export async function createFullTestPublisher(): Promise<{
  * Call this in global teardown
  */
 export async function cleanupTestData(): Promise<void> {
+  if (!isDatabaseConfigured()) {
+    console.log('Database not configured - skipping test data cleanup');
+    return;
+  }
+
   console.log('Cleaning up test data from database...');
 
+  const client = await getPool().connect();
   try {
     // First, get all test publisher IDs
-    const { data: testPublishers } = await supabase
-      .from('publishers')
-      .select('id')
-      .or(`name.ilike.${TEST_PREFIX}%,email.ilike.%@${TEST_EMAIL_DOMAIN}`);
+    const publisherResult = await client.query(
+      `SELECT id FROM publishers WHERE name LIKE $1 OR email LIKE $2`,
+      [`${TEST_PREFIX}%`, `%@${TEST_EMAIL_DOMAIN}`]
+    );
 
-    const publisherIds = testPublishers?.map((p) => p.id) || [];
+    const publisherIds = publisherResult.rows.map((p) => p.id);
 
     if (publisherIds.length > 0) {
       // Delete test algorithms for these publishers
-      const { error: algoError } = await supabase
-        .from('algorithms')
-        .delete()
-        .in('publisher_id', publisherIds);
-
-      if (algoError) {
-        console.warn(`Error cleaning algorithms: ${algoError.message}`);
-      }
+      await client.query(
+        `DELETE FROM algorithms WHERE publisher_id = ANY($1)`,
+        [publisherIds]
+      );
 
       // Delete test coverage for these publishers
-      const { error: coverageError } = await supabase
-        .from('publisher_coverage')
-        .delete()
-        .in('publisher_id', publisherIds);
-
-      if (coverageError) {
-        console.warn(`Error cleaning coverage: ${coverageError.message}`);
-      }
+      await client.query(
+        `DELETE FROM publisher_coverage WHERE publisher_id = ANY($1)`,
+        [publisherIds]
+      );
 
       // Delete test publishers
-      const { error: pubError } = await supabase
-        .from('publishers')
-        .delete()
-        .in('id', publisherIds);
-
-      if (pubError) {
-        console.warn(`Error cleaning publishers: ${pubError.message}`);
-      }
+      await client.query(
+        `DELETE FROM publishers WHERE id = ANY($1)`,
+        [publisherIds]
+      );
     }
 
     // Also try to delete by name pattern directly (in case some were missed)
-    const { error: nameError } = await supabase
-      .from('publishers')
-      .delete()
-      .ilike('name', `${TEST_PREFIX}%`);
-
-    if (nameError) {
-      console.warn(`Error cleaning publishers by name: ${nameError.message}`);
-    }
+    await client.query(
+      `DELETE FROM publishers WHERE name LIKE $1`,
+      [`${TEST_PREFIX}%`]
+    );
 
     // Clear the cache
     testEntityCache.clear();
@@ -314,6 +404,8 @@ export async function cleanupTestData(): Promise<void> {
     console.log('Test data cleanup complete');
   } catch (error) {
     console.error('Error during test data cleanup:', error);
+  } finally {
+    client.release();
   }
 }
 
@@ -329,4 +421,14 @@ export function clearEntityCache(): void {
  */
 export function getTestPrefix(): string {
   return TEST_PREFIX;
+}
+
+/**
+ * Close the database pool (call in global teardown)
+ */
+export async function closePool(): Promise<void> {
+  if (pool) {
+    await pool.end();
+    pool = null;
+  }
 }
