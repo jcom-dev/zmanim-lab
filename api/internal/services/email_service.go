@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"strings"
 	"text/template"
 )
 
@@ -104,12 +105,22 @@ func (s *EmailService) SendInvitation(to, inviterName, publisherName, acceptURL 
 func (s *EmailService) SendPublisherApproved(to, publisherName, dashboardURL string) error {
 	subject := "Welcome to Zmanim Lab - Your Publisher Account is Ready!"
 
-	data := map[string]string{
+	// Check if it's a Gmail address
+	isGmail := strings.HasSuffix(strings.ToLower(to), "@gmail.com") ||
+		strings.HasSuffix(strings.ToLower(to), "@googlemail.com")
+
+	// Build sign-in URL from dashboard URL
+	signInURL := strings.Replace(dashboardURL, "/publisher/dashboard", "/sign-in", 1)
+
+	data := map[string]interface{}{
 		"publisher_name": publisherName,
 		"dashboard_url":  dashboardURL,
+		"sign_in_url":    signInURL,
+		"email":          to,
+		"is_gmail":       isGmail,
 	}
 
-	html := s.renderTemplate(TemplatePublisherApproved, data)
+	html := s.renderTemplateInterface(TemplatePublisherApproved, data)
 	return s.send(to, subject, html, []EmailTag{{Name: "template", Value: string(TemplatePublisherApproved)}})
 }
 
@@ -274,37 +285,6 @@ func (s *EmailService) renderTemplate(templateType EmailTemplate, data map[strin
         <p style="color: #718096; font-size: 14px;">This invitation will expire in 7 days.</p>
         <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;">
         <p style="color: #718096; font-size: 12px;">If you didn't expect this invitation, you can safely ignore this email.</p>
-    </div>
-</body>
-</html>`,
-
-		TemplatePublisherApproved: `
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Welcome to Zmanim Lab</title>
-</head>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-    <div style="background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 100%); padding: 30px; border-radius: 10px 10px 0 0;">
-        <h1 style="color: white; margin: 0; font-size: 24px;">Zmanim Lab</h1>
-    </div>
-    <div style="background: #ffffff; padding: 30px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 10px 10px;">
-        <h2 style="color: #1e3a5f; margin-top: 0;">Welcome, {{.publisher_name}}!</h2>
-        <p>Great news! Your publisher application has been <strong style="color: #38a169;">approved</strong>.</p>
-        <p>You can now:</p>
-        <ul style="color: #4a5568;">
-            <li>Set up your calculation algorithms</li>
-            <li>Define your coverage areas</li>
-            <li>Invite team members to help manage your account</li>
-            <li>Publish your zmanim for your community</li>
-        </ul>
-        <div style="text-align: center; margin: 30px 0;">
-            <a href="{{.dashboard_url}}" style="background: #1e3a5f; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 600;">Go to Dashboard</a>
-        </div>
-        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;">
-        <p style="color: #718096; font-size: 12px;">Thank you for joining Zmanim Lab!</p>
     </div>
 </body>
 </html>`,
@@ -525,4 +505,86 @@ func (s *EmailService) renderTemplate(templateType EmailTemplate, data map[strin
 	}
 
 	return buf.String()
+}
+
+// renderTemplateInterface renders an email template with interface{} data (supports booleans, etc.)
+func (s *EmailService) renderTemplateInterface(templateType EmailTemplate, data map[string]interface{}) string {
+	// Get the template from the same templates map
+	templates := s.getTemplates()
+
+	templateStr, ok := templates[templateType]
+	if !ok {
+		slog.Warn("unknown email template", "template", templateType)
+		return fmt.Sprintf("<html><body><p>Template: %s</p></body></html>", templateType)
+	}
+
+	tmpl, err := template.New("email").Parse(templateStr)
+	if err != nil {
+		slog.Error("failed to parse email template", "error", err, "template", templateType)
+		return templateStr
+	}
+
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		slog.Error("failed to execute email template", "error", err, "template", templateType)
+		return templateStr
+	}
+
+	return buf.String()
+}
+
+// getTemplates returns the email templates map
+func (s *EmailService) getTemplates() map[EmailTemplate]string {
+	return map[EmailTemplate]string{
+		TemplatePublisherApproved: `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome to Zmanim Lab</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+    <div style="background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 100%); padding: 30px; border-radius: 10px 10px 0 0;">
+        <h1 style="color: white; margin: 0; font-size: 24px;">Zmanim Lab</h1>
+    </div>
+    <div style="background: #ffffff; padding: 30px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 10px 10px;">
+        <h2 style="color: #1e3a5f; margin-top: 0;">Welcome, {{.publisher_name}}!</h2>
+        <p>Great news! Your publisher account has been created and is ready to use.</p>
+
+        <div style="background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; padding: 20px; margin: 20px 0;">
+            <h3 style="color: #0369a1; margin-top: 0; font-size: 16px;">How to Sign In</h3>
+            {{if .is_gmail}}
+            <p style="margin-bottom: 10px;"><strong style="color: #0369a1;">Recommended:</strong> Since you have a Gmail address, the easiest way to sign in is with Google:</p>
+            <ol style="color: #4a5568; margin: 0; padding-left: 20px;">
+                <li>Go to the sign-in page</li>
+                <li>Click "Continue with Google"</li>
+                <li>Select your Google account ({{.email}})</li>
+            </ol>
+            {{else}}
+            <p style="margin-bottom: 10px;">You can sign in using an email magic link:</p>
+            <ol style="color: #4a5568; margin: 0; padding-left: 20px;">
+                <li>Go to the sign-in page</li>
+                <li>Enter your email: <strong>{{.email}}</strong></li>
+                <li>Click the link sent to your email</li>
+            </ol>
+            {{end}}
+        </div>
+
+        <p>Once signed in, you can:</p>
+        <ul style="color: #4a5568;">
+            <li>Set up your calculation algorithms</li>
+            <li>Define your coverage areas</li>
+            <li>Invite team members to help manage your account</li>
+            <li>Publish your zmanim for your community</li>
+        </ul>
+        <div style="text-align: center; margin: 30px 0;">
+            <a href="{{.sign_in_url}}" style="background: #1e3a5f; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 600;">Sign In Now</a>
+        </div>
+        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;">
+        <p style="color: #718096; font-size: 12px;">Thank you for joining Zmanim Lab!</p>
+    </div>
+</body>
+</html>`,
+	}
 }
