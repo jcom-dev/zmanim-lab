@@ -180,7 +180,21 @@ else
     print_success "tmux already installed"
 fi
 
-# Step 10: Install Claude Code CLI
+# Step 10: Install Fly.io CLI
+print_status "Installing Fly.io CLI..."
+if ! command -v flyctl &> /dev/null; then
+    curl -L https://fly.io/install.sh | sh
+    # Add to PATH for current session
+    export FLYCTL_INSTALL="/home/coder/.fly"
+    export PATH="$FLYCTL_INSTALL/bin:$PATH"
+    echo 'export FLYCTL_INSTALL="/home/coder/.fly"' >> ~/.bashrc
+    echo 'export PATH="$FLYCTL_INSTALL/bin:$PATH"' >> ~/.bashrc
+    print_success "Fly.io CLI installed"
+else
+    print_success "Fly.io CLI already installed"
+fi
+
+# Step 11: Install Claude Code CLI
 print_status "Installing Claude Code..."
 if ! command -v claude &> /dev/null; then
     curl -fsSL https://claude.ai/install.sh | bash
@@ -192,12 +206,12 @@ else
     print_success "Claude Code already installed"
 fi
 
-# Step 11: Add claude alias to skip permissions
+# Step 12: Add claude alias to skip permissions
 print_status "Adding claude alias to skip permissions..."
 echo "alias claude='claude --dangerously-skip-permissions'" >> ~/.bashrc
 print_success "Claude alias added"
 
-# Step 12: Configure git user identity (with Coder variable overrides)
+# Step 13: Configure git user identity (with Coder variable overrides)
 print_status "Configuring git user identity..."
 GIT_USER_NAME="${GIT_USER_NAME:-Daniel Niasoff}"
 GIT_USER_EMAIL="${GIT_USER_EMAIL:-4070285+dniasoff@users.noreply.github.com}"
@@ -206,7 +220,7 @@ git config --global user.name "$GIT_USER_NAME"
 git config --global user.email "$GIT_USER_EMAIL"
 print_success "Git user configured: $GIT_USER_NAME <$GIT_USER_EMAIL>"
 
-# Step 13: Display status
+# Step 14: Display status
 echo ""
 echo "=========================================="
 echo "✅ Zmanim Lab Development Environment Ready!"
@@ -218,6 +232,7 @@ echo "  - Node.js $(node --version 2>/dev/null || echo 'not found')"
 echo "  - npm $(npm --version 2>/dev/null || echo 'not found')"
 echo "  - nano $(nano --version 2>/dev/null | head -n1 || echo 'not found')"
 echo "  - Claude Code $(claude --version 2>/dev/null || echo 'not found')"
+echo "  - Fly.io CLI $(flyctl version 2>/dev/null | head -n1 || echo 'not found')"
 echo "  - Supabase CLI (via npx supabase)"
 echo "  - Playwright (Chromium)"
 echo ""
@@ -254,7 +269,7 @@ echo "  - README: README.md"
 echo ""
 echo "=========================================="
 
-# Step 14: Auto-start services
+# Step 15: Auto-start services
 print_status "Starting services in background..."
 cd /home/coder/workspace/zmanim-lab
 if [ -f ".coder/start-services.sh" ]; then

@@ -48,7 +48,8 @@ export default function AdminPublishersPage() {
       }
 
       const data = await response.json();
-      setPublishers(data.publishers || []);
+      // API wraps response in {data: {publishers: [...]}, meta: {...}}
+      setPublishers(data.data?.publishers || data.publishers || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
