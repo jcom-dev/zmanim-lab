@@ -28,13 +28,14 @@ const (
 
 // Claims represents the JWT claims from Clerk
 type Claims struct {
-	Subject   string                 `json:"sub"`
-	Issuer    string                 `json:"iss"`
-	Audience  []string               `json:"aud"`
-	ExpiresAt int64                  `json:"exp"`
-	IssuedAt  int64                  `json:"iat"`
-	NotBefore int64                  `json:"nbf"`
-	Metadata  map[string]interface{} `json:"metadata"`
+	Subject        string                 `json:"sub"`
+	Issuer         string                 `json:"iss"`
+	Audience       []string               `json:"aud"`
+	ExpiresAt      int64                  `json:"exp"`
+	IssuedAt       int64                  `json:"iat"`
+	NotBefore      int64                  `json:"nbf"`
+	Metadata       map[string]interface{} `json:"metadata"`
+	PublicMetadata map[string]interface{} `json:"public_metadata"`
 }
 
 // JWK represents a JSON Web Key
@@ -79,6 +80,19 @@ func NewAuthMiddleware(jwksUrl, issuer string) *AuthMiddleware {
 	}
 }
 
+// getRoleFromClaims extracts the role from either Metadata or PublicMetadata
+func getRoleFromClaims(claims *Claims) string {
+	// Check Metadata first (legacy)
+	if role, ok := claims.Metadata["role"].(string); ok && role != "" {
+		return role
+	}
+	// Check PublicMetadata (Clerk standard)
+	if role, ok := claims.PublicMetadata["role"].(string); ok && role != "" {
+		return role
+	}
+	return ""
+}
+
 // RequireAuth returns a middleware that requires authentication
 func (am *AuthMiddleware) RequireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -91,7 +105,7 @@ func (am *AuthMiddleware) RequireAuth(next http.Handler) http.Handler {
 
 		// Add user info to context
 		ctx := context.WithValue(r.Context(), UserIDKey, claims.Subject)
-		if role, ok := claims.Metadata["role"].(string); ok {
+		if role := getRoleFromClaims(claims); role != "" {
 			ctx = context.WithValue(ctx, UserRoleKey, role)
 		}
 
@@ -110,8 +124,8 @@ func (am *AuthMiddleware) RequireRole(role string) func(http.Handler) http.Handl
 				return
 			}
 
-			// Check role in metadata
-			userRole, _ := claims.Metadata["role"].(string)
+			// Check role in metadata (supports both legacy metadata and public_metadata)
+			userRole := getRoleFromClaims(claims)
 			if userRole != role && userRole != "admin" { // admin has access to all roles
 				slog.Warn("insufficient permissions", "required", role, "actual", userRole, "user_id", claims.Subject)
 				respondAuthError(w, http.StatusForbidden, "FORBIDDEN", fmt.Sprintf("Role '%s' is required", role))
@@ -134,7 +148,7 @@ func (am *AuthMiddleware) OptionalAuth(next http.Handler) http.Handler {
 		if err == nil {
 			// Add user info to context
 			ctx := context.WithValue(r.Context(), UserIDKey, claims.Subject)
-			if role, ok := claims.Metadata["role"].(string); ok {
+			if role := getRoleFromClaims(claims); role != "" {
 				ctx = context.WithValue(ctx, UserRoleKey, role)
 			}
 			r = r.WithContext(ctx)
