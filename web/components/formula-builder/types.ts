@@ -1,6 +1,6 @@
 // Formula builder state and types
 
-export type MethodType = 'solar' | 'fixed' | 'proportional' | null;
+export type MethodType = 'solar' | 'fixed' | 'proportional' | 'fixed_zman' | null;
 export type SolarDirection = 'before_sunrise' | 'after_sunset';
 export type OffsetDirection = 'before' | 'after';
 export type ShaosBase = 'gra' | 'mga' | 'custom';
@@ -11,6 +11,9 @@ export interface FormulaBuilderState {
 
   // Selected method
   method: MethodType;
+
+  // Fixed zman selection
+  selectedFixedZman: string;
 
   // Solar angle parameters
   solarDegrees: number;
@@ -36,6 +39,7 @@ export interface FormulaBuilderState {
 export const initialState: FormulaBuilderState = {
   baseTime: 'sunrise',
   method: null,
+  selectedFixedZman: 'sunrise',
   solarDegrees: 16.1,
   solarDirection: 'before_sunrise',
   offsetMinutes: 72,
@@ -48,7 +52,25 @@ export const initialState: FormulaBuilderState = {
   isValid: true,
 };
 
-// Base time primitives organized by category
+// Fixed zmanim - pure astronomical events requiring no calculation parameters
+export const fixedZmanimOptions = [
+  {
+    label: 'Day',
+    options: [
+      { value: 'sunrise', label: 'Sunrise', description: 'Sun crosses horizon (morning)' },
+      { value: 'solar_noon', label: 'Solar Noon', description: 'Sun at highest point' },
+      { value: 'sunset', label: 'Sunset', description: 'Sun crosses horizon (evening)' },
+    ],
+  },
+  {
+    label: 'Night',
+    options: [
+      { value: 'midnight', label: 'Midnight', description: 'Solar midnight' },
+    ],
+  },
+];
+
+// Base time primitives organized by category (used in Fixed Offset method)
 export const baseTimeOptions = [
   {
     label: 'Dawn',
@@ -108,6 +130,9 @@ export function generateFormula(state: FormulaBuilderState): string {
         return `shaos(${state.shaosHours}, custom(@${state.customStart}, @${state.customEnd}))`;
       }
       return `shaos(${state.shaosHours}, ${state.shaosBase})`;
+
+    case 'fixed_zman':
+      return state.selectedFixedZman;
 
     default:
       return state.baseTime;

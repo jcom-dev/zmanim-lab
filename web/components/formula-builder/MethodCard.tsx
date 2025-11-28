@@ -1,6 +1,6 @@
 'use client';
 
-import { Sun, Clock, Scale } from 'lucide-react';
+import { Sun, Clock, Scale, Star } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { MethodType } from './types';
 
@@ -17,6 +17,7 @@ const methodIcons: Record<string, React.ReactNode> = {
   solar: <Sun className="h-6 w-6" />,
   fixed: <Clock className="h-6 w-6" />,
   proportional: <Scale className="h-6 w-6" />,
+  fixed_zman: <Star className="h-6 w-6" />,
 };
 
 export function MethodCard({

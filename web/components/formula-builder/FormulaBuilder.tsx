@@ -5,8 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Save, Code2, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-import { BaseTimeSelector } from './BaseTimeSelector';
 import { MethodCard } from './MethodCard';
+import { FixedZmanForm } from './methods/FixedZmanForm';
 import { SolarAngleForm } from './methods/SolarAngleForm';
 import { FixedOffsetForm } from './methods/FixedOffsetForm';
 import { ProportionalHoursForm } from './methods/ProportionalHoursForm';
@@ -62,6 +62,7 @@ export function FormulaBuilder({
   }, [
     state.baseTime,
     state.method,
+    state.selectedFixedZman,
     state.solarDegrees,
     state.solarDirection,
     state.offsetMinutes,
@@ -74,15 +75,15 @@ export function FormulaBuilder({
   ]);
 
   // Handlers
-  const handleBaseTimeChange = useCallback((value: string) => {
-    setState((prev) => ({ ...prev, baseTime: value }));
-  }, []);
-
   const handleMethodSelect = useCallback((method: MethodType) => {
     setState((prev) => ({
       ...prev,
       method: prev.method === method ? null : method,
     }));
+  }, []);
+
+  const handleFixedZmanChange = useCallback((value: string) => {
+    setState((prev) => ({ ...prev, selectedFixedZman: value }));
   }, []);
 
   const handleSolarDegreesChange = useCallback((value: number) => {
@@ -149,13 +150,23 @@ export function FormulaBuilder({
           </p>
         </div>
 
-        {/* Base Time Selection */}
-        <BaseTimeSelector value={state.baseTime} onChange={handleBaseTimeChange} />
-
         {/* Method Selection */}
         <div className="space-y-4">
           <label className="text-sm font-medium">Calculation Method</label>
           <div className="space-y-3">
+            <MethodCard
+              method="fixed_zman"
+              title="Fixed Zmanim"
+              description="Select standalone astronomical events (no parameters needed)"
+              selected={state.method === 'fixed_zman'}
+              onSelect={() => handleMethodSelect('fixed_zman')}
+            >
+              <FixedZmanForm
+                value={state.selectedFixedZman}
+                onChange={handleFixedZmanChange}
+              />
+            </MethodCard>
+
             <MethodCard
               method="solar"
               title="Solar Angle"
