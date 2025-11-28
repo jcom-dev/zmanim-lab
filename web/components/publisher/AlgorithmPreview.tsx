@@ -43,7 +43,7 @@ export function AlgorithmPreview({ configuration, getToken, location }: Algorith
   const [preview, setPreview] = useState<PreviewZman[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [date] = useState(() => new Date().toISOString().split('T')[0]);
+  const date = new Date().toISOString().split('T')[0];
 
   useEffect(() => {
     loadPreview();
@@ -139,15 +139,6 @@ export function AlgorithmPreview({ configuration, getToken, location }: Algorith
             ))}
           </div>
         )}
-
-        <div className="mt-4 pt-4 border-t border-border">
-          <p className="text-xs text-muted-foreground">
-            Date: {date}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            Location: {location.latitude.toFixed(4)}, {location.longitude.toFixed(4)}
-          </p>
-        </div>
       </CardContent>
     </Card>
   );

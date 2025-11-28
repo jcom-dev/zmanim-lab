@@ -1,8 +1,8 @@
 'use client';
 import { API_BASE } from '@/lib/api';
 
-import { useEffect, useState } from 'react';
-import { Clock, MapPin, Calendar, Loader2, AlertCircle } from 'lucide-react';
+import { useEffect, useState, useMemo } from 'react';
+import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface CalculationPreviewProps {
@@ -27,13 +27,24 @@ export function CalculationPreview({
   isValid,
   latitude = 40.7128,
   longitude = -74.006,
-  locationName = 'New York, NY',
-  date = new Date(),
+  date,
   className,
 }: CalculationPreviewProps) {
   const [result, setResult] = useState<PreviewResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Stabilize date to prevent re-render loops when no date prop is passed
+  const stableDate = useMemo(() => {
+    if (date) return date;
+    return new Date();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only create once on mount
+
+  const dateString = useMemo(() => {
+    const d = date || stableDate;
+    return d.toISOString().split('T')[0];
+  }, [date, stableDate]);
 
   useEffect(() => {
     if (!isValid || !formula) {
@@ -48,7 +59,6 @@ export function CalculationPreview({
       setError(null);
 
       try {
-        
         const response = await fetch(`${API_BASE}/api/v1/dsl/preview`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -56,7 +66,7 @@ export function CalculationPreview({
             formula,
             latitude,
             longitude,
-            date: date.toISOString().split('T')[0],
+            date: dateString,
           }),
           signal: controller.signal,
         });
@@ -66,7 +76,8 @@ export function CalculationPreview({
           throw new Error(data.error || 'Preview failed');
         }
 
-        const data = await response.json();
+        const json = await response.json();
+        const data = json.data || json; // Handle wrapped or direct response
         setResult({
           time: data.time || data.result,
           formatted: data.formatted || formatTime(data.time || data.result),
@@ -88,76 +99,54 @@ export function CalculationPreview({
       clearTimeout(timeoutId);
       controller.abort();
     };
-  }, [formula, isValid, latitude, longitude, date]);
+  }, [formula, isValid, latitude, longitude, dateString]);
 
-  const formatTime = (isoTime: string): string => {
-    try {
-      const d = new Date(isoTime);
-      return d.toLocaleTimeString('en-US', {
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true,
-      });
-    } catch {
-      return isoTime;
+  const formatTime = (timeValue: string): string => {
+    if (!timeValue) return timeValue;
+
+    // If it's already a simple time string (HH:MM:SS or HH:MM), format it nicely
+    const timeOnlyMatch = timeValue.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+    if (timeOnlyMatch) {
+      const hours = parseInt(timeOnlyMatch[1], 10);
+      const minutes = timeOnlyMatch[2];
+      const seconds = timeOnlyMatch[3] || '00';
+      const period = hours >= 12 ? 'PM' : 'AM';
+      const displayHour = hours % 12 || 12;
+      return `${displayHour}:${minutes}:${seconds} ${period}`;
     }
-  };
 
-  const formatDate = (d: Date): string => {
-    return d.toLocaleDateString('en-US', {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
+    // Try parsing as ISO date/time
+    try {
+      const d = new Date(timeValue);
+      if (!isNaN(d.getTime())) {
+        return d.toLocaleTimeString('en-US', {
+          hour: 'numeric',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: true,
+        });
+      }
+    } catch {
+      // Fall through to return original
+    }
+
+    return timeValue;
   };
 
   return (
-    <div className={cn('rounded-lg border bg-card p-4', className)}>
-      <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-        <Clock className="h-4 w-4" />
-        Live Preview
-      </h3>
-
-      {/* Location and date info */}
-      <div className="text-xs text-muted-foreground space-y-1 mb-4">
-        <div className="flex items-center gap-1">
-          <MapPin className="h-3 w-3" />
-          {locationName}
-        </div>
-        <div className="flex items-center gap-1">
-          <Calendar className="h-3 w-3" />
-          {formatDate(date)}
-        </div>
-      </div>
-
-      {/* Result display */}
-      <div className="min-h-[60px] flex items-center justify-center">
-        {loading ? (
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <Loader2 className="h-5 w-5 animate-spin" />
-            <span className="text-sm">Calculating...</span>
-          </div>
-        ) : error ? (
-          <div className="flex items-center gap-2 text-destructive">
-            <AlertCircle className="h-5 w-5" />
-            <span className="text-sm">{error}</span>
-          </div>
-        ) : result ? (
-          <div className="text-center">
-            <div className="text-3xl font-bold text-primary">
-              {result.formatted}
-            </div>
-            <div className="text-xs text-muted-foreground mt-1">
-              {result.time}
-            </div>
-          </div>
-        ) : (
-          <div className="text-sm text-muted-foreground">
-            {isValid ? 'Enter a formula to see preview' : 'Fix validation errors to see preview'}
-          </div>
-        )}
-      </div>
+    <div className={cn('rounded-lg border bg-card p-4 text-center', className)}>
+      <div className="text-xs text-muted-foreground mb-2">Calculated Time</div>
+      {loading ? (
+        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground mx-auto" />
+      ) : error ? (
+        <span className="text-sm text-destructive">{error}</span>
+      ) : result ? (
+        <span className="text-3xl font-bold font-mono text-primary">
+          {result.formatted}
+        </span>
+      ) : (
+        <span className="text-2xl font-mono text-muted-foreground">--:--</span>
+      )}
     </div>
   );
 }
