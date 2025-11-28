@@ -48,7 +48,6 @@ function PublisherProviderInner({ children }: { children: ReactNode }) {
 
   // Extract publisher IDs from Clerk metadata
   const metadata = user?.publicMetadata as ClerkPublicMetadata | undefined;
-  const publisherIds = metadata?.publisher_access_list || [];
   const primaryPublisherId = metadata?.primary_publisher_id;
 
   // Fetch publisher details from API
@@ -63,6 +62,12 @@ function PublisherProviderInner({ children }: { children: ReactNode }) {
       setError(null);
 
       const token = await getToken();
+      if (!token) {
+        setError('Not authenticated');
+        setIsLoading(false);
+        return;
+      }
+
       const response = await fetch(`${API_BASE}/api/v1/publisher/accessible`, {
         headers: {
           'Content-Type': 'application/json',

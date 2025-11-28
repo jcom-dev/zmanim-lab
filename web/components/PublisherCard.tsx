@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { Publisher } from '@/lib/api';
 
 interface PublisherCardProps {
@@ -13,11 +14,11 @@ export default function PublisherCard({ publisher, onSelect, isSelected }: Publi
     <div
       onClick={() => onSelect?.(publisher)}
       className={`
-        relative bg-white rounded-2xl border-2 p-6 transition-all duration-200 cursor-pointer
+        relative bg-card rounded-2xl border-2 p-6 transition-all duration-200 cursor-pointer
         hover:shadow-lg hover:-translate-y-1
         ${isSelected
           ? 'border-blue-500 shadow-lg ring-2 ring-blue-200'
-          : 'border-gray-200 hover:border-blue-300'
+          : 'border-border hover:border-blue-300'
         }
       `}
     >
@@ -36,11 +37,15 @@ export default function PublisherCard({ publisher, onSelect, isSelected }: Publi
       {/* Publisher Logo */}
       <div className="flex items-center mb-4">
         {publisher.logo_url ? (
-          <img
-            src={publisher.logo_url}
-            alt={`${publisher.name} logo`}
-            className="w-16 h-16 rounded-xl object-cover mr-4"
-          />
+          <div className="relative w-16 h-16 mr-4">
+            <Image
+              src={publisher.logo_url}
+              alt={`${publisher.name} logo`}
+              fill
+              className="rounded-xl object-cover"
+              unoptimized
+            />
+          </div>
         ) : (
           <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center mr-4">
             <span className="text-2xl text-white font-bold">
@@ -49,8 +54,8 @@ export default function PublisherCard({ publisher, onSelect, isSelected }: Publi
           </div>
         )}
         <div className="flex-1">
-          <h3 className="text-xl font-bold text-gray-900">{publisher.name}</h3>
-          <div className="flex items-center text-sm text-gray-500 mt-1">
+          <h3 className="text-xl font-bold text-foreground">{publisher.name}</h3>
+          <div className="flex items-center text-sm text-muted-foreground mt-1">
             <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
             </svg>
@@ -60,12 +65,12 @@ export default function PublisherCard({ publisher, onSelect, isSelected }: Publi
       </div>
 
       {/* Description */}
-      <p className="text-gray-600 text-sm mb-4 line-clamp-3">
+      <p className="text-muted-foreground text-sm mb-4 line-clamp-3">
         {publisher.description}
       </p>
 
       {/* Footer */}
-      <div className="flex items-center justify-between pt-4 border-t border-gray-100">
+      <div className="flex items-center justify-between pt-4 border-t border-border">
         <a
           href={publisher.website}
           target="_blank"

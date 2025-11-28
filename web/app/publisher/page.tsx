@@ -12,8 +12,8 @@ export default function PublisherPage() {
   }, [router]);
 
   return (
-    <div className="min-h-screen bg-slate-900 flex items-center justify-center">
-      <div className="text-white">Redirecting to dashboard...</div>
+    <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="text-foreground">Redirecting to dashboard...</div>
     </div>
   );
 }

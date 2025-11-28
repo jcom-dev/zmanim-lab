@@ -93,7 +93,7 @@ export default function AdminPage() {
         </CardHeader>
         <CardContent className="space-y-3 text-sm text-muted-foreground">
           <p>
-            <strong>Approving Publishers:</strong> When a user submits a publisher request via "Become a Publisher",
+            <strong>Approving Publishers:</strong> When a user submits a publisher request via &quot;Become a Publisher&quot;,
             it appears in the Publisher Management page. Click to review details and approve or reject.
           </p>
           <p>
@@ -101,7 +101,7 @@ export default function AdminPage() {
             or remove existing users.
           </p>
           <p>
-            <strong>Impersonation:</strong> Use the "Impersonate Publisher" button on a publisher's detail page
+            <strong>Impersonation:</strong> Use the &quot;Impersonate Publisher&quot; button on a publisher&apos;s detail page
             to view the dashboard as that publisher for troubleshooting.
           </p>
         </CardContent>

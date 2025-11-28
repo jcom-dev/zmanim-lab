@@ -104,7 +104,7 @@ export function ZmanList({ zmanim, onZmanClick, onZmanRemove }: ZmanListProps) {
 
   if (sortedKeys.length === 0) {
     return (
-      <div className="text-center py-8 text-slate-400">
+      <div className="text-center py-8 text-muted-foreground">
         <p>No zmanim configured. Select a template above to get started.</p>
       </div>
     );
@@ -120,22 +120,22 @@ export function ZmanList({ zmanim, onZmanClick, onZmanRemove }: ZmanListProps) {
         return (
           <div
             key={key}
-            className="flex items-center justify-between p-3 bg-slate-800 rounded-lg hover:bg-slate-700 cursor-pointer transition-colors"
+            className="flex items-center justify-between p-3 bg-card rounded-lg hover:bg-accent cursor-pointer transition-colors border border-border"
             onClick={() => onZmanClick(key)}
             data-testid={`zman-item-${key}`}
           >
             <div className="flex-1">
-              <div className="font-medium text-white">{displayName}</div>
-              <div className="text-sm text-slate-400">{description}</div>
+              <div className="font-medium text-foreground">{displayName}</div>
+              <div className="text-sm text-muted-foreground">{description}</div>
             </div>
             <div className="flex items-center gap-2">
-              <span className="px-2 py-1 bg-slate-700 rounded text-xs text-slate-300">
+              <span className="px-2 py-1 bg-secondary rounded text-xs text-secondary-foreground">
                 {METHOD_DISPLAY_NAMES[config.method] || config.method}
               </span>
               <Button
-                variant="ghost"
+                variant="outline"
                 size="sm"
-                className="text-red-400 hover:text-red-300 hover:bg-red-900/20"
+                className="text-red-500 border-red-500/50 hover:bg-red-500/10 hover:text-red-400 hover:border-red-500"
                 onClick={(e) => {
                   e.stopPropagation();
                   onZmanRemove(key);

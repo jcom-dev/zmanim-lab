@@ -1,4 +1,5 @@
 'use client';
+import { API_BASE } from '@/lib/api';
 
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
@@ -30,6 +31,7 @@ interface ZmanConfigModalProps {
   zmanKey: string;
   currentConfig?: ZmanConfig;
   onSave: (config: ZmanConfig) => void;
+  getToken: () => Promise<string | null>;
 }
 
 // Display names for zmanim
@@ -56,6 +58,7 @@ export function ZmanConfigModal({
   zmanKey,
   currentConfig,
   onSave,
+  getToken,
 }: ZmanConfigModalProps) {
   const [methods, setMethods] = useState<Method[]>([]);
   const [selectedMethod, setSelectedMethod] = useState<string>(currentConfig?.method || 'sunrise');
@@ -76,10 +79,17 @@ export function ZmanConfigModal({
 
   const loadMethods = async () => {
     try {
-      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
-      const response = await fetch(`${apiBaseUrl}/api/v1/publisher/algorithm/methods`, {
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
+      const token = await getToken();
+      if (!token) {
+        console.warn('No auth token available, skipping methods load');
+        return;
+      }
+
+      const response = await fetch(`${API_BASE}/api/v1/publisher/algorithm/methods`, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
       });
 
       if (response.ok) {
@@ -136,14 +146,14 @@ export function ZmanConfigModal({
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" data-testid="zman-config-modal">
-      <div className="bg-slate-800 rounded-lg p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
-        <h2 className="text-xl font-bold text-white mb-4">
+      <div className="bg-card rounded-lg p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        <h2 className="text-xl font-bold text-foreground mb-4">
           Configure {displayName}
         </h2>
 
         {/* Method Selection with Autocomplete */}
         <div className="mb-6">
-          <label className="block text-sm font-medium text-slate-300 mb-2">
+          <label className="block text-sm font-medium text-muted-foreground mb-2">
             Calculation Method
           </label>
           <Input
@@ -161,7 +171,7 @@ export function ZmanConfigModal({
                 className={`p-3 rounded-lg cursor-pointer transition-colors ${
                   selectedMethod === method.id
                     ? 'bg-blue-600 text-white'
-                    : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                    : 'bg-secondary text-muted-foreground hover:bg-muted'
                 }`}
                 onClick={() => handleMethodChange(method.id)}
                 data-testid={`method-option-${method.id}`}
@@ -176,19 +186,19 @@ export function ZmanConfigModal({
         {/* Parameters */}
         {selectedMethodObj && selectedMethodObj.parameters.length > 0 && (
           <div className="mb-6">
-            <label className="block text-sm font-medium text-slate-300 mb-2">
+            <label className="block text-sm font-medium text-muted-foreground mb-2">
               Parameters
             </label>
             <div className="space-y-4">
               {selectedMethodObj.parameters.map((param) => (
                 <div key={param.name}>
-                  <label className="block text-sm text-slate-400 mb-1">
+                  <label className="block text-sm text-muted-foreground mb-1">
                     {param.name}
-                    {param.required && <span className="text-red-400 ml-1">*</span>}
+                    {param.required && <span className="text-destructive ml-1">*</span>}
                   </label>
                   {param.type === 'select' ? (
                     <select
-                      className="w-full p-2 rounded bg-slate-700 text-white border border-slate-600"
+                      className="w-full p-2 rounded bg-secondary text-foreground border border-border"
                       value={(params[param.name] as string) || ''}
                       onChange={(e) => handleParamChange(param.name, e.target.value)}
                       data-testid={`param-${param.name}`}
@@ -214,7 +224,7 @@ export function ZmanConfigModal({
                       data-testid={`param-${param.name}`}
                     />
                   )}
-                  <p className="text-xs text-slate-500 mt-1">{param.description}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{param.description}</p>
                 </div>
               ))}
             </div>

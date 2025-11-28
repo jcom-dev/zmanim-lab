@@ -54,8 +54,8 @@ export default function LocationInput({ onLocationChange }: LocationInputProps) 
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-apple p-6 md:p-8 border border-apple-gray-200">
-      <h2 className="text-xl font-semibold text-apple-gray-900 mb-6 flex items-center">
+    <div className="bg-card rounded-2xl shadow-apple p-6 md:p-8 border border-border">
+      <h2 className="text-xl font-semibold text-foreground mb-6 flex items-center">
         <svg
           className="w-5 h-5 mr-2 text-apple-blue"
           fill="none"
@@ -84,7 +84,7 @@ export default function LocationInput({ onLocationChange }: LocationInputProps) 
           <div>
             <label
               htmlFor="latitude"
-              className="block text-sm font-medium text-apple-gray-700 mb-2"
+              className="block text-sm font-medium text-foreground mb-2"
             >
               Latitude
             </label>
@@ -96,11 +96,12 @@ export default function LocationInput({ onLocationChange }: LocationInputProps) 
               onChange={(e) => setLatitude(e.target.value)}
               className="
                 w-full px-4 py-2.5 rounded-xl
-                border border-apple-gray-300
+                border border-border
                 focus:border-apple-blue focus:ring-2 focus:ring-apple-blue/20
                 transition-all duration-200 outline-none
-                text-apple-gray-900 font-normal text-[15px]
-                placeholder-apple-gray-400
+                text-foreground font-normal text-[15px]
+                placeholder-muted-foreground
+                bg-card
               "
               placeholder="31.7683"
             />
@@ -110,7 +111,7 @@ export default function LocationInput({ onLocationChange }: LocationInputProps) 
           <div>
             <label
               htmlFor="longitude"
-              className="block text-sm font-medium text-apple-gray-700 mb-2"
+              className="block text-sm font-medium text-foreground mb-2"
             >
               Longitude
             </label>
@@ -122,11 +123,12 @@ export default function LocationInput({ onLocationChange }: LocationInputProps) 
               onChange={(e) => setLongitude(e.target.value)}
               className="
                 w-full px-4 py-2.5 rounded-xl
-                border border-apple-gray-300
+                border border-border
                 focus:border-apple-blue focus:ring-2 focus:ring-apple-blue/20
                 transition-all duration-200 outline-none
-                text-apple-gray-900 font-normal text-[15px]
-                placeholder-apple-gray-400
+                text-foreground font-normal text-[15px]
+                placeholder-muted-foreground
+                bg-card
               "
               placeholder="35.2137"
             />
@@ -145,7 +147,7 @@ export default function LocationInput({ onLocationChange }: LocationInputProps) 
           <button
             type="submit"
             className="
-              flex-1 bg-apple-blue hover:bg-[#0051D5]
+              flex-1 bg-apple-blue hover:bg-apple-blue/90
               text-white font-medium py-2.5 px-5 rounded-xl
               transition-all duration-200
               shadow-sm hover:shadow-md
@@ -159,8 +161,8 @@ export default function LocationInput({ onLocationChange }: LocationInputProps) 
             onClick={handleUseMyLocation}
             disabled={isLoading}
             className="
-              flex-1 bg-apple-gray-100 hover:bg-apple-gray-200
-              text-apple-gray-900 font-medium py-2.5 px-5 rounded-xl
+              flex-1 bg-muted hover:bg-secondary
+              text-foreground font-medium py-2.5 px-5 rounded-xl
               transition-all duration-200
               disabled:opacity-50 disabled:cursor-not-allowed
               flex items-center justify-center
@@ -169,7 +171,7 @@ export default function LocationInput({ onLocationChange }: LocationInputProps) 
             {isLoading ? (
               <>
                 <svg
-                  className="animate-spin -ml-1 mr-2 h-4 w-4 text-apple-gray-900"
+                  className="animate-spin -ml-1 mr-2 h-4 w-4 text-foreground"
                   xmlns="http://www.w3.org/2000/svg"
                   fill="none"
                   viewBox="0 0 24 24"

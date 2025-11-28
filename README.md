@@ -80,8 +80,7 @@ Services run in a tmux session named `zmanim` with windows for API and Web.
 
 **Restart all services:**
 ```bash
-tmux kill-session -t zmanim
-./.coder/start-services.sh
+./restart.sh
 ```
 
 **Restart individual service:**

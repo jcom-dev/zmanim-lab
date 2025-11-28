@@ -64,12 +64,10 @@ export default function AdminDashboardPage() {
     title,
     value,
     description,
-    trend
   }: {
     title: string;
     value: string | number;
     description?: string;
-    trend?: string;
   }) => (
     <Card>
       <CardHeader className="pb-3">

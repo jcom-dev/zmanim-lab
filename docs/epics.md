@@ -26,8 +26,8 @@ Single epic delivering complete Zmanim Lab MVP - a multi-publisher platform for 
 |------|---------|-------------|--------|
 | **Epic 1: Zmanim Lab MVP** | 11 | FR1-FR42 | COMPLETED |
 | **Epic 2: Publisher User Management** | 13 | FR43-FR66 | COMPLETED |
-| **Epic 3: Consolidation & Quality** | 5 | Internal (0 FRs) | NEXT |
-| **Epic 4: Algorithms** | TBD | TBD | FUTURE |
+| **Epic 3: Consolidation & Quality** | 5 | Internal (0 FRs) | COMPLETED |
+| **Epic 4: Algorithm Editor + AI** | 14 | FR67-FR95+ | CURRENT |
 
 ---
 
@@ -780,7 +780,7 @@ See: [epic-2-publisher-user-management.md](epic-2-publisher-user-management.md)
 
 ## Epic 3: Consolidation & Quality
 
-**Status:** NEXT
+**Status:** COMPLETED (2025-11-27)
 **Stories:** 5 (3.0 - 3.4)
 **FRs:** None (internal quality work)
 
@@ -792,14 +792,14 @@ See: [epic-3-consolidation-quality.md](epic-3-consolidation-quality.md)
 | Story | Name | Focus |
 |-------|------|-------|
 | 3.0 | Testing Infrastructure | Clerk auth helpers, test fixtures |
-| 3.1 | Comprehensive E2E Test Suite | 50+ scenarios validating Epic 1 & 2 |
+| 3.1 | Comprehensive E2E Test Suite | 130+ scenarios validating Epic 1 & 2 |
 | 3.2 | Codebase Audit & Documentation | Study patterns, document learnings |
 | 3.3 | Coding Standards & Architecture | Formalize patterns, update docs |
 | 3.4 | Refactor to Standards | Apply standards, fix inconsistencies |
 
 **Key Outcomes:**
 - `loginAsAdmin()` and `loginAsPublisher()` test helpers
-- Comprehensive E2E coverage for authenticated flows
+- Comprehensive E2E coverage for authenticated flows (130+ tests)
 - `coding-standards.md` with clear guidelines
 - Updated `architecture.md` with proven patterns
 - Technical debt reduced
@@ -807,15 +807,90 @@ See: [epic-3-consolidation-quality.md](epic-3-consolidation-quality.md)
 
 ---
 
-## Epic 4: Algorithms (Future)
+## Epic 4: Intuitive Zmanim Algorithm Editor with AI-Powered DSL
 
-**Status:** FUTURE (after Epic 3)
-**Stories:** TBD
-**FRs:** TBD
+**Status:** CURRENT SPRINT
+**Stories:** 14 (4.0 - 4.13)
+**FRs:** FR67-FR95+ (Algorithm Editor Enhancement)
 
-Enhanced algorithm features built on the solid, tested, documented foundation from Epic 3.
+**Goal:** Transform the algorithm editor into an Apple-quality UX experience with AI-powered formula generation, bilingual support, and collaborative features.
+
+See detailed specifications:
+- [epic-4-comprehensive-plan.md](sprint-artifacts/epic-4-comprehensive-plan.md)
+- [epic-4-dsl-specification.md](sprint-artifacts/epic-4-dsl-specification.md)
+- [epic-4-ui-wireframes.md](sprint-artifacts/epic-4-ui-wireframes.md)
+
+### Epic 4 Phases
+
+| Phase | Stories | Focus |
+|-------|---------|-------|
+| **Foundation** | 4.0-4.3 | Infrastructure, DSL design & parser, bilingual naming |
+| **Editor UX** | 4.4-4.6 | Guided builder, halachic docs, advanced editor |
+| **AI Features** | 4.7-4.9 | RAG context, formula generation, explanations |
+| **User Experience** | 4.10-4.13 | Hebrew calendar, onboarding, collaboration, versioning |
+
+### Stories
+
+| Story | Name | Points | Dependencies |
+|-------|------|--------|--------------|
+| 4.0 | PostgreSQL + pgvector Image | 3 | None | **DONE** |
+| 4.1 | Zmanim DSL Design | 3 | 4.0 |
+| 4.2 | Zmanim DSL Parser | 8 | 4.1 |
+| 4.3 | Bilingual Naming System | 5 | 4.2 |
+| 4.4 | Guided Formula Builder | 13 | 4.2, 4.3 |
+| 4.5 | Halachic Documentation | 5 | 4.3, 4.4 |
+| 4.6 | Advanced Mode Editor (CodeMirror) | 8 | 4.2, 4.4 |
+| 4.7 | AI Context System (RAG) | 8 | 4.0, 4.1 |
+| 4.8 | AI Formula Service | 8 | 4.2, 4.7 |
+| 4.9 | AI Explanation Generator | 5 | 4.8 |
+| 4.10 | Weekly Preview (Hebrew Calendar) | 8 | 4.2, 4.3 |
+| 4.11 | Publisher Onboarding Wizard | 8 | 4.4, 4.3 |
+| 4.12 | Algorithm Collaboration | 5 | 4.2 |
+| 4.13 | Formula Version History | 5 | 4.2, 4.6 |
+
+**Total Story Points:** 92
+
+### Epic 4 DoD Policy
+
+**Story-Level:**
+- Create comprehensive tests for the story (frontend + backend)
+- Run only story-specific tests before marking "ready for review"
+- If API/web not working: run `./restart.sh` from project root
+
+**Epic-Level:**
+- Full E2E regression (130+ existing tests + new tests) at epic completion
+- All tests must pass before epic considered complete
+
+### Key Deliverables
+
+- **DSL Language:** Complete specification and parser for zmanim formulas
+- **Visual Editor:** Apple-quality guided formula builder with live preview
+- **CodeMirror Integration:** Syntax highlighting, autocomplete, inline validation
+- **AI Features:** RAG-powered formula generation and human-readable explanations
+- **Hebrew Calendar:** Weekly preview with 44 Jewish events via hebcal-go
+- **Collaboration:** Copy/fork algorithms with attribution
+- **Version History:** Visual diff and rollback capabilities
+
+### Dependency Chain
+
+```
+4.0 PostgreSQL + pgvector ✅
+ └── 4.1 DSL Design
+      └── 4.2 DSL Parser
+           ├── 4.3 Bilingual Naming
+           │    └── 4.4 Guided Builder
+           │         ├── 4.5 Halachic Docs
+           │         └── 4.11 Onboarding
+           ├── 4.6 Advanced Editor
+           │    └── 4.13 Version History
+           ├── 4.10 Hebrew Calendar
+           └── 4.12 Collaboration
+      └── 4.7 RAG Context (parallel with 4.2)
+           └── 4.8 AI Formula
+                └── 4.9 AI Explanations
+```
 
 ---
 
 _Generated by BMAD Epic Workflow v1.0_
-_Last Updated: 2025-11-27_
+_Last Updated: 2025-11-28_

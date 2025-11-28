@@ -24,6 +24,10 @@ const (
 	UserIDKey contextKey = "user_id"
 	// UserRoleKey is the context key for the user's role
 	UserRoleKey contextKey = "user_role"
+	// PrimaryPublisherIDKey is the context key for the user's primary publisher ID
+	PrimaryPublisherIDKey contextKey = "primary_publisher_id"
+	// PublisherAccessListKey is the context key for the list of publishers the user can access
+	PublisherAccessListKey contextKey = "publisher_access_list"
 )
 
 // Claims represents the JWT claims from Clerk
@@ -100,6 +104,98 @@ func getRoleFromClaims(claims *Claims) string {
 	return ""
 }
 
+// getPrimaryPublisherIDFromClaims extracts the primary publisher ID from claims
+func getPrimaryPublisherIDFromClaims(claims *Claims) string {
+	if claims.Metadata != nil {
+		if id, ok := claims.Metadata["primary_publisher_id"].(string); ok {
+			return id
+		}
+	}
+	return ""
+}
+
+// getPublisherAccessListFromClaims extracts the publisher access list from claims
+func getPublisherAccessListFromClaims(claims *Claims) []string {
+	var result []string
+	if claims.Metadata != nil {
+		if list, ok := claims.Metadata["publisher_access_list"].([]interface{}); ok {
+			for _, item := range list {
+				if id, ok := item.(string); ok {
+					result = append(result, id)
+				}
+			}
+		}
+	}
+	return result
+}
+
+// GetUserID retrieves the user ID from the request context
+func GetUserID(ctx context.Context) string {
+	if id, ok := ctx.Value(UserIDKey).(string); ok {
+		return id
+	}
+	return ""
+}
+
+// GetUserRole retrieves the user role from the request context
+func GetUserRole(ctx context.Context) string {
+	if role, ok := ctx.Value(UserRoleKey).(string); ok {
+		return role
+	}
+	return ""
+}
+
+// GetPrimaryPublisherID retrieves the primary publisher ID from the request context
+func GetPrimaryPublisherID(ctx context.Context) string {
+	if id, ok := ctx.Value(PrimaryPublisherIDKey).(string); ok {
+		return id
+	}
+	return ""
+}
+
+// GetPublisherAccessList retrieves the publisher access list from the request context
+func GetPublisherAccessList(ctx context.Context) []string {
+	if list, ok := ctx.Value(PublisherAccessListKey).([]string); ok {
+		return list
+	}
+	return nil
+}
+
+// GetValidatedPublisherID validates and returns the publisher ID from the request
+// It checks X-Publisher-Id header first, falls back to primary_publisher_id from JWT
+// Returns empty string if user has no access to any publisher
+func GetValidatedPublisherID(ctx context.Context, requestedID string) string {
+	primaryID := GetPrimaryPublisherID(ctx)
+	accessList := GetPublisherAccessList(ctx)
+	userRole := GetUserRole(ctx)
+
+	// Admin users can access any publisher
+	if userRole == "admin" && requestedID != "" {
+		return requestedID
+	}
+
+	// If no specific ID requested, use primary
+	if requestedID == "" {
+		return primaryID
+	}
+
+	// Check if requested ID is the primary
+	if requestedID == primaryID {
+		return requestedID
+	}
+
+	// Check if requested ID is in the access list
+	for _, id := range accessList {
+		if id == requestedID {
+			return requestedID
+		}
+	}
+
+	// Requested ID not in user's access list - return empty (unauthorized)
+	slog.Warn("publisher access denied", "requested", requestedID, "primary", primaryID, "access_list", accessList)
+	return ""
+}
+
 // RequireAuth returns a middleware that requires authentication
 func (am *AuthMiddleware) RequireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -143,6 +239,14 @@ func (am *AuthMiddleware) RequireRole(role string) func(http.Handler) http.Handl
 			// Add user info to context
 			ctx := context.WithValue(r.Context(), UserIDKey, claims.Subject)
 			ctx = context.WithValue(ctx, UserRoleKey, userRole)
+
+			// Add publisher info to context (from JWT claims)
+			if primaryPubID := getPrimaryPublisherIDFromClaims(claims); primaryPubID != "" {
+				ctx = context.WithValue(ctx, PrimaryPublisherIDKey, primaryPubID)
+			}
+			if accessList := getPublisherAccessListFromClaims(claims); len(accessList) > 0 {
+				ctx = context.WithValue(ctx, PublisherAccessListKey, accessList)
+			}
 
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
@@ -366,22 +470,6 @@ func respondAuthError(w http.ResponseWriter, status int, code, message string) {
 			"message": message,
 		},
 	})
-}
-
-// GetUserID retrieves the user ID from the context
-func GetUserID(ctx context.Context) string {
-	if id, ok := ctx.Value(UserIDKey).(string); ok {
-		return id
-	}
-	return ""
-}
-
-// GetUserRole retrieves the user role from the context
-func GetUserRole(ctx context.Context) string {
-	if role, ok := ctx.Value(UserRoleKey).(string); ok {
-		return role
-	}
-	return ""
 }
 
 // IsAuthenticated checks if the request context has a valid user ID

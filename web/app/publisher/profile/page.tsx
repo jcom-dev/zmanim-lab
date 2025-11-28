@@ -145,10 +145,10 @@ export default function PublisherProfilePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-900 p-8">
+      <div className="min-h-screen bg-background p-8">
         <div className="max-w-4xl mx-auto">
           <div className="flex justify-center items-center h-64">
-            <div className="text-white">Loading profile...</div>
+            <div className="text-foreground">Loading profile...</div>
           </div>
         </div>
       </div>
@@ -156,11 +156,11 @@ export default function PublisherProfilePage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 p-8">
+    <div className="min-h-screen bg-background p-8">
       <div className="max-w-4xl mx-auto">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-white mb-2">Publisher Profile</h1>
-          <p className="text-slate-400">Manage your profile information</p>
+          <h1 className="text-3xl font-bold text-foreground mb-2">Publisher Profile</h1>
+          <p className="text-muted-foreground">Manage your profile information</p>
         </div>
 
         <Card>
@@ -260,6 +260,7 @@ export default function PublisherProfilePage() {
                   onUploadError={(errorMsg) => {
                     setError(errorMsg);
                   }}
+                  getToken={getToken}
                 />
               </div>
 
@@ -306,17 +307,17 @@ export default function PublisherProfilePage() {
                 <span
                   className={`px-3 py-1 rounded-full text-sm font-medium ${
                     profile.status === 'verified'
-                      ? 'bg-green-100 text-green-800'
+                      ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-300'
                       : profile.status === 'pending'
-                      ? 'bg-yellow-100 text-yellow-800'
-                      : 'bg-red-100 text-red-800'
+                      ? 'bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-300'
+                      : 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-300'
                   }`}
                 >
                   {profile.status}
                 </span>
               </div>
               {profile.status === 'pending' && (
-                <p className="text-sm text-slate-600 mt-2">
+                <p className="text-sm text-muted-foreground mt-2">
                   Your profile is pending approval by an administrator.
                 </p>
               )}

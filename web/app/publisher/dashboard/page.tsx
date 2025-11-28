@@ -82,8 +82,8 @@ export default function PublisherDashboardPage() {
       <div className="p-8">
         <div className="max-w-6xl mx-auto">
           <div className="text-center py-12">
-            <Loader2 className="w-8 h-8 text-blue-400 animate-spin mx-auto" />
-            <p className="mt-4 text-gray-400">Loading dashboard...</p>
+            <Loader2 className="w-8 h-8 text-primary animate-spin mx-auto" />
+            <p className="mt-4 text-muted-foreground">Loading dashboard...</p>
           </div>
         </div>
       </div>
@@ -94,8 +94,8 @@ export default function PublisherDashboardPage() {
     return (
       <div className="p-8">
         <div className="max-w-6xl mx-auto">
-          <div className="bg-red-900/50 border border-red-700 rounded-lg p-4">
-            <p className="text-red-200">{error}</p>
+          <div className="bg-destructive/10 border border-destructive/50 rounded-lg p-4">
+            <p className="text-destructive">{error}</p>
           </div>
         </div>
       </div>
@@ -111,12 +111,12 @@ export default function PublisherDashboardPage() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'verified':
-        return <span className="flex items-center gap-1 text-green-400 text-sm"><CheckCircle className="w-4 h-4" /> Verified</span>;
+        return <span className="flex items-center gap-1 text-green-600 dark:text-green-400 text-sm"><CheckCircle className="w-4 h-4" /> Verified</span>;
       case 'pending':
       case 'pending_verification':
-        return <span className="flex items-center gap-1 text-yellow-400 text-sm"><Clock className="w-4 h-4" /> Pending</span>;
+        return <span className="flex items-center gap-1 text-yellow-600 dark:text-yellow-400 text-sm"><Clock className="w-4 h-4" /> Pending</span>;
       default:
-        return <span className="text-gray-400 text-sm">{status}</span>;
+        return <span className="text-muted-foreground text-sm">{status}</span>;
     }
   };
 
@@ -124,15 +124,15 @@ export default function PublisherDashboardPage() {
     if (!summary) return null;
     switch (summary.algorithm.status) {
       case 'published':
-        return <span className="flex items-center gap-1 text-green-400 text-sm"><CheckCircle className="w-4 h-4" /> Published</span>;
+        return <span className="flex items-center gap-1 text-green-600 dark:text-green-400 text-sm"><CheckCircle className="w-4 h-4" /> Published</span>;
       case 'draft':
         return (
-          <span className="flex items-center gap-1 text-yellow-400 text-sm">
+          <span className="flex items-center gap-1 text-yellow-600 dark:text-yellow-400 text-sm">
             <AlertTriangle className="w-4 h-4" /> Draft
           </span>
         );
       case 'none':
-        return <span className="text-gray-500 text-sm">Not configured</span>;
+        return <span className="text-muted-foreground text-sm">Not configured</span>;
       default:
         return null;
     }
@@ -143,9 +143,9 @@ export default function PublisherDashboardPage() {
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold">Dashboard</h1>
+          <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
           {selectedPublisher && (
-            <p className="text-gray-400 mt-1">
+            <p className="text-muted-foreground mt-1">
               Managing: {selectedPublisher.name} ({selectedPublisher.organization})
             </p>
           )}
@@ -156,17 +156,17 @@ export default function PublisherDashboardPage() {
           {/* Profile Card */}
           <Link
             href="/publisher/profile"
-            className="bg-slate-800 rounded-lg p-6 border border-slate-700 hover:border-slate-500 transition-colors group"
+            className="bg-card rounded-lg p-6 border border-border hover:border-primary/50 transition-colors group"
           >
             <div className="flex items-start justify-between mb-4">
               <User className="w-8 h-8 text-blue-500" />
               {summary && getStatusBadge(summary.profile.status)}
             </div>
-            <h2 className="text-lg font-semibold mb-1 group-hover:text-blue-400 transition-colors">Profile</h2>
+            <h2 className="text-lg font-semibold mb-1 group-hover:text-primary transition-colors">Profile</h2>
             {summary && (
               <>
-                <p className="text-white">{summary.profile.name}</p>
-                <p className="text-slate-400 text-sm">{summary.profile.organization}</p>
+                <p className="text-foreground">{summary.profile.name}</p>
+                <p className="text-muted-foreground text-sm">{summary.profile.organization}</p>
               </>
             )}
           </Link>
@@ -174,10 +174,10 @@ export default function PublisherDashboardPage() {
           {/* Zmanim Card */}
           <Link
             href="/publisher/algorithm"
-            className={`bg-slate-800 rounded-lg p-6 border transition-colors group ${
+            className={`bg-card rounded-lg p-6 border transition-colors group ${
               summary?.algorithm.status === 'draft'
                 ? 'border-yellow-500/50 hover:border-yellow-500'
-                : 'border-slate-700 hover:border-slate-500'
+                : 'border-border hover:border-primary/50'
             }`}
           >
             <div className="flex items-start justify-between mb-4">
@@ -187,16 +187,16 @@ export default function PublisherDashboardPage() {
             <h2 className="text-lg font-semibold mb-1 group-hover:text-purple-400 transition-colors">Zmanim</h2>
             {summary && (
               <>
-                <p className="text-white">{summary.algorithm.name || 'No zmanim configured'}</p>
-                <p className="text-slate-400 text-sm">
+                <p className="text-foreground">{summary.algorithm.name || 'No zmanim configured'}</p>
+                <p className="text-muted-foreground text-sm">
                   Updated: {formatDate(summary.algorithm.updated_at)}
                 </p>
               </>
             )}
             {summary?.algorithm.status === 'draft' && (
-              <div className="mt-3 flex items-center gap-2 text-yellow-400 text-sm">
+              <div className="mt-3 flex items-center gap-2 text-yellow-600 dark:text-yellow-400 text-sm">
                 <AlertTriangle className="w-4 h-4" />
-                Zmanim not published - users can't see your times
+                Zmanim not published - users can&apos;t see your times
               </div>
             )}
           </Link>
@@ -204,22 +204,22 @@ export default function PublisherDashboardPage() {
           {/* Coverage Card */}
           <Link
             href="/publisher/coverage"
-            className="bg-slate-800 rounded-lg p-6 border border-slate-700 hover:border-slate-500 transition-colors group"
+            className="bg-card rounded-lg p-6 border border-border hover:border-primary/50 transition-colors group"
           >
             <div className="flex items-start justify-between mb-4">
               <MapPin className="w-8 h-8 text-green-500" />
               {summary && summary.coverage.total_areas > 0 && (
-                <span className="text-green-400 text-sm">{summary.coverage.total_areas} areas</span>
+                <span className="text-green-600 dark:text-green-400 text-sm">{summary.coverage.total_areas} areas</span>
               )}
             </div>
             <h2 className="text-lg font-semibold mb-1 group-hover:text-green-400 transition-colors">Coverage</h2>
             {summary && summary.coverage.total_areas > 0 ? (
               <>
-                <p className="text-white">{summary.coverage.total_areas} coverage areas</p>
-                <p className="text-slate-400 text-sm">{summary.coverage.total_cities.toLocaleString()} cities covered</p>
+                <p className="text-foreground">{summary.coverage.total_areas} coverage areas</p>
+                <p className="text-muted-foreground text-sm">{summary.coverage.total_cities.toLocaleString()} cities covered</p>
               </>
             ) : (
-              <div className="flex items-center gap-2 text-slate-400">
+              <div className="flex items-center gap-2 text-muted-foreground">
                 <Plus className="w-4 h-4" />
                 <span>Add your first coverage area</span>
               </div>
@@ -227,34 +227,34 @@ export default function PublisherDashboardPage() {
           </Link>
 
           {/* Analytics Card */}
-          <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
+          <div className="bg-card rounded-lg p-6 border border-border">
             <div className="flex items-start justify-between mb-4">
               <BarChart3 className="w-8 h-8 text-orange-500" />
             </div>
             <h2 className="text-lg font-semibold mb-1">Analytics</h2>
             {summary && (
               <>
-                <p className="text-3xl font-bold text-white">
+                <p className="text-3xl font-bold text-foreground">
                   {summary.analytics.calculations_this_month.toLocaleString()}
                 </p>
-                <p className="text-slate-400 text-sm">calculations this month</p>
+                <p className="text-muted-foreground text-sm">calculations this month</p>
               </>
             )}
-            <p className="text-slate-500 text-xs mt-2">Coming soon in a future update</p>
+            <p className="text-muted-foreground/70 text-xs mt-2">Coming soon in a future update</p>
           </div>
         </div>
 
         {/* Recent Activity Section */}
-        <div className="bg-slate-800 rounded-lg border border-slate-700 p-6">
+        <div className="bg-card rounded-lg border border-border p-6">
           <h2 className="text-lg font-semibold mb-4">Recent Activity</h2>
           {summary && summary.recent_activity.length > 0 ? (
             <div className="space-y-3">
               {summary.recent_activity.map((activity, index) => (
-                <div key={index} className="flex items-center gap-3 py-2 border-b border-slate-700 last:border-0">
-                  <Clock className="w-4 h-4 text-slate-500" />
+                <div key={index} className="flex items-center gap-3 py-2 border-b border-border last:border-0">
+                  <Clock className="w-4 h-4 text-muted-foreground" />
                   <div className="flex-1">
-                    <p className="text-white text-sm">{activity.description}</p>
-                    <p className="text-slate-500 text-xs">
+                    <p className="text-foreground text-sm">{activity.description}</p>
+                    <p className="text-muted-foreground text-xs">
                       {formatDate(activity.created_at)} • {activity.actor_type}
                     </p>
                   </div>
@@ -262,7 +262,7 @@ export default function PublisherDashboardPage() {
               ))}
             </div>
           ) : (
-            <div className="text-center py-8 text-slate-500">
+            <div className="text-center py-8 text-muted-foreground">
               <Clock className="w-8 h-8 mx-auto mb-2 opacity-50" />
               <p>No recent activity</p>
               <p className="text-xs mt-1">Activity will appear here as you make changes</p>

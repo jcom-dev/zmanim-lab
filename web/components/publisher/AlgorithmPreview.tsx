@@ -1,4 +1,5 @@
 'use client';
+import { API_BASE } from '@/lib/api';
 
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -25,19 +26,20 @@ interface PreviewZman {
   };
 }
 
-interface AlgorithmPreviewProps {
-  configuration: AlgorithmConfig;
+export interface PreviewLocation {
+  latitude: number;
+  longitude: number;
+  timezone: string;
+  displayName: string;
 }
 
-// Sample location for preview (Brooklyn, NY)
-const PREVIEW_LOCATION = {
-  latitude: 40.6782,
-  longitude: -73.9442,
-  timezone: 'America/New_York',
-  name: 'Brooklyn, NY',
-};
+interface AlgorithmPreviewProps {
+  configuration: AlgorithmConfig;
+  getToken: () => Promise<string | null>;
+  location: PreviewLocation;
+}
 
-export function AlgorithmPreview({ configuration }: AlgorithmPreviewProps) {
+export function AlgorithmPreview({ configuration, getToken, location }: AlgorithmPreviewProps) {
   const [preview, setPreview] = useState<PreviewZman[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -45,7 +47,7 @@ export function AlgorithmPreview({ configuration }: AlgorithmPreviewProps) {
 
   useEffect(() => {
     loadPreview();
-  }, [configuration]);
+  }, [configuration, location]);
 
   const loadPreview = async () => {
     if (Object.keys(configuration.zmanim).length === 0) {
@@ -57,17 +59,25 @@ export function AlgorithmPreview({ configuration }: AlgorithmPreviewProps) {
       setLoading(true);
       setError(null);
 
-      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
-      const response = await fetch(`${apiBaseUrl}/api/v1/publisher/algorithm/preview`, {
+      const token = await getToken();
+      if (!token) {
+        setError('Not authenticated');
+        setLoading(false);
+        return;
+      }
+
+      const response = await fetch(`${API_BASE}/api/v1/publisher/algorithm/preview`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
         body: JSON.stringify({
           configuration,
           date,
-          latitude: PREVIEW_LOCATION.latitude,
-          longitude: PREVIEW_LOCATION.longitude,
-          timezone: PREVIEW_LOCATION.timezone,
+          latitude: location.latitude,
+          longitude: location.longitude,
+          timezone: location.timezone,
         }),
       });
 
@@ -90,24 +100,24 @@ export function AlgorithmPreview({ configuration }: AlgorithmPreviewProps) {
       <CardHeader>
         <CardTitle>Live Preview</CardTitle>
         <CardDescription>
-          Today&apos;s zmanim for {PREVIEW_LOCATION.name}
+          Today&apos;s zmanim for {location.displayName}
         </CardDescription>
       </CardHeader>
       <CardContent>
         {loading && (
-          <div className="text-center py-4 text-slate-400">
+          <div className="text-center py-4 text-muted-foreground">
             Calculating...
           </div>
         )}
 
         {error && (
-          <div className="text-center py-4 text-red-400">
+          <div className="text-center py-4 text-destructive">
             {error}
           </div>
         )}
 
         {!loading && !error && preview.length === 0 && (
-          <div className="text-center py-4 text-slate-400">
+          <div className="text-center py-4 text-muted-foreground">
             Configure zmanim to see preview
           </div>
         )}
@@ -117,25 +127,25 @@ export function AlgorithmPreview({ configuration }: AlgorithmPreviewProps) {
             {preview.map((zman) => (
               <div
                 key={zman.key}
-                className="flex justify-between items-center py-2 border-b border-slate-700 last:border-0"
+                className="flex justify-between items-center py-2 border-b border-border last:border-0"
                 data-testid={`preview-${zman.key}`}
               >
                 <div>
-                  <div className="font-medium text-white text-sm">{zman.name}</div>
-                  <div className="text-xs text-slate-400">{zman.formula.display_name}</div>
+                  <div className="font-medium text-foreground text-sm">{zman.name}</div>
+                  <div className="text-xs text-muted-foreground">{zman.formula.display_name}</div>
                 </div>
-                <div className="text-lg font-mono text-blue-400">{zman.time}</div>
+                <div className="text-lg font-mono text-primary">{zman.time}</div>
               </div>
             ))}
           </div>
         )}
 
-        <div className="mt-4 pt-4 border-t border-slate-700">
-          <p className="text-xs text-slate-500">
+        <div className="mt-4 pt-4 border-t border-border">
+          <p className="text-xs text-muted-foreground">
             Date: {date}
           </p>
-          <p className="text-xs text-slate-500">
-            Location: {PREVIEW_LOCATION.latitude.toFixed(4)}, {PREVIEW_LOCATION.longitude.toFixed(4)}
+          <p className="text-xs text-muted-foreground">
+            Location: {location.latitude.toFixed(4)}, {location.longitude.toFixed(4)}
           </p>
         </div>
       </CardContent>

@@ -34,10 +34,7 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-body {
-  background: #F9FAFB;
-  color: #111827;
-}
+/* Body colors now handled by theme system via @layer base */
 
 @layer utilities {
   .text-balance {
@@ -106,8 +103,8 @@ html {
     --accent-foreground: 222 47% 11%;
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 98%;
-    --border: 214 32% 91%;
-    --input: 214 32% 91%;
+    --border: 214 32% 80%;
+    --input: 214 32% 80%;
     --ring: 217 91% 60%;
     --chart-1: 217 91% 60%;
     --chart-2: 173 58% 39%;
@@ -134,8 +131,8 @@ html {
     --accent-foreground: 210 40% 98%;
     --destructive: 0 62% 30%;
     --destructive-foreground: 0 0% 98%;
-    --border: 217 33% 17%;
-    --input: 217 33% 17%;
+    --border: 217 33% 30%;
+    --input: 217 33% 30%;
     --ring: 217 91% 60%;
     --chart-1: 220 70% 50%;
     --chart-2: 160 60% 45%;

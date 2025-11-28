@@ -23,8 +23,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+import { API_BASE } from '@/lib/api';
 
 interface Coverage {
   id: string;
@@ -344,8 +343,8 @@ export default function PublisherCoveragePage() {
       <div className="p-8">
         <div className="max-w-4xl mx-auto">
           <div className="text-center py-12">
-            <Loader2 className="w-8 h-8 text-blue-400 animate-spin mx-auto" />
-            <p className="mt-4 text-gray-400">Loading coverage...</p>
+            <Loader2 className="w-8 h-8 text-blue-600 dark:text-blue-400 animate-spin mx-auto" />
+            <p className="mt-4 text-muted-foreground">Loading coverage...</p>
           </div>
         </div>
       </div>
@@ -359,7 +358,7 @@ export default function PublisherCoveragePage() {
         <div className="flex justify-between items-center mb-8">
           <div>
             <h1 className="text-3xl font-bold">Coverage Areas</h1>
-            <p className="text-gray-400 mt-1">
+            <p className="text-muted-foreground mt-1">
               Define where users can find your zmanim
             </p>
           </div>
@@ -370,17 +369,17 @@ export default function PublisherCoveragePage() {
         </div>
 
         {error && (
-          <div className="mb-6 bg-red-900/50 border border-red-700 rounded-lg p-4">
-            <p className="text-red-200">{error}</p>
+          <div className="mb-6 bg-red-900/50 border border-red-700 dark:bg-red-950 dark:border-red-700 rounded-lg p-4">
+            <p className="text-red-200 dark:text-red-300">{error}</p>
           </div>
         )}
 
         {/* Coverage List */}
         {coverage.length === 0 ? (
-          <div className="bg-slate-800 rounded-lg border border-slate-700 p-12 text-center">
-            <MapPin className="w-12 h-12 text-slate-600 mx-auto mb-4" />
+          <div className="bg-card rounded-lg border border-border p-12 text-center">
+            <MapPin className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
             <h3 className="text-lg font-semibold mb-2">No Coverage Areas</h3>
-            <p className="text-slate-400 mb-4">
+            <p className="text-muted-foreground mb-4">
               Add coverage areas to define where users can find your zmanim.
             </p>
             <Button onClick={handleOpenAddDialog}>
@@ -393,8 +392,8 @@ export default function PublisherCoveragePage() {
             {coverage.map((item) => (
               <div
                 key={item.id}
-                className={`bg-slate-800 rounded-lg border p-4 flex items-center justify-between ${
-                  item.is_active ? 'border-slate-700' : 'border-slate-700/50 opacity-60'
+                className={`bg-card rounded-lg border p-4 flex items-center justify-between ${
+                  item.is_active ? 'border-border' : 'border-border opacity-60'
                 }`}
               >
                 <div className="flex items-center gap-4">
@@ -403,12 +402,12 @@ export default function PublisherCoveragePage() {
                   </div>
                   <div>
                     <div className="font-medium">{item.display_name || item.city_name || item.country}</div>
-                    <div className="flex items-center gap-2 text-sm text-slate-400">
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <span className={`px-2 py-0.5 rounded-full border text-xs ${getLevelBadgeColor(item.coverage_level)}`}>
                         {item.coverage_level}
                       </span>
                       <span>Priority: {item.priority}</span>
-                      {!item.is_active && <span className="text-yellow-500">Inactive</span>}
+                      {!item.is_active && <span className="text-yellow-600 dark:text-yellow-400">Inactive</span>}
                     </div>
                   </div>
                 </div>
@@ -460,7 +459,7 @@ export default function PublisherCoveragePage() {
             </DialogHeader>
 
             {/* Breadcrumb */}
-            <div className="flex items-center gap-2 text-sm py-2 border-b border-slate-700">
+            <div className="flex items-center gap-2 text-sm py-2 border-b border-border">
               <button
                 onClick={() => {
                   setSelectedCountry(null);
@@ -468,19 +467,19 @@ export default function PublisherCoveragePage() {
                   setRegions([]);
                   setCities([]);
                 }}
-                className={!selectedCountry ? 'text-blue-400' : 'text-slate-400 hover:text-white'}
+                className={!selectedCountry ? 'text-blue-600 dark:text-blue-400' : 'text-muted-foreground hover:text-foreground'}
               >
                 Countries
               </button>
               {selectedCountry && (
                 <>
-                  <ChevronRight className="w-4 h-4 text-slate-600" />
+                  <ChevronRight className="w-4 h-4 text-muted-foreground" />
                   <button
                     onClick={() => {
                       setSelectedRegion(null);
                       setCities([]);
                     }}
-                    className={selectedCountry && !selectedRegion ? 'text-blue-400' : 'text-slate-400 hover:text-white'}
+                    className={selectedCountry && !selectedRegion ? 'text-blue-600 dark:text-blue-400' : 'text-muted-foreground hover:text-foreground'}
                   >
                     {selectedCountry.name}
                   </button>
@@ -488,15 +487,15 @@ export default function PublisherCoveragePage() {
               )}
               {selectedRegion && (
                 <>
-                  <ChevronRight className="w-4 h-4 text-slate-600" />
-                  <span className="text-blue-400">{selectedRegion.name}</span>
+                  <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                  <span className="text-blue-600 dark:text-blue-400">{selectedRegion.name}</span>
                 </>
               )}
             </div>
 
             {/* Add at current level button */}
             {selectedCountry && (
-              <div className="py-2 border-b border-slate-700">
+              <div className="py-2 border-b border-border">
                 {!selectedRegion ? (
                   <Button
                     variant="outline"
@@ -527,7 +526,7 @@ export default function PublisherCoveragePage() {
               {!selectedCountry && (
                 loadingCountries ? (
                   <div className="flex justify-center py-8">
-                    <Loader2 className="w-6 h-6 text-blue-400 animate-spin" />
+                    <Loader2 className="w-6 h-6 text-blue-600 dark:text-blue-400 animate-spin" />
                   </div>
                 ) : (
                   <div className="grid gap-2 py-2">
@@ -535,16 +534,16 @@ export default function PublisherCoveragePage() {
                       <button
                         key={country.code}
                         onClick={() => handleSelectCountry(country)}
-                        className="flex items-center justify-between p-3 bg-slate-700/50 hover:bg-slate-700 rounded-lg text-left transition-colors"
+                        className="flex items-center justify-between p-3 bg-secondary/50 hover:bg-secondary rounded-lg text-left transition-colors"
                       >
                         <div className="flex items-center gap-3">
-                          <Globe className="w-5 h-5 text-slate-400" />
+                          <Globe className="w-5 h-5 text-muted-foreground" />
                           <div>
                             <div className="font-medium">{country.name}</div>
-                            <div className="text-sm text-slate-500">{country.city_count} cities</div>
+                            <div className="text-sm text-muted-foreground">{country.city_count} cities</div>
                           </div>
                         </div>
-                        <ChevronRight className="w-5 h-5 text-slate-500" />
+                        <ChevronRight className="w-5 h-5 text-muted-foreground" />
                       </button>
                     ))}
                   </div>
@@ -555,7 +554,7 @@ export default function PublisherCoveragePage() {
               {selectedCountry && !selectedRegion && regions.length > 0 && (
                 loadingRegions ? (
                   <div className="flex justify-center py-8">
-                    <Loader2 className="w-6 h-6 text-blue-400 animate-spin" />
+                    <Loader2 className="w-6 h-6 text-blue-600 dark:text-blue-400 animate-spin" />
                   </div>
                 ) : (
                   <div className="grid gap-2 py-2">
@@ -563,18 +562,18 @@ export default function PublisherCoveragePage() {
                       <button
                         key={region.name}
                         onClick={() => handleSelectRegion(region)}
-                        className="flex items-center justify-between p-3 bg-slate-700/50 hover:bg-slate-700 rounded-lg text-left transition-colors"
+                        className="flex items-center justify-between p-3 bg-secondary/50 hover:bg-secondary rounded-lg text-left transition-colors"
                       >
                         <div className="flex items-center gap-3">
-                          <Building2 className="w-5 h-5 text-slate-400" />
+                          <Building2 className="w-5 h-5 text-muted-foreground" />
                           <div>
                             <div className="font-medium">{region.name}</div>
-                            <div className="text-sm text-slate-500">
+                            <div className="text-sm text-muted-foreground">
                               {region.type && `${region.type} • `}{region.city_count} cities
                             </div>
                           </div>
                         </div>
-                        <ChevronRight className="w-5 h-5 text-slate-500" />
+                        <ChevronRight className="w-5 h-5 text-muted-foreground" />
                       </button>
                     ))}
                   </div>
@@ -585,10 +584,10 @@ export default function PublisherCoveragePage() {
               {(selectedRegion || (selectedCountry && regions.length === 0)) && (
                 loadingCities ? (
                   <div className="flex justify-center py-8">
-                    <Loader2 className="w-6 h-6 text-blue-400 animate-spin" />
+                    <Loader2 className="w-6 h-6 text-blue-600 dark:text-blue-400 animate-spin" />
                   </div>
                 ) : cities.length === 0 ? (
-                  <div className="text-center py-8 text-slate-400">
+                  <div className="text-center py-8 text-muted-foreground">
                     No cities found in this area.
                   </div>
                 ) : (
@@ -598,18 +597,18 @@ export default function PublisherCoveragePage() {
                         key={city.id}
                         onClick={() => handleAddCoverage('city', city.id)}
                         disabled={addingCoverage}
-                        className="flex items-center justify-between p-3 bg-slate-700/50 hover:bg-slate-700 rounded-lg text-left transition-colors disabled:opacity-50"
+                        className="flex items-center justify-between p-3 bg-secondary/50 hover:bg-secondary rounded-lg text-left transition-colors disabled:opacity-50"
                       >
                         <div className="flex items-center gap-3">
-                          <MapPin className="w-5 h-5 text-slate-400" />
+                          <MapPin className="w-5 h-5 text-muted-foreground" />
                           <div>
                             <div className="font-medium">{city.name}</div>
-                            <div className="text-sm text-slate-500">
+                            <div className="text-sm text-muted-foreground">
                               {city.region && `${city.region}, `}{city.country}
                             </div>
                           </div>
                         </div>
-                        <Plus className="w-5 h-5 text-slate-500" />
+                        <Plus className="w-5 h-5 text-muted-foreground" />
                       </button>
                     ))}
                   </div>

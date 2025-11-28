@@ -165,60 +165,6 @@ export default function ZmanimDisplay({ geoLocation, date }: ZmanimDisplayProps)
     return dt.toLocaleString(DateTime.TIME_24_WITH_SECONDS);
   };
 
-  const getMinutesBeforeSunrise = (): string => {
-    if (!alosTime || !sunrise) return '';
-    const diff = Math.round(sunrise.diff(alosTime, 'minutes').minutes);
-    return `${diff} minutes before sunrise`;
-  };
-
-  const getMinutesAfterSunrise = (): string => {
-    if (!sofZmanShma || !sunrise) return '';
-    const diff = Math.round(sofZmanShma.diff(sunrise, 'minutes').minutes);
-    return `${diff} minutes after sunrise`;
-  };
-
-  const getChatzosRelativeTime = (): string => {
-    if (!chatzos || !sunrise) return '';
-    const diff = Math.round(chatzos.diff(sunrise, 'minutes').minutes);
-    return `${diff} minutes after sunrise`;
-  };
-
-  const getTefillahRelativeTime = (): string => {
-    if (!sofZmanTefillah || !sunrise) return '';
-    const diff = Math.round(sofZmanTefillah.diff(sunrise, 'minutes').minutes);
-    return `${diff} minutes after sunrise`;
-  };
-
-  const getMinchaGedolahRelativeTime = (): string => {
-    if (!minchaGedolah || !chatzos) return '';
-    const diff = Math.round(minchaGedolah.diff(chatzos, 'minutes').minutes);
-    return `${diff} minutes after Chatzos`;
-  };
-
-  const getMinchaKetanahRelativeTime = (): string => {
-    if (!minchaKetanah || !chatzos) return '';
-    const diff = Math.round(minchaKetanah.diff(chatzos, 'minutes').minutes);
-    return `${diff} minutes after Chatzos`;
-  };
-
-  const getPlagRelativeTime = (): string => {
-    if (!plagHamincha || !sunset) return '';
-    const diff = Math.round(sunset.diff(plagHamincha, 'minutes').minutes);
-    return `${diff} minutes before sunset`;
-  };
-
-  const getTzeisRelativeTime = (): string => {
-    if (!tzeis || !sunset) return '';
-    const diff = Math.round(tzeis.diff(sunset, 'minutes').minutes);
-    return `${diff} minutes after sunset`;
-  };
-
-  const getChatzosHalailahRelativeTime = (): string => {
-    if (!chatzosHalailah || !sunset) return '';
-    const diff = Math.round(chatzosHalailah.diff(sunset, 'minutes').minutes);
-    return `${diff} minutes after sunset`;
-  };
-
   const formatDuration = (minutes: number): string => {
     const hours = Math.floor(minutes / 60);
     const mins = Math.round(minutes % 60);
@@ -483,34 +429,34 @@ export default function ZmanimDisplay({ geoLocation, date }: ZmanimDisplayProps)
 
           {/* Configuration Controls */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            <div className="bg-white rounded-xl p-4 border border-apple-gray-200">
-              <label className="block text-xs font-semibold text-apple-gray-700 mb-2">Sunrise Method</label>
+            <div className="bg-card rounded-xl p-4 border border-border">
+              <label className="block text-xs font-semibold text-foreground mb-2">Sunrise Method</label>
               <select
                 value={sunriseMethod}
                 onChange={(e) => setSunriseMethod(e.target.value as SunriseMethod)}
-                className="w-full px-3 py-2 text-sm bg-white border border-apple-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-3 py-2 text-sm bg-card border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-foreground"
               >
                 <option value="elevation">Elevation-Adjusted</option>
                 <option value="sealevel">Sea-Level</option>
               </select>
             </div>
-            <div className="bg-white rounded-xl p-4 border border-apple-gray-200">
-              <label className="block text-xs font-semibold text-apple-gray-700 mb-2">Sunset Method</label>
+            <div className="bg-card rounded-xl p-4 border border-border">
+              <label className="block text-xs font-semibold text-foreground mb-2">Sunset Method</label>
               <select
                 value={sunsetMethod}
                 onChange={(e) => setSunsetMethod(e.target.value as SunsetMethod)}
-                className="w-full px-3 py-2 text-sm bg-white border border-apple-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-3 py-2 text-sm bg-card border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-foreground"
               >
                 <option value="elevation">Elevation-Adjusted</option>
                 <option value="sealevel">Sea-Level</option>
               </select>
             </div>
-            <div className="bg-white rounded-xl p-4 border border-apple-gray-200">
-              <label className="block text-xs font-semibold text-apple-gray-700 mb-2">Shaah Zmanis Method</label>
+            <div className="bg-card rounded-xl p-4 border border-border">
+              <label className="block text-xs font-semibold text-foreground mb-2">Shaah Zmanis Method</label>
               <select
                 value={shaahZmanisMethod}
                 onChange={(e) => setShaahZmanisMethod(e.target.value as ShaahZmanisMethod)}
-                className="w-full px-3 py-2 text-sm bg-white border border-apple-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-3 py-2 text-sm bg-card border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-foreground"
               >
                 <option value="gra">GRA (Sunrise to Sunset)</option>
                 <option value="mga">MGA (72-min Alos to Tzeis)</option>
@@ -525,33 +471,33 @@ export default function ZmanimDisplay({ geoLocation, date }: ZmanimDisplayProps)
           </div>
 
           {/* Zmanim Table */}
-          <div className="bg-white rounded-2xl shadow-sm border border-apple-gray-200 overflow-hidden">
+          <div className="bg-card rounded-2xl shadow-sm border border-border overflow-hidden">
             <table className="w-full">
-              <thead className="bg-gradient-to-r from-gray-50 to-gray-100 border-b-2 border-gray-200">
+              <thead className="bg-muted border-b-2 border-border">
                 <tr>
-                  <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                  <th className="px-6 py-4 text-left text-xs font-bold text-foreground uppercase tracking-wider">
                     Zman
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                  <th className="px-6 py-4 text-left text-xs font-bold text-foreground uppercase tracking-wider">
                     Time
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                  <th className="px-6 py-4 text-left text-xs font-bold text-foreground uppercase tracking-wider">
                     Method
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                  <th className="px-6 py-4 text-left text-xs font-bold text-foreground uppercase tracking-wider">
                     Formula
                   </th>
-                  <th className="px-6 py-4 text-center text-xs font-bold text-gray-700 uppercase tracking-wider">
+                  <th className="px-6 py-4 text-center text-xs font-bold text-foreground uppercase tracking-wider">
                     Explain
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200">
+              <tbody className="divide-y divide-border">
                 {zmanimData.map((zman) => (
                   <>
                     <tr
                       key={zman.id}
-                      className="hover:bg-gray-50 transition-colors duration-150"
+                      className="hover:bg-muted transition-colors duration-150"
                     >
                       {/* Zman Name with Tree Structure */}
                       <td className="px-6 py-4">
@@ -560,7 +506,7 @@ export default function ZmanimDisplay({ geoLocation, date }: ZmanimDisplayProps)
                           style={{ paddingLeft: `${zman.level * 1.5}rem` }}
                         >
                           {zman.level > 0 && (
-                            <div className="mr-2 text-gray-400">
+                            <div className="mr-2 text-muted-foreground">
                               <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                               </svg>
@@ -568,9 +514,9 @@ export default function ZmanimDisplay({ geoLocation, date }: ZmanimDisplayProps)
                           )}
                           <span className="text-2xl mr-3">{zman.icon}</span>
                           <div>
-                            <div className="font-semibold text-gray-900">{zman.name}</div>
+                            <div className="font-semibold text-foreground">{zman.name}</div>
                             {zman.dependencies && (
-                              <div className="text-xs text-gray-500 mt-1">
+                              <div className="text-xs text-muted-foreground mt-1">
                                 Depends on: {zman.dependencies.join(', ')}
                               </div>
                             )}
@@ -593,17 +539,17 @@ export default function ZmanimDisplay({ geoLocation, date }: ZmanimDisplayProps)
 
                       {/* Method */}
                       <td className="px-6 py-4">
-                        <div className="text-sm font-medium text-gray-700 bg-gray-100 px-3 py-2 rounded-lg inline-block">
+                        <div className="text-sm font-medium text-foreground bg-muted px-3 py-2 rounded-lg inline-block">
                           {zman.method}
                         </div>
                       </td>
 
                       {/* Formula */}
                       <td className="px-6 py-4">
-                        <div className="font-mono text-sm text-gray-800 bg-blue-50 px-3 py-2 rounded-lg border border-blue-200">
+                        <div className="font-mono text-sm text-foreground bg-blue-50 dark:bg-blue-950 px-3 py-2 rounded-lg border border-blue-200 dark:border-blue-800">
                           {zman.formula}
                         </div>
-                        <div className="text-xs text-gray-500 mt-1">
+                        <div className="text-xs text-muted-foreground mt-1">
                           φ = Latitude: {geoLocation.getLatitude().toFixed(4)}°
                           {', '}
                           δ = Solar declination
@@ -637,9 +583,9 @@ export default function ZmanimDisplay({ geoLocation, date }: ZmanimDisplayProps)
 
                     {/* Expanded Explanation Row */}
                     {expandedFormulas.has(zman.id) && (
-                      <tr key={`${zman.id}-explanation`} className="bg-blue-50">
+                      <tr key={`${zman.id}-explanation`} className="bg-blue-50 dark:bg-blue-950">
                         <td colSpan={5} className="px-6 py-6">
-                          <div className="bg-white rounded-xl p-6 shadow-inner border border-blue-200">
+                          <div className="bg-card rounded-xl p-6 shadow-inner border border-blue-300 dark:border-blue-700">
                             <div className="flex items-start">
                               <div className="flex-shrink-0">
                                 <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center">
@@ -649,10 +595,10 @@ export default function ZmanimDisplay({ geoLocation, date }: ZmanimDisplayProps)
                                 </div>
                               </div>
                               <div className="ml-4 flex-1">
-                                <h4 className="text-lg font-bold text-gray-900 mb-3">
+                                <h4 className="text-lg font-bold text-foreground mb-3">
                                   How is {zman.name} calculated?
                                 </h4>
-                                <p className="text-gray-700 leading-relaxed">
+                                <p className="text-muted-foreground leading-relaxed">
                                   {getFormulaExplanation(zman.id)}
                                 </p>
                               </div>
@@ -671,7 +617,7 @@ export default function ZmanimDisplay({ geoLocation, date }: ZmanimDisplayProps)
 
       {/* Location Info Footer */}
       {sunrise && (
-        <div className="bg-gradient-to-br from-gray-700 to-gray-900 rounded-2xl shadow-apple p-6 text-white max-w-7xl mx-auto">
+        <div className="bg-gradient-to-br from-secondary to-muted rounded-2xl shadow-apple p-6 text-foreground max-w-7xl mx-auto border border-border">
           <div className="flex items-center justify-between flex-wrap gap-4">
             <div className="flex items-center">
               <svg

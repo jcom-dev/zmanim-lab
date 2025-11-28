@@ -97,7 +97,7 @@ var StandardZmanim = []string{
 	"tzeis_72",
 }
 
-// ZmanDisplayNames maps zman keys to display names
+// ZmanDisplayNames maps zman keys to display names (English)
 var ZmanDisplayNames = map[string]string{
 	"alos_hashachar":       "Alos HaShachar",
 	"misheyakir":           "Misheyakir",
@@ -113,6 +113,59 @@ var ZmanDisplayNames = map[string]string{
 	"sunset":               "Sunset (Shkiah)",
 	"tzeis_hakochavim":     "Tzeis HaKochavim",
 	"tzeis_72":             "Tzeis (72 minutes)",
+}
+
+// BilingualName represents a zman name in Hebrew and English
+type BilingualName struct {
+	Hebrew         string `json:"hebrew"`
+	English        string `json:"english"`
+	Transliteration string `json:"transliteration,omitempty"`
+}
+
+// ZmanBilingualNames maps zman keys to bilingual names
+var ZmanBilingualNames = map[string]BilingualName{
+	"alos_hashachar":       {Hebrew: "עלות השחר", English: "Dawn", Transliteration: "Alos HaShachar"},
+	"alos_16_1":            {Hebrew: "עלות השחר 16.1°", English: "Dawn (16.1°)", Transliteration: "Alos 16.1"},
+	"alos_72":              {Hebrew: "עלות השחר 72 דקות", English: "Dawn (72 minutes)", Transliteration: "Alos 72"},
+	"misheyakir":           {Hebrew: "משיכיר", English: "Misheyakir", Transliteration: "Misheyakir"},
+	"misheyakir_10_2":      {Hebrew: "משיכיר 10.2°", English: "Misheyakir (10.2°)", Transliteration: "Misheyakir 10.2"},
+	"sunrise":              {Hebrew: "נץ החמה", English: "Sunrise", Transliteration: "Netz HaChama"},
+	"visible_sunrise":      {Hebrew: "נץ החמה הנראה", English: "Visible Sunrise", Transliteration: "Netz HaChama HaNireh"},
+	"sof_zman_shma_gra":    {Hebrew: "סוף זמן שמע גר״א", English: "Latest Shema (GRA)", Transliteration: "Sof Zman Shma GRA"},
+	"sof_zman_shma_mga":    {Hebrew: "סוף זמן שמע מג״א", English: "Latest Shema (MGA)", Transliteration: "Sof Zman Shma MGA"},
+	"sof_zman_tefilla_gra": {Hebrew: "סוף זמן תפילה גר״א", English: "Latest Shacharit (GRA)", Transliteration: "Sof Zman Tefilla GRA"},
+	"sof_zman_tefilla_mga": {Hebrew: "סוף זמן תפילה מג״א", English: "Latest Shacharit (MGA)", Transliteration: "Sof Zman Tefilla MGA"},
+	"chatzos":              {Hebrew: "חצות היום", English: "Midday", Transliteration: "Chatzos HaYom"},
+	"mincha_gedola":        {Hebrew: "מנחה גדולה", English: "Earliest Mincha", Transliteration: "Mincha Gedolah"},
+	"mincha_ketana":        {Hebrew: "מנחה קטנה", English: "Mincha Ketana", Transliteration: "Mincha Ketanah"},
+	"plag_hamincha":        {Hebrew: "פלג המנחה", English: "Plag HaMincha", Transliteration: "Plag HaMincha"},
+	"sunset":               {Hebrew: "שקיעת החמה", English: "Sunset", Transliteration: "Shkias HaChama"},
+	"bein_hashmashos":      {Hebrew: "בין השמשות", English: "Twilight", Transliteration: "Bein HaShmashos"},
+	"tzeis_hakochavim":     {Hebrew: "צאת הכוכבים", English: "Nightfall", Transliteration: "Tzeis HaKochavim"},
+	"tzeis_8_5":            {Hebrew: "צאת הכוכבים 8.5°", English: "Nightfall (8.5°)", Transliteration: "Tzeis 8.5"},
+	"tzeis_72":             {Hebrew: "צאת הכוכבים 72 דקות", English: "Nightfall (72 minutes)", Transliteration: "Tzeis 72"},
+	"tzeis_rabbeinu_tam":   {Hebrew: "צאת הכוכבים רבינו תם", English: "Nightfall (Rabbeinu Tam)", Transliteration: "Tzeis Rabbeinu Tam"},
+	"chatzos_laila":        {Hebrew: "חצות הלילה", English: "Midnight", Transliteration: "Chatzos HaLailah"},
+	"candle_lighting":      {Hebrew: "הדלקת נרות", English: "Candle Lighting", Transliteration: "Hadlakas Neiros"},
+	"motzei_shabbat":       {Hebrew: "מוצאי שבת", English: "End of Shabbat", Transliteration: "Motzei Shabbat"},
+}
+
+// GetBilingualName returns the bilingual name for a zman key
+func GetBilingualName(key string) BilingualName {
+	if name, ok := ZmanBilingualNames[key]; ok {
+		return name
+	}
+	// Fallback: use key as both names
+	return BilingualName{Hebrew: key, English: key}
+}
+
+// GetDisplayName returns the display name in the specified locale
+func GetDisplayName(key string, locale string) string {
+	name := GetBilingualName(key)
+	if locale == "he" {
+		return name.Hebrew
+	}
+	return name.English
 }
 
 // DefaultAlgorithm returns a standard algorithm configuration

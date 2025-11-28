@@ -1,4 +1,5 @@
 import type { Config } from 'tailwindcss'
+import tailwindcssAnimate from 'tailwindcss-animate'
 
 const config: Config = {
     darkMode: ['class'],
@@ -74,6 +75,13 @@ const config: Config = {
   				'Segoe UI',
   				'system-ui',
   				'sans-serif'
+  			],
+  			hebrew: [
+  				'var(--font-hebrew)',
+  				'Noto Sans Hebrew',
+  				'Arial Hebrew',
+  				'David',
+  				'sans-serif'
   			]
   		},
   		backdropBlur: {
@@ -126,7 +134,7 @@ const config: Config = {
   		}
   	}
   },
-  plugins: [require("tailwindcss-animate")],
+  plugins: [tailwindcssAnimate],
 }
 
 export default config

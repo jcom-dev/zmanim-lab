@@ -70,18 +70,17 @@ func (h *Handlers) GetPublisherAlgorithmHandler(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	// Get publisher ID
-	var publisherID string
-	err := h.db.Pool.QueryRow(ctx,
-		"SELECT id FROM publishers WHERE clerk_user_id = $1",
-		userID,
-	).Scan(&publisherID)
-	if err != nil {
-		RespondNotFound(w, r, "Publisher not found")
+	// Get and validate publisher ID from header (validated against JWT claims)
+	// Admins can impersonate any publisher via X-Publisher-Id header
+	requestedID := r.Header.Get("X-Publisher-Id")
+	publisherID := middleware.GetValidatedPublisherID(ctx, requestedID)
+	if publisherID == "" {
+		RespondForbidden(w, r, "No access to the requested publisher")
 		return
 	}
 
 	// Get algorithm for this publisher (prefer draft, then published)
+	var err error
 	var algID, algName, description, status string
 	var configJSON []byte
 	var isActive bool
@@ -189,15 +188,16 @@ func (h *Handlers) UpdatePublisherAlgorithmHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
-	// Get publisher ID
-	var publisherID string
-	err := h.db.Pool.QueryRow(ctx,
-		"SELECT id FROM publishers WHERE clerk_user_id = $1",
-		userID,
-	).Scan(&publisherID)
-	if err != nil {
-		RespondNotFound(w, r, "Publisher not found")
-		return
+	// Get publisher ID from header first, fall back to clerk_user_id lookup
+	publisherID := r.Header.Get("X-Publisher-Id")
+	if publisherID == "" {
+		if err := h.db.Pool.QueryRow(ctx,
+			"SELECT id FROM publishers WHERE clerk_user_id = $1",
+			userID,
+		).Scan(&publisherID); err != nil {
+			RespondNotFound(w, r, "Publisher not found")
+			return
+		}
 	}
 
 	// Convert configuration to JSON
@@ -606,21 +606,23 @@ func (h *Handlers) PublishAlgorithm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get publisher ID
-	var publisherID string
-	err := h.db.Pool.QueryRow(ctx,
-		"SELECT id FROM publishers WHERE clerk_user_id = $1",
-		userID,
-	).Scan(&publisherID)
-	if err != nil {
-		RespondNotFound(w, r, "Publisher not found")
-		return
+	// Get publisher ID from header first, fall back to clerk_user_id lookup
+	publisherID := r.Header.Get("X-Publisher-Id")
+	if publisherID == "" {
+		if err := h.db.Pool.QueryRow(ctx,
+			"SELECT id FROM publishers WHERE clerk_user_id = $1",
+			userID,
+		).Scan(&publisherID); err != nil {
+			RespondNotFound(w, r, "Publisher not found")
+			return
+		}
 	}
 
 	// Get the draft algorithm
 	var algID, algName, description string
 	var configJSON []byte
 	var currentVersion int
+	var err error
 
 	query := `
 		SELECT id, name, COALESCE(description, ''),
@@ -722,15 +724,16 @@ func (h *Handlers) GetAlgorithmVersions(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Get publisher ID
-	var publisherID string
-	err := h.db.Pool.QueryRow(ctx,
-		"SELECT id FROM publishers WHERE clerk_user_id = $1",
-		userID,
-	).Scan(&publisherID)
-	if err != nil {
-		RespondNotFound(w, r, "Publisher not found")
-		return
+	// Get publisher ID from header first, fall back to clerk_user_id lookup
+	publisherID := r.Header.Get("X-Publisher-Id")
+	if publisherID == "" {
+		if err := h.db.Pool.QueryRow(ctx,
+			"SELECT id FROM publishers WHERE clerk_user_id = $1",
+			userID,
+		).Scan(&publisherID); err != nil {
+			RespondNotFound(w, r, "Publisher not found")
+			return
+		}
 	}
 
 	// Get all versions
@@ -797,15 +800,16 @@ func (h *Handlers) DeprecateAlgorithmVersion(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Get publisher ID
-	var publisherID string
-	err := h.db.Pool.QueryRow(ctx,
-		"SELECT id FROM publishers WHERE clerk_user_id = $1",
-		userID,
-	).Scan(&publisherID)
-	if err != nil {
-		RespondNotFound(w, r, "Publisher not found")
-		return
+	// Get publisher ID from header first, fall back to clerk_user_id lookup
+	publisherID := r.Header.Get("X-Publisher-Id")
+	if publisherID == "" {
+		if err := h.db.Pool.QueryRow(ctx,
+			"SELECT id FROM publishers WHERE clerk_user_id = $1",
+			userID,
+		).Scan(&publisherID); err != nil {
+			RespondNotFound(w, r, "Publisher not found")
+			return
+		}
 	}
 
 	// Verify version belongs to publisher and update
@@ -851,15 +855,16 @@ func (h *Handlers) GetAlgorithmVersion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get publisher ID
-	var publisherID string
-	err := h.db.Pool.QueryRow(ctx,
-		"SELECT id FROM publishers WHERE clerk_user_id = $1",
-		userID,
-	).Scan(&publisherID)
-	if err != nil {
-		RespondNotFound(w, r, "Publisher not found")
-		return
+	// Get publisher ID from header first, fall back to clerk_user_id lookup
+	publisherID := r.Header.Get("X-Publisher-Id")
+	if publisherID == "" {
+		if err := h.db.Pool.QueryRow(ctx,
+			"SELECT id FROM publishers WHERE clerk_user_id = $1",
+			userID,
+		).Scan(&publisherID); err != nil {
+			RespondNotFound(w, r, "Publisher not found")
+			return
+		}
 	}
 
 	// Get version
@@ -869,6 +874,7 @@ func (h *Handlers) GetAlgorithmVersion(w http.ResponseWriter, r *http.Request) {
 	var isActive bool
 	var publishedAt, deprecatedAt *time.Time
 	var createdAt, updatedAt time.Time
+	var err error
 
 	query := `
 		SELECT id, name, COALESCE(description, ''),

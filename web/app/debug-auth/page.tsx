@@ -17,7 +17,7 @@ export default async function DebugAuth() {
 
       <div className="mb-4">
         <strong>Session Claims:</strong>
-        <pre className="bg-gray-100 p-4 rounded mt-2 overflow-auto">
+        <pre className="bg-muted p-4 rounded mt-2 overflow-auto">
           {JSON.stringify(sessionClaims, null, 2)}
         </pre>
       </div>

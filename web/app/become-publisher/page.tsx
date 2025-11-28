@@ -4,8 +4,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import Link from 'next/link';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+import { API_BASE } from '@/lib/api';
 
 interface FormData {
   name: string;
@@ -103,7 +102,7 @@ export default function BecomePublisherPage() {
       }
 
       setSubmitted(true);
-    } catch (err) {
+    } catch {
       setSubmitError('Network error. Please check your connection and try again.');
     } finally {
       setIsSubmitting(false);
@@ -121,13 +120,13 @@ export default function BecomePublisherPage() {
 
   if (submitted) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white py-12 px-4">
+      <div className="min-h-screen bg-gradient-to-b from-background to-background py-12 px-4">
         <div className="container mx-auto max-w-lg">
-          <Card className="border-green-200 bg-green-50">
+          <Card className="border-green-200 bg-green-50 dark:border-green-700 dark:bg-green-950">
             <CardHeader className="text-center">
-              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <div className="w-16 h-16 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center mx-auto mb-4">
                 <svg
-                  className="w-8 h-8 text-green-600"
+                  className="w-8 h-8 text-green-600 dark:text-green-400"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -140,18 +139,18 @@ export default function BecomePublisherPage() {
                   />
                 </svg>
               </div>
-              <CardTitle className="text-green-800">Request Submitted!</CardTitle>
-              <CardDescription className="text-green-700">
+              <CardTitle className="text-green-800 dark:text-green-200">Request Submitted!</CardTitle>
+              <CardDescription className="text-green-700 dark:text-green-300">
                 Thank you for your interest in becoming a publisher on Zmanim Lab.
               </CardDescription>
             </CardHeader>
             <CardContent className="text-center">
-              <p className="text-green-700 mb-6">
+              <p className="text-green-700 dark:text-green-300 mb-6">
                 We&apos;ll review your application and get back to you soon. You&apos;ll receive an email
                 notification once your request has been processed.
               </p>
               <Link href="/">
-                <Button variant="outline" className="border-green-600 text-green-700 hover:bg-green-100">
+                <Button variant="outline" className="border-green-600 text-green-700 dark:border-green-400 dark:text-green-300 hover:bg-green-100 dark:hover:bg-green-900">
                   Return to Home
                 </Button>
               </Link>
@@ -163,15 +162,15 @@ export default function BecomePublisherPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white py-12 px-4">
+    <div className="min-h-screen bg-gradient-to-b from-background to-background py-12 px-4">
       <div className="container mx-auto max-w-2xl">
         {/* Header */}
         <div className="text-center mb-8">
-          <Link href="/" className="text-2xl font-bold text-[#1e3a5f] mb-4 inline-block">
+          <Link href="/" className="text-2xl font-bold text-primary mb-4 inline-block">
             Zmanim Lab
           </Link>
-          <h1 className="text-3xl font-bold text-gray-900 mt-4">Become a Publisher</h1>
-          <p className="text-gray-600 mt-2">
+          <h1 className="text-3xl font-bold text-foreground mt-4">Become a Publisher</h1>
+          <p className="text-muted-foreground mt-2">
             Join our network of trusted religious authorities providing accurate zmanim calculations
           </p>
         </div>
@@ -194,7 +193,7 @@ export default function BecomePublisherPage() {
 
               {/* Name */}
               <div>
-                <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="name" className="block text-sm font-medium mb-1">
                   Your Name <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -203,8 +202,8 @@ export default function BecomePublisherPage() {
                   name="name"
                   value={formData.name}
                   onChange={handleChange}
-                  className={`w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                    errors.name ? 'border-red-500' : 'border-gray-300'
+                  className={`w-full px-4 py-2 border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary ${
+                    errors.name ? 'border-red-500' : 'border-border'
                   }`}
                   placeholder="Rabbi Abraham Cohen"
                 />
@@ -213,7 +212,7 @@ export default function BecomePublisherPage() {
 
               {/* Organization */}
               <div>
-                <label htmlFor="organization" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="organization" className="block text-sm font-medium mb-1">
                   Organization <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -222,8 +221,8 @@ export default function BecomePublisherPage() {
                   name="organization"
                   value={formData.organization}
                   onChange={handleChange}
-                  className={`w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                    errors.organization ? 'border-red-500' : 'border-gray-300'
+                  className={`w-full px-4 py-2 border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary ${
+                    errors.organization ? 'border-red-500' : 'border-border'
                   }`}
                   placeholder="Congregation Beth Israel"
                 />
@@ -232,7 +231,7 @@ export default function BecomePublisherPage() {
 
               {/* Email */}
               <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="email" className="block text-sm font-medium mb-1">
                   Email Address <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -241,8 +240,8 @@ export default function BecomePublisherPage() {
                   name="email"
                   value={formData.email}
                   onChange={handleChange}
-                  className={`w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                    errors.email ? 'border-red-500' : 'border-gray-300'
+                  className={`w-full px-4 py-2 border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary ${
+                    errors.email ? 'border-red-500' : 'border-border'
                   }`}
                   placeholder="rabbi@congregation.org"
                 />
@@ -251,8 +250,8 @@ export default function BecomePublisherPage() {
 
               {/* Website */}
               <div>
-                <label htmlFor="website" className="block text-sm font-medium text-gray-700 mb-1">
-                  Website <span className="text-gray-400">(optional)</span>
+                <label htmlFor="website" className="block text-sm font-medium mb-1">
+                  Website <span className="text-muted-foreground">(optional)</span>
                 </label>
                 <input
                   type="url"
@@ -260,14 +259,14 @@ export default function BecomePublisherPage() {
                   name="website"
                   value={formData.website}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                   placeholder="https://congregation.org"
                 />
               </div>
 
               {/* Description */}
               <div>
-                <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="description" className="block text-sm font-medium mb-1">
                   About Your Organization <span className="text-red-500">*</span>
                 </label>
                 <textarea
@@ -276,13 +275,13 @@ export default function BecomePublisherPage() {
                   value={formData.description}
                   onChange={handleChange}
                   rows={5}
-                  className={`w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                    errors.description ? 'border-red-500' : 'border-gray-300'
+                  className={`w-full px-4 py-2 border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary ${
+                    errors.description ? 'border-red-500' : 'border-border'
                   }`}
                   placeholder="Tell us about your community, the areas you serve, and your approach to zmanim calculations..."
                 />
                 {errors.description && <p className="mt-1 text-sm text-red-500">{errors.description}</p>}
-                <p className="mt-1 text-sm text-gray-500">
+                <p className="mt-1 text-sm text-muted-foreground">
                   {formData.description.length}/10 characters minimum
                 </p>
               </div>
@@ -303,10 +302,10 @@ export default function BecomePublisherPage() {
         </Card>
 
         {/* Info */}
-        <div className="mt-8 text-center text-sm text-gray-500">
+        <div className="mt-8 text-center text-sm text-muted-foreground">
           <p>
             Already have an account?{' '}
-            <Link href="/sign-in" className="text-blue-600 hover:underline">
+            <Link href="/sign-in" className="text-blue-600 dark:text-blue-400 hover:underline">
               Sign in
             </Link>
           </p>

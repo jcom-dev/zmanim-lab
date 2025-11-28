@@ -1,8 +1,9 @@
 'use client';
+import { API_BASE } from '@/lib/api';
 
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface ZmanConfig {
   method: string;
@@ -24,18 +25,20 @@ interface DayZmanim {
   }>;
 }
 
-interface MonthPreviewProps {
-  configuration: AlgorithmConfig;
+export interface PreviewLocation {
+  latitude: number;
+  longitude: number;
+  timezone: string;
+  displayName: string;
 }
 
-// Sample location for preview
-const PREVIEW_LOCATION = {
-  latitude: 40.6782,
-  longitude: -73.9442,
-  timezone: 'America/New_York',
-};
+interface MonthPreviewProps {
+  configuration: AlgorithmConfig;
+  getToken: () => Promise<string | null>;
+  location: PreviewLocation;
+}
 
-export function MonthPreview({ configuration }: MonthPreviewProps) {
+export function MonthPreview({ configuration, getToken, location }: MonthPreviewProps) {
   const [currentMonth, setCurrentMonth] = useState(() => {
     const now = new Date();
     return { year: now.getFullYear(), month: now.getMonth() };
@@ -46,7 +49,7 @@ export function MonthPreview({ configuration }: MonthPreviewProps) {
 
   useEffect(() => {
     loadMonth();
-  }, [currentMonth, configuration]);
+  }, [currentMonth, configuration, location]);
 
   const loadMonth = async () => {
     if (Object.keys(configuration.zmanim).length === 0) {
@@ -63,7 +66,12 @@ export function MonthPreview({ configuration }: MonthPreviewProps) {
       const month = currentMonth.month;
       const daysInMonth = new Date(year, month + 1, 0).getDate();
 
-      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+      const token = await getToken();
+      if (!token) {
+        console.warn('No auth token available, skipping month preview load');
+        setLoading(false);
+        return;
+      }
 
       // Fetch zmanim for each day (we'll batch this in a real implementation)
       // For now, fetch a few key days to demonstrate
@@ -73,16 +81,18 @@ export function MonthPreview({ configuration }: MonthPreviewProps) {
         const date = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 
         try {
-          const response = await fetch(`${apiBaseUrl}/api/v1/publisher/algorithm/preview`, {
+          const response = await fetch(`${API_BASE}/api/v1/publisher/algorithm/preview`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`,
+            },
             body: JSON.stringify({
               configuration,
               date,
-              latitude: PREVIEW_LOCATION.latitude,
-              longitude: PREVIEW_LOCATION.longitude,
-              timezone: PREVIEW_LOCATION.timezone,
+              latitude: location.latitude,
+              longitude: location.longitude,
+              timezone: location.timezone,
             }),
           });
 
@@ -124,7 +134,12 @@ export function MonthPreview({ configuration }: MonthPreviewProps) {
     });
   };
 
-  const monthName = new Date(currentMonth.year, currentMonth.month).toLocaleString('default', { month: 'long', year: 'numeric' });
+  const months = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+
+  const years = Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - 2 + i);
 
   // Generate calendar grid
   const firstDayOfMonth = new Date(currentMonth.year, currentMonth.month, 1).getDay();
@@ -142,24 +157,49 @@ export function MonthPreview({ configuration }: MonthPreviewProps) {
   }
 
   return (
-    <Card data-testid="month-preview">
-      <CardHeader>
-        <div className="flex justify-between items-center">
-          <CardTitle>Month View</CardTitle>
-          <div className="flex items-center gap-4">
-            <Button variant="outline" size="sm" onClick={prevMonth}>
-              Previous
-            </Button>
-            <span className="text-white font-medium">{monthName}</span>
-            <Button variant="outline" size="sm" onClick={nextMonth}>
-              Next
-            </Button>
-          </div>
+    <div data-testid="month-preview">
+      {/* Month/Year Selector */}
+      <div className="flex justify-between items-center mb-6">
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="icon" onClick={prevMonth}>
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+
+          {/* Month Selector */}
+          <select
+            value={currentMonth.month}
+            onChange={(e) => setCurrentMonth(prev => ({ ...prev, month: parseInt(e.target.value) }))}
+            className="bg-background border border-input rounded-md px-3 py-1.5 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+          >
+            {months.map((month, index) => (
+              <option key={month} value={index}>{month}</option>
+            ))}
+          </select>
+
+          {/* Year Selector */}
+          <select
+            value={currentMonth.year}
+            onChange={(e) => setCurrentMonth(prev => ({ ...prev, year: parseInt(e.target.value) }))}
+            className="bg-background border border-input rounded-md px-3 py-1.5 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+          >
+            {years.map((year) => (
+              <option key={year} value={year}>{year}</option>
+            ))}
+          </select>
+
+          <Button variant="ghost" size="icon" onClick={nextMonth}>
+            <ChevronRight className="h-4 w-4" />
+          </Button>
         </div>
-      </CardHeader>
-      <CardContent>
+
+        <span className="text-xs text-muted-foreground">
+          {location.displayName}
+        </span>
+      </div>
+
+      <div>
         {loading && (
-          <div className="text-center py-8 text-slate-400">
+          <div className="text-center py-8 text-muted-foreground">
             Loading month data...
           </div>
         )}
@@ -168,7 +208,7 @@ export function MonthPreview({ configuration }: MonthPreviewProps) {
           <div className="grid grid-cols-7 gap-1">
             {/* Day headers */}
             {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-              <div key={day} className="text-center text-xs text-slate-400 py-2">
+              <div key={day} className="text-center text-xs text-muted-foreground py-2">
                 {day}
               </div>
             ))}
@@ -188,8 +228,8 @@ export function MonthPreview({ configuration }: MonthPreviewProps) {
                   key={day}
                   className={`p-2 text-center rounded cursor-pointer transition-colors ${
                     hasData
-                      ? 'bg-blue-900/50 hover:bg-blue-800/50 text-white'
-                      : 'bg-slate-800 hover:bg-slate-700 text-slate-400'
+                      ? 'bg-blue-900/50 hover:bg-blue-800/50 text-foreground'
+                      : 'bg-card hover:bg-muted text-muted-foreground'
                   } ${selectedDay?.date === dateStr ? 'ring-2 ring-blue-500' : ''}`}
                   onClick={() => dayData && setSelectedDay(dayData)}
                 >
@@ -207,8 +247,8 @@ export function MonthPreview({ configuration }: MonthPreviewProps) {
 
         {/* Selected day details */}
         {selectedDay && (
-          <div className="mt-6 p-4 bg-slate-700 rounded-lg">
-            <h4 className="font-medium text-white mb-3">
+          <div className="mt-6 p-4 bg-muted rounded-lg">
+            <h4 className="font-medium text-foreground mb-3">
               {new Date(selectedDay.date).toLocaleDateString('en-US', {
                 weekday: 'long',
                 year: 'numeric',
@@ -219,7 +259,7 @@ export function MonthPreview({ configuration }: MonthPreviewProps) {
             <div className="space-y-2">
               {selectedDay.zmanim.map(zman => (
                 <div key={zman.key} className="flex justify-between text-sm">
-                  <span className="text-slate-300">{zman.name}</span>
+                  <span className="text-muted-foreground">{zman.name}</span>
                   <span className="font-mono text-blue-400">{zman.time}</span>
                 </div>
               ))}
@@ -227,10 +267,10 @@ export function MonthPreview({ configuration }: MonthPreviewProps) {
           </div>
         )}
 
-        <p className="text-xs text-slate-500 mt-4">
+        <p className="text-xs text-muted-foreground mt-4">
           Note: Preview shows sample days. Full month data available after save.
         </p>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }

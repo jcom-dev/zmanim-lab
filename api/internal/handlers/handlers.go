@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jcom-dev/zmanim-lab/internal/ai"
 	"github.com/jcom-dev/zmanim-lab/internal/db"
 	"github.com/jcom-dev/zmanim-lab/internal/middleware"
 	"github.com/jcom-dev/zmanim-lab/internal/models"
@@ -20,6 +21,11 @@ type Handlers struct {
 	zmanimService    *services.ZmanimService
 	clerkService     *services.ClerkService
 	emailService     *services.EmailService
+	// AI services (optional - may be nil if not configured)
+	aiSearch    *ai.SearchService
+	aiContext   *ai.ContextService
+	aiEmbedding *ai.EmbeddingService
+	aiClaude    *ai.ClaudeService
 }
 
 // New creates a new handlers instance

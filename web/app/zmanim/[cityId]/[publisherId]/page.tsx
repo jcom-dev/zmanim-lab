@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Image from 'next/image';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import {
   MapPin, User, Building, ChevronLeft, ChevronRight,
@@ -8,9 +9,8 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { DateTime } from 'luxon';
-import { FormulaPanel, type Zman, type ZmanFormula } from '@/components/zmanim/FormulaPanel';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+import { FormulaPanel, type Zman } from '@/components/zmanim/FormulaPanel';
+import { API_BASE } from '@/lib/api';
 
 interface City {
   id: string;
@@ -140,7 +140,7 @@ export default function ZmanimPage() {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-slate-900 flex items-center justify-center">
+      <main className="min-h-screen bg-background flex items-center justify-center">
         <Loader2 className="w-8 h-8 text-blue-400 animate-spin" />
       </main>
     );
@@ -148,11 +148,11 @@ export default function ZmanimPage() {
 
   if (error) {
     return (
-      <main className="min-h-screen bg-slate-900">
+      <main className="min-h-screen bg-background">
         <div className="container mx-auto px-4 py-12">
           <div className="bg-red-900/50 border border-red-700 rounded-lg p-6 text-center">
-            <AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-4" />
-            <h2 className="text-xl font-bold text-white mb-2">Error</h2>
+            <AlertCircle className="w-12 h-12 text-destructive mx-auto mb-4" />
+            <h2 className="text-xl font-bold text-foreground mb-2">Error</h2>
             <p className="text-red-200 mb-4">{error}</p>
             <Link
               href={`/zmanim/${cityId}`}
@@ -172,13 +172,13 @@ export default function ZmanimPage() {
   const zmanim = data?.zmanim || [];
 
   return (
-    <main className="min-h-screen bg-slate-900">
+    <main className="min-h-screen bg-background">
       {/* Header */}
-      <div className="bg-slate-800 border-b border-slate-700">
+      <div className="bg-card border-b border-border">
         <div className="container mx-auto px-4 py-6">
           <Link
             href={`/zmanim/${cityId}`}
-            className="inline-flex items-center gap-2 text-slate-400 hover:text-white mb-4"
+            className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground mb-4"
           >
             <ArrowLeft className="w-4 h-4" />
             Change publisher
@@ -187,33 +187,37 @@ export default function ZmanimPage() {
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             {/* Location & Publisher */}
             <div>
-              <div className="flex items-center gap-2 text-slate-400 text-sm mb-1">
+              <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1">
                 <MapPin className="w-4 h-4" />
                 <span>{city?.name}, {city?.region && `${city.region}, `}{city?.country}</span>
               </div>
 
               {isDefault ? (
                 <div className="flex items-center gap-2">
-                  <AlertCircle className="w-5 h-5 text-yellow-400" />
-                  <h1 className="text-xl font-bold text-yellow-200">Default Zmanim</h1>
+                  <AlertCircle className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
+                  <h1 className="text-xl font-bold text-yellow-600 dark:text-yellow-200">Default Zmanim</h1>
                 </div>
               ) : publisher ? (
                 <div className="flex items-center gap-3">
                   {publisher.logo_url ? (
-                    <img
-                      src={publisher.logo_url}
-                      alt={publisher.name}
-                      className="w-10 h-10 rounded-lg object-cover"
-                    />
+                    <div className="relative w-10 h-10">
+                      <Image
+                        src={publisher.logo_url}
+                        alt={publisher.name}
+                        fill
+                        className="rounded-lg object-cover"
+                        unoptimized
+                      />
+                    </div>
                   ) : (
-                    <div className="w-10 h-10 bg-slate-700 rounded-lg flex items-center justify-center">
-                      <User className="w-5 h-5 text-slate-400" />
+                    <div className="w-10 h-10 bg-muted rounded-lg flex items-center justify-center">
+                      <User className="w-5 h-5 text-muted-foreground" />
                     </div>
                   )}
                   <div>
-                    <h1 className="text-xl font-bold text-white">{publisher.name}</h1>
+                    <h1 className="text-xl font-bold text-foreground">{publisher.name}</h1>
                     {publisher.organization && (
-                      <div className="flex items-center gap-1 text-slate-400 text-sm">
+                      <div className="flex items-center gap-1 text-muted-foreground text-sm">
                         <Building className="w-3 h-3" />
                         <span>{publisher.organization}</span>
                       </div>
@@ -227,28 +231,28 @@ export default function ZmanimPage() {
             <div className="flex items-center gap-2">
               <button
                 onClick={handlePrevDay}
-                className="p-2 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors"
+                className="p-2 bg-muted hover:bg-secondary rounded-lg transition-colors"
                 aria-label="Previous day"
               >
-                <ChevronLeft className="w-5 h-5 text-white" />
+                <ChevronLeft className="w-5 h-5 text-foreground" />
               </button>
 
               <button
                 onClick={handleToday}
-                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors flex items-center gap-2"
+                className="px-4 py-2 bg-muted hover:bg-secondary rounded-lg transition-colors flex items-center gap-2"
               >
-                <Calendar className="w-4 h-4 text-slate-400" />
-                <span className="text-white font-medium">
+                <Calendar className="w-4 h-4 text-muted-foreground" />
+                <span className="text-foreground font-medium">
                   {selectedDate.toFormat('EEE, MMM d, yyyy')}
                 </span>
               </button>
 
               <button
                 onClick={handleNextDay}
-                className="p-2 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors"
+                className="p-2 bg-muted hover:bg-secondary rounded-lg transition-colors"
                 aria-label="Next day"
               >
-                <ChevronRight className="w-5 h-5 text-white" />
+                <ChevronRight className="w-5 h-5 text-foreground" />
               </button>
             </div>
           </div>
@@ -278,11 +282,11 @@ export default function ZmanimPage() {
             return (
               <div
                 key={zman.key}
-                className="bg-slate-800 border border-slate-700 rounded-lg overflow-hidden"
+                className="bg-card border border-border rounded-lg overflow-hidden"
               >
                 <div className="flex items-center justify-between p-4">
                   <div className="flex items-center gap-3">
-                    <span className="text-white font-medium">
+                    <span className="text-foreground font-medium">
                       {zmanWithName.name}
                     </span>
                     <button
@@ -290,7 +294,7 @@ export default function ZmanimPage() {
                         setSelectedZman(zmanWithName);
                         setFormulaPanelOpen(true);
                       }}
-                      className="p-1 text-slate-500 hover:text-blue-400 hover:bg-slate-700 rounded transition-colors"
+                      className="p-1 text-muted-foreground hover:text-blue-400 hover:bg-muted rounded transition-colors"
                       aria-label={`Show formula details for ${zmanWithName.name}`}
                     >
                       <Info className="w-4 h-4" />
@@ -307,7 +311,7 @@ export default function ZmanimPage() {
 
         {zmanim.length === 0 && (
           <div className="text-center py-12">
-            <p className="text-slate-400">No zmanim available for this date.</p>
+            <p className="text-muted-foreground">No zmanim available for this date.</p>
           </div>
         )}
       </div>
@@ -323,12 +327,12 @@ export default function ZmanimPage() {
       />
 
       {/* Footer */}
-      <footer className="mt-auto border-t border-slate-700 bg-slate-800/50">
+      <footer className="mt-auto border-t border-border bg-card/50">
         <div className="container mx-auto px-4 py-8 text-center">
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-muted-foreground">
             Zmanim Lab - Multi-Publisher Prayer Times Platform
           </p>
-          <p className="text-xs text-slate-600 mt-2">
+          <p className="text-xs text-muted-foreground mt-2">
             Timezone: {city?.timezone || 'Unknown'}
           </p>
         </div>

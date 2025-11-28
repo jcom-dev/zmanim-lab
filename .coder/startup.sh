@@ -268,7 +268,28 @@ else
     print_success "tmux already installed"
 fi
 
-# Step 10: Install Fly.io CLI
+# Step 10: Install useful development utilities
+print_status "Installing development utilities (jq, tree, htop, ncdu, vim)..."
+sudo apt-get update -qq && sudo apt-get install -y \
+    jq \
+    tree \
+    htop \
+    ncdu \
+    vim \
+    iproute2 \
+    > /dev/null 2>&1
+print_success "Development utilities installed"
+
+# Step 10b: Install Jest globally for testing
+print_status "Installing Jest globally..."
+if ! npm list -g jest &> /dev/null; then
+    sudo npm install -g jest
+    print_success "Jest installed globally"
+else
+    print_success "Jest already installed globally"
+fi
+
+# Step 10c: Install Fly.io CLI
 print_status "Installing Fly.io CLI..."
 if ! command -v flyctl &> /dev/null; then
     curl -L https://fly.io/install.sh | sh
@@ -325,11 +346,16 @@ echo "📦 Installed:"
 echo "  - Go $(go version 2>/dev/null | awk '{print $3}' || echo 'not found')"
 echo "  - Node.js $(node --version 2>/dev/null || echo 'not found')"
 echo "  - npm $(npm --version 2>/dev/null || echo 'not found')"
+echo "  - Jest $(jest --version 2>/dev/null || echo 'not found')"
 echo "  - nano $(nano --version 2>/dev/null | head -n1 || echo 'not found')"
 echo "  - Claude Code $(claude --version 2>/dev/null || echo 'not found')"
 echo "  - Fly.io CLI $(flyctl version 2>/dev/null | head -n1 || echo 'not found')"
 echo "  - Supabase CLI (via npx supabase)"
 echo "  - Playwright (Chromium)"
+echo ""
+echo "🛠️  Utilities:"
+echo "  - jq $(jq --version 2>/dev/null || echo 'not found')"
+echo "  - tree, htop, ncdu, vim, ss"
 echo ""
 echo "🔧 Configuration:"
 echo "  - Git User: $(git config --global user.name 2>/dev/null || echo 'not configured')"

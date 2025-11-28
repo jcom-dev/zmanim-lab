@@ -62,7 +62,8 @@ export const getDefaultGeoLocation = (): GeoLocation => {
 export const detectTimeZone = (latitude: number, longitude: number): string => {
   // Simple timezone detection based on longitude
   // For more accuracy, use a timezone API service
-  const offset = Math.round(longitude / 15);
+  // Calculate rough offset (not used for detection, but helpful for debugging)
+  // const offset = Math.round(longitude / 15);
 
   // Return common timezones based on rough location
   if (latitude >= 29 && latitude <= 33 && longitude >= 34 && longitude <= 36) {

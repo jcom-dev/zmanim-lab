@@ -34,7 +34,7 @@ export default function MethodCard({ method, time, sunrise }: MethodCardProps) {
   return (
     <div
       className="
-        bg-white rounded-2xl shadow-apple border border-apple-gray-200
+        bg-card rounded-2xl shadow-apple border border-border
         card-hover cursor-pointer overflow-hidden
         transition-all duration-300
       "
@@ -49,7 +49,7 @@ export default function MethodCard({ method, time, sunrise }: MethodCardProps) {
       <div className="p-5">
         {/* Method name and category badge */}
         <div className="flex items-start justify-between mb-3">
-          <h3 className="text-base font-semibold text-apple-gray-900 flex-1 pr-2">
+          <h3 className="text-base font-semibold text-foreground flex-1 pr-2">
             {method.name}
           </h3>
           <span
@@ -65,13 +65,13 @@ export default function MethodCard({ method, time, sunrise }: MethodCardProps) {
 
         {/* Time display */}
         <div className="mb-3">
-          <div className="text-3xl font-semibold text-apple-gray-900 tracking-tight">
+          <div className="text-3xl font-semibold text-foreground tracking-tight">
             {formatTime(time)}
           </div>
         </div>
 
         {/* Formula */}
-        <div className="text-sm text-apple-gray-600 bg-apple-gray-50 rounded-lg px-3 py-2 mb-3 font-mono">
+        <div className="text-sm text-muted-foreground bg-muted rounded-lg px-3 py-2 mb-3 font-mono">
           {getFormula()}
         </div>
 
@@ -82,27 +82,27 @@ export default function MethodCard({ method, time, sunrise }: MethodCardProps) {
             ${isExpanded ? 'max-h-96 opacity-100 mt-4' : 'max-h-0 opacity-0'}
           `}
         >
-          <div className="pt-4 border-t border-apple-gray-200">
+          <div className="pt-4 border-t border-border">
             {/* Description */}
             <div className="mb-3">
-              <h4 className="text-sm font-semibold text-apple-gray-900 mb-1">
+              <h4 className="text-sm font-semibold text-foreground mb-1">
                 Description
               </h4>
-              <p className="text-sm text-apple-gray-600 leading-relaxed">{method.description}</p>
+              <p className="text-sm text-muted-foreground leading-relaxed">{method.description}</p>
             </div>
 
             {/* Source */}
             <div className="mb-3">
-              <h4 className="text-sm font-semibold text-apple-gray-900 mb-1">
+              <h4 className="text-sm font-semibold text-foreground mb-1">
                 Source
               </h4>
-              <p className="text-sm text-apple-gray-600 italic">{method.source}</p>
+              <p className="text-sm text-muted-foreground italic">{method.source}</p>
             </div>
 
             {/* Additional details */}
             {time && sunrise && (
-              <div className="mt-3 pt-3 border-t border-apple-gray-100">
-                <p className="text-xs text-apple-gray-500 font-medium">
+              <div className="mt-3 pt-3 border-t border-border">
+                <p className="text-xs text-muted-foreground font-medium">
                   {Math.round(sunrise.diff(time, 'minutes').minutes)} minutes before sunrise
                 </p>
               </div>
@@ -114,7 +114,7 @@ export default function MethodCard({ method, time, sunrise }: MethodCardProps) {
         <div className="flex justify-center mt-3 pt-2">
           <svg
             className={`
-              w-5 h-5 text-apple-gray-400 transition-transform duration-300
+              w-5 h-5 text-muted-foreground transition-transform duration-300
               ${isExpanded ? 'rotate-180' : ''}
             `}
             fill="none"

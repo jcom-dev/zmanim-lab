@@ -100,6 +100,37 @@ func main() {
 			// Zmanim calculations
 			r.Get("/zmanim", h.GetZmanimForCity)      // New: GET with cityId, date, publisherId
 			r.Post("/zmanim", h.CalculateZmanim)       // Legacy: POST with coordinates
+
+			// DSL endpoints (Epic 4)
+			r.Post("/dsl/validate", h.ValidateDSLFormula)       // Validate DSL formula
+			r.Post("/dsl/preview", h.PreviewDSLFormula)         // Preview/calculate DSL formula
+			r.Post("/dsl/preview-week", h.PreviewDSLFormulaWeek) // Weekly preview (Story 4-10)
+
+			// Zman definitions - bilingual naming (Story 4-3)
+			r.Get("/zman-definitions", h.GetZmanDefinitions)
+			r.Get("/zman-definitions/{key}", h.GetZmanDefinition)
+
+			// AI endpoints (Story 4-7, 4-8)
+			r.Post("/ai/search", h.SearchAI)
+			r.Post("/ai/context", h.GetAIContext)
+			r.Post("/ai/generate-formula", h.GenerateFormula)
+			r.Post("/ai/explain-formula", h.ExplainFormula)
+
+			// Hebrew calendar endpoints (Story 4-10)
+			r.Get("/calendar/week", h.GetWeekCalendar)
+			r.Get("/calendar/hebrew-date", h.GetHebrewDate)
+			r.Get("/calendar/shabbat", h.GetShabbatTimes)
+
+			// Public algorithm browsing (Story 4-12)
+			r.Get("/algorithms/public", h.BrowsePublicAlgorithms)
+			r.Get("/algorithms/{id}/public", h.GetPublicAlgorithm)
+		})
+
+		// Authenticated routes for algorithm actions (Story 4-12)
+		r.Group(func(r chi.Router) {
+			r.Use(authMiddleware.RequireRole("publisher"))
+			r.Post("/algorithms/{id}/copy", h.CopyAlgorithm)
+			r.Post("/algorithms/{id}/fork", h.ForkAlgorithm)
 		})
 
 		// Publisher protected routes
@@ -117,6 +148,8 @@ func main() {
 			r.Post("/algorithm/preview", h.PreviewAlgorithm)
 			r.Get("/algorithm/templates", h.GetAlgorithmTemplates)
 			r.Get("/algorithm/methods", h.GetZmanMethods)
+			// Publisher zmanim management (Story 4-4)
+			r.Get("/zmanim", h.GetPublisherZmanim)
 			r.Post("/algorithm/publish", h.PublishAlgorithm)
 			r.Get("/algorithm/versions", h.GetAlgorithmVersions)
 			r.Get("/algorithm/versions/{id}", h.GetAlgorithmVersion)
@@ -128,6 +161,9 @@ func main() {
 			r.Delete("/coverage/{id}", h.DeletePublisherCoverage)
 			// Cache management
 			r.Delete("/cache", h.InvalidatePublisherCache)
+			// Zman definitions management (Story 4-3)
+			r.Post("/zman-definitions", h.CreateZmanDefinition)
+			r.Put("/zman-definitions/{key}", h.UpdateZmanDefinition)
 			// Team management (Story 2-10)
 			r.Get("/team", h.GetPublisherTeam)
 			r.Post("/team/invite", h.InvitePublisherTeamMember)
@@ -135,6 +171,20 @@ func main() {
 			r.Post("/team/invitations/{id}/resend", h.ResendPublisherInvitation)
 			r.Delete("/team/invitations/{id}", h.CancelPublisherInvitation)
 			r.Post("/team/accept", h.AcceptPublisherInvitation)
+			// Onboarding wizard (Story 4-11)
+			r.Get("/onboarding", h.GetOnboardingState)
+			r.Put("/onboarding", h.SaveOnboardingState)
+			r.Post("/onboarding/complete", h.CompleteOnboarding)
+			r.Post("/onboarding/skip", h.SkipOnboarding)
+			// Algorithm collaboration (Story 4-12)
+			r.Put("/algorithm/visibility", h.SetAlgorithmVisibility)
+			r.Get("/algorithm/forks", h.GetMyForks)
+			// Version history (Story 4-13)
+			r.Get("/algorithm/history", h.GetVersionHistory)
+			r.Get("/algorithm/history/{version}", h.GetVersionDetail)
+			r.Get("/algorithm/diff", h.GetVersionDiff)
+			r.Post("/algorithm/rollback", h.RollbackVersion)
+			r.Post("/algorithm/snapshot", h.CreateVersionSnapshot)
 		})
 
 		// User routes (authenticated)
@@ -172,6 +222,11 @@ func main() {
 			// System configuration
 			r.Get("/config", h.AdminGetConfig)
 			r.Put("/config", h.AdminUpdateConfig)
+
+			// AI management (Story 4-7, 4-8)
+			r.Get("/ai/stats", h.GetAIIndexStats)
+			r.Post("/ai/reindex", h.TriggerReindex)
+			r.Get("/ai/audit", h.GetAIAuditLogs)
 		})
 	})
 

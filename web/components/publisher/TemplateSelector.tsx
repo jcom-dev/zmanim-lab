@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { useAuthenticatedFetch } from '@/lib/hooks/useAuthenticatedFetch';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -27,32 +28,25 @@ interface TemplateSelectorProps {
 }
 
 export function TemplateSelector({ onSelect }: TemplateSelectorProps) {
+  const { fetchWithAuth } = useAuthenticatedFetch();
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadTemplates();
-  }, []);
-
-  const loadTemplates = async () => {
+  const loadTemplates = useCallback(async () => {
     try {
-      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
-      const response = await fetch(`${apiBaseUrl}/api/v1/publisher/algorithm/templates`, {
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setTemplates(data.data?.templates || data.templates || []);
-      }
+      const data = await fetchWithAuth<{ templates: Template[] }>('/api/v1/publisher/algorithm/templates');
+      setTemplates(data.templates || []);
     } catch (err) {
       console.error('Failed to load templates:', err);
     } finally {
       setLoading(false);
     }
-  };
+  }, [fetchWithAuth]);
+
+  useEffect(() => {
+    loadTemplates();
+  }, [loadTemplates]);
 
   const handleSelect = (template: Template) => {
     setSelectedId(template.id);
@@ -60,7 +54,7 @@ export function TemplateSelector({ onSelect }: TemplateSelectorProps) {
   };
 
   if (loading) {
-    return <div className="text-slate-400">Loading templates...</div>;
+    return <div className="text-muted-foreground">Loading templates...</div>;
   }
 
   return (
@@ -68,8 +62,8 @@ export function TemplateSelector({ onSelect }: TemplateSelectorProps) {
       {templates.map((template) => (
         <Card
           key={template.id}
-          className={`cursor-pointer transition-all hover:border-blue-500 ${
-            selectedId === template.id ? 'border-blue-500 ring-2 ring-blue-500/50' : ''
+          className={`cursor-pointer transition-all hover:border-primary flex flex-col ${
+            selectedId === template.id ? 'border-primary ring-2 ring-primary/50' : ''
           }`}
           onClick={() => handleSelect(template)}
           data-testid={`template-${template.id}`}
@@ -77,14 +71,14 @@ export function TemplateSelector({ onSelect }: TemplateSelectorProps) {
           <CardHeader className="pb-2">
             <CardTitle className="text-lg">{template.name}</CardTitle>
           </CardHeader>
-          <CardContent>
-            <CardDescription className="text-sm">
+          <CardContent className="flex flex-col flex-1">
+            <CardDescription className="text-sm flex-1">
               {template.description}
             </CardDescription>
             <Button
               variant="outline"
               size="sm"
-              className="mt-4"
+              className="mt-4 self-start"
               onClick={(e) => {
                 e.stopPropagation();
                 handleSelect(template);

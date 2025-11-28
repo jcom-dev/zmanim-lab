@@ -41,8 +41,8 @@ export default function DatePicker({ onDateChange }: DatePickerProps) {
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-apple p-6 md:p-8 border border-apple-gray-200">
-      <h2 className="text-xl font-semibold text-apple-gray-900 mb-6 flex items-center">
+    <div className="bg-card rounded-2xl shadow-apple p-6 md:p-8 border border-border">
+      <h2 className="text-xl font-semibold text-foreground mb-6 flex items-center">
         <svg
           className="w-5 h-5 mr-2 text-apple-blue"
           fill="none"
@@ -64,7 +64,7 @@ export default function DatePicker({ onDateChange }: DatePickerProps) {
         <div>
           <label
             htmlFor="date"
-            className="block text-sm font-medium text-apple-gray-700 mb-2"
+            className="block text-sm font-medium text-foreground mb-2"
           >
             Select Date
           </label>
@@ -75,18 +75,19 @@ export default function DatePicker({ onDateChange }: DatePickerProps) {
             onChange={handleDateChange}
             className="
               w-full px-4 py-2.5 rounded-xl
-              border border-apple-gray-300
+              border border-border
               focus:border-apple-blue focus:ring-2 focus:ring-apple-blue/20
               transition-all duration-200 outline-none
-              text-apple-gray-900 font-normal text-[15px]
+              text-foreground font-normal text-[15px]
+              bg-card
             "
           />
         </div>
 
         {/* Display formatted date */}
-        <div className="bg-apple-gray-50 rounded-xl p-4 border border-apple-gray-200">
-          <p className="text-xs text-apple-gray-500 mb-1 font-medium">Selected Date</p>
-          <p className="text-base font-medium text-apple-gray-900">
+        <div className="bg-muted rounded-xl p-4 border border-border">
+          <p className="text-xs text-muted-foreground mb-1 font-medium">Selected Date</p>
+          <p className="text-base font-medium text-foreground">
             {formatDisplayDate()}
           </p>
         </div>
@@ -96,7 +97,7 @@ export default function DatePicker({ onDateChange }: DatePickerProps) {
           type="button"
           onClick={handleToday}
           className="
-            w-full bg-apple-blue hover:bg-[#0051D5]
+            w-full bg-apple-blue hover:bg-apple-blue/90
             text-white font-medium py-2.5 px-5 rounded-xl
             transition-all duration-200
             shadow-sm hover:shadow-md

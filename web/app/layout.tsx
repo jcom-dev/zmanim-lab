@@ -1,10 +1,17 @@
 import type { Metadata, Viewport } from 'next';
-import { Inter } from 'next/font/google';
+import { Inter, Noto_Sans_Hebrew } from 'next/font/google';
 import { ClerkProvider } from '@clerk/nextjs';
 import { QueryProvider } from '@/providers/QueryProvider';
+import { ThemeProvider } from '@/components/theme-provider';
+import { Toaster } from 'sonner';
 import './globals.css';
 
 const inter = Inter({ subsets: ['latin'] });
+const notoSansHebrew = Noto_Sans_Hebrew({
+  subsets: ['hebrew'],
+  variable: '--font-hebrew',
+  display: 'swap',
+});
 
 export const metadata: Metadata = {
   title: 'Zmanim Lab - Multi-Publisher Prayer Times Platform',
@@ -39,16 +46,24 @@ export default function RootLayout({
 }) {
   return (
     <ClerkProvider>
-      <html lang="en">
+      <html lang="en" suppressHydrationWarning>
         <head>
           <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🕍</text></svg>" />
         </head>
-        <body className={inter.className}>
-          <QueryProvider>
-            <div className="min-h-screen">
-              {children}
-            </div>
-          </QueryProvider>
+        <body className={`${inter.className} ${notoSansHebrew.variable}`}>
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="dark"
+            enableSystem
+            disableTransitionOnChange
+          >
+            <QueryProvider>
+              <div className="min-h-screen bg-background text-foreground">
+                {children}
+              </div>
+              <Toaster richColors position="bottom-right" />
+            </QueryProvider>
+          </ThemeProvider>
         </body>
       </html>
     </ClerkProvider>

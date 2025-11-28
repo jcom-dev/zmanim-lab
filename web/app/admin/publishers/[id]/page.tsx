@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import Image from 'next/image';
 import { useAuth } from '@clerk/nextjs';
 import { useParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -27,8 +28,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import Link from 'next/link';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+import { API_BASE } from '@/lib/api';
 
 interface Publisher {
   id: string;
@@ -306,12 +306,12 @@ export default function AdminPublisherDetailPage() {
   if (error || !publisher) {
     return (
       <div className="container mx-auto py-8">
-        <Card className="border-red-300 bg-red-50">
+        <Card className="border-red-300 bg-red-50 dark:border-red-700 dark:bg-red-950">
           <CardHeader>
-            <CardTitle className="text-red-800">Error</CardTitle>
+            <CardTitle className="text-red-800 dark:text-red-200">Error</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-red-700">{error || 'Publisher not found'}</p>
+            <p className="text-red-700 dark:text-red-300">{error || 'Publisher not found'}</p>
             <Link href="/admin/publishers">
               <Button className="mt-4" variant="outline">
                 Back to Publishers
@@ -329,7 +329,7 @@ export default function AdminPublisherDetailPage() {
       <div className="flex justify-between items-center mb-6">
         <div>
           <div className="flex items-center gap-2 mb-2">
-            <Link href="/admin/publishers" className="text-blue-600 hover:underline text-sm">
+            <Link href="/admin/publishers" className="text-blue-600 dark:text-blue-400 hover:underline text-sm">
               Publishers
             </Link>
             <span className="text-muted-foreground">/</span>
@@ -367,7 +367,7 @@ export default function AdminPublisherDetailPage() {
               }));
               router.push('/publisher/dashboard');
             }}
-            className="bg-yellow-600 hover:bg-yellow-700 text-white"
+            className="bg-yellow-600 hover:bg-yellow-700 dark:bg-yellow-600 dark:hover:bg-yellow-700 text-white"
           >
             <svg className="w-4 h-4 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -565,10 +565,10 @@ export default function AdminPublisherDetailPage() {
                   disabled={inviteLoading}
                 />
                 {inviteError && (
-                  <p className="text-red-600 text-sm mt-2">{inviteError}</p>
+                  <p className="text-destructive text-sm mt-2">{inviteError}</p>
                 )}
                 {inviteSuccess && (
-                  <p className="text-green-600 text-sm mt-2">{inviteSuccess}</p>
+                  <p className="text-green-600 dark:text-green-400 text-sm mt-2">{inviteSuccess}</p>
                 )}
               </div>
               <DialogFooter>
@@ -586,7 +586,7 @@ export default function AdminPublisherDetailPage() {
           {users.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <p>No users have access to this publisher yet.</p>
-              <p className="text-sm mt-2">Click "Invite User" to add someone.</p>
+              <p className="text-sm mt-2">Click &quot;Invite User&quot; to add someone.</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -605,11 +605,15 @@ export default function AdminPublisherDetailPage() {
                       <td className="py-4">
                         <div className="flex items-center gap-3">
                           {user.image_url ? (
-                            <img
-                              src={user.image_url}
-                              alt={user.name}
-                              className="w-8 h-8 rounded-full"
-                            />
+                            <div className="relative w-8 h-8">
+                              <Image
+                                src={user.image_url}
+                                alt={user.name}
+                                fill
+                                className="rounded-full object-cover"
+                                unoptimized
+                              />
+                            </div>
                           ) : (
                             <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
                               <span className="text-muted-foreground text-sm">
@@ -621,7 +625,7 @@ export default function AdminPublisherDetailPage() {
                         </div>
                       </td>
                       <td className="py-4">
-                        <a href={`mailto:${user.email}`} className="text-blue-600 hover:underline">
+                        <a href={`mailto:${user.email}`} className="text-blue-600 dark:text-blue-400 hover:underline">
                           {user.email}
                         </a>
                       </td>

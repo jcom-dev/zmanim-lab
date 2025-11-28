@@ -1,11 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Image from 'next/image';
 import { useParams, useRouter } from 'next/navigation';
 import { MapPin, User, Building, ChevronRight, Loader2, AlertCircle, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+import { API_BASE } from '@/lib/api';
 
 interface City {
   id: string;
@@ -87,7 +87,7 @@ export default function CityPublishersPage() {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-slate-900 flex items-center justify-center">
+      <main className="min-h-screen bg-background flex items-center justify-center">
         <Loader2 className="w-8 h-8 text-blue-400 animate-spin" />
       </main>
     );
@@ -95,11 +95,11 @@ export default function CityPublishersPage() {
 
   if (error) {
     return (
-      <main className="min-h-screen bg-slate-900">
+      <main className="min-h-screen bg-background">
         <div className="container mx-auto px-4 py-12">
           <div className="bg-red-900/50 border border-red-700 rounded-lg p-6 text-center">
-            <AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-4" />
-            <h2 className="text-xl font-bold text-white mb-2">Error</h2>
+            <AlertCircle className="w-12 h-12 text-destructive mx-auto mb-4" />
+            <h2 className="text-xl font-bold text-foreground mb-2">Error</h2>
             <p className="text-red-200 mb-4">{error}</p>
             <Link
               href="/"
@@ -119,13 +119,13 @@ export default function CityPublishersPage() {
   const hasCoverage = data?.has_coverage || publishers.length > 0;
 
   return (
-    <main className="min-h-screen bg-slate-900">
+    <main className="min-h-screen bg-background">
       {/* Header */}
-      <div className="bg-slate-800 border-b border-slate-700">
+      <div className="bg-card border-b border-border">
         <div className="container mx-auto px-4 py-8">
           <Link
             href="/"
-            className="inline-flex items-center gap-2 text-slate-400 hover:text-white mb-4"
+            className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground mb-4"
           >
             <ArrowLeft className="w-4 h-4" />
             Change location
@@ -134,8 +134,8 @@ export default function CityPublishersPage() {
           <div className="flex items-center gap-3">
             <MapPin className="w-8 h-8 text-blue-400" />
             <div>
-              <h1 className="text-2xl font-bold text-white">{city?.name}</h1>
-              <p className="text-slate-400">
+              <h1 className="text-2xl font-bold text-foreground">{city?.name}</h1>
+              <p className="text-muted-foreground">
                 {city?.region && `${city.region}, `}{city?.country}
               </p>
             </div>
@@ -145,7 +145,7 @@ export default function CityPublishersPage() {
 
       {/* Main Content */}
       <div className="container mx-auto px-4 py-8">
-        <h2 className="text-xl font-bold text-white mb-6">
+        <h2 className="text-xl font-bold text-foreground mb-6">
           {hasCoverage ? 'Select Publisher' : 'No Local Authority'}
         </h2>
 
@@ -153,9 +153,9 @@ export default function CityPublishersPage() {
         {!hasCoverage && (
           <div className="mb-8 bg-yellow-900/30 border border-yellow-700 rounded-lg p-6">
             <div className="flex items-start gap-4">
-              <AlertCircle className="w-6 h-6 text-yellow-400 flex-shrink-0 mt-1" />
+              <AlertCircle className="w-6 h-6 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-1" />
               <div>
-                <h3 className="text-lg font-semibold text-yellow-200 mb-2">
+                <h3 className="text-lg font-semibold text-yellow-600 dark:text-yellow-200 mb-2">
                   No Local Authority Covers This Area
                 </h3>
                 <p className="text-yellow-100/80 mb-4">
@@ -165,7 +165,7 @@ export default function CityPublishersPage() {
                 </p>
                 <button
                   onClick={handleUseDefault}
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg transition-colors"
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-foreground rounded-lg transition-colors"
                 >
                   View Default Zmanim
                   <ChevronRight className="w-4 h-4" />
@@ -182,48 +182,50 @@ export default function CityPublishersPage() {
               <button
                 key={publisher.id}
                 onClick={() => handlePublisherSelect(publisher)}
-                className="w-full flex items-center gap-4 p-6 bg-slate-800 border border-slate-700 rounded-lg hover:bg-slate-700 hover:border-slate-600 transition-colors text-left"
+                className="w-full flex items-center gap-4 p-6 bg-card border border-border rounded-lg hover:bg-muted hover:border-border transition-colors text-left"
               >
                 {/* Logo */}
-                <div className="w-16 h-16 bg-slate-700 rounded-lg flex items-center justify-center flex-shrink-0">
+                <div className="relative w-16 h-16 bg-muted rounded-lg flex items-center justify-center flex-shrink-0">
                   {publisher.logo_url ? (
-                    <img
+                    <Image
                       src={publisher.logo_url}
                       alt={publisher.name}
-                      className="w-full h-full object-cover rounded-lg"
+                      fill
+                      className="object-cover rounded-lg"
+                      unoptimized
                     />
                   ) : (
-                    <User className="w-8 h-8 text-slate-400" />
+                    <User className="w-8 h-8 text-muted-foreground" />
                   )}
                 </div>
 
                 {/* Info */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
-                    <h3 className="text-lg font-semibold text-white truncate">
+                    <h3 className="text-lg font-semibold text-foreground truncate">
                       {publisher.name}
                     </h3>
                     {publisher.is_verified && (
-                      <span className="px-2 py-0.5 text-xs bg-green-600 text-white rounded">
+                      <span className="px-2 py-0.5 text-xs bg-green-600 dark:text-green-400 text-foreground rounded">
                         Verified
                       </span>
                     )}
                   </div>
                   {publisher.organization && (
-                    <div className="flex items-center gap-2 text-slate-400 mb-1">
+                    <div className="flex items-center gap-2 text-muted-foreground mb-1">
                       <Building className="w-4 h-4" />
                       <span className="truncate">{publisher.organization}</span>
                     </div>
                   )}
                   {publisher.description && (
-                    <p className="text-sm text-slate-500 line-clamp-2">
+                    <p className="text-sm text-muted-foreground line-clamp-2">
                       {publisher.description}
                     </p>
                   )}
                 </div>
 
                 {/* Arrow */}
-                <ChevronRight className="w-6 h-6 text-slate-500 flex-shrink-0" />
+                <ChevronRight className="w-6 h-6 text-muted-foreground flex-shrink-0" />
               </button>
             ))}
           </div>
@@ -231,10 +233,10 @@ export default function CityPublishersPage() {
 
         {/* Alternative: Use Default */}
         {hasCoverage && (
-          <div className="mt-8 pt-8 border-t border-slate-700">
+          <div className="mt-8 pt-8 border-t border-border">
             <button
               onClick={handleUseDefault}
-              className="text-slate-400 hover:text-white text-sm"
+              className="text-muted-foreground hover:text-foreground text-sm"
             >
               Or use default calculations without a specific publisher →
             </button>
@@ -243,9 +245,9 @@ export default function CityPublishersPage() {
       </div>
 
       {/* Footer */}
-      <footer className="mt-auto border-t border-slate-700 bg-slate-800/50">
+      <footer className="mt-auto border-t border-border bg-card/50">
         <div className="container mx-auto px-4 py-8 text-center">
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-muted-foreground">
             Zmanim Lab - Multi-Publisher Prayer Times Platform
           </p>
         </div>

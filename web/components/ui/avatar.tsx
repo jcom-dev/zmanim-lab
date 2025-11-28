@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import Image from 'next/image';
 
 interface AvatarProps {
   className?: string;
@@ -20,7 +21,7 @@ interface AvatarFallbackProps {
 
 export function Avatar({ className = '', children }: AvatarProps) {
   return (
-    <div className={`relative inline-flex items-center justify-center overflow-hidden rounded-full bg-gray-100 ${className}`}>
+    <div className={`relative inline-flex items-center justify-center overflow-hidden rounded-full bg-muted ${className}`}>
       {children}
     </div>
   );
@@ -34,18 +35,20 @@ export function AvatarImage({ src, alt, className = '' }: AvatarImageProps) {
   }
 
   return (
-    <img
+    <Image
       src={src}
-      alt={alt}
-      className={`w-full h-full object-cover ${className}`}
+      alt={alt || ''}
+      fill
+      className={`object-cover ${className}`}
       onError={() => setError(true)}
+      unoptimized
     />
   );
 }
 
 export function AvatarFallback({ children, className = '' }: AvatarFallbackProps) {
   return (
-    <span className={`flex items-center justify-center w-full h-full text-sm font-medium text-gray-600 ${className}`}>
+    <span className={`flex items-center justify-center w-full h-full text-sm font-medium text-muted-foreground ${className}`}>
       {children}
     </span>
   );

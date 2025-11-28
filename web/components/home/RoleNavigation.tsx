@@ -24,7 +24,7 @@ export function RoleNavigation() {
       {showBecomePublisher && (
         <Link
           href="/become-publisher"
-          className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-primary-foreground rounded-lg font-medium transition-colors"
         >
           <UserPlus className="w-4 h-4" />
           Become a Publisher
@@ -33,7 +33,7 @@ export function RoleNavigation() {
       {(hasPublisherAccess || isPublisher) && (
         <Link
           href="/publisher/dashboard"
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-primary-foreground rounded-lg font-medium transition-colors"
         >
           <Building2 className="w-4 h-4" />
           Publisher Dashboard
@@ -42,7 +42,7 @@ export function RoleNavigation() {
       {isAdmin && (
         <Link
           href="/admin"
-          className="flex items-center gap-2 px-4 py-2 bg-slate-600 hover:bg-slate-500 text-white rounded-lg font-medium transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-slate-600 hover:bg-slate-500 text-primary-foreground rounded-lg font-medium transition-colors"
         >
           <Settings className="w-4 h-4" />
           Admin Portal

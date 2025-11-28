@@ -1,4 +1,5 @@
 'use client';
+import { API_BASE } from '@/lib/api';
 
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
@@ -17,9 +18,10 @@ interface AlgorithmVersion {
 
 interface VersionHistoryProps {
   onClose?: () => void;
+  getToken: () => Promise<string | null>;
 }
 
-export function VersionHistory({ onClose }: VersionHistoryProps) {
+export function VersionHistory({ onClose, getToken }: VersionHistoryProps) {
   const [versions, setVersions] = useState<AlgorithmVersion[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -34,10 +36,18 @@ export function VersionHistory({ onClose }: VersionHistoryProps) {
       setLoading(true);
       setError(null);
 
-      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
-      const response = await fetch(`${apiBaseUrl}/api/v1/publisher/algorithm/versions`, {
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
+      const token = await getToken();
+      if (!token) {
+        setError('Not authenticated');
+        setLoading(false);
+        return;
+      }
+
+      const response = await fetch(`${API_BASE}/api/v1/publisher/algorithm/versions`, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
       });
 
       if (!response.ok) {
@@ -59,13 +69,21 @@ export function VersionHistory({ onClose }: VersionHistoryProps) {
       setDeprecating(versionId);
       setError(null);
 
-      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+      const token = await getToken();
+      if (!token) {
+        setError('Not authenticated');
+        setDeprecating(null);
+        return;
+      }
+
       const response = await fetch(
-        `${apiBaseUrl}/api/v1/publisher/algorithm/versions/${versionId}/deprecate`,
+        `${API_BASE}/api/v1/publisher/algorithm/versions/${versionId}/deprecate`,
         {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
         }
       );
 
@@ -141,7 +159,7 @@ export function VersionHistory({ onClose }: VersionHistoryProps) {
       </CardHeader>
       <CardContent>
         {loading && (
-          <div className="text-center py-8 text-slate-400">Loading versions...</div>
+          <div className="text-center py-8 text-muted-foreground">Loading versions...</div>
         )}
 
         {error && (
@@ -151,7 +169,7 @@ export function VersionHistory({ onClose }: VersionHistoryProps) {
         )}
 
         {!loading && versions.length === 0 && (
-          <div className="text-center py-8 text-slate-400">
+          <div className="text-center py-8 text-muted-foreground">
             No versions found. Save and publish your first algorithm to start version history.
           </div>
         )}
@@ -161,23 +179,23 @@ export function VersionHistory({ onClose }: VersionHistoryProps) {
             {versions.map((version) => (
               <div
                 key={version.id}
-                className="border border-slate-700 rounded-lg p-4 flex items-center justify-between"
+                className="border border-border rounded-lg p-4 flex items-center justify-between"
                 data-testid={`version-${version.id}`}
               >
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-2">
-                    <span className="text-white font-medium">
+                    <span className="text-foreground font-medium">
                       {version.name} v{version.version}
                     </span>
                     {getStatusBadge(version)}
                   </div>
-                  <div className="text-sm text-slate-400 space-y-1">
+                  <div className="text-sm text-muted-foreground space-y-1">
                     <div>Created: {formatDate(version.created_at)}</div>
                     {version.published_at && (
                       <div>Published: {formatDate(version.published_at)}</div>
                     )}
                     {version.deprecated_at && (
-                      <div className="text-red-400">
+                      <div className="text-destructive">
                         Deprecated: {formatDate(version.deprecated_at)}
                       </div>
                     )}
@@ -190,7 +208,7 @@ export function VersionHistory({ onClose }: VersionHistoryProps) {
                       size="sm"
                       onClick={() => handleDeprecate(version.id)}
                       disabled={deprecating === version.id}
-                      className="text-red-400 border-red-400 hover:bg-red-900/50"
+                      className="text-destructive border-destructive hover:bg-red-900/50 dark:hover:bg-red-950/50"
                     >
                       {deprecating === version.id ? 'Deprecating...' : 'Deprecate'}
                     </Button>

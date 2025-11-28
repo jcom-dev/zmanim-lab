@@ -1,8 +1,9 @@
 'use client';
+import { API_BASE } from '@/lib/api';
 
 import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
-import { ChevronDown, Search, MapPin, Globe, Flag, Building } from 'lucide-react';
+import { Search, MapPin, Globe, Flag, Building } from 'lucide-react';
 
 interface City {
   id: string;
@@ -44,7 +45,7 @@ interface CitySelectorProps {
   onCancel: () => void;
 }
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+
 
 export default function CitySelector({ onSelect, onCancel }: CitySelectorProps) {
   const [level, setLevel] = useState<CoverageLevel>('country');
@@ -121,7 +122,7 @@ export default function CitySelector({ onSelect, onCancel }: CitySelectorProps) 
     setIsLoadingCities(true);
     try {
       // Filter by country if selected
-      let url = `${API_BASE}/api/v1/cities?search=${encodeURIComponent(query)}&limit=20`;
+      const url = `${API_BASE}/api/v1/cities?search=${encodeURIComponent(query)}&limit=20`;
       const response = await fetch(url);
       if (!response.ok) throw new Error('Failed to search cities');
       const data = await response.json();
@@ -243,7 +244,7 @@ export default function CitySelector({ onSelect, onCancel }: CitySelectorProps) 
           Country {level !== 'city' ? '*' : '(optional filter)'}
         </label>
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <input
             type="text"
             value={countrySearch}
@@ -253,7 +254,7 @@ export default function CitySelector({ onSelect, onCancel }: CitySelectorProps) 
           />
         </div>
         {isLoadingCountries ? (
-          <p className="text-sm text-gray-500 mt-2">Loading countries...</p>
+          <p className="text-sm text-muted-foreground mt-2">Loading countries...</p>
         ) : (
           <div className="mt-2 max-h-40 overflow-y-auto border rounded-md">
             {filteredCountries.map((country) => (
@@ -264,26 +265,26 @@ export default function CitySelector({ onSelect, onCancel }: CitySelectorProps) 
                   setSelectedCountry(country);
                   setCountrySearch('');
                 }}
-                className={`w-full text-left px-3 py-2 hover:bg-gray-100 flex items-center gap-2 ${
-                  selectedCountry?.code === country.code ? 'bg-blue-50 text-blue-700' : ''
+                className={`w-full text-left px-3 py-2 hover:bg-muted flex items-center gap-2 ${
+                  selectedCountry?.code === country.code ? 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-400' : ''
                 }`}
               >
                 <span className="font-medium">{country.name}</span>
-                <span className="text-gray-500 text-sm">({country.code})</span>
+                <span className="text-muted-foreground text-sm">({country.code})</span>
               </button>
             ))}
             {filteredCountries.length === 0 && (
-              <p className="px-3 py-2 text-gray-500 text-sm">No countries found</p>
+              <p className="px-3 py-2 text-muted-foreground text-sm">No countries found</p>
             )}
           </div>
         )}
         {selectedCountry && (
-          <div className="mt-2 p-2 bg-blue-50 rounded-md flex items-center justify-between">
-            <span className="text-blue-700 font-medium">{selectedCountry.name}</span>
+          <div className="mt-2 p-2 bg-blue-50 dark:bg-blue-950 rounded-md flex items-center justify-between">
+            <span className="text-blue-700 dark:text-blue-400 font-medium">{selectedCountry.name}</span>
             <button
               type="button"
               onClick={() => setSelectedCountry(null)}
-              className="text-blue-500 hover:text-blue-700 text-sm"
+              className="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 text-sm"
             >
               Change
             </button>
@@ -298,7 +299,7 @@ export default function CitySelector({ onSelect, onCancel }: CitySelectorProps) 
             Region {level === 'region' ? '*' : '(optional filter)'}
           </label>
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <input
               type="text"
               value={regionSearch}
@@ -308,7 +309,7 @@ export default function CitySelector({ onSelect, onCancel }: CitySelectorProps) 
             />
           </div>
           {isLoadingRegions ? (
-            <p className="text-sm text-gray-500 mt-2">Loading regions...</p>
+            <p className="text-sm text-muted-foreground mt-2">Loading regions...</p>
           ) : (
             <div className="mt-2 max-h-40 overflow-y-auto border rounded-md">
               {filteredRegions.map((region) => (
@@ -319,26 +320,26 @@ export default function CitySelector({ onSelect, onCancel }: CitySelectorProps) 
                     setSelectedRegion(region);
                     setRegionSearch('');
                   }}
-                  className={`w-full text-left px-3 py-2 hover:bg-gray-100 ${
-                    selectedRegion?.name === region.name ? 'bg-blue-50 text-blue-700' : ''
+                  className={`w-full text-left px-3 py-2 hover:bg-muted ${
+                    selectedRegion?.name === region.name ? 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-400' : ''
                   }`}
                 >
                   {region.name}
-                  {region.type && <span className="text-gray-500 text-sm ml-2">({region.type})</span>}
+                  {region.type && <span className="text-muted-foreground text-sm ml-2">({region.type})</span>}
                 </button>
               ))}
               {filteredRegions.length === 0 && (
-                <p className="px-3 py-2 text-gray-500 text-sm">No regions found</p>
+                <p className="px-3 py-2 text-muted-foreground text-sm">No regions found</p>
               )}
             </div>
           )}
           {selectedRegion && (
-            <div className="mt-2 p-2 bg-blue-50 rounded-md flex items-center justify-between">
-              <span className="text-blue-700 font-medium">{selectedRegion.name}</span>
+            <div className="mt-2 p-2 bg-blue-50 dark:bg-blue-950 rounded-md flex items-center justify-between">
+              <span className="text-blue-700 dark:text-blue-400 font-medium">{selectedRegion.name}</span>
               <button
                 type="button"
                 onClick={() => setSelectedRegion(null)}
-                className="text-blue-500 hover:text-blue-700 text-sm"
+                className="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 text-sm"
               >
                 Change
               </button>
@@ -352,7 +353,7 @@ export default function CitySelector({ onSelect, onCancel }: CitySelectorProps) 
         <div>
           <label className="block text-sm font-medium mb-2">City *</label>
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <input
               type="text"
               value={citySearch}
@@ -362,7 +363,7 @@ export default function CitySelector({ onSelect, onCancel }: CitySelectorProps) 
             />
           </div>
           {isLoadingCities ? (
-            <p className="text-sm text-gray-500 mt-2">Searching cities...</p>
+            <p className="text-sm text-muted-foreground mt-2">Searching cities...</p>
           ) : cities.length > 0 ? (
             <div className="mt-2 max-h-48 overflow-y-auto border rounded-md">
               {cities.map((city) => (
@@ -370,12 +371,12 @@ export default function CitySelector({ onSelect, onCancel }: CitySelectorProps) 
                   key={city.id}
                   type="button"
                   onClick={() => handleCitySelect(city)}
-                  className="w-full text-left px-3 py-2 hover:bg-gray-100 flex items-center gap-2"
+                  className="w-full text-left px-3 py-2 hover:bg-muted flex items-center gap-2"
                 >
-                  <MapPin className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                  <MapPin className="w-4 h-4 text-muted-foreground flex-shrink-0" />
                   <div>
                     <span className="font-medium">{city.name}</span>
-                    <span className="text-gray-500 text-sm ml-2">
+                    <span className="text-muted-foreground text-sm ml-2">
                       {city.region && `${city.region}, `}{city.country}
                     </span>
                   </div>
@@ -383,9 +384,9 @@ export default function CitySelector({ onSelect, onCancel }: CitySelectorProps) 
               ))}
             </div>
           ) : citySearch.length >= 2 ? (
-            <p className="text-sm text-gray-500 mt-2">No cities found</p>
+            <p className="text-sm text-muted-foreground mt-2">No cities found</p>
           ) : (
-            <p className="text-sm text-gray-500 mt-2">Type at least 2 characters to search</p>
+            <p className="text-sm text-muted-foreground mt-2">Type at least 2 characters to search</p>
           )}
         </div>
       )}

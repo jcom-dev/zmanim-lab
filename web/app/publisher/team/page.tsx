@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import Image from 'next/image';
 import { useAuth } from '@clerk/nextjs';
 import { usePublisherContext } from '@/providers/PublisherContext';
 import { Button } from '@/components/ui/button';
@@ -25,8 +26,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+import { API_BASE } from '@/lib/api';
 
 interface TeamMember {
   user_id: string;
@@ -131,7 +131,7 @@ export default function PublisherTeamPage() {
       setInviteEmail('');
       setInviteDialogOpen(false);
       fetchTeam();
-    } catch (err) {
+    } catch {
       setInviteError('Network error. Please try again.');
     } finally {
       setInviteLoading(false);
@@ -224,7 +224,7 @@ export default function PublisherTeamPage() {
     return (
       <div className="container mx-auto py-8">
         <Card>
-          <CardContent className="py-8 text-center text-gray-500">
+          <CardContent className="py-8 text-center text-muted-foreground">
             Please select a publisher to manage team members
           </CardContent>
         </Card>
@@ -245,7 +245,7 @@ export default function PublisherTeamPage() {
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-3xl font-bold">Team Members</h1>
-          <p className="text-gray-600 mt-1">Manage who can access {selectedPublisher.name}</p>
+          <p className="text-muted-foreground mt-1">Manage who can access {selectedPublisher.name}</p>
         </div>
         <Dialog open={inviteDialogOpen} onOpenChange={setInviteDialogOpen}>
           <DialogTrigger asChild>
@@ -266,7 +266,7 @@ export default function PublisherTeamPage() {
                     {inviteError}
                   </div>
                 )}
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="email" className="block text-sm font-medium mb-1">
                   Email Address
                 </label>
                 <input
@@ -275,7 +275,7 @@ export default function PublisherTeamPage() {
                   value={inviteEmail}
                   onChange={(e) => setInviteEmail(e.target.value)}
                   placeholder="colleague@example.com"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                 />
               </div>
               <DialogFooter>
@@ -292,9 +292,9 @@ export default function PublisherTeamPage() {
       </div>
 
       {error && (
-        <Card className="mb-6 border-red-300 bg-red-50">
+        <Card className="mb-6 border-red-300 bg-red-50 dark:border-red-700 dark:bg-red-950">
           <CardContent className="py-4">
-            <p className="text-red-700">{error}</p>
+            <p className="text-red-700 dark:text-red-300">{error}</p>
             <Button onClick={() => setError(null)} className="mt-2" variant="outline" size="sm">
               Dismiss
             </Button>
@@ -310,23 +310,27 @@ export default function PublisherTeamPage() {
         </CardHeader>
         <CardContent>
           {members.length === 0 ? (
-            <p className="text-gray-500 text-center py-4">No team members yet</p>
+            <p className="text-muted-foreground text-center py-4">No team members yet</p>
           ) : (
             <div className="space-y-4">
               {members.map((member) => (
                 <div
                   key={member.user_id}
-                  className="flex items-center justify-between p-4 bg-gray-50 rounded-lg"
+                  className="flex items-center justify-between p-4 bg-muted rounded-lg"
                 >
                   <div className="flex items-center gap-4">
                     {member.image_url ? (
-                      <img
-                        src={member.image_url}
-                        alt={member.name || member.email}
-                        className="w-10 h-10 rounded-full"
-                      />
+                      <div className="relative w-10 h-10">
+                        <Image
+                          src={member.image_url}
+                          alt={member.name || member.email}
+                          fill
+                          className="rounded-full object-cover"
+                          unoptimized
+                        />
+                      </div>
                     ) : (
-                      <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-medium">
+                      <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-blue-700 dark:text-blue-300 font-medium">
                         {getInitials(member.name, member.email)}
                       </div>
                     )}
@@ -334,15 +338,15 @@ export default function PublisherTeamPage() {
                       <div className="flex items-center gap-2">
                         <span className="font-medium">{member.name || member.email}</span>
                         {member.is_owner && (
-                          <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full">
+                          <span className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 text-xs rounded-full">
                             Owner
                           </span>
                         )}
                       </div>
                       {member.name && (
-                        <p className="text-sm text-gray-500">{member.email}</p>
+                        <p className="text-sm text-muted-foreground">{member.email}</p>
                       )}
-                      <p className="text-xs text-gray-400">
+                      <p className="text-xs text-muted-foreground">
                         Added {new Date(member.added_at).toLocaleDateString()}
                       </p>
                     </div>
@@ -396,7 +400,7 @@ export default function PublisherTeamPage() {
                   <div
                     key={invitation.id}
                     className={`flex items-center justify-between p-4 rounded-lg ${
-                      isExpired ? 'bg-gray-100' : 'bg-yellow-50'
+                      isExpired ? 'bg-muted' : 'bg-yellow-50 dark:bg-yellow-950'
                     }`}
                   >
                     <div>
@@ -405,14 +409,14 @@ export default function PublisherTeamPage() {
                         <span
                           className={`px-2 py-0.5 text-xs rounded-full ${
                             isExpired
-                              ? 'bg-gray-200 text-gray-600'
-                              : 'bg-yellow-100 text-yellow-700'
+                              ? 'bg-muted text-muted-foreground'
+                              : 'bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300'
                           }`}
                         >
                           {isExpired ? 'Expired' : 'Pending'}
                         </span>
                       </div>
-                      <p className="text-xs text-gray-500 mt-1">
+                      <p className="text-xs text-muted-foreground mt-1">
                         Sent {new Date(invitation.created_at).toLocaleDateString()}
                         {!isExpired && (
                           <> &middot; Expires {new Date(invitation.expires_at).toLocaleDateString()}</>

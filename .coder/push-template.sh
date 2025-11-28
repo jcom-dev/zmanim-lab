@@ -73,14 +73,6 @@ EOF
 
 echo "✅ Created terraform.tfvars from env files"
 
-# Copy Claude Code config if it exists (for AI-assisted development)
-if [ -f "$HOME/.claude.json" ]; then
-    cp "$HOME/.claude.json" "$SCRIPT_DIR/claude.json"
-    echo "✅ Copied ~/.claude.json to template directory"
-else
-    echo "ℹ️  No ~/.claude.json found (optional - for Claude Code config)"
-fi
-
 # Verify Dockerfile exists for custom postgres image
 if [ ! -f "$SCRIPT_DIR/docker/Dockerfile.postgres" ]; then
     echo "❌ Missing Dockerfile.postgres in .coder/docker/"

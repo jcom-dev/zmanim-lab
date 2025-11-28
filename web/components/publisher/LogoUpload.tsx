@@ -1,6 +1,8 @@
 'use client';
+import { API_BASE } from '@/lib/api';
 
 import { useState, useRef, DragEvent, ChangeEvent } from 'react';
+import NextImage from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Upload, X, Image as ImageIcon } from 'lucide-react';
 
@@ -8,12 +10,13 @@ interface LogoUploadProps {
   currentLogoUrl?: string | null;
   onUploadComplete: (logoUrl: string) => void;
   onUploadError: (error: string) => void;
+  getToken: () => Promise<string | null>;
 }
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
 
-export function LogoUpload({ currentLogoUrl, onUploadComplete, onUploadError }: LogoUploadProps) {
+export function LogoUpload({ currentLogoUrl, onUploadComplete, onUploadError, getToken }: LogoUploadProps) {
   const [preview, setPreview] = useState<string | null>(currentLogoUrl || null);
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -63,11 +66,14 @@ export function LogoUpload({ currentLogoUrl, onUploadComplete, onUploadError }: 
         });
       }, 100);
 
-      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
-      const response = await fetch(`${apiBaseUrl}/api/v1/publisher/logo`, {
+      const token = await getToken();
+      
+      const response = await fetch(`${API_BASE}/api/v1/publisher/logo`, {
         method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
         body: formData,
-        credentials: 'include',
       });
 
       clearInterval(progressInterval);
@@ -148,11 +154,13 @@ export function LogoUpload({ currentLogoUrl, onUploadComplete, onUploadError }: 
         {/* Preview */}
         <div className="flex-shrink-0">
           {preview ? (
-            <div className="relative group">
-              <img
+            <div className="relative group w-24 h-24">
+              <NextImage
                 src={preview}
                 alt="Logo preview"
-                className="w-24 h-24 rounded-lg object-cover border border-slate-200"
+                fill
+                className="rounded-lg object-cover border border-border"
+                unoptimized
               />
               {!isUploading && (
                 <button
@@ -165,8 +173,8 @@ export function LogoUpload({ currentLogoUrl, onUploadComplete, onUploadError }: 
               )}
             </div>
           ) : (
-            <div className="w-24 h-24 rounded-lg border-2 border-dashed border-slate-300 flex items-center justify-center bg-slate-50">
-              <ImageIcon className="w-8 h-8 text-slate-400" />
+            <div className="w-24 h-24 rounded-lg border-2 border-dashed border-border flex items-center justify-center bg-background">
+              <ImageIcon className="w-8 h-8 text-muted-foreground" />
             </div>
           )}
         </div>
@@ -176,8 +184,8 @@ export function LogoUpload({ currentLogoUrl, onUploadComplete, onUploadError }: 
           <div
             className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
               isDragging
-                ? 'border-blue-500 bg-blue-50'
-                : 'border-slate-300 hover:border-slate-400'
+                ? 'border-blue-500 bg-blue-50 dark:bg-blue-950'
+                : 'border-border hover:border-muted-foreground'
             } ${isUploading ? 'pointer-events-none opacity-50' : ''}`}
             onDragEnter={handleDragEnter}
             onDragOver={handleDragOver}
@@ -186,10 +194,10 @@ export function LogoUpload({ currentLogoUrl, onUploadComplete, onUploadError }: 
           >
             <div className="space-y-3">
               <div className="flex justify-center">
-                <Upload className="w-10 h-10 text-slate-400" />
+                <Upload className="w-10 h-10 text-muted-foreground" />
               </div>
               <div>
-                <p className="text-sm font-medium text-slate-700">
+                <p className="text-sm font-medium text-foreground">
                   Drag and drop your logo here, or
                 </p>
                 <Button
@@ -203,7 +211,7 @@ export function LogoUpload({ currentLogoUrl, onUploadComplete, onUploadError }: 
                   Browse Files
                 </Button>
               </div>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-muted-foreground">
                 PNG, JPG or WebP (max 5MB)
               </p>
             </div>
@@ -221,11 +229,11 @@ export function LogoUpload({ currentLogoUrl, onUploadComplete, onUploadError }: 
           {/* Upload progress */}
           {isUploading && (
             <div className="mt-4">
-              <div className="flex justify-between text-sm text-slate-600 mb-1">
+              <div className="flex justify-between text-sm text-muted-foreground mb-1">
                 <span>Uploading...</span>
                 <span>{uploadProgress}%</span>
               </div>
-              <div className="w-full bg-slate-200 rounded-full h-2">
+              <div className="w-full bg-muted rounded-full h-2">
                 <div
                   className="bg-blue-500 h-2 rounded-full transition-all duration-300"
                   style={{ width: `${uploadProgress}%` }}

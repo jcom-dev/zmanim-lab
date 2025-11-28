@@ -107,7 +107,7 @@ export function DropdownMenuContent({ children, align = 'end', className = '' }:
 
   return (
     <div
-      className={`absolute top-full mt-2 ${alignClass} z-50 min-w-[200px] bg-white border border-gray-200 rounded-md shadow-lg py-1 ${className}`}
+      className={`absolute top-full mt-2 ${alignClass} z-50 min-w-[200px] bg-popover border border-border rounded-md shadow-lg py-1 ${className}`}
       onClick={() => setOpen(false)}
     >
       {children}
@@ -120,7 +120,7 @@ export function DropdownMenuItem({ children, onClick, disabled, className = '' }
 
   return (
     <button
-      className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 flex items-center gap-2 ${
+      className={`w-full text-left px-4 py-2 text-sm hover:bg-muted flex items-center gap-2 ${
         disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
       } ${className}`}
       onClick={() => {
@@ -142,5 +142,5 @@ export function DropdownMenuLabel({ children, className = '' }: DropdownMenuLabe
 }
 
 export function DropdownMenuSeparator() {
-  return <div className="border-t border-gray-200 my-1" />;
+  return <div className="border-t border-border my-1" />;
 }

@@ -1,4 +1,5 @@
 'use client';
+import { API_BASE } from '@/lib/api';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { MapPin, Search, Navigation, X, Loader2 } from 'lucide-react';
@@ -30,7 +31,7 @@ interface LocationPickerProps {
   placeholder?: string;
 }
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+
 
 // localStorage key for persisting location
 const LOCATION_STORAGE_KEY = 'zmanim_selected_location';
@@ -243,13 +244,13 @@ export default function LocationPicker({
       <div className="relative">
         {selectedCity ? (
           // Show selected city
-          <div className="flex items-center gap-2 p-3 bg-white border border-apple-gray-300 rounded-xl">
+          <div className="flex items-center gap-2 p-3 bg-card border border-border rounded-xl">
             <MapPin className="w-5 h-5 text-apple-blue flex-shrink-0" />
             <div className="flex-1 min-w-0">
-              <div className="font-medium text-apple-gray-900 truncate">
+              <div className="font-medium text-foreground truncate">
                 {selectedCity.name}
               </div>
-              <div className="text-sm text-apple-gray-500 truncate">
+              <div className="text-sm text-muted-foreground truncate">
                 {selectedCity.region && `${selectedCity.region}, `}
                 {selectedCity.country}
               </div>
@@ -257,16 +258,16 @@ export default function LocationPicker({
             <button
               type="button"
               onClick={handleClear}
-              className="p-1 hover:bg-apple-gray-100 rounded-lg transition-colors"
+              className="p-1 hover:bg-muted rounded-lg transition-colors"
               aria-label="Clear location"
             >
-              <X className="w-4 h-4 text-apple-gray-500" />
+              <X className="w-4 h-4 text-muted-foreground" />
             </button>
           </div>
         ) : (
           // Show search input
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-apple-gray-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
             <input
               ref={inputRef}
               type="text"
@@ -276,11 +277,12 @@ export default function LocationPicker({
               placeholder={placeholder}
               className="
                 w-full pl-10 pr-4 py-3 rounded-xl
-                border border-apple-gray-300
+                border border-border
                 focus:border-apple-blue focus:ring-2 focus:ring-apple-blue/20
                 transition-all duration-200 outline-none
-                text-apple-gray-900 text-[15px]
-                placeholder-apple-gray-400
+                text-foreground text-[15px]
+                placeholder-muted-foreground
+                bg-card
               "
               aria-label="Search for a city"
               aria-expanded={showDropdown}
@@ -288,7 +290,7 @@ export default function LocationPicker({
               role="combobox"
             />
             {isSearching && (
-              <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-apple-gray-400 animate-spin" />
+              <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground animate-spin" />
             )}
           </div>
         )}
@@ -301,7 +303,7 @@ export default function LocationPicker({
           id="city-search-results"
           className="
             absolute z-50 w-full mt-2 py-2
-            bg-white border border-apple-gray-200 rounded-xl
+            bg-card border border-border rounded-xl
             shadow-lg max-h-64 overflow-y-auto
           "
           role="listbox"
@@ -313,7 +315,7 @@ export default function LocationPicker({
             disabled={isGeolocating}
             className="
               w-full flex items-center gap-3 px-4 py-3
-              hover:bg-apple-gray-50 transition-colors
+              hover:bg-muted transition-colors
               text-left disabled:opacity-50
             "
           >
@@ -327,7 +329,7 @@ export default function LocationPicker({
             </span>
           </button>
 
-          <div className="border-t border-apple-gray-100 my-1" />
+          <div className="border-t border-border my-1" />
 
           {/* Search results */}
           {cities.length > 0 ? (
@@ -338,18 +340,18 @@ export default function LocationPicker({
                 onClick={() => handleSelectCity(city)}
                 className="
                   w-full flex items-center gap-3 px-4 py-3
-                  hover:bg-apple-gray-50 transition-colors
+                  hover:bg-muted transition-colors
                   text-left
                 "
                 role="option"
                 aria-selected="false"
               >
-                <MapPin className="w-5 h-5 text-apple-gray-400 flex-shrink-0" />
+                <MapPin className="w-5 h-5 text-muted-foreground flex-shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <div className="font-medium text-apple-gray-900 truncate">
+                  <div className="font-medium text-foreground truncate">
                     {city.name}
                   </div>
-                  <div className="text-sm text-apple-gray-500 truncate">
+                  <div className="text-sm text-muted-foreground truncate">
                     {city.region && `${city.region}, `}
                     {city.country}
                   </div>
@@ -357,11 +359,11 @@ export default function LocationPicker({
               </button>
             ))
           ) : query.length >= 2 && !isSearching ? (
-            <div className="px-4 py-3 text-apple-gray-500 text-center">
+            <div className="px-4 py-3 text-muted-foreground text-center">
               No cities found
             </div>
           ) : query.length < 2 ? (
-            <div className="px-4 py-3 text-apple-gray-500 text-center text-sm">
+            <div className="px-4 py-3 text-muted-foreground text-center text-sm">
               Type at least 2 characters to search
             </div>
           ) : null}

@@ -6,8 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+import { API_BASE } from '@/lib/api';
 
 function AcceptInvitationContent() {
   const { isLoaded, isSignedIn, user } = useUser();
@@ -73,7 +72,7 @@ function AcceptInvitationContent() {
       setTimeout(() => {
         router.push(`/publisher/dashboard`);
       }, 2000);
-    } catch (err) {
+    } catch {
       setError('Network error. Please try again.');
       setStatus('error');
     }
@@ -97,7 +96,7 @@ function AcceptInvitationContent() {
 
   if (status === 'loading' || status === 'redirect') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center bg-background">
         <Card className="max-w-md w-full mx-4">
           <CardHeader className="text-center">
             <CardTitle>Welcome to Zmanim Lab!</CardTitle>
@@ -106,8 +105,8 @@ function AcceptInvitationContent() {
             </CardDescription>
           </CardHeader>
           <CardContent className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="mt-4 text-gray-600">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 dark:border-blue-400 mx-auto"></div>
+            <p className="mt-4 text-muted-foreground">
               Please wait while we redirect you.
             </p>
           </CardContent>
@@ -118,7 +117,7 @@ function AcceptInvitationContent() {
 
   if (status === 'accepting') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center bg-background">
         <Card className="max-w-md w-full mx-4">
           <CardHeader className="text-center">
             <CardTitle>Accepting Invitation</CardTitle>
@@ -127,7 +126,7 @@ function AcceptInvitationContent() {
             </CardDescription>
           </CardHeader>
           <CardContent className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 dark:border-blue-400 mx-auto"></div>
           </CardContent>
         </Card>
       </div>
@@ -136,12 +135,12 @@ function AcceptInvitationContent() {
 
   if (status === 'success') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <Card className="max-w-md w-full mx-4 border-green-200 bg-green-50">
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Card className="max-w-md w-full mx-4 border-green-200 bg-green-50 dark:border-green-700 dark:bg-green-950">
           <CardHeader className="text-center">
-            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <div className="w-16 h-16 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center mx-auto mb-4">
               <svg
-                className="w-8 h-8 text-green-600"
+                className="w-8 h-8 text-green-600 dark:text-green-400"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -154,16 +153,16 @@ function AcceptInvitationContent() {
                 />
               </svg>
             </div>
-            <CardTitle className="text-green-800">Welcome to the Team!</CardTitle>
-            <CardDescription className="text-green-700">
+            <CardTitle className="text-green-800 dark:text-green-200">Welcome to the Team!</CardTitle>
+            <CardDescription className="text-green-700 dark:text-green-300">
               You&apos;ve been added to {publisherName}
             </CardDescription>
           </CardHeader>
           <CardContent className="text-center">
-            <p className="text-green-700 mb-4">
+            <p className="text-green-700 dark:text-green-300 mb-4">
               Redirecting you to the dashboard...
             </p>
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-green-600 mx-auto"></div>
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-green-600 dark:border-green-400 mx-auto"></div>
           </CardContent>
         </Card>
       </div>
@@ -172,12 +171,12 @@ function AcceptInvitationContent() {
 
   if (status === 'error') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <Card className="max-w-md w-full mx-4 border-red-200 bg-red-50">
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Card className="max-w-md w-full mx-4 border-red-200 bg-red-50 dark:border-red-700 dark:bg-red-950">
           <CardHeader className="text-center">
-            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <div className="w-16 h-16 bg-red-100 dark:bg-red-900 rounded-full flex items-center justify-center mx-auto mb-4">
               <svg
-                className="w-8 h-8 text-red-600"
+                className="w-8 h-8 text-red-600 dark:text-red-400"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -190,17 +189,17 @@ function AcceptInvitationContent() {
                 />
               </svg>
             </div>
-            <CardTitle className="text-red-800">Invitation Error</CardTitle>
-            <CardDescription className="text-red-700">
+            <CardTitle className="text-red-800 dark:text-red-200">Invitation Error</CardTitle>
+            <CardDescription className="text-red-700 dark:text-red-300">
               {error || 'This invitation is invalid or has expired.'}
             </CardDescription>
           </CardHeader>
           <CardContent className="text-center">
-            <p className="text-red-700 mb-6">
+            <p className="text-red-700 dark:text-red-300 mb-6">
               Please contact the person who invited you to request a new invitation.
             </p>
             <Link href="/">
-              <Button variant="outline" className="border-red-600 text-red-700 hover:bg-red-100">
+              <Button variant="outline" className="border-red-600 text-red-700 dark:border-red-400 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900">
                 Return to Home
               </Button>
             </Link>
@@ -216,8 +215,8 @@ function AcceptInvitationContent() {
 export default function AcceptInvitationPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 dark:border-blue-400"></div>
       </div>
     }>
       <AcceptInvitationContent />

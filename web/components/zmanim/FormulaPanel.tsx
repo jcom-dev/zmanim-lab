@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { X, Clock, Calculator, BookOpen, Info } from 'lucide-react';
+import { Clock, Calculator, BookOpen, Info } from 'lucide-react';
 import {
   Sheet,
   SheetContent,
@@ -86,11 +86,11 @@ export function FormulaPanel({ zman, open, onClose }: FormulaPanelProps) {
         {/* Mobile drag handle */}
         {!isDesktop && (
           <div className="flex justify-center pb-4 -mt-2">
-            <div className="w-12 h-1.5 bg-slate-700 rounded-full" />
+            <div className="w-12 h-1.5 bg-muted rounded-full" />
           </div>
         )}
 
-        <SheetHeader className="pb-4 border-b border-slate-700">
+        <SheetHeader className="pb-4 border-b border-border">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-blue-500/20 rounded-lg">
               <Clock className="w-5 h-5 text-blue-400" />
@@ -108,13 +108,13 @@ export function FormulaPanel({ zman, open, onClose }: FormulaPanelProps) {
           {/* Method Section */}
           <section>
             <div className="flex items-center gap-2 mb-3">
-              <Calculator className="w-4 h-4 text-slate-500" />
-              <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wide">
+              <Calculator className="w-4 h-4 text-muted-foreground" />
+              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
                 Calculation Method
               </h3>
             </div>
-            <div className="bg-slate-800 rounded-lg p-4">
-              <p className="text-white font-medium">
+            <div className="bg-card rounded-lg p-4">
+              <p className="text-foreground font-medium">
                 {formula?.display_name || formula?.method || 'Standard calculation'}
               </p>
             </div>
@@ -124,15 +124,15 @@ export function FormulaPanel({ zman, open, onClose }: FormulaPanelProps) {
           {hasParameters && (
             <section>
               <div className="flex items-center gap-2 mb-3">
-                <Info className="w-4 h-4 text-slate-500" />
-                <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wide">
+                <Info className="w-4 h-4 text-muted-foreground" />
+                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
                   Parameters
                 </h3>
               </div>
-              <div className="bg-slate-800 rounded-lg p-4">
+              <div className="bg-card rounded-lg p-4">
                 <ul className="space-y-2">
                   {Object.entries(parameters).map(([key, value]) => (
-                    <li key={key} className="flex items-center gap-2 text-slate-300">
+                    <li key={key} className="flex items-center gap-2 text-muted-foreground">
                       <span className="w-2 h-2 bg-blue-400 rounded-full" />
                       {formatParameter(key, value)}
                     </li>
@@ -146,13 +146,13 @@ export function FormulaPanel({ zman, open, onClose }: FormulaPanelProps) {
           {formula?.explanation && (
             <section>
               <div className="flex items-center gap-2 mb-3">
-                <BookOpen className="w-4 h-4 text-slate-500" />
-                <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wide">
+                <BookOpen className="w-4 h-4 text-muted-foreground" />
+                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
                   Explanation
                 </h3>
               </div>
-              <div className="bg-slate-800 rounded-lg p-4">
-                <p className="text-slate-300 leading-relaxed">
+              <div className="bg-card rounded-lg p-4">
+                <p className="text-muted-foreground leading-relaxed">
                   {formula.explanation}
                 </p>
               </div>

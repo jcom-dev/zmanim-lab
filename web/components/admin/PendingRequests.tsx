@@ -1,4 +1,5 @@
 'use client';
+import { API_BASE } from '@/lib/api';
 
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@clerk/nextjs';
@@ -13,7 +14,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+
 
 interface PublisherRequest {
   id: string;
@@ -184,7 +185,7 @@ export function PendingRequests({ onApprove }: PendingRequestsProps) {
               {requests.map((request) => (
                 <div
                   key={request.id}
-                  className="bg-white p-4 rounded-lg border border-yellow-200 hover:border-yellow-300 cursor-pointer"
+                  className="bg-card p-4 rounded-lg border border-yellow-200 hover:border-yellow-300 cursor-pointer"
                   onClick={() => setSelectedRequest(request)}
                 >
                   <div className="flex justify-between items-start">

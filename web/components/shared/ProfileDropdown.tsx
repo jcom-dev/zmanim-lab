@@ -128,7 +128,7 @@ export function ProfileDropdown() {
         <DropdownMenuLabel className="font-normal">
           <div className="flex flex-col space-y-1">
             <p className="text-sm font-medium leading-none">{user.fullName || 'User'}</p>
-            <p className="text-xs leading-none text-gray-500">{user.primaryEmailAddress?.emailAddress}</p>
+            <p className="text-xs leading-none text-muted-foreground">{user.primaryEmailAddress?.emailAddress}</p>
             <Badge variant={getRoleBadgeVariant(role)} className="mt-2 w-fit">
               {role.charAt(0).toUpperCase() + role.slice(1)}
             </Badge>
@@ -138,11 +138,11 @@ export function ProfileDropdown() {
         {publishers.length > 0 && (
           <>
             <DropdownMenuSeparator />
-            <DropdownMenuLabel className="text-xs text-gray-500 font-normal">Publishers</DropdownMenuLabel>
+            <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">Publishers</DropdownMenuLabel>
             {publishers.map((pub) => (
               <DropdownMenuItem key={pub.id} onClick={() => router.push(`/publisher/dashboard?p=${pub.id}`)}>
                 <svg
-                  className="w-4 h-4 mr-2 text-gray-500"
+                  className="w-4 h-4 mr-2 text-muted-foreground"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -163,7 +163,7 @@ export function ProfileDropdown() {
         <DropdownMenuSeparator />
 
         <DropdownMenuItem onClick={handlePasswordReset} disabled={isResettingPassword}>
-          <svg className="w-4 h-4 mr-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-4 h-4 mr-2 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -175,7 +175,7 @@ export function ProfileDropdown() {
         </DropdownMenuItem>
 
         <DropdownMenuItem onClick={handleSignOut}>
-          <svg className="w-4 h-4 mr-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-4 h-4 mr-2 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
               strokeLinecap="round"
               strokeLinejoin="round"

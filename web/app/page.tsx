@@ -198,12 +198,12 @@ export default function Home() {
   const step = getCurrentStep();
 
   return (
-    <main className="min-h-screen bg-slate-900">
+    <main className="min-h-screen bg-background">
       {/* Top Navigation Bar */}
-      <div className="bg-slate-800 border-b border-slate-700">
+      <div className="bg-card border-b border-border">
         <div className="container mx-auto px-4">
           <div className="flex justify-between items-center h-16">
-            <div className="text-xl font-bold text-white">
+            <div className="text-xl font-bold text-foreground">
               Zmanim Lab
             </div>
             <div className="flex items-center gap-4">
@@ -213,7 +213,7 @@ export default function Home() {
                   <UserButton afterSignOutUrl="/" />
                 ) : (
                   <SignInButton mode="modal">
-                    <button className="px-4 py-2 text-slate-300 hover:text-white transition-colors">
+                    <button className="px-4 py-2 text-muted-foreground hover:text-foreground transition-colors">
                       Sign In
                     </button>
                   </SignInButton>
@@ -225,16 +225,16 @@ export default function Home() {
       </div>
 
       {/* Hero Section */}
-      <div className="bg-slate-800/50 border-b border-slate-700">
+      <div className="bg-card/50 border-b border-border">
         <div className="container mx-auto px-4 py-12">
           <div className="text-center max-w-3xl mx-auto">
-            <h1 className="text-4xl font-bold text-white mb-3">
+            <h1 className="text-4xl font-bold text-foreground mb-3">
               Zmanim Lab
             </h1>
-            <p className="text-lg text-slate-400">
+            <p className="text-lg text-muted-foreground">
               Multi-Publisher Zmanim Platform
             </p>
-            <p className="text-slate-500 mt-2">
+            <p className="text-muted-foreground mt-2">
               Select your location to view prayer times from local authorities
             </p>
           </div>
@@ -242,7 +242,7 @@ export default function Home() {
       </div>
 
       {/* Breadcrumb Navigation */}
-      <div className="bg-slate-800/50 border-b border-slate-700">
+      <div className="bg-card/50 border-b border-border">
         <div className="container mx-auto px-4 py-3">
           <div className="flex items-center gap-2 text-sm">
             <button
@@ -253,7 +253,7 @@ export default function Home() {
                 setRegions([]);
                 setCities([]);
               }}
-              className={`${!selectedCountry ? 'text-blue-400' : 'text-slate-400 hover:text-white'}`}
+              className={`${!selectedCountry ? 'text-blue-400' : 'text-muted-foreground hover:text-foreground'}`}
             >
               <Globe className="w-4 h-4 inline mr-1" />
               Select Location
@@ -261,14 +261,14 @@ export default function Home() {
 
             {selectedCountry && (
               <>
-                <ChevronRight className="w-4 h-4 text-slate-600" />
+                <ChevronRight className="w-4 h-4 text-muted-foreground" />
                 <button
                   onClick={() => {
                     setSelectedRegion(null);
                     setSelectedCity(null);
                     setCities([]);
                   }}
-                  className={`${!selectedRegion && regions.length > 0 ? 'text-blue-400' : 'text-slate-400 hover:text-white'}`}
+                  className={`${!selectedRegion && regions.length > 0 ? 'text-blue-400' : 'text-muted-foreground hover:text-foreground'}`}
                 >
                   {selectedCountry.name}
                 </button>
@@ -277,10 +277,10 @@ export default function Home() {
 
             {selectedRegion && (
               <>
-                <ChevronRight className="w-4 h-4 text-slate-600" />
+                <ChevronRight className="w-4 h-4 text-muted-foreground" />
                 <button
                   onClick={() => setSelectedCity(null)}
-                  className={`${!selectedCity ? 'text-blue-400' : 'text-slate-400 hover:text-white'}`}
+                  className={`${!selectedCity ? 'text-blue-400' : 'text-muted-foreground hover:text-foreground'}`}
                 >
                   {selectedRegion.name}
                 </button>
@@ -301,7 +301,7 @@ export default function Home() {
         {/* Country Selection */}
         {step === 'country' && (
           <div>
-            <h2 className="text-2xl font-bold text-white mb-6">Select Country</h2>
+            <h2 className="text-2xl font-bold text-foreground mb-6">Select Country</h2>
 
             {loadingCountries ? (
               <div className="flex justify-center py-12">
@@ -313,16 +313,16 @@ export default function Home() {
                   <button
                     key={country.code}
                     onClick={() => handleCountrySelect(country)}
-                    className="flex items-center justify-between p-4 bg-slate-800 border border-slate-700 rounded-lg hover:bg-slate-700 hover:border-slate-600 transition-colors text-left"
+                    className="flex items-center justify-between p-4 bg-card border border-border rounded-lg hover:bg-muted hover:border-border transition-colors text-left"
                   >
                     <div className="flex items-center gap-3">
-                      <Globe className="w-5 h-5 text-slate-400" />
+                      <Globe className="w-5 h-5 text-muted-foreground" />
                       <div>
-                        <div className="text-white font-medium">{country.name}</div>
-                        <div className="text-sm text-slate-500">{country.city_count} cities</div>
+                        <div className="text-foreground font-medium">{country.name}</div>
+                        <div className="text-sm text-muted-foreground">{country.city_count} cities</div>
                       </div>
                     </div>
-                    <ChevronRight className="w-5 h-5 text-slate-500" />
+                    <ChevronRight className="w-5 h-5 text-muted-foreground" />
                   </button>
                 ))}
               </div>
@@ -336,11 +336,11 @@ export default function Home() {
             <div className="flex items-center gap-4 mb-6">
               <button
                 onClick={handleBack}
-                className="text-slate-400 hover:text-white"
+                className="text-muted-foreground hover:text-foreground"
               >
                 ← Back
               </button>
-              <h2 className="text-2xl font-bold text-white">
+              <h2 className="text-2xl font-bold text-foreground">
                 Select {regions[0]?.type || 'Region'} in {selectedCountry?.name}
               </h2>
             </div>
@@ -355,16 +355,16 @@ export default function Home() {
                   <button
                     key={region.name}
                     onClick={() => handleRegionSelect(region)}
-                    className="flex items-center justify-between p-4 bg-slate-800 border border-slate-700 rounded-lg hover:bg-slate-700 hover:border-slate-600 transition-colors text-left"
+                    className="flex items-center justify-between p-4 bg-card border border-border rounded-lg hover:bg-muted hover:border-border transition-colors text-left"
                   >
                     <div className="flex items-center gap-3">
-                      <Building2 className="w-5 h-5 text-slate-400" />
+                      <Building2 className="w-5 h-5 text-muted-foreground" />
                       <div>
-                        <div className="text-white font-medium">{region.name}</div>
-                        <div className="text-sm text-slate-500">{region.city_count} cities</div>
+                        <div className="text-foreground font-medium">{region.name}</div>
+                        <div className="text-sm text-muted-foreground">{region.city_count} cities</div>
                       </div>
                     </div>
-                    <ChevronRight className="w-5 h-5 text-slate-500" />
+                    <ChevronRight className="w-5 h-5 text-muted-foreground" />
                   </button>
                 ))}
               </div>
@@ -378,11 +378,11 @@ export default function Home() {
             <div className="flex items-center gap-4 mb-6">
               <button
                 onClick={handleBack}
-                className="text-slate-400 hover:text-white"
+                className="text-muted-foreground hover:text-foreground"
               >
                 ← Back
               </button>
-              <h2 className="text-2xl font-bold text-white">
+              <h2 className="text-2xl font-bold text-foreground">
                 Select City {selectedRegion ? `in ${selectedRegion.name}` : `in ${selectedCountry?.name}`}
               </h2>
             </div>
@@ -393,7 +393,7 @@ export default function Home() {
               </div>
             ) : cities.length === 0 ? (
               <div className="text-center py-12">
-                <p className="text-slate-400">No cities found in this location.</p>
+                <p className="text-muted-foreground">No cities found in this location.</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -401,18 +401,18 @@ export default function Home() {
                   <button
                     key={city.id}
                     onClick={() => handleCitySelect(city)}
-                    className="flex items-center justify-between p-4 bg-slate-800 border border-slate-700 rounded-lg hover:bg-slate-700 hover:border-slate-600 transition-colors text-left"
+                    className="flex items-center justify-between p-4 bg-card border border-border rounded-lg hover:bg-muted hover:border-border transition-colors text-left"
                   >
                     <div className="flex items-center gap-3">
-                      <MapPin className="w-5 h-5 text-slate-400" />
+                      <MapPin className="w-5 h-5 text-muted-foreground" />
                       <div>
-                        <div className="text-white font-medium">{city.name}</div>
-                        <div className="text-sm text-slate-500">
+                        <div className="text-foreground font-medium">{city.name}</div>
+                        <div className="text-sm text-muted-foreground">
                           {city.region && `${city.region}, `}{city.country}
                         </div>
                       </div>
                     </div>
-                    <ChevronRight className="w-5 h-5 text-slate-500" />
+                    <ChevronRight className="w-5 h-5 text-muted-foreground" />
                   </button>
                 ))}
               </div>
@@ -422,12 +422,12 @@ export default function Home() {
       </div>
 
       {/* Footer */}
-      <footer className="mt-auto border-t border-slate-700 bg-slate-800/50">
+      <footer className="mt-auto border-t border-border bg-card/50">
         <div className="container mx-auto px-4 py-8 text-center">
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-muted-foreground">
             Zmanim Lab - Multi-Publisher Prayer Times Platform
           </p>
-          <p className="text-xs text-slate-600 mt-2">
+          <p className="text-xs text-muted-foreground mt-2">
             Times are calculated based on astronomical and halachic methods.
             Consult your local rabbi for practical guidance.
           </p>

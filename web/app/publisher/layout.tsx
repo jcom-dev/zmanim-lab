@@ -27,20 +27,20 @@ export default function PublisherLayout({ children }: PublisherLayoutProps) {
 
   return (
     <PublisherProvider>
-      <div className="min-h-screen bg-slate-900 text-white">
+      <div className="min-h-screen bg-background text-foreground">
         {/* Impersonation Banner */}
         <ImpersonationBanner />
 
         {/* Header */}
-        <header className="bg-slate-800 border-b border-slate-700">
+        <header className="bg-card border-b border-border">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between items-center h-16">
               {/* Left: Logo & Publisher Switcher */}
               <div className="flex items-center gap-6">
-                <Link href="/" className="text-xl font-bold text-white hover:text-blue-400 transition-colors">
+                <Link href="/" className="text-xl font-bold text-foreground hover:text-primary transition-colors">
                   Zmanim Lab
                 </Link>
-                <div className="h-6 w-px bg-slate-600" />
+                <div className="h-6 w-px bg-border" />
                 <PublisherSwitcher />
               </div>
 
@@ -53,7 +53,7 @@ export default function PublisherLayout({ children }: PublisherLayoutProps) {
         </header>
 
         {/* Navigation */}
-        <nav className="bg-slate-850 border-b border-slate-700">
+        <nav className="bg-card/50 border-b border-border">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex space-x-8">
               {navItems.map((item) => {
@@ -64,8 +64,8 @@ export default function PublisherLayout({ children }: PublisherLayoutProps) {
                     href={item.href}
                     className={`py-3 px-1 border-b-2 text-sm font-medium transition-colors ${
                       isActive
-                        ? 'border-blue-500 text-blue-400'
-                        : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-500'
+                        ? 'border-primary text-primary'
+                        : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted'
                     }`}
                   >
                     {item.label}

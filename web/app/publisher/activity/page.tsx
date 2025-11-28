@@ -4,8 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@clerk/nextjs';
 import { usePublisherContext } from '@/providers/PublisherContext';
 import { Clock, User, Code, MapPin, UserPlus, Loader2, History } from 'lucide-react';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+import { API_BASE } from '@/lib/api';
 
 interface ActivityEntry {
   id: string;
@@ -21,14 +20,12 @@ export default function PublisherActivityPage() {
   const { selectedPublisher, isLoading: contextLoading } = usePublisherContext();
   const [activities, setActivities] = useState<ActivityEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
   const fetchActivities = useCallback(async () => {
     if (!selectedPublisher) return;
 
     try {
       setIsLoading(true);
-      setError(null);
       const token = await getToken();
 
       const response = await fetch(`${API_BASE}/api/v1/publisher/activity`, {
@@ -50,7 +47,7 @@ export default function PublisherActivityPage() {
 
       const data = await response.json();
       setActivities(data.data?.activities || data.activities || []);
-    } catch (err) {
+    } catch {
       // Don't show error for now since endpoint may not exist
       setActivities([]);
     } finally {
@@ -106,8 +103,8 @@ export default function PublisherActivityPage() {
       <div className="p-8">
         <div className="max-w-4xl mx-auto">
           <div className="text-center py-12">
-            <Loader2 className="w-8 h-8 text-blue-400 animate-spin mx-auto" />
-            <p className="mt-4 text-gray-400">Loading activity...</p>
+            <Loader2 className="w-8 h-8 text-blue-600 dark:text-blue-400 animate-spin mx-auto" />
+            <p className="mt-4 text-muted-foreground">Loading activity...</p>
           </div>
         </div>
       </div>
@@ -120,16 +117,16 @@ export default function PublisherActivityPage() {
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold">Activity Log</h1>
-          <p className="text-gray-400 mt-1">
+          <p className="text-muted-foreground mt-1">
             Track changes made to your publisher account
           </p>
         </div>
 
         {/* Coming Soon Banner */}
-        <div className="bg-slate-800/50 rounded-lg border border-slate-700/50 p-8 text-center mb-8">
-          <History className="w-12 h-12 mx-auto text-slate-500 mb-4" />
+        <div className="bg-card/50 rounded-lg border border-border p-8 text-center mb-8">
+          <History className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
           <h2 className="text-xl font-semibold mb-2">Activity Logging Coming Soon</h2>
-          <p className="text-slate-400 max-w-md mx-auto">
+          <p className="text-muted-foreground max-w-md mx-auto">
             A detailed log of all changes to your profile, algorithm, and coverage
             will be available here in a future update.
           </p>
@@ -141,17 +138,17 @@ export default function PublisherActivityPage() {
             {activities.map((activity) => (
               <div
                 key={activity.id}
-                className="flex items-start gap-4 p-4 bg-slate-800 rounded-lg border border-slate-700"
+                className="flex items-start gap-4 p-4 bg-card rounded-lg border border-border"
               >
-                <div className="p-2 bg-slate-700 rounded-full text-slate-400">
+                <div className="p-2 bg-secondary rounded-full text-muted-foreground">
                   {getActionIcon(activity.action_type)}
                 </div>
                 <div className="flex-1">
-                  <p className="font-medium text-white">{activity.description}</p>
-                  <div className="flex items-center gap-2 text-sm text-slate-400 mt-1">
+                  <p className="font-medium text-foreground">{activity.description}</p>
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
                     <span>{formatDate(activity.created_at)}</span>
                     {activity.actor_type === 'admin_impersonation' && (
-                      <span className="px-2 py-0.5 bg-yellow-900/50 text-yellow-400 rounded text-xs">
+                      <span className="px-2 py-0.5 bg-yellow-900/50 dark:bg-yellow-900/50 text-yellow-600 dark:text-yellow-400 rounded text-xs">
                         Admin (Support)
                       </span>
                     )}
@@ -161,10 +158,10 @@ export default function PublisherActivityPage() {
             ))}
           </div>
         ) : (
-          <div className="bg-slate-800 rounded-lg border border-slate-700 p-12 text-center">
-            <Clock className="w-12 h-12 mx-auto text-slate-600 mb-4" />
+          <div className="bg-card rounded-lg border border-border p-12 text-center">
+            <Clock className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
             <h3 className="text-lg font-semibold mb-2">No activity yet</h3>
-            <p className="text-slate-400">
+            <p className="text-muted-foreground">
               Changes to your profile, algorithm, and coverage will be logged here.
             </p>
           </div>

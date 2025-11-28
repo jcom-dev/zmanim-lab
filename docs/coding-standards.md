@@ -2,8 +2,154 @@
 
 **Purpose:** Ensure consistent code quality and patterns across the codebase
 **Audience:** Developers (human and AI agents)
-**Status:** Living document (update as patterns evolve)
-**Based on:** Story 3.2 Codebase Audit (2025-11-27)
+**Status:** CAST-IRON RULES - Violations block PRs
+**Based on:** Story 3.2 Codebase Audit (2025-11-27), Codebase Review (2025-11-28)
+
+---
+
+## CRITICAL VIOLATIONS (Must Fix Immediately)
+
+The following patterns are FORBIDDEN and must be refactored:
+
+### 1. Hardcoded Colors - NEVER USE
+
+```tsx
+// FORBIDDEN - Will be rejected in code review
+className="text-[#1e3a5f]"
+className="bg-[#0051D5]"
+className="border-[#007AFF]"
+style={{ color: '#ff0000' }}
+```
+
+**REQUIRED - Use design tokens:**
+```tsx
+className="text-primary"
+className="bg-primary/90"
+className="text-muted-foreground"
+className="border-border"
+```
+
+### 2. Defining API_BASE in Components - NEVER DO THIS
+
+```tsx
+// FORBIDDEN - Will be rejected in code review
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+```
+
+**REQUIRED - Import from lib/api.ts:**
+```tsx
+import { API_BASE } from '@/lib/api';
+// OR use the API client
+import { api, authenticatedFetch } from '@/lib/api';
+```
+
+### 3. Duplicated Fetch Logic - EXTRACT TO HOOKS
+
+```tsx
+// FORBIDDEN - Duplicated auth/fetch pattern in every component
+const token = await getToken();
+const response = await fetch(`${API_BASE}/api/v1/endpoint`, {
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${token}`,
+    'X-Publisher-Id': selectedPublisher.id,
+  },
+});
+```
+
+**REQUIRED - Use centralized hooks:**
+```tsx
+import { useAuthenticatedFetch } from '@/lib/hooks/useAuthenticatedFetch';
+
+const { fetchWithAuth } = useAuthenticatedFetch();
+const data = await fetchWithAuth<DataType>('/api/v1/endpoint');
+```
+
+### 4. Authentication - CORRECT PATTERNS (No Broken Code)
+
+**RULE: Always check Clerk loading state BEFORE accessing auth:**
+```tsx
+const { isLoaded, isSignedIn, user } = useUser();
+const { getToken } = useAuth();
+
+// NEVER access user or call getToken before isLoaded is true
+if (!isLoaded) {
+  return <LoadingSpinner />;
+}
+
+if (!isSignedIn) {
+  redirect('/sign-in');
+}
+
+// NOW safe to use
+const token = await getToken();
+```
+
+**RULE: Token MUST be awaited and checked:**
+```tsx
+// WRONG - token may be null/undefined, sends "Bearer null" causing 401
+const token = await getToken();
+fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+
+// CORRECT - handle missing token gracefully
+const token = await getToken();
+if (!token) {
+  setError('Not authenticated. Please sign in.');
+  setLoading(false);
+  return;
+}
+fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+```
+
+**Common 401 Error Patterns to Avoid:**
+1. Making fetch requests before checking if token is null
+2. Not handling the case where `getToken()` returns null
+3. Sending `Authorization: Bearer null` or `Authorization: Bearer undefined`
+4. Making authenticated requests before Clerk's `isLoaded` is true
+
+**RULE: X-Publisher-Id header required for publisher endpoints:**
+```tsx
+// WRONG - missing publisher context
+fetch(`${API_BASE}/api/v1/publisher/profile`, {
+  headers: { Authorization: `Bearer ${token}` }
+});
+
+// CORRECT - include publisher ID
+fetch(`${API_BASE}/api/v1/publisher/profile`, {
+  headers: {
+    Authorization: `Bearer ${token}`,
+    'X-Publisher-Id': selectedPublisher.id,  // REQUIRED
+  }
+});
+```
+
+**RULE: Use centralized hook to prevent mistakes:**
+```tsx
+// This hook handles all auth correctly - USE IT
+import { useAuthenticatedFetch } from '@/lib/hooks/useAuthenticatedFetch';
+
+const { fetchWithAuth } = useAuthenticatedFetch();
+const data = await fetchWithAuth('/api/v1/publisher/profile');
+// Token and X-Publisher-Id handled automatically
+```
+
+**DEBUGGING CHECKLIST (when auth is broken):**
+
+1. Is `isLoaded` true before calling `getToken()`?
+2. Is the token being sent in the Authorization header?
+3. Is `X-Publisher-Id` header set for publisher routes?
+4. Are environment variables correct? (`CLERK_SECRET_KEY`, `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`)
+5. Is the backend running? (`tmux attach -t zmanim`)
+
+**COMMON MISTAKES:**
+
+| Mistake | Fix |
+|---------|-----|
+| Calling `getToken()` before `isLoaded` | Add loading check |
+| Missing Authorization header | Use centralized fetch hook |
+| Missing X-Publisher-Id | Use centralized fetch hook |
+| Token is null/undefined | Check `isSignedIn` first |
+| Wrong env variables | Both must be from same Clerk instance |
 
 ---
 
@@ -239,7 +385,32 @@ const actualData = result.data || result;  // Handle wrapped/unwrapped
 - Don't forget to include auth token for protected routes
 - Don't forget X-Publisher-Id header for publisher-specific endpoints
 
-### Styling (Tailwind CSS)
+### Styling (Tailwind CSS) - MANDATORY DESIGN TOKEN USAGE
+
+**RULE: NO HARDCODED COLORS**
+
+All colors MUST come from the design system defined in `tailwind.config.ts` and `globals.css`:
+
+| Usage | CORRECT | FORBIDDEN |
+|-------|---------|-----------|
+| Primary text | `text-foreground` | `text-[#111827]` |
+| Muted text | `text-muted-foreground` | `text-gray-400` |
+| Primary button | `bg-primary` | `bg-[#007AFF]` |
+| Button hover | `bg-primary/90` | `bg-[#0051D5]` |
+| Card background | `bg-card` | `bg-white` |
+| Borders | `border-border` | `border-gray-300` |
+| Status success | `bg-green-100 text-green-800` | (allowed - semantic) |
+| Status error | `bg-destructive/10 text-destructive` | `bg-red-100` |
+
+**Reusable Status Badge Classes (add to globals.css):**
+```css
+@layer utilities {
+  .status-badge-success { @apply bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-medium; }
+  .status-badge-warning { @apply bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-sm font-medium; }
+  .status-badge-error { @apply bg-red-100 text-red-800 px-3 py-1 rounded-full text-sm font-medium; }
+  .status-badge-pending { @apply bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium; }
+}
+```
 
 **Layout Pattern:**
 ```tsx
@@ -247,8 +418,8 @@ const actualData = result.data || result;  // Handle wrapped/unwrapped
   <div className="max-w-6xl mx-auto">
     {/* Header */}
     <div className="mb-8">
-      <h1 className="text-3xl font-bold">Page Title</h1>
-      <p className="text-gray-400 mt-1">Subtitle</p>
+      <h1 className="text-3xl font-bold text-foreground">Page Title</h1>
+      <p className="text-muted-foreground mt-1">Subtitle</p>
     </div>
 
     {/* Grid content */}
@@ -259,16 +430,11 @@ const actualData = result.data || result;  // Handle wrapped/unwrapped
 </div>
 ```
 
-**Color Palette:**
-| Purpose | Color Classes |
-|---------|---------------|
-| Admin actions | `bg-slate-600 hover:bg-slate-500` |
-| Publisher actions | `bg-blue-600 hover:bg-blue-700` |
-| Success/User actions | `bg-green-600 hover:bg-green-700` |
-| Danger | `bg-red-600 hover:bg-red-700` |
-| Warning | `bg-yellow-500 text-yellow-950` |
-| Card backgrounds | `bg-slate-800 border-slate-700` |
-| Muted text | `text-gray-400`, `text-gray-500` |
+**MANDATORY Design Token Hierarchy (use in this order):**
+1. Semantic tokens: `primary`, `secondary`, `destructive`, `muted`, `accent`, `foreground`, `background`
+2. Extended colors from config: `apple-blue`, `apple-gray-500`
+3. Tailwind defaults: `green-100`, `red-800` (for status colors only)
+4. **NEVER**: Arbitrary values like `[#hex]` or inline styles
 
 **Responsive Design:**
 ```tsx

@@ -81,14 +81,20 @@ development_status:
   3-4-refactor-to-standards: done  # Apply standards, cleanup - COMPLETED 2025-11-27
   epic-3-retrospective: optional
 
-  # Epic 4: Intuitive Zmanim Algorithm Editor with AI-Powered DSL (14 stories)
+  # Epic 4: Intuitive Zmanim Algorithm Editor with AI-Powered DSL (14 stories) - CURRENT SPRINT
   # Focus: Apple-quality UX, DSL for calculations, AI formula generation, Hebrew calendar
   # Epic defined: docs/epic-4-algorithm-editor-ux.md
   # Tech spec: docs/sprint-artifacts/tech-spec-epic-4.md
+  #
+  # Epic 4 DoD Policy (Simplified Gates):
+  #   - Only run NEW tests created for the story (not full regression suite)
+  #   - If API/web not working: run ./restart.sh from project root
+  #   - If still broken: troubleshoot via tmux (tmux attach -t zmanim)
+  #   - Full E2E regression only required at epic completion, not per-story
   epic-4: contexted  # Tech spec created 2025-11-27
-  4-0-postgres-pgvector-image: in-progress  # Infrastructure: PostgreSQL 17 + PostGIS + pgvector
-  4-1-zmanim-dsl-design: ready-for-dev        # Research all zmanim, design DSL syntax
-  4-2-zmanim-dsl-parser: ready-for-dev        # Implement lexer/parser/compiler
+  4-0-postgres-pgvector-image: done  # Infrastructure: PostgreSQL 17 + PostGIS + pgvector - COMPLETED 2025-11-27
+  4-1-zmanim-dsl-design: done                  # DSL spec APPROVED by code-review 2025-11-28
+  4-2-zmanim-dsl-parser: dev-complete         # Executor, API endpoints, tests - ready for code review
   4-3-bilingual-naming: ready-for-dev         # Mandatory Hebrew + English names
   4-4-guided-formula-builder: ready-for-dev   # shadcn/ui visual formula construction
   4-5-halachic-documentation: ready-for-dev   # Comments field with Hebrew/Markdown

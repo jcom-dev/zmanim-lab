@@ -1,246 +1,199 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@clerk/nextjs';
+import { usePublisherContext } from '@/providers/PublisherContext';
+import { useAuthenticatedFetch, ApiError } from '@/lib/hooks/useAuthenticatedFetch';
+import { API_BASE } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { TemplateSelector } from '@/components/publisher/TemplateSelector';
-import { ZmanList } from '@/components/publisher/ZmanList';
-import { ZmanConfigModal } from '@/components/publisher/ZmanConfigModal';
+import { Input } from '@/components/ui/input';
+import { ZmanGrid } from '@/components/publisher/ZmanCard';
 import { AlgorithmPreview } from '@/components/publisher/AlgorithmPreview';
 import { MonthPreview } from '@/components/publisher/MonthPreview';
 import { VersionHistory } from '@/components/publisher/VersionHistory';
+import { useZmanimList, categorizeZmanim } from '@/lib/hooks/useZmanimList';
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { MapPin, Search, Plus, Filter } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 
-interface ZmanConfig {
-  method: string;
-  params: Record<string, unknown>;
+// Default location: Brooklyn, NY
+const DEFAULT_LOCATION = {
+  latitude: 40.6782,
+  longitude: -73.9442,
+  timezone: 'America/New_York',
+  displayName: 'Brooklyn, NY',
+};
+
+interface PreviewLocation {
+  latitude: number;
+  longitude: number;
+  timezone: string;
+  displayName: string;
 }
 
-interface AlgorithmConfig {
-  name: string;
-  description?: string;
-  zmanim: Record<string, ZmanConfig>;
-}
-
-interface Algorithm {
+interface CoverageCity {
   id: string;
   name: string;
-  description: string;
-  configuration: AlgorithmConfig;
-  version: number;
-  status: string;
-  is_active: boolean;
-  published_at?: string;
+  latitude: number;
+  longitude: number;
+  timezone: string;
+  country: string;
+  region?: string;
 }
 
 export default function AlgorithmEditorPage() {
   const router = useRouter();
-  const [algorithm, setAlgorithm] = useState<Algorithm | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [publishing, setPublishing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const [selectedZman, setSelectedZman] = useState<string | null>(null);
+  const { getToken } = useAuth();
+  const { selectedPublisher } = usePublisherContext();
+  const { fetchWithAuth } = useAuthenticatedFetch();
+
+  // Fetch zmanim using React Query
+  const { data: zmanim = [], isLoading, error: zmanimError } = useZmanimList();
+
   const [showMonthView, setShowMonthView] = useState(false);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
-  const [showPublishDialog, setShowPublishDialog] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterCategory, setFilterCategory] = useState<'all' | 'essential' | 'optional' | 'custom'>('all');
 
-  // Warn before leaving with unsaved changes
-  useEffect(() => {
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (hasUnsavedChanges) {
-        e.preventDefault();
-        e.returnValue = '';
-      }
-    };
+  // Location state
+  const [previewLocation, setPreviewLocation] = useState<PreviewLocation>(DEFAULT_LOCATION);
+  const [coverageCities, setCoverageCities] = useState<CoverageCity[]>([]);
+  const [citySearch, setCitySearch] = useState('');
+  const [searchResults, setSearchResults] = useState<CoverageCity[]>([]);
+  const [showCityDropdown, setShowCityDropdown] = useState(false);
 
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [hasUnsavedChanges]);
-
-  const loadAlgorithm = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
-      const response = await fetch(`${apiBaseUrl}/api/v1/publisher/algorithm`, {
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to load algorithm');
-      }
-
-      const data = await response.json();
-      setAlgorithm(data.data || data);
-    } catch (err) {
-      console.error('Failed to load algorithm:', err);
-      setError('Failed to load algorithm. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadAlgorithm();
-  }, [loadAlgorithm]);
-
-  const handleSave = async () => {
-    if (!algorithm) return;
+  // Load publisher coverage cities and set default location
+  const loadCoverage = useCallback(async () => {
+    if (!selectedPublisher) return;
 
     try {
-      setSaving(true);
-      setError(null);
-      setSuccess(false);
+      const data = await fetchWithAuth<{ cities: CoverageCity[] }>('/api/v1/publisher/coverage');
+      const cities = data.cities || [];
+      setCoverageCities(cities);
 
-      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
-      const response = await fetch(`${apiBaseUrl}/api/v1/publisher/algorithm`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          name: algorithm.configuration.name,
-          description: algorithm.configuration.description,
-          configuration: algorithm.configuration,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || 'Failed to save algorithm');
-      }
-
-      const data = await response.json();
-      setAlgorithm(data.data || data);
-      setHasUnsavedChanges(false);
-      setSuccess(true);
-      setTimeout(() => setSuccess(false), 3000);
-    } catch (err) {
-      console.error('Failed to save algorithm:', err);
-      setError(err instanceof Error ? err.message : 'Failed to save algorithm');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handlePublish = async () => {
-    try {
-      setPublishing(true);
-      setError(null);
-      setShowPublishDialog(false);
-
-      // If there are unsaved changes, save first
-      if (hasUnsavedChanges && algorithm) {
-        const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
-        const saveResponse = await fetch(`${apiBaseUrl}/api/v1/publisher/algorithm`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({
-            name: algorithm.configuration.name,
-            description: algorithm.configuration.description,
-            configuration: algorithm.configuration,
-          }),
+      // Set default location from coverage if available
+      if (cities.length > 0) {
+        const firstCity = cities[0];
+        setPreviewLocation({
+          latitude: firstCity.latitude,
+          longitude: firstCity.longitude,
+          timezone: firstCity.timezone,
+          displayName: `${firstCity.name}${firstCity.region ? `, ${firstCity.region}` : ''}, ${firstCity.country}`,
         });
-
-        if (!saveResponse.ok) {
-          throw new Error('Failed to save before publishing');
-        }
-        setHasUnsavedChanges(false);
       }
+    } catch (err) {
+      console.error('Failed to load coverage:', err);
+      // Keep default location on error
+    }
+  }, [fetchWithAuth, selectedPublisher]);
 
-      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
-      const response = await fetch(`${apiBaseUrl}/api/v1/publisher/algorithm/publish`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
+  useEffect(() => {
+    if (selectedPublisher) {
+      loadCoverage();
+    }
+  }, [selectedPublisher, loadCoverage]);
+
+  // Search for cities
+  const handleCitySearch = async (query: string) => {
+    setCitySearch(query);
+
+    if (query.length < 2) {
+      setSearchResults([]);
+      setShowCityDropdown(false);
+      return;
+    }
+
+    // First filter from coverage cities
+    const coverageMatches = coverageCities.filter(city =>
+      city.name.toLowerCase().includes(query.toLowerCase())
+    );
+
+    if (coverageMatches.length > 0) {
+      setSearchResults(coverageMatches);
+      setShowCityDropdown(true);
+      return;
+    }
+
+    // If no coverage matches, search all cities
+    try {
+      const token = await getToken();
+      const response = await fetch(`${API_BASE}/api/v1/cities/search?q=${encodeURIComponent(query)}`, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
       });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || 'Failed to publish algorithm');
+      if (response.ok) {
+        const data = await response.json();
+        setSearchResults(data.data?.cities || data.cities || []);
+        setShowCityDropdown(true);
       }
-
-      const data = await response.json();
-      setAlgorithm(data.data || data);
-      setSuccess(true);
-      setTimeout(() => setSuccess(false), 3000);
     } catch (err) {
-      console.error('Failed to publish algorithm:', err);
-      setError(err instanceof Error ? err.message : 'Failed to publish algorithm');
-    } finally {
-      setPublishing(false);
+      console.error('Failed to search cities:', err);
     }
   };
 
-  const handleTemplateSelect = (template: AlgorithmConfig) => {
-    setAlgorithm(prev => prev ? {
-      ...prev,
-      configuration: template,
-    } : {
-      id: '',
-      name: template.name,
-      description: template.description || '',
-      configuration: template,
-      version: 1,
-      status: 'draft',
-      is_active: false,
+  const selectCity = (city: CoverageCity) => {
+    setPreviewLocation({
+      latitude: city.latitude,
+      longitude: city.longitude,
+      timezone: city.timezone,
+      displayName: `${city.name}${city.region ? `, ${city.region}` : ''}, ${city.country}`,
     });
-    setHasUnsavedChanges(true);
+    setCitySearch('');
+    setSearchResults([]);
+    setShowCityDropdown(false);
   };
 
-  const handleZmanUpdate = (zmanKey: string, config: ZmanConfig) => {
-    if (!algorithm) return;
+  // Categorize and filter zmanim
+  const { essential, optional, custom } = useMemo(() => {
+    const categorized = categorizeZmanim(zmanim);
 
-    setAlgorithm({
-      ...algorithm,
-      configuration: {
-        ...algorithm.configuration,
-        zmanim: {
-          ...algorithm.configuration.zmanim,
-          [zmanKey]: config,
-        },
-      },
-    });
-    setHasUnsavedChanges(true);
+    if (searchQuery.trim() === '') {
+      return categorized;
+    }
+
+    const query = searchQuery.toLowerCase();
+    const filterFn = (z: typeof zmanim[0]) =>
+      z.hebrew_name.toLowerCase().includes(query) ||
+      z.english_name.toLowerCase().includes(query) ||
+      z.zman_key.toLowerCase().includes(query);
+
+    return {
+      essential: categorized.essential.filter(filterFn),
+      optional: categorized.optional.filter(filterFn),
+      custom: categorized.custom.filter(filterFn),
+    };
+  }, [zmanim, searchQuery]);
+
+  // Navigate to editor
+  const handleEditZman = (zmanKey: string) => {
+    router.push(`/publisher/algorithm/edit/${zmanKey}`);
   };
 
-  const handleZmanRemove = (zmanKey: string) => {
-    if (!algorithm) return;
-
-    const newZmanim = { ...algorithm.configuration.zmanim };
-    delete newZmanim[zmanKey];
-
-    setAlgorithm({
-      ...algorithm,
-      configuration: {
-        ...algorithm.configuration,
-        zmanim: newZmanim,
-      },
-    });
-    setHasUnsavedChanges(true);
+  const handleAddCustomZman = () => {
+    router.push('/publisher/algorithm/edit/new');
   };
 
-  if (loading) {
+  // Calculate counts
+  const totalCount = zmanim.length;
+  const enabledCount = zmanim.filter(z => z.is_enabled).length;
+  const visibleCount = zmanim.filter(z => z.is_visible).length;
+
+  if (isLoading) {
     return (
-      <div className="min-h-screen bg-slate-900 p-8">
+      <div className="min-h-screen bg-background p-8">
         <div className="max-w-7xl mx-auto">
           <div className="flex justify-center items-center h-64">
-            <div className="text-white">Loading algorithm...</div>
+            <div className="text-foreground">Loading zmanim...</div>
           </div>
         </div>
       </div>
@@ -248,34 +201,21 @@ export default function AlgorithmEditorPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 p-8">
+    <div className="min-h-screen bg-background p-8">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8 flex justify-between items-start">
           <div>
             <div className="flex items-center gap-3 mb-2">
-              <h1 className="text-3xl font-bold text-white">Algorithm Editor</h1>
-              {algorithm && (
-                <span
-                  className={`px-2 py-1 text-xs font-medium rounded ${
-                    algorithm.status === 'published'
-                      ? 'bg-green-600 text-white'
-                      : algorithm.status === 'draft'
-                      ? 'bg-yellow-600 text-white'
-                      : 'bg-slate-600 text-white'
-                  }`}
-                  data-testid="algorithm-status"
-                >
-                  {algorithm.status.toUpperCase()}
-                </span>
-              )}
-              {algorithm?.version && algorithm.version > 0 && (
-                <span className="px-2 py-1 text-xs font-medium bg-slate-700 text-slate-300 rounded">
-                  v{algorithm.version}
-                </span>
-              )}
+              <h1 className="text-3xl font-bold text-foreground">Algorithm Editor</h1>
+              <Badge variant="outline" className="text-sm">
+                {totalCount} Zmanim
+              </Badge>
+              <Badge variant="secondary" className="text-sm">
+                {enabledCount} Enabled
+              </Badge>
             </div>
-            <p className="text-slate-400">Configure your zmanim calculation algorithm</p>
+            <p className="text-muted-foreground">Configure your zmanim calculation formulas</p>
           </div>
           <div className="flex gap-4">
             <Button
@@ -286,163 +226,226 @@ export default function AlgorithmEditorPage() {
             </Button>
             <Button
               variant="outline"
-              onClick={() => setShowMonthView(!showMonthView)}
+              onClick={() => setShowMonthView(true)}
             >
-              {showMonthView ? 'Hide Month View' : 'View Month'}
+              View Month
             </Button>
             <Button
               variant="outline"
-              onClick={() => {
-                if (hasUnsavedChanges && !confirm('You have unsaved changes. Are you sure you want to leave?')) {
-                  return;
-                }
-                router.push('/publisher/dashboard');
-              }}
+              onClick={() => router.push('/publisher/dashboard')}
             >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleSave}
-              disabled={saving || !hasUnsavedChanges}
-            >
-              {saving ? 'Saving...' : 'Save Changes'}
-            </Button>
-            <Button
-              onClick={() => setShowPublishDialog(true)}
-              disabled={publishing || !algorithm?.id}
-              className="bg-green-600 hover:bg-green-700"
-              data-testid="publish-button"
-            >
-              {publishing ? 'Publishing...' : algorithm?.status === 'draft' ? 'Publish' : 'Publish Changes'}
+              Back to Dashboard
             </Button>
           </div>
         </div>
 
-        {/* Unsaved changes warning */}
-        {hasUnsavedChanges && (
-          <div className="mb-6 bg-yellow-900/50 border border-yellow-700 rounded-md p-4">
-            <p className="text-yellow-200 text-sm">You have unsaved changes</p>
-          </div>
-        )}
-
         {/* Error message */}
-        {error && (
-          <div className="mb-6 bg-red-900/50 border border-red-700 rounded-md p-4">
-            <p className="text-red-200 text-sm">{error}</p>
+        {zmanimError && (
+          <div className="mb-6 bg-destructive/10 border border-destructive/50 rounded-md p-4">
+            <p className="text-destructive text-sm">Failed to load zmanim. Please refresh the page.</p>
           </div>
         )}
 
-        {/* Success message */}
-        {success && (
-          <div className="mb-6 bg-green-900/50 border border-green-700 rounded-md p-4">
-            <p className="text-green-200 text-sm">Algorithm saved successfully!</p>
-          </div>
-        )}
+        {/* Location Selector */}
+        <Card className="mb-6">
+          <CardContent className="py-4">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <MapPin className="h-4 w-4" />
+                <span className="text-sm font-medium">Preview Location:</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-foreground font-medium">{previewLocation.displayName}</span>
+              </div>
+              <div className="relative flex-1 max-w-xs">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search for a city..."
+                    value={citySearch}
+                    onChange={(e) => handleCitySearch(e.target.value)}
+                    onFocus={() => citySearch.length >= 2 && setShowCityDropdown(true)}
+                    onBlur={() => setTimeout(() => setShowCityDropdown(false), 200)}
+                    className="pl-10"
+                  />
+                </div>
+                {showCityDropdown && searchResults.length > 0 && (
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-card border border-border rounded-md shadow-lg z-50 max-h-60 overflow-y-auto">
+                    {searchResults.map((city) => (
+                      <button
+                        key={city.id}
+                        className="w-full px-4 py-2 text-left text-sm hover:bg-muted transition-colors flex items-center gap-2"
+                        onClick={() => selectCity(city)}
+                      >
+                        <MapPin className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                        <span className="text-foreground">
+                          {city.name}
+                          {city.region && <span className="text-muted-foreground">, {city.region}</span>}
+                          <span className="text-muted-foreground">, {city.country}</span>
+                        </span>
+                        {coverageCities.some(c => c.id === city.id) && (
+                          <span className="ml-auto text-xs bg-primary/20 text-primary px-2 py-0.5 rounded">
+                            Coverage
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {coverageCities.length > 0 && (
+                <div className="text-xs text-muted-foreground">
+                  {coverageCities.length} coverage {coverageCities.length === 1 ? 'city' : 'cities'}
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Main Editor Panel */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Template Selector */}
+            {/* Search and Filter Bar */}
             <Card>
-              <CardHeader>
-                <CardTitle>Algorithm Templates</CardTitle>
-                <CardDescription>
-                  Choose a template to start from or create a custom algorithm
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <TemplateSelector onSelect={handleTemplateSelect} />
+              <CardContent className="py-4">
+                <div className="flex gap-3">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search zmanim by name or key..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                  <Button
+                    variant="default"
+                    onClick={handleAddCustomZman}
+                    className="flex items-center gap-2"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add Custom Zman
+                  </Button>
+                </div>
               </CardContent>
             </Card>
 
-            {/* Zman List */}
-            {algorithm && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Zmanim Configuration</CardTitle>
-                  <CardDescription>
-                    Click on any zman to configure its calculation method
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <ZmanList
-                    zmanim={algorithm.configuration.zmanim}
-                    onZmanClick={setSelectedZman}
-                    onZmanRemove={handleZmanRemove}
-                  />
-                </CardContent>
-              </Card>
-            )}
+            {/* Essential Zmanim */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>Essential Zmanim</CardTitle>
+                    <CardDescription>
+                      Required zmanim that cannot be deleted
+                    </CardDescription>
+                  </div>
+                  <Badge variant="secondary">{essential.length}</Badge>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <ZmanGrid
+                  zmanim={essential}
+                  category="essential"
+                  onEdit={handleEditZman}
+                />
+              </CardContent>
+            </Card>
+
+            {/* Optional Zmanim */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>Optional Zmanim</CardTitle>
+                    <CardDescription>
+                      Common zmanim that can be hidden or customized
+                    </CardDescription>
+                  </div>
+                  <Badge variant="secondary">{optional.length}</Badge>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <ZmanGrid
+                  zmanim={optional}
+                  category="optional"
+                  onEdit={handleEditZman}
+                />
+              </CardContent>
+            </Card>
+
+            {/* Custom Zmanim */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>Custom Zmanim</CardTitle>
+                    <CardDescription>
+                      Your custom zmanim created for specific needs
+                    </CardDescription>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary">{custom.length}</Badge>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleAddCustomZman}
+                      className="flex items-center gap-1 h-8"
+                    >
+                      <Plus className="h-3 w-3" />
+                      Add
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <ZmanGrid
+                  zmanim={custom}
+                  category="custom"
+                  onEdit={handleEditZman}
+                />
+              </CardContent>
+            </Card>
           </div>
 
           {/* Preview Panel */}
           <div className="space-y-6">
-            {algorithm && (
-              <AlgorithmPreview configuration={algorithm.configuration} />
-            )}
+            <AlgorithmPreview
+              configuration={{
+                name: 'Current Algorithm',
+                description: 'Live preview of zmanim calculations',
+                zmanim: {}, // Legacy prop, not used for new system
+              }}
+              getToken={getToken}
+              location={previewLocation}
+            />
           </div>
         </div>
 
-        {/* Month View */}
-        {showMonthView && algorithm && (
-          <div className="mt-6">
-            <MonthPreview configuration={algorithm.configuration} />
-          </div>
-        )}
+        {/* Month View Dialog */}
+        <Dialog open={showMonthView} onOpenChange={setShowMonthView}>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Month Preview</DialogTitle>
+            </DialogHeader>
+            <MonthPreview
+              configuration={{
+                name: 'Current Algorithm',
+                description: 'Monthly preview',
+                zmanim: {},
+              }}
+              getToken={getToken}
+              location={previewLocation}
+            />
+          </DialogContent>
+        </Dialog>
 
         {/* Version History */}
         {showVersionHistory && (
           <div className="mt-6">
-            <VersionHistory onClose={() => setShowVersionHistory(false)} />
+            <VersionHistory onClose={() => setShowVersionHistory(false)} getToken={getToken} />
           </div>
         )}
-
-        {/* Zman Configuration Modal */}
-        {selectedZman && algorithm && (
-          <ZmanConfigModal
-            isOpen={!!selectedZman}
-            onClose={() => setSelectedZman(null)}
-            zmanKey={selectedZman}
-            currentConfig={algorithm.configuration.zmanim[selectedZman]}
-            onSave={(config) => {
-              handleZmanUpdate(selectedZman, config);
-              setSelectedZman(null);
-            }}
-          />
-        )}
-
-        {/* Publish Confirmation Dialog */}
-        <AlertDialog open={showPublishDialog} onOpenChange={setShowPublishDialog}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Publish Algorithm</AlertDialogTitle>
-              <AlertDialogDescription>
-                {algorithm?.status === 'published' ? (
-                  <>
-                    This will publish your changes as a new version. The current version will be archived.
-                    End users will see zmanim calculated with your new configuration.
-                  </>
-                ) : (
-                  <>
-                    This will publish your algorithm and make it active. End users will be able to see
-                    zmanim calculated with your configuration.
-                  </>
-                )}
-                {hasUnsavedChanges && (
-                  <span className="block mt-2 text-yellow-500">
-                    Your unsaved changes will be saved before publishing.
-                  </span>
-                )}
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={handlePublish}>
-                {algorithm?.status === 'published' ? 'Publish Changes' : 'Publish'}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
       </div>
     </div>
   );
