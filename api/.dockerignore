@@ -36,7 +36,7 @@ Thumbs.db
 
 # Documentation
 *.md
-docs/
+# Note: docs/ is NOT ignored because it contains swagger generated Go code
 
 # Git files
 .git/
