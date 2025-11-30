@@ -118,9 +118,11 @@ func (h *Handlers) GetPublisherTeam(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// InvitePublisherTeamMember invites a new team member
+// AddPublisherTeamMember adds a new team member (direct creation, no invitation)
 // POST /api/publisher/team/invite
-func (h *Handlers) InvitePublisherTeamMember(w http.ResponseWriter, r *http.Request) {
+// If user exists: adds publisher to their access list
+// If user doesn't exist: creates user directly and sends welcome email
+func (h *Handlers) AddPublisherTeamMember(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	// Use PublisherResolver to get publisher context
@@ -133,6 +135,7 @@ func (h *Handlers) InvitePublisherTeamMember(w http.ResponseWriter, r *http.Requ
 
 	var req struct {
 		Email string `json:"email"`
+		Name  string `json:"name"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -156,55 +159,8 @@ func (h *Handlers) InvitePublisherTeamMember(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Check if user already has access
-	if h.clerkService != nil {
-		existingUser, err := h.clerkService.GetUserByEmail(ctx, req.Email)
-		if err == nil && existingUser != nil {
-			metadata, _ := h.clerkService.GetUserPublicMetadata(ctx, existingUser.ID)
-			if accessList, ok := metadata["publisher_access_list"].([]interface{}); ok {
-				for _, id := range accessList {
-					if idStr, ok := id.(string); ok && idStr == publisherID {
-						RespondConflict(w, r, "User already has access to this publisher")
-						return
-					}
-				}
-			}
-		}
-	}
-
-	// Check for existing pending invitation
-	var existingCount int
-	h.db.Pool.QueryRow(ctx, `
-		SELECT COUNT(*) FROM publisher_invitations
-		WHERE publisher_id = $1 AND LOWER(email) = LOWER($2) AND status = 'pending'
-	`, publisherID, req.Email).Scan(&existingCount)
-
-	if existingCount > 0 {
-		RespondConflict(w, r, "An invitation for this email is already pending")
-		return
-	}
-
-	// Generate token
-	token, err := generateSecureToken()
-	if err != nil {
-		slog.Error("failed to generate invitation token", "error", err)
-		RespondInternalError(w, r, "Failed to create invitation")
-		return
-	}
-
-	// Create invitation (expires in 7 days)
-	expiresAt := time.Now().Add(7 * 24 * time.Hour)
-	var invitationID string
-
-	err = h.db.Pool.QueryRow(ctx, `
-		INSERT INTO publisher_invitations (publisher_id, email, token, status, invited_by, expires_at)
-		VALUES ($1, $2, $3, 'pending', $4, $5)
-		RETURNING id
-	`, publisherID, req.Email, token, userID, expiresAt).Scan(&invitationID)
-
-	if err != nil {
-		slog.Error("failed to create publisher invitation", "error", err)
-		RespondInternalError(w, r, "Failed to create invitation")
+	if h.clerkService == nil {
+		RespondInternalError(w, r, "Clerk service not available")
 		return
 	}
 
@@ -222,30 +178,98 @@ func (h *Handlers) InvitePublisherTeamMember(w http.ResponseWriter, r *http.Requ
 		}
 	}
 
-	// Send invitation email
-	if h.emailService != nil {
-		webURL := os.Getenv("WEB_URL")
-		if webURL == "" {
-			webURL = "http://localhost:3001"
-		}
-		acceptURL := fmt.Sprintf("%s/accept-invitation?token=%s", webURL, token)
-		go h.emailService.SendInvitation(req.Email, inviterName, publisherName, acceptURL)
+	// Check if user already exists
+	existingUser, err := h.clerkService.GetUserByEmail(ctx, req.Email)
+	if err != nil {
+		slog.Error("failed to check for existing user", "error", err, "email", req.Email)
+		RespondInternalError(w, r, "Failed to check for existing user")
+		return
 	}
 
-	slog.Info("publisher team invitation sent",
-		"invitation_id", invitationID,
-		"publisher_id", publisherID,
-		"email", req.Email,
-		"invited_by", userID)
+	isNewUser := existingUser == nil
+	var newUserID string
+	userName := req.Name
+	if userName == "" {
+		userName = req.Email // Fallback to email if no name provided
+	}
+
+	if existingUser != nil {
+		// User exists - check if they already have access
+		newUserID = existingUser.ID
+		metadata, _ := h.clerkService.GetUserPublicMetadata(ctx, existingUser.ID)
+		if accessList, ok := metadata["publisher_access_list"].([]interface{}); ok {
+			for _, id := range accessList {
+				if idStr, ok := id.(string); ok && idStr == publisherID {
+					RespondConflict(w, r, "User already has access to this publisher")
+					return
+				}
+			}
+		}
+
+		// Add publisher to their access list
+		if err := h.clerkService.AddPublisherToUser(ctx, existingUser.ID, publisherID); err != nil {
+			slog.Error("failed to add publisher to user", "error", err, "user_id", existingUser.ID, "publisher_id", publisherID)
+			RespondInternalError(w, r, "Failed to add user to team")
+			return
+		}
+
+		// Get existing user's name for email
+		if existingUser.FirstName != nil {
+			userName = *existingUser.FirstName
+		}
+
+		slog.Info("publisher access added to existing user",
+			"email", req.Email,
+			"user_id", existingUser.ID,
+			"publisher_id", publisherID,
+			"added_by", userID)
+	} else {
+		// User doesn't exist - create directly (no invitation)
+		newUser, err := h.clerkService.CreatePublisherUserDirectly(ctx, req.Email, userName, publisherID)
+		if err != nil {
+			slog.Error("failed to create user", "error", err, "email", req.Email, "publisher_id", publisherID)
+			RespondInternalError(w, r, "Failed to create user")
+			return
+		}
+		newUserID = newUser.ID
+
+		slog.Info("user created and added to publisher team",
+			"email", req.Email,
+			"user_id", newUser.ID,
+			"publisher_id", publisherID,
+			"added_by", userID)
+	}
+
+	// Send email notification
+	if h.emailService != nil {
+		go func() {
+			if err := h.emailService.SendUserAddedToPublisher(req.Email, userName, publisherName, inviterName, isNewUser); err != nil {
+				slog.Error("failed to send team member added email",
+					"error", err,
+					"email", req.Email,
+					"publisher_id", publisherID)
+			}
+		}()
+	}
 
 	RespondJSON(w, r, http.StatusOK, map[string]interface{}{
-		"success": true,
-		"message": "Invitation sent",
+		"success":     true,
+		"message":     "Team member added",
+		"user_id":     newUserID,
+		"is_new_user": isNewUser,
 	})
+}
+
+// InvitePublisherTeamMember is an alias for AddPublisherTeamMember for backward compatibility
+// POST /api/publisher/team/invite
+// Deprecated: Use AddPublisherTeamMember instead
+func (h *Handlers) InvitePublisherTeamMember(w http.ResponseWriter, r *http.Request) {
+	h.AddPublisherTeamMember(w, r)
 }
 
 // RemovePublisherTeamMember removes a team member
 // DELETE /api/publisher/team/{userId}
+// If this is the user's last role (no admin, no other publishers), the user is deleted
 func (h *Handlers) RemovePublisherTeamMember(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -275,21 +299,45 @@ func (h *Handlers) RemovePublisherTeamMember(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if err := h.clerkService.RemovePublisherFromUser(ctx, memberUserID, publisherID); err != nil {
+	// Get user email before potential deletion (for logging)
+	var email string
+	if user, err := h.clerkService.GetUser(ctx, memberUserID); err == nil && len(user.EmailAddresses) > 0 {
+		email = user.EmailAddresses[0].EmailAddress
+	}
+
+	// Remove publisher and check if user should be deleted
+	userDeleted, err := h.clerkService.RemovePublisherFromUserAndCleanup(ctx, memberUserID, publisherID)
+	if err != nil {
 		slog.Error("failed to remove publisher from user", "error", err)
 		RespondInternalError(w, r, "Failed to remove team member")
 		return
 	}
 
-	slog.Info("team member removed",
-		"publisher_id", publisherID,
-		"removed_user", memberUserID,
-		"removed_by", currentUserID)
+	if userDeleted {
+		slog.Info("team member removed and user deleted (no remaining roles)",
+			"publisher_id", publisherID,
+			"removed_user", memberUserID,
+			"removed_by", currentUserID,
+			"email", email)
 
-	RespondJSON(w, r, http.StatusOK, map[string]interface{}{
-		"success": true,
-		"message": "Member removed",
-	})
+		RespondJSON(w, r, http.StatusOK, map[string]interface{}{
+			"success":      true,
+			"message":      "Member removed and user deleted (no remaining roles)",
+			"user_deleted": true,
+		})
+	} else {
+		slog.Info("team member removed",
+			"publisher_id", publisherID,
+			"removed_user", memberUserID,
+			"removed_by", currentUserID,
+			"email", email)
+
+		RespondJSON(w, r, http.StatusOK, map[string]interface{}{
+			"success":      true,
+			"message":      "Member removed",
+			"user_deleted": false,
+		})
+	}
 }
 
 // ResendPublisherInvitation resends an invitation email

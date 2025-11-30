@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -18,10 +18,6 @@ import {
   Moon,
   ChevronLeft,
   ChevronRight,
-  ChevronUp,
-  ChevronDown,
-  ChevronsUp,
-  ChevronsDown,
   Star,
 } from 'lucide-react';
 import { cn, formatTime, formatTimeShort } from '@/lib/utils';
@@ -118,25 +114,6 @@ export function WeeklyPreviewDialog({
 
   const goToToday = () => {
     setStartDate(new Date().toISOString().split('T')[0]);
-  };
-
-  // Scroll ref and functions
-  const scrollRef = useRef<HTMLDivElement>(null);
-
-  const scrollToTop = () => {
-    scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const scrollToBottom = () => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
-  };
-
-  const scrollUp = () => {
-    scrollRef.current?.scrollBy({ top: -150, behavior: 'smooth' });
-  };
-
-  const scrollDown = () => {
-    scrollRef.current?.scrollBy({ top: 150, behavior: 'smooth' });
   };
 
   return (
@@ -263,11 +240,7 @@ export function WeeklyPreviewDialog({
         </div>
 
         {/* Weekly Grid with Scroll */}
-        <div className="relative flex-1">
-          <div
-            ref={scrollRef}
-            className="h-[400px] overflow-y-auto pr-4"
-          >
+        <div className="flex-1 h-[400px] overflow-y-auto">
           {previewWeek.isPending ? (
             <div className="flex items-center justify-center h-32">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -279,7 +252,7 @@ export function WeeklyPreviewDialog({
                 : 'Enter a formula to see the weekly preview.'}
             </div>
           ) : (
-            <div className="space-y-3 pr-4">
+            <div className="space-y-3">
               {days.map((day, i) => (
                 <Card
                   key={i}
@@ -336,49 +309,6 @@ export function WeeklyPreviewDialog({
                   </CardContent>
                 </Card>
               ))}
-            </div>
-          )}
-          </div>
-
-          {/* Scroll Navigation Buttons */}
-          {days.length > 0 && (
-            <div className="absolute right-0 top-1/2 -translate-y-1/2 flex flex-col gap-1 bg-background/80 backdrop-blur-sm rounded-lg p-1 shadow-lg border">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={scrollToTop}
-                title="Scroll to top"
-              >
-                <ChevronsUp className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={scrollUp}
-                title="Scroll up"
-              >
-                <ChevronUp className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={scrollDown}
-                title="Scroll down"
-              >
-                <ChevronDown className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={scrollToBottom}
-                title="Scroll to bottom"
-              >
-                <ChevronsDown className="h-4 w-4" />
-              </Button>
             </div>
           )}
         </div>

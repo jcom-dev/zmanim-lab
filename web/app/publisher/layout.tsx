@@ -7,6 +7,8 @@ import { ImpersonationBanner } from '@/components/admin/ImpersonationBanner';
 import { UserButton } from '@clerk/nextjs';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useUserRoles } from '@/lib/hooks';
+import { Shield } from 'lucide-react';
 
 interface PublisherLayoutProps {
   children: ReactNode;
@@ -14,6 +16,7 @@ interface PublisherLayoutProps {
 
 export default function PublisherLayout({ children }: PublisherLayoutProps) {
   const pathname = usePathname();
+  const { isAdmin, isLoaded } = useUserRoles();
 
   const navItems = [
     { href: '/publisher/dashboard', label: 'Dashboard' },
@@ -44,8 +47,17 @@ export default function PublisherLayout({ children }: PublisherLayoutProps) {
                 <PublisherSwitcher />
               </div>
 
-              {/* Right: User Button */}
+              {/* Right: Admin Link (if dual-role) & User Button */}
               <div className="flex items-center gap-4">
+                {isLoaded && isAdmin && (
+                  <Link
+                    href="/admin"
+                    className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950 rounded-md hover:bg-purple-100 dark:hover:bg-purple-900 transition-colors"
+                  >
+                    <Shield className="w-4 h-4" />
+                    Admin Portal
+                  </Link>
+                )}
                 <UserButton afterSignOutUrl="/" />
               </div>
             </div>

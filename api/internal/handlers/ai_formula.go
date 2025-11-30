@@ -135,8 +135,8 @@ func (h *Handlers) ExplainFormula(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate language
-	if req.Language != "en" && req.Language != "he" {
-		RespondBadRequest(w, r, "Language must be 'en' or 'he'")
+	if req.Language != "en" && req.Language != "he" && req.Language != "mixed" {
+		RespondBadRequest(w, r, "Language must be 'en', 'he', or 'mixed'")
 		return
 	}
 
@@ -161,8 +161,25 @@ func (h *Handlers) ExplainFormula(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get RAG context if available - search for halachic sources related to the formula
+	var ragContext string
+	ragUsed := false
+	if h.aiContext != nil {
+		opts := ai.ContextOptions{
+			MaxTokens:       1000,
+			MaxDocs:         2,
+			IncludeExamples: false,
+			IncludeHalachic: true,
+		}
+		assembled, err := h.aiContext.AssembleContext(ctx, req.Formula, opts)
+		if err == nil && assembled != nil {
+			ragContext = assembled.Context
+			ragUsed = len(assembled.Sources) > 0
+		}
+	}
+
 	// Generate explanation
-	result, err := h.aiClaude.ExplainFormula(ctx, req.Formula, req.Language)
+	result, err := h.aiClaude.ExplainFormula(ctx, req.Formula, req.Language, ragContext)
 	durationMs := int(time.Since(startTime).Milliseconds())
 
 	// Log to audit
@@ -173,7 +190,7 @@ func (h *Handlers) ExplainFormula(w http.ResponseWriter, r *http.Request) {
 			Confidence: 1.0,
 		}
 	}
-	h.logAIAudit(ctx, r, "explain_formula", req.Formula, auditResult, err, durationMs, false)
+	h.logAIAudit(ctx, r, "explain_formula", req.Formula, auditResult, err, durationMs, ragUsed)
 
 	if err != nil {
 		log.Printf("ERROR [ExplainFormula] Failed to generate explanation: %v", err)

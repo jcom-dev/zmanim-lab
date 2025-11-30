@@ -33,6 +33,9 @@ const (
 	TemplatePublisherRequestReceived EmailTemplate = "publisher-request-received"
 	TemplateAdminNewRequest          EmailTemplate = "admin-new-request"
 	TemplatePublisherCreated         EmailTemplate = "publisher-created"
+	TemplateUserAddedToAdmin         EmailTemplate = "user-added-admin"
+	TemplateUserAddedToPublisher     EmailTemplate = "user-added-publisher"
+	TemplatePasswordResetRequest     EmailTemplate = "password-reset-request"
 )
 
 // SendEmailRequest represents the Resend API request
@@ -199,6 +202,54 @@ func (s *EmailService) SendAdminNewPublisherRequest(to, applicantName, organizat
 
 	html := s.renderTemplate(TemplateAdminNewRequest, data)
 	return s.send(to, subject, html, []EmailTag{{Name: "template", Value: string(TemplateAdminNewRequest)}})
+}
+
+// SendUserAddedToAdmin notifies a user they've been granted admin access
+func (s *EmailService) SendUserAddedToAdmin(to, userName string, isNewUser bool) error {
+	subject := "You've been granted admin access to Zmanim Lab"
+
+	signInURL := s.webURL + "/sign-in"
+
+	data := map[string]string{
+		"user_name":   userName,
+		"sign_in_url": signInURL,
+		"is_new_user": fmt.Sprintf("%t", isNewUser),
+	}
+
+	html := s.renderTemplate(TemplateUserAddedToAdmin, data)
+	return s.send(to, subject, html, []EmailTag{{Name: "template", Value: string(TemplateUserAddedToAdmin)}})
+}
+
+// SendUserAddedToPublisher notifies a user they've been added to a publisher team
+func (s *EmailService) SendUserAddedToPublisher(to, userName, publisherName, addedBy string, isNewUser bool) error {
+	subject := fmt.Sprintf("You've been added to %s on Zmanim Lab", publisherName)
+
+	signInURL := s.webURL + "/sign-in"
+
+	data := map[string]string{
+		"user_name":      userName,
+		"publisher_name": publisherName,
+		"added_by":       addedBy,
+		"sign_in_url":    signInURL,
+		"is_new_user":    fmt.Sprintf("%t", isNewUser),
+	}
+
+	html := s.renderTemplate(TemplateUserAddedToPublisher, data)
+	return s.send(to, subject, html, []EmailTag{{Name: "template", Value: string(TemplateUserAddedToPublisher)}})
+}
+
+// SendPasswordResetRequest sends a password reset email triggered by an admin
+func (s *EmailService) SendPasswordResetRequest(to, userName, resetURL, expiresIn string) error {
+	subject := "Password Reset Requested for Zmanim Lab"
+
+	data := map[string]string{
+		"user_name":  userName,
+		"reset_url":  resetURL,
+		"expires_in": expiresIn,
+	}
+
+	html := s.renderTemplate(TemplatePasswordResetRequest, data)
+	return s.send(to, subject, html, []EmailTag{{Name: "template", Value: string(TemplatePasswordResetRequest)}})
 }
 
 // send executes the email send via Resend API
@@ -523,6 +574,109 @@ func (s *EmailService) renderTemplate(templateType EmailTemplate, data map[strin
         </div>
         <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;">
         <p style="color: #718096; font-size: 12px;">If you have any questions, please reply to this email.</p>
+    </div>
+</body>
+</html>`,
+
+		TemplateUserAddedToAdmin: `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Access Granted</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+    <div style="background: linear-gradient(135deg, #c53030 0%, #9b2c2c 100%); padding: 30px; border-radius: 10px 10px 0 0;">
+        <h1 style="color: white; margin: 0; font-size: 24px;">Zmanim Lab Admin</h1>
+    </div>
+    <div style="background: #ffffff; padding: 30px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 10px 10px;">
+        <h2 style="color: #c53030; margin-top: 0;">Admin Access Granted</h2>
+        <p>Hello {{.user_name}},</p>
+        <p>You have been granted <strong>administrator access</strong> to Zmanim Lab.</p>
+        <p>As an admin, you can:</p>
+        <ul style="color: #4a5568;">
+            <li>Manage all publishers and their settings</li>
+            <li>Approve or reject publisher applications</li>
+            <li>Add or remove users from the system</li>
+            <li>Configure system-wide settings</li>
+        </ul>
+        {{if eq .is_new_user "true"}}
+        <div style="background: #fff5f5; border-left: 4px solid #c53030; padding: 15px; margin: 20px 0;">
+            <p style="margin: 0; color: #c53030;"><strong>Set Up Your Account</strong></p>
+            <p style="margin: 10px 0 0 0; color: #742a2a;">Since this is a new account, you'll need to set up your password when you first sign in. Use the "Forgot password?" link or sign in with Google if available.</p>
+        </div>
+        {{end}}
+        <div style="text-align: center; margin: 30px 0;">
+            <a href="{{.sign_in_url}}" style="background: #c53030; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 600;">Sign In to Admin Panel</a>
+        </div>
+        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;">
+        <p style="color: #718096; font-size: 12px;">If you did not expect this access, please contact support immediately.</p>
+    </div>
+</body>
+</html>`,
+
+		TemplateUserAddedToPublisher: `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Added to Publisher Team</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+    <div style="background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 100%); padding: 30px; border-radius: 10px 10px 0 0;">
+        <h1 style="color: white; margin: 0; font-size: 24px;">Zmanim Lab</h1>
+    </div>
+    <div style="background: #ffffff; padding: 30px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 10px 10px;">
+        <h2 style="color: #1e3a5f; margin-top: 0;">Welcome to the Team!</h2>
+        <p>Hello {{.user_name}},</p>
+        <p>{{.added_by}} has added you to <strong>{{.publisher_name}}</strong> on Zmanim Lab.</p>
+        <p>As a team member, you can:</p>
+        <ul style="color: #4a5568;">
+            <li>Manage the publisher's calculation algorithms</li>
+            <li>Configure coverage areas</li>
+            <li>View analytics and activity logs</li>
+            <li>Add other team members</li>
+        </ul>
+        {{if eq .is_new_user "true"}}
+        <div style="background: #f0f9ff; border-left: 4px solid #0369a1; padding: 15px; margin: 20px 0;">
+            <p style="margin: 0; color: #0369a1;"><strong>Set Up Your Account</strong></p>
+            <p style="margin: 10px 0 0 0; color: #0c4a6e;">Since this is a new account, you'll need to set up your password when you first sign in. Use the "Forgot password?" link or sign in with Google if available.</p>
+        </div>
+        {{end}}
+        <div style="text-align: center; margin: 30px 0;">
+            <a href="{{.sign_in_url}}" style="background: #1e3a5f; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 600;">Sign In Now</a>
+        </div>
+        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;">
+        <p style="color: #718096; font-size: 12px;">If you did not expect to be added to this team, please contact the person who added you.</p>
+    </div>
+</body>
+</html>`,
+
+		TemplatePasswordResetRequest: `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Password Reset Requested</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+    <div style="background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 100%); padding: 30px; border-radius: 10px 10px 0 0;">
+        <h1 style="color: white; margin: 0; font-size: 24px;">Zmanim Lab</h1>
+    </div>
+    <div style="background: #ffffff; padding: 30px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 10px 10px;">
+        <h2 style="color: #1e3a5f; margin-top: 0;">Password Reset Requested</h2>
+        <p>Hello {{.user_name}},</p>
+        <p>An administrator has requested a password reset for your Zmanim Lab account.</p>
+        <p>Click the button below to set a new password:</p>
+        <div style="text-align: center; margin: 30px 0;">
+            <a href="{{.reset_url}}" style="background: #1e3a5f; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 600;">Reset Password</a>
+        </div>
+        <p style="color: #e53e3e; font-size: 14px;">This link will expire in {{.expires_in}}.</p>
+        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;">
+        <p style="color: #718096; font-size: 12px;">If you did not expect this password reset, please contact support.</p>
     </div>
 </body>
 </html>`,

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 
 	"github.com/clerk/clerk-sdk-go/v2"
 	clerkInvitation "github.com/clerk/clerk-sdk-go/v2/invitation"
@@ -183,7 +184,17 @@ func (s *ClerkService) AddPublisherToUser(ctx context.Context, clerkUserID, publ
 	// Add new publisher to list
 	accessList = append(accessList, publisherID)
 	metadata["publisher_access_list"] = accessList
-	metadata["role"] = "publisher"
+
+	// Update role - admin takes precedence
+	isAdmin := false
+	if adminFlag, ok := metadata["is_admin"].(bool); ok && adminFlag {
+		isAdmin = true
+	} else if role, ok := metadata["role"].(string); ok && role == "admin" {
+		isAdmin = true
+	}
+	if !isAdmin {
+		metadata["role"] = "publisher"
+	}
 
 	// Set primary_publisher_id if this is the first publisher
 	if _, hasPrimary := metadata["primary_publisher_id"]; !hasPrimary {
@@ -238,12 +249,23 @@ func (s *ClerkService) RemovePublisherFromUser(ctx context.Context, clerkUserID,
 		return nil // Publisher wasn't in list
 	}
 
+	// Check if user is admin (admin status is preserved)
+	isAdmin := false
+	if adminFlag, ok := metadata["is_admin"].(bool); ok && adminFlag {
+		isAdmin = true
+	} else if role, ok := metadata["role"].(string); ok && role == "admin" {
+		isAdmin = true
+	}
+
 	// Update metadata
 	if len(newAccessList) == 0 {
-		// No publishers left - revert to regular user
-		metadata["role"] = "user"
+		// No publishers left
 		delete(metadata, "publisher_access_list")
 		delete(metadata, "primary_publisher_id")
+		// Only revert to user if not admin
+		if !isAdmin {
+			metadata["role"] = "user"
+		}
 	} else {
 		metadata["publisher_access_list"] = newAccessList
 
@@ -322,10 +344,19 @@ func (s *ClerkService) CreatePublisherUserDirectly(ctx context.Context, email, n
 		return nil, fmt.Errorf("failed to marshal metadata: %w", err)
 	}
 
-	// Create the user directly
+	// Split name into first and last name
+	firstName := name
+	lastName := ""
+	if parts := strings.SplitN(name, " ", 2); len(parts) == 2 {
+		firstName = parts[0]
+		lastName = parts[1]
+	}
+
+	// Create the user directly for publisher access
 	params := &clerkUser.CreateParams{
 		EmailAddresses:          &[]string{email},
-		FirstName:               clerk.String(name),
+		FirstName:               clerk.String(firstName),
+		LastName:                clerk.String(lastName),
 		PublicMetadata:          clerk.JSONRawMessage(metadataJSON),
 		SkipPasswordRequirement: clerk.Bool(true),
 	}
@@ -364,11 +395,23 @@ func (s *ClerkService) GetUserByEmail(ctx context.Context, email string) (*clerk
 
 // PublisherUserInfo represents a user linked to a publisher
 type PublisherUserInfo struct {
-	ClerkUserID string  `json:"clerk_user_id"`
-	Email       string  `json:"email"`
-	Name        string  `json:"name"`
-	ImageURL    string  `json:"image_url,omitempty"`
-	CreatedAt   int64   `json:"created_at"`
+	ClerkUserID string `json:"clerk_user_id"`
+	Email       string `json:"email"`
+	Name        string `json:"name"`
+	ImageURL    string `json:"image_url,omitempty"`
+	CreatedAt   int64  `json:"created_at"`
+}
+
+// UserWithRoles represents a user with their admin status and publisher access
+type UserWithRoles struct {
+	ClerkUserID         string   `json:"clerk_user_id"`
+	Email               string   `json:"email"`
+	Name                string   `json:"name"`
+	ImageURL            string   `json:"image_url,omitempty"`
+	IsAdmin             bool     `json:"is_admin"`
+	PublisherAccessList []string `json:"publisher_access_list"`
+	PrimaryPublisherID  string   `json:"primary_publisher_id,omitempty"`
+	CreatedAt           int64    `json:"created_at"`
 }
 
 // GetUsersWithPublisherAccess returns all users who have access to a specific publisher
@@ -449,4 +492,286 @@ func (s *ClerkService) GetUsersWithPublisherAccess(ctx context.Context, publishe
 	}
 
 	return result, nil
+}
+
+// SetAdminRole sets or removes admin status for a user
+// Updates both is_admin flag and role field for backward compatibility
+func (s *ClerkService) SetAdminRole(ctx context.Context, clerkUserID string, isAdmin bool) error {
+	metadata, err := s.GetUserPublicMetadata(ctx, clerkUserID)
+	if err != nil {
+		return fmt.Errorf("failed to get user metadata: %w", err)
+	}
+
+	metadata["is_admin"] = isAdmin
+
+	// Update role for backward compatibility
+	// Admin role takes precedence
+	if isAdmin {
+		metadata["role"] = "admin"
+	} else {
+		// Check if user has publishers
+		if accessList, ok := metadata["publisher_access_list"].([]interface{}); ok && len(accessList) > 0 {
+			metadata["role"] = "publisher"
+		} else {
+			metadata["role"] = "user"
+		}
+	}
+
+	if err := s.UpdateUserMetadata(ctx, clerkUserID, metadata); err != nil {
+		return fmt.Errorf("failed to update user metadata: %w", err)
+	}
+
+	slog.Info("admin role updated", "user_id", clerkUserID, "is_admin", isAdmin)
+	return nil
+}
+
+// IsAdmin checks if a user has admin status
+func (s *ClerkService) IsAdmin(ctx context.Context, clerkUserID string) (bool, error) {
+	metadata, err := s.GetUserPublicMetadata(ctx, clerkUserID)
+	if err != nil {
+		return false, err
+	}
+
+	// Check is_admin flag first
+	if isAdmin, ok := metadata["is_admin"].(bool); ok && isAdmin {
+		return true, nil
+	}
+
+	// Fallback to role check for backward compatibility
+	if role, ok := metadata["role"].(string); ok && role == "admin" {
+		return true, nil
+	}
+
+	return false, nil
+}
+
+// HasAnyRole checks if a user has admin status or any publisher access
+func (s *ClerkService) HasAnyRole(ctx context.Context, clerkUserID string) (bool, error) {
+	metadata, err := s.GetUserPublicMetadata(ctx, clerkUserID)
+	if err != nil {
+		return false, err
+	}
+
+	// Check admin status
+	if isAdmin, ok := metadata["is_admin"].(bool); ok && isAdmin {
+		return true, nil
+	}
+	if role, ok := metadata["role"].(string); ok && role == "admin" {
+		return true, nil
+	}
+
+	// Check publisher access
+	if accessList, ok := metadata["publisher_access_list"].([]interface{}); ok && len(accessList) > 0 {
+		return true, nil
+	}
+
+	return false, nil
+}
+
+// DeleteUserIfNoRoles checks if user has any roles and deletes them if not
+// Returns true if user was deleted
+func (s *ClerkService) DeleteUserIfNoRoles(ctx context.Context, clerkUserID string) (bool, error) {
+	hasRoles, err := s.HasAnyRole(ctx, clerkUserID)
+	if err != nil {
+		return false, fmt.Errorf("failed to check user roles: %w", err)
+	}
+
+	if hasRoles {
+		return false, nil
+	}
+
+	// No roles remaining, delete the user
+	if err := s.DeleteUser(ctx, clerkUserID); err != nil {
+		return false, fmt.Errorf("failed to delete user: %w", err)
+	}
+
+	return true, nil
+}
+
+// GetAllUsersWithRoles returns all users with admin status or publisher access
+func (s *ClerkService) GetAllUsersWithRoles(ctx context.Context) ([]UserWithRoles, error) {
+	var result []UserWithRoles
+
+	params := &clerkUser.ListParams{}
+	users, err := clerkUser.List(ctx, params)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list users: %w", err)
+	}
+
+	if users == nil {
+		return result, nil
+	}
+
+	for _, user := range users.Users {
+		var metadata map[string]interface{}
+		if user.PublicMetadata != nil {
+			if err := json.Unmarshal(user.PublicMetadata, &metadata); err != nil {
+				metadata = make(map[string]interface{})
+			}
+		} else {
+			metadata = make(map[string]interface{})
+		}
+
+		// Check admin status
+		isAdmin := false
+		if adminFlag, ok := metadata["is_admin"].(bool); ok && adminFlag {
+			isAdmin = true
+		} else if role, ok := metadata["role"].(string); ok && role == "admin" {
+			isAdmin = true
+		}
+
+		// Get publisher access list
+		var publisherAccessList []string
+		if accessList, ok := metadata["publisher_access_list"].([]interface{}); ok {
+			for _, v := range accessList {
+				if s, ok := v.(string); ok {
+					publisherAccessList = append(publisherAccessList, s)
+				}
+			}
+		}
+
+		// Skip users with no roles
+		if !isAdmin && len(publisherAccessList) == 0 {
+			continue
+		}
+
+		// Get primary publisher ID
+		primaryPublisherID := ""
+		if primary, ok := metadata["primary_publisher_id"].(string); ok {
+			primaryPublisherID = primary
+		}
+
+		// Get email
+		email := ""
+		if len(user.EmailAddresses) > 0 {
+			email = user.EmailAddresses[0].EmailAddress
+		}
+
+		// Get name
+		name := ""
+		if user.FirstName != nil {
+			name = *user.FirstName
+		}
+		if user.LastName != nil {
+			if name != "" {
+				name += " "
+			}
+			name += *user.LastName
+		}
+
+		// Get image URL
+		imageURL := ""
+		if user.ImageURL != nil {
+			imageURL = *user.ImageURL
+		}
+
+		result = append(result, UserWithRoles{
+			ClerkUserID:         user.ID,
+			Email:               email,
+			Name:                name,
+			ImageURL:            imageURL,
+			IsAdmin:             isAdmin,
+			PublisherAccessList: publisherAccessList,
+			PrimaryPublisherID:  primaryPublisherID,
+			CreatedAt:           user.CreatedAt,
+		})
+	}
+
+	return result, nil
+}
+
+// CreateUserDirectly creates a Clerk user directly with optional admin and/or publisher roles
+// The user will need to set up their password via the sign-in flow
+func (s *ClerkService) CreateUserDirectly(ctx context.Context, email, name string, isAdmin bool, publisherIDs []string) (*clerk.User, error) {
+	// Create public metadata
+	publicMetadata := make(map[string]interface{})
+
+	// Set admin status
+	if isAdmin {
+		publicMetadata["is_admin"] = true
+		publicMetadata["role"] = "admin"
+	}
+
+	// Set publisher access
+	if len(publisherIDs) > 0 {
+		publicMetadata["publisher_access_list"] = publisherIDs
+		publicMetadata["primary_publisher_id"] = publisherIDs[0]
+		if !isAdmin {
+			publicMetadata["role"] = "publisher"
+		}
+	}
+
+	// Default role if neither admin nor publisher
+	if _, hasRole := publicMetadata["role"]; !hasRole {
+		publicMetadata["role"] = "user"
+	}
+
+	metadataJSON, err := json.Marshal(publicMetadata)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal metadata: %w", err)
+	}
+
+	// Split name into first and last name
+	firstName := name
+	lastName := ""
+	if parts := strings.SplitN(name, " ", 2); len(parts) == 2 {
+		firstName = parts[0]
+		lastName = parts[1]
+	}
+
+	// Create the user directly with admin/publisher roles
+	params := &clerkUser.CreateParams{
+		EmailAddresses:          &[]string{email},
+		FirstName:               clerk.String(firstName),
+		LastName:                clerk.String(lastName),
+		PublicMetadata:          clerk.JSONRawMessage(metadataJSON),
+		SkipPasswordRequirement: clerk.Bool(true),
+	}
+
+	user, err := clerkUser.Create(ctx, params)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create user: %w", err)
+	}
+
+	slog.Info("user created directly",
+		"email", email,
+		"user_id", user.ID,
+		"is_admin", isAdmin,
+		"publisher_count", len(publisherIDs))
+
+	return user, nil
+}
+
+// RemovePublisherFromUserAndCleanup removes a publisher and deletes user if no roles remain
+// Returns (userDeleted, error)
+func (s *ClerkService) RemovePublisherFromUserAndCleanup(ctx context.Context, clerkUserID, publisherID string) (bool, error) {
+	// First remove the publisher
+	if err := s.RemovePublisherFromUser(ctx, clerkUserID, publisherID); err != nil {
+		return false, err
+	}
+
+	// Check if user should be deleted
+	deleted, err := s.DeleteUserIfNoRoles(ctx, clerkUserID)
+	if err != nil {
+		return false, err
+	}
+
+	return deleted, nil
+}
+
+// RemoveAdminAndCleanup removes admin status and deletes user if no roles remain
+// Returns (userDeleted, error)
+func (s *ClerkService) RemoveAdminAndCleanup(ctx context.Context, clerkUserID string) (bool, error) {
+	// First remove admin status
+	if err := s.SetAdminRole(ctx, clerkUserID, false); err != nil {
+		return false, err
+	}
+
+	// Check if user should be deleted
+	deleted, err := s.DeleteUserIfNoRoles(ctx, clerkUserID)
+	if err != nil {
+		return false, err
+	}
+
+	return deleted, nil
 }

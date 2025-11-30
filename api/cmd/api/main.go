@@ -366,6 +366,17 @@ func main() {
 			r.Get("/registry/tags", h.AdminGetTags)
 			r.Get("/registry/day-types", h.AdminGetDayTypes)
 			r.Get("/registry/primitives/grouped", h.GetAstronomicalPrimitivesGrouped)
+
+			// User management (unified admin + publisher roles)
+			r.Route("/users", func(r chi.Router) {
+				r.Get("/", h.AdminListAllUsers)                                       // List all users with roles
+				r.Post("/", h.AdminAddUser)                                           // Add user (create or update)
+				r.Delete("/{userId}", h.AdminDeleteUser)                              // Delete user completely
+				r.Put("/{userId}/admin", h.AdminSetAdminRole)                         // Toggle admin status
+				r.Post("/{userId}/reset-password", h.AdminResetUserPassword)          // Trigger password reset
+				r.Post("/{userId}/publishers", h.AdminAddPublisherToUser)             // Add publisher access
+				r.Delete("/{userId}/publishers/{publisherId}", h.AdminRemovePublisherFromUser) // Remove publisher access
+			})
 		})
 	})
 

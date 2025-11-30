@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo, useImperativeHandle, forwardRef } from 'react';
 import { AlertCircle, CheckCircle2, Code2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -12,6 +12,11 @@ import {
   getReferenceCompletions,
   type Completion,
 } from '@/lib/codemirror/dsl-completions';
+
+export interface DSLEditorRef {
+  insertAtCursor: (text: string) => void;
+  focus: () => void;
+}
 
 interface DSLEditorProps {
   value: string;
@@ -28,15 +33,41 @@ interface ValidationState {
   loading: boolean;
 }
 
-export function DSLEditor({
+export const DSLEditor = forwardRef<DSLEditorRef, DSLEditorProps>(function DSLEditor({
   value,
   onChange,
   onValidate,
   zmanimKeys = [],
   disabled = false,
   className,
-}: DSLEditorProps) {
+}, ref) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Expose insertAtCursor method via ref
+  useImperativeHandle(ref, () => ({
+    insertAtCursor: (text: string) => {
+      const textarea = textareaRef.current;
+      if (!textarea) return;
+
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const before = value.substring(0, start);
+      const after = value.substring(end);
+      const newValue = before + text + after;
+
+      onChange(newValue);
+
+      // Set cursor position after inserted text
+      setTimeout(() => {
+        textarea.focus();
+        const newPos = start + text.length;
+        textarea.setSelectionRange(newPos, newPos);
+      }, 0);
+    },
+    focus: () => {
+      textareaRef.current?.focus();
+    },
+  }), [value, onChange]);
   const [showCompletions, setShowCompletions] = useState(false);
   const [completions, setCompletions] = useState<Completion[]>([]);
   const [selectedCompletion, setSelectedCompletion] = useState(0);
@@ -354,6 +385,6 @@ sunrise - 72min"
       </details>
     </div>
   );
-}
+});
 
 export default DSLEditor;

@@ -63,23 +63,65 @@ html {
   scroll-behavior: smooth;
 }
 
-/* Custom scrollbar - Apple style */
+/* ============================================
+   Custom Scrollbars - Theme Aware
+   ============================================ */
+
+/* Scrollbar CSS Custom Properties */
+:root {
+  --scrollbar-thumb: hsl(215 16% 70%);
+  --scrollbar-thumb-hover: hsl(217 91% 60%);
+  --scrollbar-thumb-active: hsl(217 91% 55%);
+  --scrollbar-track: transparent;
+  --scrollbar-glow: 0 0 0 transparent;
+}
+
+.dark {
+  --scrollbar-thumb: hsl(217 33% 35%);
+  --scrollbar-thumb-hover: hsl(217 91% 60%);
+  --scrollbar-thumb-active: hsl(217 91% 55%);
+  --scrollbar-track: transparent;
+  --scrollbar-glow: 0 0 8px hsla(217, 91%, 60%, 0.3);
+}
+
+/* WebKit Browsers (Chrome, Safari, Edge) */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
 }
 
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: var(--scrollbar-track);
+  border-radius: 5px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 10px;
+  background: var(--scrollbar-thumb);
+  border-radius: 5px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  transition: background 150ms ease, box-shadow 150ms ease;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--scrollbar-thumb-hover);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  box-shadow: var(--scrollbar-glow);
+}
+
+::-webkit-scrollbar-thumb:active {
+  background: var(--scrollbar-thumb-active);
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Firefox */
+* {
+  scrollbar-width: auto;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
 }
 
 

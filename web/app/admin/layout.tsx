@@ -4,7 +4,8 @@ import { ReactNode } from 'react';
 import { UserButton } from '@clerk/nextjs';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Users, BarChart3, Settings, UserPlus, Sun, Clock } from 'lucide-react';
+import { Home, Users, BarChart3, Settings, UserPlus, Sun, Clock, UserCog, Building2 } from 'lucide-react';
+import { useUserRoles } from '@/lib/hooks';
 
 interface AdminLayoutProps {
   children: ReactNode;
@@ -12,9 +13,11 @@ interface AdminLayoutProps {
 
 export default function AdminLayout({ children }: AdminLayoutProps) {
   const pathname = usePathname();
+  const { hasPublisherAccess, isLoaded } = useUserRoles();
 
   const navItems = [
     { href: '/admin', label: 'Overview', icon: Home, exact: true },
+    { href: '/admin/users', label: 'Users', icon: UserCog },
     { href: '/admin/publishers', label: 'Publishers', icon: Users },
     { href: '/admin/publishers/new', label: 'Create Publisher', icon: UserPlus },
     { href: '/admin/zmanim/primitives', label: 'Primitives', icon: Sun },
@@ -46,8 +49,17 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
               <span className="text-xl font-bold">Admin Portal</span>
             </div>
 
-            {/* Right: User Button */}
+            {/* Right: Publisher Link (if dual-role) & User Button */}
             <div className="flex items-center gap-4">
+              {isLoaded && hasPublisherAccess && (
+                <Link
+                  href="/publisher"
+                  className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900 transition-colors"
+                >
+                  <Building2 className="w-4 h-4" />
+                  Publisher Portal
+                </Link>
+              )}
               <UserButton afterSignOutUrl="/" />
             </div>
           </div>

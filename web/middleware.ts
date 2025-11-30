@@ -5,14 +5,33 @@ import { NextResponse } from 'next/server';
 const isPublisherRoute = createRouteMatcher(['/publisher(.*)']);
 const isAdminRoute = createRouteMatcher(['/admin(.*)']);
 
-// Helper to extract role from session claims
+// User roles interface matching the new dual-role metadata structure
+interface UserRoles {
+  isAdmin: boolean;
+  hasPublisherAccess: boolean;
+  publisherAccessList: string[];
+}
+
+// Helper to extract roles from session claims
 // Clerk session token must be customized to include: {"metadata": "{{user.public_metadata}}"}
-function getRoleFromClaims(sessionClaims: any): string | null {
-  return sessionClaims?.metadata?.role || null;
+function getRolesFromClaims(sessionClaims: any): UserRoles {
+  const metadata = sessionClaims?.metadata || {};
+
+  // Support both old format (role: 'admin'/'publisher') and new format (is_admin, publisher_access_list)
+  const isAdmin = metadata.is_admin === true || metadata.role === 'admin';
+  const publisherAccessList: string[] = metadata.publisher_access_list || [];
+  // Old format compatibility: if role is 'publisher' but no publisher_access_list, still grant access
+  const hasPublisherAccess = publisherAccessList.length > 0 || metadata.role === 'publisher';
+
+  return {
+    isAdmin,
+    hasPublisherAccess,
+    publisherAccessList,
+  };
 }
 
 export default clerkMiddleware(async (auth, req) => {
-  // Publisher routes require publisher or admin role
+  // Publisher routes require publisher access or admin role
   if (isPublisherRoute(req)) {
     const { userId, sessionClaims } = await auth();
     if (!userId) {
@@ -21,10 +40,10 @@ export default clerkMiddleware(async (auth, req) => {
       return NextResponse.redirect(signInUrl);
     }
 
-    const role = getRoleFromClaims(sessionClaims);
-    if (role !== 'publisher' && role !== 'admin') {
-      // Access denied - role check failed
-      return new NextResponse('Forbidden: Publisher role required', { status: 403 });
+    const roles = getRolesFromClaims(sessionClaims);
+    if (!roles.hasPublisherAccess && !roles.isAdmin) {
+      // Access denied - no publisher access
+      return new NextResponse('Forbidden: Publisher access required', { status: 403 });
     }
   }
 
@@ -37,8 +56,8 @@ export default clerkMiddleware(async (auth, req) => {
       return NextResponse.redirect(signInUrl);
     }
 
-    const role = getRoleFromClaims(sessionClaims);
-    if (role !== 'admin') {
+    const roles = getRolesFromClaims(sessionClaims);
+    if (!roles.isAdmin) {
       // Access denied - admin role required
       return new NextResponse('Forbidden: Admin role required', { status: 403 });
     }

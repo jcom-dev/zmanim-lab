@@ -1419,12 +1419,370 @@ DATABASE_URL=postgresql://zmanim:password@postgres:5432/zmanim
 
 ---
 
+## Error Handling Standards
+
+### Backend Error Handling
+
+**Pattern: Wrap errors with context**
+```go
+// REQUIRED - wrap with context using fmt.Errorf
+if err != nil {
+    return nil, fmt.Errorf("failed to fetch publisher: %w", err)
+}
+
+// FORBIDDEN - naked error returns
+if err != nil {
+    return nil, err  // No context, hard to debug
+}
+```
+
+**Pattern: Log at the boundary, not everywhere**
+```go
+// In service layer - return error, don't log
+func (s *Service) DoSomething() error {
+    if err != nil {
+        return fmt.Errorf("failed to do something: %w", err)
+    }
+}
+
+// In handler layer - log the error with context
+if err != nil {
+    slog.Error("operation failed", "error", err, "user_id", userID)
+    RespondInternalError(w, r, "Failed to process request")
+    return
+}
+```
+
+**Pattern: User-friendly error messages**
+```go
+// REQUIRED - generic messages for 500 errors
+RespondInternalError(w, r, "Failed to process request")
+
+// FORBIDDEN - exposing internals
+RespondInternalError(w, r, err.Error())  // Exposes database errors!
+RespondInternalError(w, r, "SQL: duplicate key constraint violation")
+```
+
+### Frontend Error Handling
+
+**Pattern: Use ApiError class**
+```tsx
+import { ApiError } from '@/lib/api-client';
+
+try {
+  await api.post('/endpoint', { body: JSON.stringify(data) });
+} catch (error) {
+  if (error instanceof ApiError) {
+    if (error.isUnauthorized) {
+      // Handle 401
+    } else if (error.isNotFound) {
+      // Handle 404
+    } else if (error.isServerError) {
+      // Handle 500+
+    }
+    setError(error.message);
+  } else {
+    setError('An unexpected error occurred');
+  }
+}
+```
+
+**Pattern: Toast notifications for mutations**
+```tsx
+const mutation = usePublisherMutation<Data, Request>(
+  '/endpoint',
+  'POST',
+  {
+    invalidateKeys: ['query-key'],
+    onError: (error) => {
+      toast.error(error.message);
+    },
+    onSuccess: () => {
+      toast.success('Operation completed');
+    }
+  }
+);
+```
+
+---
+
+## Performance Standards
+
+### Backend Performance
+
+**Pattern: Use database indexes for common queries**
+```sql
+-- Index columns used in WHERE clauses
+CREATE INDEX idx_publisher_zmanim_publisher_id ON publisher_zmanim(publisher_id);
+CREATE INDEX idx_publisher_zmanim_zman_key ON publisher_zmanim(zman_key);
+
+-- Composite indexes for multi-column filters
+CREATE INDEX idx_publisher_zmanim_publisher_key
+  ON publisher_zmanim(publisher_id, zman_key);
+```
+
+**Pattern: Paginate large result sets**
+```go
+// REQUIRED for endpoints returning many rows
+params := sqlcgen.ListItemsParams{
+    Limit:  int32(limit),
+    Offset: int32(offset),
+}
+```
+
+**Pattern: Use caching for expensive operations**
+```go
+// Cache zman calculations (24-hour TTL)
+cacheKey := fmt.Sprintf("zman:%s:%s:%s", publisherID, zmanKey, date)
+if cached, ok := h.cache.Get(cacheKey); ok {
+    return cached
+}
+```
+
+### Frontend Performance
+
+**Pattern: Memoize expensive computations**
+```tsx
+const expensiveResult = useMemo(() => {
+  return calculateSomethingExpensive(data);
+}, [data]);
+```
+
+**Pattern: Debounce user input**
+```tsx
+const debouncedSearch = useMemo(
+  () => debounce((value: string) => setSearch(value), 300),
+  []
+);
+```
+
+**Pattern: Use React Query staleTime for static data**
+```tsx
+const { data } = useGlobalQuery<Template[]>('templates', '/zmanim/templates', {
+  staleTime: 1000 * 60 * 60, // 1 hour - templates rarely change
+});
+```
+
+---
+
+## Security Standards
+
+### Input Validation
+
+**Backend: Validate all inputs**
+```go
+// REQUIRED - validate request fields
+validationErrors := make(map[string]string)
+
+if req.Name == "" {
+    validationErrors["name"] = "Name is required"
+}
+if len(req.Name) > 255 {
+    validationErrors["name"] = "Name must be 255 characters or less"
+}
+if !isValidEmail(req.Email) {
+    validationErrors["email"] = "Invalid email format"
+}
+
+if len(validationErrors) > 0 {
+    RespondValidationError(w, r, "Validation failed", validationErrors)
+    return
+}
+```
+
+**Frontend: Validate before submission**
+```tsx
+const [errors, setErrors] = useState<Record<string, string>>({});
+
+const validate = () => {
+  const newErrors: Record<string, string> = {};
+  if (!formData.name) newErrors.name = 'Name is required';
+  if (!isValidEmail(formData.email)) newErrors.email = 'Invalid email';
+  setErrors(newErrors);
+  return Object.keys(newErrors).length === 0;
+};
+
+const handleSubmit = async () => {
+  if (!validate()) return;
+  // Proceed with submission
+};
+```
+
+### SQL Injection Prevention
+
+**REQUIRED: Use parameterized queries (SQLc handles this)**
+```go
+// SQLc generates safe parameterized queries
+result, err := h.db.Queries.GetPublisher(ctx, publisherID)
+```
+
+**FORBIDDEN: String concatenation in queries**
+```go
+// NEVER DO THIS
+query := fmt.Sprintf("SELECT * FROM publishers WHERE id = '%s'", publisherID)
+```
+
+### XSS Prevention
+
+**Pattern: React escapes by default - don't bypass**
+```tsx
+// SAFE - React escapes content
+<div>{userProvidedContent}</div>
+
+// DANGEROUS - bypass escaping (avoid unless absolutely necessary)
+<div dangerouslySetInnerHTML={{ __html: content }} />
+```
+
+### Authentication Checks
+
+**Backend: Always verify auth before operations**
+```go
+// Use middleware.RequireAuth or middleware.RequireRole
+r.With(middleware.RequireRole("admin")).Get("/admin/stats", h.AdminStats)
+r.With(middleware.RequireAuth).Get("/publisher/profile", h.GetProfile)
+```
+
+**Frontend: Check auth state before rendering protected content**
+```tsx
+if (!isLoaded) return <Loading />;
+if (!isSignedIn) return redirect('/sign-in');
+if (!hasPublisherAccess) return redirect('/');
+```
+
+---
+
+## Code Organization Standards
+
+### File Naming Conventions
+
+| Type | Convention | Example |
+|------|------------|---------|
+| Go handlers | snake_case | `publisher_zmanim.go` |
+| Go services | snake_case | `clerk_service.go` |
+| React components | PascalCase | `WeeklyPreviewDialog.tsx` |
+| React hooks | camelCase with use prefix | `useApiQuery.ts` |
+| Utilities | kebab-case | `api-client.ts` |
+| Types | camelCase | `types/clerk.ts` |
+
+### Import Organization
+
+**Go imports (3 groups, blank line between)**
+```go
+import (
+    // Standard library
+    "context"
+    "encoding/json"
+    "net/http"
+
+    // Third-party packages
+    "github.com/go-chi/chi/v5"
+    "github.com/jackc/pgx/v5"
+
+    // Internal packages
+    "github.com/jcom-dev/zmanim-lab/internal/db"
+    "github.com/jcom-dev/zmanim-lab/internal/middleware"
+)
+```
+
+**TypeScript imports (4 groups)**
+```tsx
+// 1. React and framework imports
+import { useState, useEffect } from 'react';
+import Link from 'next/link';
+
+// 2. Third-party libraries
+import { useUser } from '@clerk/nextjs';
+import { Loader2 } from 'lucide-react';
+
+// 3. Internal components and utilities
+import { Button } from '@/components/ui/button';
+import { useApi } from '@/lib/api-client';
+
+// 4. Types
+import type { Publisher } from '@/types';
+```
+
+### Function/Method Ordering
+
+**Go files**
+1. Type definitions
+2. Constructor functions (New*)
+3. Public methods (exported)
+4. Private methods (unexported)
+5. Helper functions
+
+**React components**
+1. Imports
+2. Types/Interfaces
+3. Component function
+   - Hooks (Clerk, context, state)
+   - Callbacks (useCallback)
+   - Effects (useEffect)
+   - Early returns (loading, error)
+   - Main render
+4. Helper functions (if not extracted)
+
+---
+
+## Git Workflow Standards
+
+### Branch Naming
+
+```
+feature/epic-{n}-{short-description}
+fix/{issue-or-short-description}
+refactor/{scope}-{description}
+docs/{what-documented}
+```
+
+### Commit Messages
+
+```
+<type>(<scope>): <description>
+
+[optional body]
+
+🤖 Generated with Claude Code
+Co-Authored-By: Claude <noreply@anthropic.com>
+```
+
+**Types**: feat, fix, refactor, docs, test, chore, style, perf
+
+**Examples**:
+```
+feat(algorithm): add weekly preview dialog
+fix(auth): handle expired tokens gracefully
+refactor(handlers): migrate to PublisherResolver pattern
+docs(readme): update deployment instructions
+```
+
+### Pull Request Checklist
+
+- [ ] All tests pass (`npm test`, `go test ./...`)
+- [ ] No new hardcoded colors (use design tokens)
+- [ ] No raw fetch() calls (use useApi hook)
+- [ ] Handlers use PublisherResolver pattern
+- [ ] SQLc queries used (no raw SQL in handlers)
+- [ ] Errors logged with slog and context
+- [ ] E2E tests added for new features
+- [ ] Times displayed in 12-hour format
+
+---
+
 _Last Updated: 2025-11-30_
-_Based on: Story 3.2 Codebase Audit, Epic 1-4 Implementation, Production Refactoring_
+_Based on: Story 3.2 Codebase Audit, Epic 1-4 Implementation, Production Refactoring, Architect Review_
 
 ---
 
 ## Changelog
+
+### 2025-11-30 - Architect Review Updates
+- Added **Error Handling Standards** section with backend/frontend patterns
+- Added **Performance Standards** section (caching, pagination, memoization)
+- Added **Security Standards** section (validation, SQL injection, XSS, auth)
+- Added **Code Organization Standards** section (naming, imports, ordering)
+- Added **Git Workflow Standards** section (branches, commits, PR checklist)
+- Updated changelog to reflect comprehensive review
 
 ### 2025-11-30 - Database Migration Tooling
 - Added `scripts/migrate.sh` for environment-aware migrations

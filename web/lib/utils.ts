@@ -32,3 +32,16 @@ export function formatTimeShort(time: string): string {
   const hour12 = hours % 12 || 12;
   return `${hour12}:${minutes.toString().padStart(2, '0')} ${period}`;
 }
+
+/**
+ * Check if text contains significant Hebrew characters
+ * Returns true if more than 30% of alphabetic chars are Hebrew
+ */
+export function isHebrewText(text: string): boolean {
+  if (!text) return false;
+  const hebrewChars = text.match(/[\u0590-\u05FF]/g)?.length || 0;
+  const latinChars = text.match(/[a-zA-Z]/g)?.length || 0;
+  const totalAlpha = hebrewChars + latinChars;
+  if (totalAlpha === 0) return false;
+  return hebrewChars / totalAlpha > 0.3;
+}

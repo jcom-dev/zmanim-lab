@@ -216,28 +216,41 @@ Original request: %s`, result.Formula, validationErr, request)
 }
 
 // ExplainFormula generates a human-readable explanation of a formula
-func (s *ClaudeService) ExplainFormula(ctx context.Context, formula string, language string) (*ExplainResult, error) {
+func (s *ClaudeService) ExplainFormula(ctx context.Context, formula string, language string, ragContext string) (*ExplainResult, error) {
 	var systemPrompt string
-	if language == "he" {
-		systemPrompt = `אתה מסביר חישוב זמני תפילה לתלמיד חכם הבקי בסוגיות הזמנים.
+	switch language {
+	case "he":
+		// Full Hebrew - concise, no formatting
+		systemPrompt = `הסבר קצר לתלמיד חכם. 2-3 משפטים בלבד.
 
-כתוב הסבר קצר ומדויק:
-1. השיטה ההלכתית (גר"א, מג"א, ר"ת וכו')
-2. אופן החישוב (שעות זמניות, מעלות השמש, דקות קבועות)
-3. מקור השיטה אם ידוע (גמרא, ראשונים, אחרונים)
+כללים:
+- ללא כותרות, ללא **bold**, ללא עיצוב
+- טקסט רציף בלבד
+- השתמש בקיצורים: נה"ח, עה"ש, צה"כ, שעו"ז
+- ציין שיטה ומקור אם ידוע
 
-השתמש במונחים הלכתיים: נץ החמה, שקיעה, עלות השחר, צאת הכוכבים, שעות זמניות, מעלות מתחת לאופק.
-שמור על 2-3 משפטים בלבד. ללא הקדמות מיותרות.`
-	} else {
-		systemPrompt = `You are explaining a zman calculation to a talmid chacham familiar with hilchos zmanim.
+דוגמא: "72 דקות לפני נה"ח לפי שיטת המג"א (שו"ע או"ח רל"ג). חישוב קבוע ללא תלות באורך היום."`
+	case "mixed":
+		// English sentences with Hebrew terms - for talmidei chachamim
+		systemPrompt = `Explain to a talmid chacham. 2-3 sentences only. Plain text, no markdown, no bold, no headers.
 
-Write a concise, precise explanation covering:
-1. The halachic shita (GRA, MGA, Rabbeinu Tam, etc.)
-2. The calculation method (sha'os zemanios, solar degrees, fixed minutes)
-3. Source if known (Gemara, Rishonim, Acharonim)
+Use Hebrew script for Jewish terms: נץ, שקיעה, עה"ש, צה"כ, שעו"ז, גר"א, מג"א, ר"ת, שו"ע, מ"ב.
+Cite sources in Hebrew (שו"ע או"ח, פסחים, etc.)
 
-Use proper Hebrew/halachic terms: netz hachama, shkia, alos hashachar, tzeis hakochavim, sha'os zemanios, degrees below horizon.
-Keep to 2-3 sentences. No unnecessary introductions. Assume the reader understands the fundamentals of zmanim.`
+Example: "72 minutes before נץ per the מג"א (שו"ע או"ח רל"ג). Fixed offset regardless of day length."`
+	default:
+		// Pure English with transliterated terms
+		systemPrompt = `Explain to a talmid chacham. 2-3 sentences only. Plain text, no markdown, no bold, no headers.
+
+Use transliterated terms: netz, shkia, alos, tzeis, sha'os zemanios.
+Cite sources when relevant (Pesachim, Shabbos 34b, Shulchan Aruch OC, etc.)
+
+Example: "72 minutes before netz per the Magen Avraham (SA OC 233). Fixed offset regardless of day length."`
+	}
+
+	// Add RAG context if available
+	if ragContext != "" {
+		systemPrompt += "\n\n## Reference Material\n\n" + ragContext
 	}
 
 	reqBody := claudeRequest{

@@ -42,4 +42,7 @@ export {
   type ImportZmanimResponse,
 } from './useZmanimList';
 
+// User Roles Hook (dual-role support)
+export { useUserRoles, useHasPublisherAccess, type UserRoles } from './useUserRoles';
+
 // All legacy useAuthenticatedFetch usages have been migrated to useApi

@@ -27,6 +27,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { useApi } from '@/lib/api-client';
+import { UserPlus } from 'lucide-react';
 
 interface TeamMember {
   user_id: string;
@@ -37,28 +38,21 @@ interface TeamMember {
   is_owner: boolean;
 }
 
-interface PendingInvitation {
-  id: string;
-  email: string;
-  status: string;
-  expires_at: string;
-  created_at: string;
-}
-
 export default function PublisherTeamPage() {
   const api = useApi();
   const { userId } = useAuth();
   const { selectedPublisher } = usePublisherContext();
   const [members, setMembers] = useState<TeamMember[]>([]);
-  const [invitations, setInvitations] = useState<PendingInvitation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  // Invite dialog state
-  const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteLoading, setInviteLoading] = useState(false);
-  const [inviteError, setInviteError] = useState<string | null>(null);
+  // Add member dialog state
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [addEmail, setAddEmail] = useState('');
+  const [addName, setAddName] = useState('');
+  const [addLoading, setAddLoading] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
 
   const fetchTeam = useCallback(async () => {
     if (!selectedPublisher) return;
@@ -66,9 +60,8 @@ export default function PublisherTeamPage() {
     try {
       setLoading(true);
 
-      const data = await api.get<{ members: TeamMember[]; pending_invitations: PendingInvitation[] }>('/publisher/team');
+      const data = await api.get<{ members: TeamMember[] }>('/publisher/team');
       setMembers(data.members || []);
-      setInvitations(data.pending_invitations || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
@@ -80,34 +73,52 @@ export default function PublisherTeamPage() {
     fetchTeam();
   }, [fetchTeam]);
 
-  const handleInvite = async (e: React.FormEvent) => {
+  const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault();
-    setInviteError(null);
+    setAddError(null);
 
-    if (!inviteEmail.trim()) {
-      setInviteError('Email is required');
+    if (!addEmail.trim()) {
+      setAddError('Email is required');
       return;
     }
 
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(inviteEmail)) {
-      setInviteError('Please enter a valid email');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addEmail)) {
+      setAddError('Please enter a valid email');
       return;
     }
 
-    setInviteLoading(true);
+    if (!addName.trim()) {
+      setAddError('Name is required');
+      return;
+    }
+
+    setAddLoading(true);
 
     try {
-      await api.post('/publisher/team/invite', {
-        body: JSON.stringify({ email: inviteEmail.trim().toLowerCase() }),
+      const response = await api.post<{ message: string; is_new_user: boolean }>('/publisher/team/invite', {
+        body: JSON.stringify({
+          email: addEmail.trim().toLowerCase(),
+          name: addName.trim(),
+        }),
       });
 
-      setInviteEmail('');
-      setInviteDialogOpen(false);
+      setAddEmail('');
+      setAddName('');
+      setAddDialogOpen(false);
+
+      // Show success message
+      if (response.is_new_user) {
+        setSuccessMessage(`${addName} has been added to the team. They will receive an email to set up their account.`);
+      } else {
+        setSuccessMessage(`${addName} has been added to the team.`);
+      }
+      setTimeout(() => setSuccessMessage(null), 5000);
+
       fetchTeam();
     } catch (err) {
-      setInviteError(err instanceof Error ? err.message : 'Network error. Please try again.');
+      setAddError(err instanceof Error ? err.message : 'Network error. Please try again.');
     } finally {
-      setInviteLoading(false);
+      setAddLoading(false);
     }
   };
 
@@ -117,24 +128,6 @@ export default function PublisherTeamPage() {
       fetchTeam();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to remove member');
-    }
-  };
-
-  const handleResendInvitation = async (invitationId: string) => {
-    try {
-      await api.post(`/publisher/team/invitations/${invitationId}/resend`);
-      fetchTeam();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to resend invitation');
-    }
-  };
-
-  const handleCancelInvitation = async (invitationId: string) => {
-    try {
-      await api.delete(`/publisher/team/invitations/${invitationId}`);
-      fetchTeam();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to cancel invitation');
     }
   };
 
@@ -175,49 +168,75 @@ export default function PublisherTeamPage() {
           <h1 className="text-3xl font-bold">Team Members</h1>
           <p className="text-muted-foreground mt-1">Manage who can access {selectedPublisher.name}</p>
         </div>
-        <Dialog open={inviteDialogOpen} onOpenChange={setInviteDialogOpen}>
+        <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
           <DialogTrigger asChild>
-            <Button>Invite Member</Button>
+            <Button>
+              <UserPlus className="w-4 h-4 mr-2" />
+              Add Member
+            </Button>
           </DialogTrigger>
           <DialogContent>
-            <form onSubmit={handleInvite}>
+            <form onSubmit={handleAddMember}>
               <DialogHeader>
-                <DialogTitle>Invite Team Member</DialogTitle>
+                <DialogTitle>Add Team Member</DialogTitle>
                 <DialogDescription>
-                  Send an invitation to join your publisher team. They&apos;ll receive an email with a link to
-                  accept.
+                  Add a new member to your publisher team. If they don&apos;t have an account, one will be
+                  created and they&apos;ll receive an email to set up their password.
                 </DialogDescription>
               </DialogHeader>
-              <div className="py-4">
-                {inviteError && (
-                  <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded-md text-sm">
-                    {inviteError}
+              <div className="py-4 space-y-4">
+                {addError && (
+                  <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded-md text-sm dark:bg-red-950 dark:border-red-800 dark:text-red-300">
+                    {addError}
                   </div>
                 )}
-                <label htmlFor="email" className="block text-sm font-medium mb-1">
-                  Email Address
-                </label>
-                <input
-                  type="email"
-                  id="email"
-                  value={inviteEmail}
-                  onChange={(e) => setInviteEmail(e.target.value)}
-                  placeholder="colleague@example.com"
-                  className="w-full px-4 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                />
+                <div>
+                  <label htmlFor="name" className="block text-sm font-medium mb-1">
+                    Name
+                  </label>
+                  <input
+                    type="text"
+                    id="name"
+                    value={addName}
+                    onChange={(e) => setAddName(e.target.value)}
+                    placeholder="John Doe"
+                    className="w-full px-4 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="email" className="block text-sm font-medium mb-1">
+                    Email Address
+                  </label>
+                  <input
+                    type="email"
+                    id="email"
+                    value={addEmail}
+                    onChange={(e) => setAddEmail(e.target.value)}
+                    placeholder="colleague@example.com"
+                    className="w-full px-4 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                </div>
               </div>
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setInviteDialogOpen(false)}>
+                <Button type="button" variant="outline" onClick={() => setAddDialogOpen(false)}>
                   Cancel
                 </Button>
-                <Button type="submit" disabled={inviteLoading}>
-                  {inviteLoading ? 'Sending...' : 'Send Invitation'}
+                <Button type="submit" disabled={addLoading}>
+                  {addLoading ? 'Adding...' : 'Add Member'}
                 </Button>
               </DialogFooter>
             </form>
           </DialogContent>
         </Dialog>
       </div>
+
+      {successMessage && (
+        <Card className="mb-6 border-green-300 bg-green-50 dark:border-green-700 dark:bg-green-950">
+          <CardContent className="py-4">
+            <p className="text-green-700 dark:text-green-300">{successMessage}</p>
+          </CardContent>
+        </Card>
+      )}
 
       {error && (
         <Card className="mb-6 border-red-300 bg-red-50 dark:border-red-700 dark:bg-red-950">
@@ -313,68 +332,6 @@ export default function PublisherTeamPage() {
         </CardContent>
       </Card>
 
-      {/* Pending Invitations */}
-      {invitations.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Pending Invitations ({invitations.length})</CardTitle>
-            <CardDescription>Invitations waiting to be accepted</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {invitations.map((invitation) => {
-                const isExpired = invitation.status === 'expired' || new Date(invitation.expires_at) < new Date();
-                return (
-                  <div
-                    key={invitation.id}
-                    className={`flex items-center justify-between p-4 rounded-lg ${
-                      isExpired ? 'bg-muted' : 'bg-yellow-50 dark:bg-yellow-950'
-                    }`}
-                  >
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium">{invitation.email}</span>
-                        <span
-                          className={`px-2 py-0.5 text-xs rounded-full ${
-                            isExpired
-                              ? 'bg-muted text-muted-foreground'
-                              : 'bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300'
-                          }`}
-                        >
-                          {isExpired ? 'Expired' : 'Pending'}
-                        </span>
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Sent {new Date(invitation.created_at).toLocaleDateString()}
-                        {!isExpired && (
-                          <> &middot; Expires {new Date(invitation.expires_at).toLocaleDateString()}</>
-                        )}
-                      </p>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleResendInvitation(invitation.id)}
-                      >
-                        Resend
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="text-red-600 hover:text-red-700"
-                        onClick={() => handleCancelInvitation(invitation.id)}
-                      >
-                        Cancel
-                      </Button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 }
