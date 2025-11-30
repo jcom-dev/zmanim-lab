@@ -85,6 +85,9 @@ jobs:
         run: npx supabase migration up --db-url "$DATABASE_URL"
         working-directory: ${{ github.workspace }}
 
+      - name: Import GeoNames cities data
+        run: go run cmd/import-cities/main.go
+
       - name: Generate RAG embeddings
         run: go run cmd/indexer/main.go
 

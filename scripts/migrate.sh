@@ -66,6 +66,9 @@ if [[ -d "/home/coder" ]] && [[ -f "/home/coder/workspace/zmanim-lab/api/.env" ]
 
     echo ""
     echo "Migration complete!"
+    echo ""
+    echo "NOTE: To import GeoNames cities data (163k+ cities with elevation/continent), run:"
+    echo "  ./scripts/import-geonames-cities.sh"
 
 else
     echo "Not in Coder environment - using Supabase CLI"

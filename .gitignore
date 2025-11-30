@@ -60,6 +60,7 @@ next-env.d.ts
 api/api
 api/main
 api/indexer
+api/import-cities
 api/zmanim-api
 zmanim-api
 *.exe
@@ -98,3 +99,6 @@ supabase/.temp/
 # .agent/
 # .claude/
 # .gemini/
+
+# Downloaded data files (GeoNames, etc.)
+scripts/data/
