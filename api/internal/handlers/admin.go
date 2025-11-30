@@ -159,10 +159,10 @@ func (h *Handlers) AdminCreatePublisher(w http.ResponseWriter, r *http.Request) 
 	// Generate slug from organization name
 	slug := generateSlug(req.Organization)
 
-	// Insert new publisher as verified (admin-created publishers are auto-verified)
+	// Insert new publisher as active (admin-created publishers are auto-approved)
 	query := `
 		INSERT INTO publishers (name, organization, slug, email, website, description, status)
-		VALUES ($1, $2, $3, $4, $5, $6, 'verified')
+		VALUES ($1, $2, $3, $4, $5, $6, 'active')
 		RETURNING id, name, organization, slug, email, website, description, status, created_at, updated_at
 	`
 

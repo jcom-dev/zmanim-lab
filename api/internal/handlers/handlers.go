@@ -278,7 +278,8 @@ func (h *Handlers) GetPublisherProfile(w http.ResponseWriter, r *http.Request) {
 	if publisherID != "" {
 		// Query by publisher ID
 		query = `
-			SELECT id, clerk_user_id, name, organization, email, description, bio,
+			SELECT id, clerk_user_id, name, organization, email,
+			       COALESCE(description, ''), COALESCE(bio, ''),
 			       website, logo_url, status, created_at, updated_at
 			FROM publishers
 			WHERE id = $1
@@ -287,7 +288,8 @@ func (h *Handlers) GetPublisherProfile(w http.ResponseWriter, r *http.Request) {
 	} else {
 		// Fall back to query by clerk_user_id
 		query = `
-			SELECT id, clerk_user_id, name, organization, email, description, bio,
+			SELECT id, clerk_user_id, name, organization, email,
+			       COALESCE(description, ''), COALESCE(bio, ''),
 			       website, logo_url, status, created_at, updated_at
 			FROM publishers
 			WHERE clerk_user_id = $1
@@ -296,22 +298,28 @@ func (h *Handlers) GetPublisherProfile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var publisher models.Publisher
+	var description, bio string
 	err := h.db.Pool.QueryRow(ctx, query, queryArg).Scan(
 		&publisher.ID,
 		&publisher.ClerkUserID,
 		&publisher.Name,
 		&publisher.Organization,
 		&publisher.Email,
-		&publisher.Description,
-		&publisher.Bio,
+		&description,
+		&bio,
 		&publisher.Website,
 		&publisher.LogoURL,
 		&publisher.Status,
 		&publisher.CreatedAt,
 		&publisher.UpdatedAt,
 	)
+	publisher.Description = description
+	if bio != "" {
+		publisher.Bio = &bio
+	}
 
 	if err != nil {
+		log.Printf("ERROR [GetPublisherProfile] Query failed: %v (publisherID=%s, userID=%s)", err, publisherID, userID)
 		if err.Error() == "no rows in result set" {
 			RespondNotFound(w, r, "Publisher profile not found")
 			return
@@ -350,34 +358,11 @@ func (h *Handlers) GetAccessiblePublishers(w http.ResponseWriter, r *http.Reques
 		var id, name, organization, status string
 		err := h.db.Pool.QueryRow(ctx, query, userID).Scan(&id, &name, &organization, &status)
 		if err != nil {
-			// Auto-create a publisher for users with publisher role who don't have one
-			userRole := middleware.GetUserRole(ctx)
-			if userRole == "publisher" || userRole == "admin" {
-				log.Printf("INFO [GetAccessiblePublishers] Auto-creating publisher for user %s with role %s", userID, userRole)
-				// Create a default publisher record with unique slug and placeholder email
-				createQuery := `
-					INSERT INTO publishers (name, organization, slug, email, clerk_user_id, status)
-					VALUES ($1, $2, $3, $4, $5, 'verified')
-					RETURNING id, name, organization, status
-				`
-				defaultName := "My Organization"
-				slug := "pub-" + userID[5:13] // Use chars 5-13 of user ID for unique slug
-				email := userID + "@publisher.zmanim.local"
-				err := h.db.Pool.QueryRow(ctx, createQuery, defaultName, defaultName, slug, email, userID).Scan(&id, &name, &organization, &status)
-				if err != nil {
-					log.Printf("ERROR [GetAccessiblePublishers] Failed to auto-create publisher: %v", err)
-					RespondJSON(w, r, http.StatusOK, map[string]interface{}{
-						"publishers": []interface{}{},
-					})
-					return
-				}
-				log.Printf("INFO [GetAccessiblePublishers] Auto-created publisher %s for user %s", id, userID)
-			} else {
-				RespondJSON(w, r, http.StatusOK, map[string]interface{}{
-					"publishers": []interface{}{},
-				})
-				return
-			}
+			// No publisher found - return empty list
+			RespondJSON(w, r, http.StatusOK, map[string]interface{}{
+				"publishers": []interface{}{},
+			})
+			return
 		}
 
 		RespondJSON(w, r, http.StatusOK, map[string]interface{}{
@@ -403,33 +388,11 @@ func (h *Handlers) GetAccessiblePublishers(w http.ResponseWriter, r *http.Reques
 		var id, name, organization, status string
 		err := h.db.Pool.QueryRow(ctx, query, userID).Scan(&id, &name, &organization, &status)
 		if err != nil {
-			// Auto-create a publisher for users with publisher role
-			userRole := middleware.GetUserRole(ctx)
-			if userRole == "publisher" || userRole == "admin" {
-				log.Printf("INFO [GetAccessiblePublishers] Auto-creating publisher for user %s (Clerk fallback)", userID)
-				createQuery := `
-					INSERT INTO publishers (name, organization, slug, email, clerk_user_id, status)
-					VALUES ($1, $2, $3, $4, $5, 'verified')
-					RETURNING id, name, organization, status
-				`
-				defaultName := "My Organization"
-				slug := "pub-" + userID[5:13]
-				email := userID + "@publisher.zmanim.local"
-				err := h.db.Pool.QueryRow(ctx, createQuery, defaultName, defaultName, slug, email, userID).Scan(&id, &name, &organization, &status)
-				if err != nil {
-					log.Printf("ERROR [GetAccessiblePublishers] Failed to auto-create publisher: %v", err)
-					RespondJSON(w, r, http.StatusOK, map[string]interface{}{
-						"publishers": []interface{}{},
-					})
-					return
-				}
-				log.Printf("INFO [GetAccessiblePublishers] Auto-created publisher %s for user %s", id, userID)
-			} else {
-				RespondJSON(w, r, http.StatusOK, map[string]interface{}{
-					"publishers": []interface{}{},
-				})
-				return
-			}
+			// No publisher found - return empty list
+			RespondJSON(w, r, http.StatusOK, map[string]interface{}{
+				"publishers": []interface{}{},
+			})
+			return
 		}
 
 		RespondJSON(w, r, http.StatusOK, map[string]interface{}{
@@ -453,39 +416,10 @@ func (h *Handlers) GetAccessiblePublishers(w http.ResponseWriter, r *http.Reques
 		}
 	}
 
-	// If no publisher access list, try to auto-create one
+	// If no publisher access list, return empty (admins don't auto-get publishers)
 	if len(publisherIDs) == 0 {
-		userRole := middleware.GetUserRole(ctx)
-		if userRole == "publisher" || userRole == "admin" {
-			log.Printf("INFO [GetAccessiblePublishers] No publisher_access_list, auto-creating publisher for user %s", userID)
-			var id, name, organization, status string
-			createQuery := `
-				INSERT INTO publishers (name, organization, slug, email, clerk_user_id, status)
-				VALUES ($1, $2, $3, $4, $5, 'verified')
-				RETURNING id, name, organization, status
-			`
-			defaultName := "My Organization"
-			slug := "pub-" + userID[5:13]
-			email := userID + "@publisher.zmanim.local"
-			err := h.db.Pool.QueryRow(ctx, createQuery, defaultName, defaultName, slug, email, userID).Scan(&id, &name, &organization, &status)
-			if err != nil {
-				log.Printf("ERROR [GetAccessiblePublishers] Failed to auto-create publisher: %v", err)
-				RespondJSON(w, r, http.StatusOK, map[string]interface{}{
-					"publishers": []interface{}{},
-				})
-				return
-			}
-			log.Printf("INFO [GetAccessiblePublishers] Auto-created publisher %s for user %s", id, userID)
-			RespondJSON(w, r, http.StatusOK, map[string]interface{}{
-				"publishers": []map[string]string{{
-					"id":           id,
-					"name":         name,
-					"organization": organization,
-					"status":       status,
-				}},
-			})
-			return
-		}
+		// For admin users without publisher access, just return empty list
+		// They can create/access publishers through the admin panel
 		RespondJSON(w, r, http.StatusOK, map[string]interface{}{
 			"publishers": []interface{}{},
 		})
@@ -529,7 +463,7 @@ func (h *Handlers) GetAccessiblePublishers(w http.ResponseWriter, r *http.Reques
 			var id, name, organization, status string
 			createQuery := `
 				INSERT INTO publishers (name, organization, slug, email, clerk_user_id, status)
-				VALUES ($1, $2, $3, $4, $5, 'verified')
+				VALUES ($1, $2, $3, $4, $5, 'active')
 				RETURNING id, name, organization, status
 			`
 			defaultName := "My Organization"

@@ -48,10 +48,9 @@ export default function BecomePublisherPage() {
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
       newErrors.email = 'Please enter a valid email address';
     }
-    if (!formData.description.trim()) {
-      newErrors.description = 'Description is required';
-    } else if (formData.description.trim().length < 10) {
-      newErrors.description = 'Please provide at least 10 characters describing your organization';
+    // Description is optional, but if provided must be at least 10 characters
+    if (formData.description.trim() && formData.description.trim().length < 10) {
+      newErrors.description = 'Please provide at least 10 characters if adding a description';
     }
 
     setErrors(newErrors);

@@ -62,9 +62,7 @@ func (h *Handlers) SubmitPublisherRequest(w http.ResponseWriter, r *http.Request
 	} else if !isValidEmail(req.Email) {
 		validationErrors["email"] = "Invalid email format"
 	}
-	if strings.TrimSpace(req.Description) == "" {
-		validationErrors["description"] = "Description is required"
-	}
+	// Description is optional
 
 	if len(validationErrors) > 0 {
 		RespondValidationError(w, r, "Invalid request parameters", validationErrors)
