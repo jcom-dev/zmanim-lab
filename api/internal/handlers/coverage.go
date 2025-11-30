@@ -386,30 +386,16 @@ func (h *Handlers) GetContinents(w http.ResponseWriter, r *http.Request) {
 		CityCount int    `json:"city_count"`
 	}
 
-	// Map continent codes to full names
-	continentNames := map[string]string{
-		"AF": "Africa",
-		"AN": "Antarctica",
-		"AS": "Asia",
-		"EU": "Europe",
-		"NA": "North America",
-		"OC": "Oceania",
-		"SA": "South America",
-	}
-
 	var continents []Continent
 	for rows.Next() {
-		var code string
+		var name string
 		var cityCount int
-		if err := rows.Scan(&code, &cityCount); err != nil {
+		if err := rows.Scan(&name, &cityCount); err != nil {
 			continue
 		}
-		name := continentNames[code]
-		if name == "" {
-			name = code
-		}
+		// Database stores full continent names, use as both code and name
 		continents = append(continents, Continent{
-			Code:      code,
+			Code:      name, // Use full name as code for filtering
 			Name:      name,
 			CityCount: cityCount,
 		})
