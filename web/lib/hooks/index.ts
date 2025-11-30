@@ -1,5 +1,5 @@
 // New unified API client (recommended)
-export { useApi, useApiFactory, ApiError, createApiClient, API_BASE } from '../api-client';
+export { usePublisherApi, useApi, useAdminApi, useApiFactory, ApiError, createApiClient, API_BASE } from '../api-client';
 
 // API Query Factories (recommended for data fetching)
 export {

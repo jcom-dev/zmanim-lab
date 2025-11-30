@@ -238,11 +238,11 @@ export function BrowseTemplatesDialog({
                 </div>
               ) : (
                 <div className="space-y-6">
-                  {/* Essential */}
+                  {/* Core */}
                   {groupedTemplates.essential.length > 0 && (
                     <div>
                       <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-                        Essential Zmanim
+                        Core Zmanim
                         <Badge variant="secondary">{groupedTemplates.essential.length}</Badge>
                       </h3>
                       <div className="space-y-3">

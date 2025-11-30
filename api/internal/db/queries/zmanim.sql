@@ -5,13 +5,19 @@
 
 -- name: GetPublisherZmanim :many
 SELECT
-    id, publisher_id, zman_key, hebrew_name, english_name,
-    formula_dsl, ai_explanation, publisher_comment,
-    is_enabled, is_visible, is_published, is_custom, category,
-    dependencies, sort_order, created_at, updated_at
-FROM publisher_zmanim
-WHERE publisher_id = $1
-ORDER BY sort_order, hebrew_name;
+    pz.id, pz.publisher_id, pz.zman_key, pz.hebrew_name, pz.english_name,
+    pz.formula_dsl, pz.ai_explanation, pz.publisher_comment,
+    pz.is_enabled, pz.is_visible, pz.is_published, pz.is_custom, pz.category,
+    pz.dependencies, pz.sort_order, pz.created_at, pz.updated_at,
+    -- Check if this zman is linked to any events (daily zmanim have no event links)
+    EXISTS (
+        SELECT 1 FROM master_zman_events mze
+        WHERE mze.master_zman_id = pz.master_zman_id
+    ) AS is_event_zman
+FROM publisher_zmanim pz
+WHERE pz.publisher_id = $1
+  AND pz.deleted_at IS NULL
+ORDER BY pz.sort_order, pz.hebrew_name;
 
 -- name: GetPublisherZmanByKey :one
 SELECT

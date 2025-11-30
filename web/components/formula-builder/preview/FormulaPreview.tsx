@@ -79,9 +79,9 @@ export function FormulaPreview({
   };
 
   return (
-    <div className={cn('space-y-2', className)}>
+    <div className={cn('space-y-3', className)}>
       <div className="flex items-center justify-between">
-        <label className="text-sm font-medium flex items-center gap-2">
+        <label className="text-sm font-semibold flex items-center gap-2">
           Generated Formula
           {isValid ? (
             <CheckCircle2 className="h-4 w-4 text-green-500" />
@@ -90,25 +90,25 @@ export function FormulaPreview({
           )}
         </label>
         <Button
-          variant="ghost"
+          variant="outline"
           size="sm"
           onClick={handleCopy}
-          className="h-7 px-2"
+          className="h-8 px-3"
         >
-          <Copy className="h-3 w-3 mr-1" />
+          <Copy className="h-3.5 w-3.5 mr-1.5" />
           {copied ? 'Copied!' : 'Copy'}
         </Button>
       </div>
 
       <div
         className={cn(
-          'font-mono text-sm p-3 rounded-lg border',
+          'font-mono text-sm p-4 rounded-xl border-2',
           isValid
-            ? 'bg-muted border-border'
+            ? 'bg-card border-primary/20'
             : 'bg-destructive/10 border-destructive'
         )}
       >
-        <code>{highlightFormula(formula)}</code>
+        <code className="text-base">{highlightFormula(formula)}</code>
       </div>
 
       {errors.length > 0 && (

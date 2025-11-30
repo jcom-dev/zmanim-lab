@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"time"
 
@@ -68,6 +69,12 @@ func (h *Handlers) GetZmanimForCity(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Default publisher ID for cache key
+	cachePublisherID := publisherID
+	if cachePublisherID == "" {
+		cachePublisherID = "default"
+	}
+
 	// Default to today if no date specified
 	if dateStr == "" {
 		dateStr = time.Now().Format("2006-01-02")
@@ -78,6 +85,23 @@ func (h *Handlers) GetZmanimForCity(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		RespondBadRequest(w, r, "Invalid date format. Use YYYY-MM-DD")
 		return
+	}
+
+	// Check cache first (if available)
+	if h.cache != nil {
+		cached, err := h.cache.GetZmanim(ctx, cachePublisherID, cityID, dateStr)
+		if err != nil {
+			log.Printf("Cache read error: %v", err)
+		} else if cached != nil {
+			// Return cached response
+			var response ZmanimWithFormulaResponse
+			if err := json.Unmarshal(cached.Data, &response); err == nil {
+				response.Cached = true
+				response.CachedAt = &cached.CachedAt
+				RespondJSON(w, r, http.StatusOK, response)
+				return
+			}
+		}
 	}
 
 	// Get city details
@@ -164,6 +188,13 @@ func (h *Handlers) GetZmanimForCity(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	// Cache the result (if cache available)
+	if h.cache != nil {
+		if err := h.cache.SetZmanim(ctx, cachePublisherID, cityID, dateStr, response); err != nil {
+			log.Printf("Cache write error: %v", err)
+		}
+	}
+
 	RespondJSON(w, r, http.StatusOK, response)
 }
 
@@ -219,19 +250,38 @@ func (h *Handlers) InvalidatePublisherCache(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Get publisher ID
-	var publisherID string
-	err := h.db.Pool.QueryRow(ctx,
-		"SELECT id FROM publishers WHERE clerk_user_id = $1",
-		userID,
-	).Scan(&publisherID)
+	// Get publisher ID from header or database lookup
+	publisherID := r.Header.Get("X-Publisher-Id")
+	if publisherID == "" {
+		err := h.db.Pool.QueryRow(ctx,
+			"SELECT id FROM publishers WHERE clerk_user_id = $1",
+			userID,
+		).Scan(&publisherID)
 
-	if err != nil {
-		RespondNotFound(w, r, "Publisher not found")
-		return
+		if err != nil {
+			RespondNotFound(w, r, "Publisher not found")
+			return
+		}
 	}
 
-	// Delete cached calculations for this publisher's algorithms
+	var redisDeleted int64
+	var dbDeleted int64
+
+	// Invalidate Redis cache (if available)
+	if h.cache != nil {
+		if err := h.cache.InvalidateZmanim(ctx, publisherID); err != nil {
+			log.Printf("Redis cache invalidation error: %v", err)
+		} else {
+			log.Printf("Redis cache invalidated for publisher %s", publisherID)
+			redisDeleted = 1 // Indicates success (actual count is logged by cache)
+		}
+		// Also invalidate algorithm cache
+		if err := h.cache.InvalidateAlgorithm(ctx, publisherID); err != nil {
+			log.Printf("Redis algorithm cache invalidation error: %v", err)
+		}
+	}
+
+	// Also clear database cache (legacy)
 	query := `
 		DELETE FROM calculation_cache
 		WHERE algorithm_id IN (
@@ -240,12 +290,14 @@ func (h *Handlers) InvalidatePublisherCache(w http.ResponseWriter, r *http.Reque
 	`
 	result, err := h.db.Pool.Exec(ctx, query, publisherID)
 	if err != nil {
-		RespondInternalError(w, r, "Failed to invalidate cache")
-		return
+		log.Printf("Database cache invalidation error: %v", err)
+	} else {
+		dbDeleted = result.RowsAffected()
 	}
 
 	RespondJSON(w, r, http.StatusOK, map[string]interface{}{
-		"message":         "Cache invalidated",
-		"entries_deleted": result.RowsAffected(),
+		"message":             "Cache invalidated",
+		"redis_invalidated":   redisDeleted > 0,
+		"db_entries_deleted":  dbDeleted,
 	})
 }

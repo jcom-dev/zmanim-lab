@@ -292,12 +292,19 @@ export default function AlgorithmEditorPage() {
   const [searchResults, setSearchResults] = useState<CoverageCity[]>([]);
   const [showCityDropdown, setShowCityDropdown] = useState(false);
 
-  // Preview date state (shared with AlgorithmPreview)
+  // Preview date state (shared with AlgorithmPreview and edit page)
   const [previewDate, setPreviewDate] = useState(() => new Date());
   const [hebrewDate, setHebrewDate] = useState<HebrewDateInfo | null>(null);
 
   // Format date as YYYY-MM-DD
   const dateStr = useMemo(() => previewDate.toISOString().split('T')[0], [previewDate]);
+
+  // Save date to localStorage for sharing with edit page
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('zmanim-preview-date', dateStr);
+    }
+  }, [dateStr]);
 
   // Fetch Hebrew date when date changes - using public API (no auth required)
   useEffect(() => {
@@ -737,7 +744,7 @@ export default function AlgorithmEditorPage() {
                 <div className="flex items-center gap-2">
                   <span className="text-foreground font-medium">{previewLocation.displayName}</span>
                 </div>
-                <div className="relative max-w-xs">
+                <div className="relative w-48">
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <input
@@ -747,7 +754,7 @@ export default function AlgorithmEditorPage() {
                       onChange={(e) => handleCitySearch(e.target.value)}
                       onFocus={() => citySearch.length >= 2 && setShowCityDropdown(true)}
                       onBlur={() => setTimeout(() => setShowCityDropdown(false), 200)}
-                      className="bg-background border border-input rounded-md pl-10 pr-3 py-2 text-base font-medium focus:outline-none focus:ring-2 focus:ring-ring cursor-text hover:bg-muted/50 w-full"
+                      className="bg-background border border-input rounded-md pl-10 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring cursor-text hover:bg-muted/50 w-full"
                     />
                   </div>
                   {showCityDropdown && searchResults.length > 0 && (
@@ -944,7 +951,7 @@ export default function AlgorithmEditorPage() {
                       Draft ({currentViewDraftCount})
                     </TabsTrigger>
                     <TabsTrigger value="essential">
-                      Essential ({currentViewEssentialCount})
+                      Core ({currentViewEssentialCount})
                     </TabsTrigger>
                     <TabsTrigger value="optional">
                       Optional ({currentViewOptionalCount})

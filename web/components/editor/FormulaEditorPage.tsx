@@ -182,9 +182,6 @@ export function FormulaEditorPage({
               <FormulaBuilder
                 initialFormula={formula}
                 onSave={setFormula}
-                latitude={latitude}
-                longitude={longitude}
-                locationName={locationName}
               />
             ) : (
               <DSLEditor

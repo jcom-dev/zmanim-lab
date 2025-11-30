@@ -30,6 +30,7 @@ type PublisherZman struct {
 	IsVisible        bool      `json:"is_visible" db:"is_visible"`
 	IsPublished      bool      `json:"is_published" db:"is_published"`
 	IsCustom         bool      `json:"is_custom" db:"is_custom"`
+	IsEventZman      bool      `json:"is_event_zman" db:"is_event_zman"`
 	Category         string    `json:"category" db:"category"`
 	Dependencies     []string  `json:"dependencies" db:"dependencies"`
 	SortOrder        int       `json:"sort_order" db:"sort_order"`
@@ -172,6 +173,7 @@ func getPublisherZmanimRowToPublisherZman(z sqlcgen.GetPublisherZmanimRow) Publi
 		IsVisible:        z.IsVisible,
 		IsPublished:      z.IsPublished,
 		IsCustom:         z.IsCustom,
+		IsEventZman:      z.IsEventZman,
 		Category:         z.Category,
 		Dependencies:     z.Dependencies,
 		SortOrder:        int(z.SortOrder),

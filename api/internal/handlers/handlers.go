@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jcom-dev/zmanim-lab/internal/ai"
+	"github.com/jcom-dev/zmanim-lab/internal/cache"
 	"github.com/jcom-dev/zmanim-lab/internal/db"
 	"github.com/jcom-dev/zmanim-lab/internal/middleware"
 	"github.com/jcom-dev/zmanim-lab/internal/models"
@@ -18,6 +19,7 @@ import (
 // Handlers holds all HTTP handlers
 type Handlers struct {
 	db               *db.DB
+	cache            *cache.Cache
 	publisherService *services.PublisherService
 	zmanimService    *services.ZmanimService
 	clerkService     *services.ClerkService
@@ -59,6 +61,11 @@ func (h *Handlers) SetAIServices(claude *ai.ClaudeService, search *ai.SearchServ
 	h.aiSearch = search
 	h.aiContext = context
 	h.aiEmbedding = embedding
+}
+
+// SetCache configures the Redis cache (optional - may be nil if Redis is not available)
+func (h *Handlers) SetCache(c *cache.Cache) {
+	h.cache = c
 }
 
 // HealthCheck returns the health status of the API

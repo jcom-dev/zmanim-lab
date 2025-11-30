@@ -5,6 +5,14 @@ export type SolarDirection = 'before_sunrise' | 'after_sunset';
 export type OffsetDirection = 'before' | 'after';
 export type ShaosBase = 'gra' | 'mga' | 'custom';
 
+// Complexity reasons for formulas that can't be represented in guided builder
+export type ComplexityReason =
+  | 'conditional'        // if/else statements
+  | 'midpoint'           // midpoint() function
+  | 'chained_operations' // multiple +/- operations
+  | 'unknown_function'   // unrecognized function
+  | 'unknown_syntax';    // catch-all
+
 export interface FormulaBuilderState {
   // Base time selection
   baseTime: string;
@@ -137,4 +145,154 @@ export function generateFormula(state: FormulaBuilderState): string {
     default:
       return state.baseTime;
   }
+}
+
+// Parse result type
+export interface ParseResult {
+  success: boolean;
+  state?: Partial<FormulaBuilderState>;
+  error?: string;
+  complexityReason?: ComplexityReason;
+  complexityDetails?: string; // Human-readable explanation for tooltip/banner
+}
+
+// Parse a DSL formula back into builder state
+export function parseFormula(formula: string): ParseResult {
+  if (!formula || !formula.trim()) {
+    return { success: false, error: 'Empty formula' };
+  }
+
+  const trimmed = formula.trim();
+
+  // 1. Check for solar angle: solar(degrees, direction)
+  const solarMatch = trimmed.match(/^solar\s*\(\s*([\d.]+)\s*,\s*(before_sunrise|after_sunset)\s*\)$/);
+  if (solarMatch) {
+    return {
+      success: true,
+      state: {
+        method: 'solar',
+        solarDegrees: parseFloat(solarMatch[1]),
+        solarDirection: solarMatch[2] as SolarDirection,
+      },
+    };
+  }
+
+  // 2. Check for proportional hours: shaos(hours, base) or shaos(hours, custom(...))
+  const shaosMatch = trimmed.match(/^shaos\s*\(\s*([\d.]+)\s*,\s*(gra|mga)\s*\)$/);
+  if (shaosMatch) {
+    return {
+      success: true,
+      state: {
+        method: 'proportional',
+        shaosHours: parseFloat(shaosMatch[1]),
+        shaosBase: shaosMatch[2] as ShaosBase,
+      },
+    };
+  }
+
+  // Check for custom shaos: shaos(hours, custom(@start, @end))
+  const shaosCustomMatch = trimmed.match(/^shaos\s*\(\s*([\d.]+)\s*,\s*custom\s*\(\s*@([a-z_][a-z0-9_]*)\s*,\s*@([a-z_][a-z0-9_]*)\s*\)\s*\)$/i);
+  if (shaosCustomMatch) {
+    return {
+      success: true,
+      state: {
+        method: 'proportional',
+        shaosHours: parseFloat(shaosCustomMatch[1]),
+        shaosBase: 'custom',
+        customStart: shaosCustomMatch[2],
+        customEnd: shaosCustomMatch[3],
+      },
+    };
+  }
+
+  // 3. Check for fixed offset: base +/- Nmin
+  // Matches: "sunrise - 72min", "@some_zman + 18min", "sunset - 40min"
+  const offsetMatch = trimmed.match(/^(@?[a-z_][a-z0-9_]*)\s*([+-])\s*(\d+)\s*min$/i);
+  if (offsetMatch) {
+    return {
+      success: true,
+      state: {
+        method: 'fixed',
+        offsetBase: offsetMatch[1].replace(/^@/, ''), // Remove @ prefix if present
+        offsetDirection: offsetMatch[2] === '-' ? 'before' : 'after',
+        offsetMinutes: parseInt(offsetMatch[3], 10),
+      },
+    };
+  }
+
+  // 4. Check for fixed zman (simple variable name)
+  // Must be a valid identifier: sunrise, sunset, solar_noon, midnight, or @zman_key
+  const fixedZmanMatch = trimmed.match(/^@?([a-z_][a-z0-9_]*)$/i);
+  if (fixedZmanMatch) {
+    const zmanName = fixedZmanMatch[1];
+    // Check if it's a known primitive
+    const knownPrimitives = ['sunrise', 'sunset', 'solar_noon', 'midnight', 'alos_hashachar', 'misheyakir', 'tzeis_hakochavim', 'bein_hashmashos'];
+    if (knownPrimitives.includes(zmanName) || trimmed.startsWith('@')) {
+      return {
+        success: true,
+        state: {
+          method: 'fixed_zman',
+          selectedFixedZman: zmanName,
+        },
+      };
+    }
+  }
+
+  // 5. Detect specific complexity reasons before generic fallback
+
+  // Check for conditionals (if/else)
+  if (/\bif\s*\(/.test(trimmed) || /\belse\b/.test(trimmed)) {
+    return {
+      success: false,
+      error: 'Conditional logic (if/else) requires Advanced DSL mode.',
+      complexityReason: 'conditional',
+      complexityDetails: 'This formula uses conditional logic to choose between different calculations based on date, location, or other factors.',
+    };
+  }
+
+  // Check for midpoint function
+  if (/\bmidpoint\s*\(/.test(trimmed)) {
+    return {
+      success: false,
+      error: 'Midpoint calculations require Advanced DSL mode.',
+      complexityReason: 'midpoint',
+      complexityDetails: 'This formula calculates the midpoint between two times, which the visual builder cannot represent.',
+    };
+  }
+
+  // Check for chained operations (multiple +/- with min)
+  const operatorMatches = trimmed.match(/[+-]\s*\d+\s*min/g);
+  if (operatorMatches && operatorMatches.length > 1) {
+    return {
+      success: false,
+      error: 'Chained operations require Advanced DSL mode.',
+      complexityReason: 'chained_operations',
+      complexityDetails: 'This formula applies multiple offsets in sequence. Use the Advanced editor for multi-step calculations.',
+    };
+  }
+
+  // Check for unknown functions (functions other than solar, shaos, custom)
+  const functionMatches = trimmed.match(/\b([a-z_][a-z0-9_]*)\s*\(/gi);
+  if (functionMatches) {
+    const knownFunctions = ['solar', 'shaos', 'custom'];
+    for (const match of functionMatches) {
+      const funcName = match.replace(/\s*\($/, '').toLowerCase();
+      if (!knownFunctions.includes(funcName)) {
+        return {
+          success: false,
+          error: `Unknown function "${funcName}" requires Advanced DSL mode.`,
+          complexityReason: 'unknown_function',
+          complexityDetails: `The function "${funcName}" is not available in the guided builder. Use Advanced DSL mode to edit this formula.`,
+        };
+      }
+    }
+  }
+
+  // 6. Generic fallback - formula is too complex for guided builder
+  return {
+    success: false,
+    error: 'This formula uses advanced syntax that cannot be edited in Guided Builder mode.',
+    complexityReason: 'unknown_syntax',
+    complexityDetails: 'This formula uses syntax that the visual builder cannot represent. Use Advanced DSL mode to edit.',
+  };
 }

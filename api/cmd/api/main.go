@@ -59,6 +59,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	"github.com/jcom-dev/zmanim-lab/internal/ai"
+	"github.com/jcom-dev/zmanim-lab/internal/cache"
 	"github.com/jcom-dev/zmanim-lab/internal/config"
 	"github.com/jcom-dev/zmanim-lab/internal/db"
 	"github.com/jcom-dev/zmanim-lab/internal/handlers"
@@ -86,6 +87,15 @@ func main() {
 
 	// Initialize handlers
 	h := handlers.New(database)
+
+	// Initialize Redis cache (optional - only if REDIS_URL is set)
+	redisCache, err := cache.New()
+	if err != nil {
+		log.Printf("Warning: Redis cache initialization failed: %v - caching disabled", err)
+	} else {
+		h.SetCache(redisCache)
+		defer redisCache.Close()
+	}
 
 	// Initialize AI services (optional - only if API keys are set)
 	var claudeService *ai.ClaudeService
@@ -221,6 +231,10 @@ func main() {
 			r.Get("/registry/zmanim/{zmanKey}/day-types", h.GetZmanApplicableDayTypes)
 			r.Get("/registry/tags", h.GetAllTags)
 			r.Get("/registry/day-types", h.GetAllDayTypes)
+
+			// Astronomical Primitives (scientific times for formulas)
+			r.Get("/registry/primitives", h.GetAstronomicalPrimitives)
+			r.Get("/registry/primitives/grouped", h.GetAstronomicalPrimitivesGrouped)
 		})
 
 		// Authenticated routes for algorithm actions (Story 4-12)
@@ -340,6 +354,18 @@ func main() {
 			// Zman registry request management
 			r.Get("/registry/requests", h.AdminGetZmanRegistryRequests)
 			r.Put("/registry/requests/{id}", h.AdminReviewZmanRegistryRequest)
+
+			// Master Zmanim Registry CRUD (admin)
+			r.Get("/registry/zmanim", h.AdminGetMasterZmanim)
+			r.Get("/registry/zmanim/{id}", h.AdminGetMasterZmanByID)
+			r.Post("/registry/zmanim", h.AdminCreateMasterZman)
+			r.Put("/registry/zmanim/{id}", h.AdminUpdateMasterZman)
+			r.Delete("/registry/zmanim/{id}", h.AdminDeleteMasterZman)
+			r.Post("/registry/zmanim/{id}/toggle-visibility", h.AdminToggleZmanVisibility)
+			r.Get("/registry/time-categories", h.AdminGetTimeCategories)
+			r.Get("/registry/tags", h.AdminGetTags)
+			r.Get("/registry/day-types", h.AdminGetDayTypes)
+			r.Get("/registry/primitives/grouped", h.GetAstronomicalPrimitivesGrouped)
 		})
 	})
 

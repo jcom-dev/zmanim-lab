@@ -43,6 +43,60 @@ import {
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
+// Infer tags from the formula DSL (same logic as Registry page)
+interface InferredTags {
+  shita?: string;
+  method?: string;
+  relative?: string; // e.g., "before sunset", "after sunrise"
+  baseTime?: string; // the base astronomical event
+}
+
+function inferTagsFromFormula(formula: string): InferredTags {
+  const result: InferredTags = {};
+
+  // Check for shita
+  if (formula.includes('gra') || formula.includes(', gra)')) {
+    result.shita = 'GRA';
+  } else if (formula.includes('mga') || formula.includes(', mga)')) {
+    result.shita = 'MGA';
+  } else if (formula.includes('alos_16_1')) {
+    result.shita = '16.1°';
+  }
+
+  // Check for calculation method
+  if (formula.includes('shaos(')) {
+    result.method = 'Proportional Hours';
+  } else if (formula.includes('solar(')) {
+    result.method = 'Solar Angle';
+  } else if (/\d+\s*min/.test(formula)) {
+    result.method = 'Fixed Minutes';
+  }
+
+  // Detect base time and before/after
+  const baseTimePatterns = [
+    { pattern: /sunset/i, name: 'sunset' },
+    { pattern: /sunrise/i, name: 'sunrise' },
+    { pattern: /chatzos/i, name: 'chatzos' },
+    { pattern: /tzais/i, name: 'tzais' },
+    { pattern: /alos/i, name: 'alos' },
+  ];
+
+  for (const { pattern, name } of baseTimePatterns) {
+    if (pattern.test(formula)) {
+      result.baseTime = name;
+      // Check if before (-) or after (+)
+      if (formula.includes('-') && /\d+\s*min/.test(formula)) {
+        result.relative = `before ${name}`;
+      } else if (formula.includes('+') && /\d+\s*min/.test(formula)) {
+        result.relative = `after ${name}`;
+      }
+      break;
+    }
+  }
+
+  return result;
+}
+
 // Event tags for event zmanim - maps zman_key to applicable events
 // Using design tokens: primary for Shabbos/YT, destructive for fasts, muted for others
 const EVENT_ZMAN_TAGS: Record<string, string[]> = {
@@ -230,7 +284,7 @@ export function ZmanCard({ zman, category, onEdit }: ZmanCardProps) {
                   />
                 </div>
 
-                {/* Essential/Optional Flag - clickable badge */}
+                {/* Core/Optional Flag - clickable badge */}
                 <Badge
                   variant={isEssential ? 'default' : 'outline'}
                   className={`cursor-pointer transition-colors select-none ${
@@ -239,9 +293,9 @@ export function ZmanCard({ zman, category, onEdit }: ZmanCardProps) {
                       : 'hover:bg-muted'
                   } ${updateZman.isPending ? 'opacity-50 pointer-events-none' : ''}`}
                   onClick={handleToggleCategory}
-                  title={isEssential ? 'Click to mark as optional' : 'Click to mark as essential'}
+                  title={isEssential ? 'Click to mark as optional' : 'Click to mark as core'}
                 >
-                  {isEssential ? 'Essential' : 'Optional'}
+                  {isEssential ? 'Core' : 'Optional'}
                 </Badge>
 
                 {/* Published Status Badge */}
@@ -331,6 +385,32 @@ export function ZmanCard({ zman, category, onEdit }: ZmanCardProps) {
         <CardContent className="pt-0">
           {/* Formula Display */}
           <HighlightedFormula formula={zman.formula_dsl} />
+
+          {/* Inferred Tags from Formula */}
+          {(() => {
+            const inferredTags = inferTagsFromFormula(zman.formula_dsl);
+            const hasTags = inferredTags.shita || inferredTags.method || inferredTags.relative;
+            if (!hasTags) return null;
+            return (
+              <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                {inferredTags.shita && (
+                  <Badge variant="outline" className="text-xs bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-200 border-cyan-300 dark:border-cyan-700">
+                    {inferredTags.shita}
+                  </Badge>
+                )}
+                {inferredTags.method && (
+                  <Badge variant="outline" className="text-xs bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-200 border-violet-300 dark:border-violet-700">
+                    {inferredTags.method}
+                  </Badge>
+                )}
+                {inferredTags.relative && (
+                  <Badge variant="outline" className="text-xs bg-pink-100 text-pink-800 dark:bg-pink-900/30 dark:text-pink-200 border-pink-300 dark:border-pink-700">
+                    {inferredTags.relative}
+                  </Badge>
+                )}
+              </div>
+            );
+          })()}
 
           {/* AI Explanation (if exists) */}
           {zman.ai_explanation && (

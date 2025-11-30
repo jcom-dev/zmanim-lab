@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"time"
 
@@ -663,6 +664,19 @@ func (h *Handlers) PublishAlgorithm(w http.ResponseWriter, r *http.Request) {
 	if err := tx.Commit(ctx); err != nil {
 		RespondInternalError(w, r, "Failed to commit publish")
 		return
+	}
+
+	// Invalidate cache for this publisher (zmanim calculations are now stale)
+	if h.cache != nil {
+		if err := h.cache.InvalidateZmanim(ctx, publisherID); err != nil {
+			log.Printf("Cache invalidation error after publish: %v", err)
+		} else {
+			log.Printf("Cache invalidated for publisher %s after algorithm publish", publisherID)
+		}
+		// Also invalidate algorithm cache
+		if err := h.cache.InvalidateAlgorithm(ctx, publisherID); err != nil {
+			log.Printf("Algorithm cache invalidation error: %v", err)
+		}
 	}
 
 	RespondJSON(w, r, http.StatusOK, AlgorithmResponse{

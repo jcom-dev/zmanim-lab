@@ -24,7 +24,7 @@ import {
   ChevronsDown,
   Star,
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, formatTime, formatTimeShort } from '@/lib/utils';
 import { usePreviewWeek, type DayPreview, type PreviewLocation } from '@/lib/hooks/useZmanimList';
 
 interface WeeklyPreviewDialogProps {
@@ -319,16 +319,16 @@ export function WeeklyPreviewDialog({
                       {/* Right: Calculated Time */}
                       <div className="text-right">
                         <div className="text-3xl font-bold font-mono">
-                          {day.result}
+                          {formatTime(day.result)}
                         </div>
                         <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
                           <span className="flex items-center gap-1">
                             <Sun className="h-3 w-3 text-amber-500" />
-                            {day.sunrise}
+                            {formatTimeShort(day.sunrise)}
                           </span>
                           <span className="flex items-center gap-1">
                             <Moon className="h-3 w-3 text-blue-500" />
-                            {day.sunset}
+                            {formatTimeShort(day.sunset)}
                           </span>
                         </div>
                       </div>

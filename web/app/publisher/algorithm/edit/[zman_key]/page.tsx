@@ -4,11 +4,9 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
 import {
   ArrowLeft,
   Save,
@@ -20,14 +18,19 @@ import {
   Loader2,
   AlertCircle,
   Wand2,
+  Copy,
+  Check,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { cn } from '@/lib/utils';
+import { cn, formatTime } from '@/lib/utils';
 import { useApi } from '@/lib/api-client';
+import { usePublisherContext } from '@/providers/PublisherContext';
 
 import { DSLEditor } from '@/components/editor/DSLEditor';
 import { FormulaBuilder } from '@/components/formula-builder/FormulaBuilder';
+import { parseFormula, type ParseResult } from '@/components/formula-builder/types';
 import { BilingualInput } from '@/components/shared/BilingualInput';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { HighlightedFormula } from '@/components/shared/HighlightedFormula';
 import { AIFormulaGenerator } from '@/components/algorithm/AIFormulaGenerator';
 import { BrowseTemplatesDialog } from '@/components/algorithm/BrowseTemplatesDialog';
@@ -50,6 +53,18 @@ const DEFAULT_LOCATION = {
   displayName: 'Brooklyn, NY',
 };
 
+// localStorage key prefix for preview location (per-publisher)
+const PREVIEW_LOCATION_KEY_PREFIX = 'zmanim-preview-location-';
+// localStorage key prefix for preview date
+const PREVIEW_DATE_KEY = 'zmanim-preview-date';
+
+interface PreviewLocation {
+  latitude: number;
+  longitude: number;
+  timezone: string;
+  displayName: string;
+}
+
 type EditorMode = 'guided' | 'advanced';
 
 export default function ZmanEditorPage() {
@@ -57,6 +72,7 @@ export default function ZmanEditorPage() {
   const params = useParams();
   const zmanKey = params.zman_key as string;
   const isNewZman = zmanKey === 'new';
+  const { selectedPublisher } = usePublisherContext();
 
   // Panel resizing
   const [leftWidth, setLeftWidth] = useState(50);
@@ -71,13 +87,38 @@ export default function ZmanEditorPage() {
   const [aiExplanation, setAiExplanation] = useState('');
   const [publisherComment, setPublisherComment] = useState('');
   const [hasChanges, setHasChanges] = useState(false);
+  const [copiedFormula, setCopiedFormula] = useState(false);
 
-  // Preview state
-  const [previewDate, setPreviewDate] = useState(() =>
-    new Date().toISOString().split('T')[0]
-  );
+  // Formula parsing state for guided mode availability
+  const [formulaParseResult, setFormulaParseResult] = useState<ParseResult | null>(null);
+  const guidedModeAvailable = formulaParseResult === null || formulaParseResult.success;
+
+  // Preview state - inherit from localStorage or use today's date
+  const [previewLocation, setPreviewLocation] = useState<PreviewLocation>(DEFAULT_LOCATION);
+  const [previewDate, setPreviewDate] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const savedDate = localStorage.getItem(PREVIEW_DATE_KEY);
+      if (savedDate) return savedDate;
+    }
+    return new Date().toISOString().split('T')[0];
+  });
   const [previewResult, setPreviewResult] = useState<PreviewResult | null>(null);
   const [showWeeklyDialog, setShowWeeklyDialog] = useState(false);
+
+  // Load location from localStorage on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined' && selectedPublisher?.id) {
+      const savedLocation = localStorage.getItem(PREVIEW_LOCATION_KEY_PREFIX + selectedPublisher.id);
+      if (savedLocation) {
+        try {
+          const parsed = JSON.parse(savedLocation) as PreviewLocation;
+          setPreviewLocation(parsed);
+        } catch {
+          // Ignore parse errors, use default
+        }
+      }
+    }
+  }, [selectedPublisher?.id]);
 
   // Dialog state
   const [showAIGenerator, setShowAIGenerator] = useState(false);
@@ -119,6 +160,23 @@ export default function ZmanEditorPage() {
     setHasChanges(changed);
   }, [hebrewName, englishName, formula, aiExplanation, publisherComment, zman]);
 
+  // Parse formula to determine if guided mode is available
+  useEffect(() => {
+    if (!formula.trim()) {
+      // Empty formula - guided mode is available
+      setFormulaParseResult(null);
+      return;
+    }
+
+    const result = parseFormula(formula);
+    setFormulaParseResult(result);
+
+    // Auto-switch to advanced if formula becomes complex while in guided mode
+    if (!result.success && mode === 'guided') {
+      setMode('advanced');
+    }
+  }, [formula, mode]);
+
   // Live preview with debounce
   useEffect(() => {
     if (!formula.trim()) {
@@ -131,7 +189,7 @@ export default function ZmanEditorPage() {
         const result = await previewFormula.mutateAsync({
           formula,
           date: previewDate,
-          location: DEFAULT_LOCATION,
+          location: previewLocation,
         });
         setPreviewResult(result);
       } catch {
@@ -140,7 +198,7 @@ export default function ZmanEditorPage() {
     }, 300);
 
     return () => clearTimeout(timeout);
-  }, [formula, previewDate]);
+  }, [formula, previewDate, previewLocation]);
 
   // Handle resize
   const handleMouseDown = useCallback(() => {
@@ -262,8 +320,9 @@ export default function ZmanEditorPage() {
     setFormula(newFormula);
   }, []);
 
-  const handleCopyToAdvanced = useCallback((newFormula: string) => {
-    setFormula(newFormula);
+  // Handle parse error from formula builder - auto-switch to advanced mode
+  const handleParseError = useCallback((error: string) => {
+    // Auto-switch to advanced mode when formula can't be parsed by guided builder
     setMode('advanced');
   }, []);
 
@@ -302,6 +361,16 @@ export default function ZmanEditorPage() {
               {zman.category}
             </Badge>
           )}
+          {/* Preview Week - Prominent Position */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowWeeklyDialog(true)}
+            disabled={!formula.trim()}
+          >
+            <Calendar className="h-4 w-4 mr-2" />
+            Preview Week
+          </Button>
         </div>
         <div className="flex items-center gap-2">
           {/* AI Assistant */}
@@ -350,12 +419,39 @@ export default function ZmanEditorPage() {
         >
           <div className="flex-1 overflow-y-auto p-6 space-y-6">
             {/* Mode Toggle */}
-            <Tabs value={mode} onValueChange={(v) => setMode(v as EditorMode)}>
+            <Tabs value={mode} onValueChange={(v) => {
+              // Only allow switching to guided if it's available
+              if (v === 'guided' && !guidedModeAvailable) return;
+              setMode(v as EditorMode);
+            }}>
               <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="guided">
-                  <Wand2 className="h-4 w-4 mr-2" />
-                  Guided Builder
-                </TabsTrigger>
+                <TooltipProvider delayDuration={0}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="w-full">
+                        <TabsTrigger
+                          value="guided"
+                          disabled={!guidedModeAvailable}
+                          className={cn(
+                            'w-full',
+                            !guidedModeAvailable && 'opacity-50 cursor-not-allowed'
+                          )}
+                        >
+                          <Wand2 className="h-4 w-4 mr-2" />
+                          Guided Builder
+                          {!guidedModeAvailable && (
+                            <AlertCircle className="h-3 w-3 ml-1 text-amber-500" />
+                          )}
+                        </TabsTrigger>
+                      </span>
+                    </TooltipTrigger>
+                    {!guidedModeAvailable && formulaParseResult?.complexityDetails && (
+                      <TooltipContent side="bottom" className="max-w-xs">
+                        <p className="text-sm">{formulaParseResult.complexityDetails}</p>
+                      </TooltipContent>
+                    )}
+                  </Tooltip>
+                </TooltipProvider>
                 <TabsTrigger value="advanced">
                   <Code2 className="h-4 w-4 mr-2" />
                   Advanced DSL
@@ -376,64 +472,29 @@ export default function ZmanEditorPage() {
               <FormulaBuilder
                 initialFormula={formula}
                 onSave={handleBuilderSave}
-                onCopyToAdvanced={handleCopyToAdvanced}
-                latitude={DEFAULT_LOCATION.latitude}
-                longitude={DEFAULT_LOCATION.longitude}
-                locationName={DEFAULT_LOCATION.displayName}
+                onParseError={handleParseError}
               />
             ) : (
-              <DSLEditor
-                value={formula}
-                onChange={setFormula}
-                onValidate={handleValidation}
-                zmanimKeys={zmanimKeys}
-              />
+              <>
+                {/* Info banner when Guided Builder is unavailable */}
+                {!guidedModeAvailable && formulaParseResult?.complexityDetails && (
+                  <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-4 py-2 mb-4">
+                    <div className="flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400">
+                      <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                      <span>
+                        <strong>Guided Builder unavailable:</strong> {formulaParseResult.complexityDetails}
+                      </span>
+                    </div>
+                  </div>
+                )}
+                <DSLEditor
+                  value={formula}
+                  onChange={setFormula}
+                  onValidate={handleValidation}
+                  zmanimKeys={zmanimKeys}
+                />
+              </>
             )}
-
-            {/* AI Explanation */}
-            <Card>
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-base">AI Explanation</CardTitle>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleGenerateExplanation}
-                    disabled={generatingExplanation || !formula.trim()}
-                  >
-                    {generatingExplanation ? (
-                      <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                    ) : (
-                      <Sparkles className="h-4 w-4 mr-1" />
-                    )}
-                    {generatingExplanation ? 'Generating...' : 'Generate'}
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <Textarea
-                  value={aiExplanation}
-                  onChange={(e) => setAiExplanation(e.target.value)}
-                  placeholder="An AI-generated explanation of this formula will appear here..."
-                  rows={4}
-                />
-              </CardContent>
-            </Card>
-
-            {/* Publisher Comment */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Publisher Comment</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Textarea
-                  value={publisherComment}
-                  onChange={(e) => setPublisherComment(e.target.value)}
-                  placeholder="Add a note for users viewing this zman (e.g., halachic source, custom minhag)..."
-                  rows={3}
-                />
-              </CardContent>
-            </Card>
           </div>
         </div>
 
@@ -471,117 +532,132 @@ export default function ZmanEditorPage() {
           role="region"
           aria-label="Formula preview and calculation"
         >
-          <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          <div className="flex-1 overflow-y-auto p-6 space-y-5">
             {/* Formula Preview */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Formula</CardTitle>
+            <Card className="border-2">
+              <CardHeader className="pb-4">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-lg font-semibold">Formula</CardTitle>
+                  {formula.trim() && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        navigator.clipboard.writeText(formula);
+                        setCopiedFormula(true);
+                        setTimeout(() => setCopiedFormula(false), 2000);
+                        toast.success('Formula copied to clipboard');
+                      }}
+                      className="h-8 px-3"
+                    >
+                      {copiedFormula ? (
+                        <Check className="h-4 w-4 text-green-600" />
+                      ) : (
+                        <Copy className="h-4 w-4" />
+                      )}
+                    </Button>
+                  )}
+                </div>
               </CardHeader>
               <CardContent>
                 {formula.trim() ? (
                   <HighlightedFormula formula={formula} />
                 ) : (
-                  <p className="text-sm text-muted-foreground italic">
+                  <p className="text-sm text-muted-foreground italic py-2">
                     Enter a formula to see the syntax highlighted preview
                   </p>
                 )}
               </CardContent>
             </Card>
 
-            {/* Calculated Result */}
-            <Card>
-              <CardHeader className="pb-3">
+            {/* Calculated Result - Hero Card */}
+            <Card className="border-2 border-primary/30 bg-gradient-to-br from-card to-primary/5">
+              <CardHeader className="pb-4">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-base">Calculated Result</CardTitle>
+                  <CardTitle className="text-lg font-semibold">Calculated Result</CardTitle>
                   {previewFormula.isPending && (
-                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                    <Loader2 className="h-5 w-5 animate-spin text-primary" />
                   )}
                 </div>
               </CardHeader>
-              <CardContent>
+              <CardContent className="pt-2">
                 {previewResult ? (
-                  <div className="animate-in fade-in-0 duration-200">
+                  <div className="animate-in fade-in-0 duration-200 text-center py-4">
                     <div
-                      className="text-4xl font-bold font-mono transition-all duration-300"
+                      className="text-5xl font-bold font-mono tracking-tight transition-all duration-300"
                       role="status"
                       aria-live="polite"
-                      aria-label={`Calculated time: ${previewResult.result}`}
+                      aria-label={`Calculated time: ${formatTime(previewResult.result)}`}
                     >
-                      {previewResult.result}
+                      {formatTime(previewResult.result)}
                     </div>
-                    <div className="text-sm text-muted-foreground mt-2">
-                      {previewDate} • {DEFAULT_LOCATION.displayName}
+                    <div className="text-sm text-muted-foreground mt-3">
+                      {previewDate} • {previewLocation.displayName}
                     </div>
                   </div>
                 ) : previewFormula.isError ? (
-                  <div className="flex items-center gap-2 text-destructive" role="alert">
-                    <AlertCircle className="h-4 w-4" aria-hidden="true" />
-                    <span className="text-sm">Error calculating result</span>
+                  <div className="flex items-center justify-center gap-2 text-destructive py-6" role="alert">
+                    <AlertCircle className="h-5 w-5" aria-hidden="true" />
+                    <span className="text-base">Error calculating result</span>
                   </div>
                 ) : (
-                  <p className="text-sm text-muted-foreground italic">
-                    Enter a valid formula to see the calculated time
-                  </p>
+                  <div className="text-center py-6">
+                    <p className="text-base text-muted-foreground italic">
+                      Enter a valid formula to see the calculated time
+                    </p>
+                  </div>
                 )}
               </CardContent>
             </Card>
 
-            {/* Calculation Breakdown */}
-            {previewResult?.breakdown && previewResult.breakdown.length > 0 && (
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base">Calculation Steps</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ol className="space-y-2">
-                    {previewResult.breakdown.map((step, i) => (
-                      <li key={i} className="text-sm flex items-start gap-2">
-                        <span className="font-medium text-muted-foreground">
-                          {step.step}.
-                        </span>
-                        <span className="flex-1">{step.description}</span>
-                        <code className="bg-muted px-2 py-0.5 rounded text-xs font-mono">
-                          {step.value}
-                        </code>
-                      </li>
-                    ))}
-                  </ol>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Test Controls */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Test Controls</CardTitle>
+            {/* AI Explanation */}
+            <Card className="border-2">
+              <CardHeader className="pb-4">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-lg font-semibold">AI Explanation</CardTitle>
+                  <Button
+                    variant="outline"
+                    size="default"
+                    onClick={handleGenerateExplanation}
+                    disabled={generatingExplanation || !formula.trim()}
+                    className="h-9 px-4"
+                  >
+                    {generatingExplanation ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <Sparkles className="h-4 w-4 mr-2" />
+                    )}
+                    {generatingExplanation ? 'Generating...' : 'Generate'}
+                  </Button>
+                </div>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="preview-date">Date</Label>
-                  <Input
-                    id="preview-date"
-                    type="date"
-                    value={previewDate}
-                    onChange={(e) => setPreviewDate(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Location</Label>
-                  <div className="text-sm text-muted-foreground">
-                    {DEFAULT_LOCATION.displayName}
-                  </div>
-                </div>
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => setShowWeeklyDialog(true)}
-                  disabled={!formula.trim()}
-                >
-                  <Calendar className="h-4 w-4 mr-2" />
-                  Preview Week
-                </Button>
+              <CardContent>
+                <Textarea
+                  value={aiExplanation}
+                  onChange={(e) => setAiExplanation(e.target.value)}
+                  placeholder="An AI-generated explanation of this formula will appear here..."
+                  rows={4}
+                  className="min-h-[100px] resize-none"
+                />
               </CardContent>
             </Card>
+
+            {/* Publisher Comment */}
+            <Card className="border-2">
+              <CardHeader className="pb-4">
+                <CardTitle className="text-lg font-semibold">Publisher Comment</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Textarea
+                  value={publisherComment}
+                  onChange={(e) => setPublisherComment(e.target.value)}
+                  placeholder="Add a note for users viewing this zman (e.g., halachic source, custom minhag)..."
+                  rows={3}
+                  className="min-h-[80px] resize-none"
+                />
+              </CardContent>
+            </Card>
+
           </div>
         </div>
       </div>
@@ -607,7 +683,7 @@ export default function ZmanEditorPage() {
         open={showWeeklyDialog}
         onOpenChange={setShowWeeklyDialog}
         formula={formula}
-        location={DEFAULT_LOCATION}
+        location={previewLocation}
         zmanName={englishName || zman?.english_name}
       />
     </div>

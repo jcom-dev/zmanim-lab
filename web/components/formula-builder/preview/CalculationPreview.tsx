@@ -3,7 +3,7 @@ import { API_BASE } from '@/lib/api';
 
 import { useEffect, useState, useMemo } from 'react';
 import { Loader2 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, formatTime } from '@/lib/utils';
 
 interface CalculationPreviewProps {
   formula: string;
@@ -101,51 +101,19 @@ export function CalculationPreview({
     };
   }, [formula, isValid, latitude, longitude, dateString]);
 
-  const formatTime = (timeValue: string): string => {
-    if (!timeValue) return timeValue;
-
-    // If it's already a simple time string (HH:MM:SS or HH:MM), format it nicely
-    const timeOnlyMatch = timeValue.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
-    if (timeOnlyMatch) {
-      const hours = parseInt(timeOnlyMatch[1], 10);
-      const minutes = timeOnlyMatch[2];
-      const seconds = timeOnlyMatch[3] || '00';
-      const period = hours >= 12 ? 'PM' : 'AM';
-      const displayHour = hours % 12 || 12;
-      return `${displayHour}:${minutes}:${seconds} ${period}`;
-    }
-
-    // Try parsing as ISO date/time
-    try {
-      const d = new Date(timeValue);
-      if (!isNaN(d.getTime())) {
-        return d.toLocaleTimeString('en-US', {
-          hour: 'numeric',
-          minute: '2-digit',
-          second: '2-digit',
-          hour12: true,
-        });
-      }
-    } catch {
-      // Fall through to return original
-    }
-
-    return timeValue;
-  };
-
   return (
-    <div className={cn('rounded-lg border bg-card p-4 text-center', className)}>
-      <div className="text-xs text-muted-foreground mb-2">Calculated Time</div>
+    <div className={cn('rounded-xl border-2 border-primary/20 bg-card p-5 text-center', className)}>
+      <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">Calculated Time</div>
       {loading ? (
-        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground mx-auto" />
+        <Loader2 className="h-6 w-6 animate-spin text-primary mx-auto my-2" />
       ) : error ? (
-        <span className="text-sm text-destructive">{error}</span>
+        <span className="text-sm text-destructive block py-2">{error}</span>
       ) : result ? (
-        <span className="text-3xl font-bold font-mono text-primary">
+        <span className="text-4xl font-bold font-mono text-primary tracking-tight">
           {result.formatted}
         </span>
       ) : (
-        <span className="text-2xl font-mono text-muted-foreground">--:--</span>
+        <span className="text-3xl font-mono text-muted-foreground/50">--:--</span>
       )}
     </div>
   );

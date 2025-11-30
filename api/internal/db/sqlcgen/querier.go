@@ -58,6 +58,10 @@ type Querier interface {
 	GetAlgorithmByID(ctx context.Context, arg GetAlgorithmByIDParams) (GetAlgorithmByIDRow, error)
 	// Algorithm versions --
 	GetAlgorithmVersions(ctx context.Context, publisherID string) ([]GetAlgorithmVersionsRow, error)
+	// ============================================
+	// ASTRONOMICAL PRIMITIVES QUERIES
+	// ============================================
+	GetAllAstronomicalPrimitives(ctx context.Context) ([]AstronomicalPrimitive, error)
 	// Master Zmanim Registry SQL Queries
 	// SQLc will generate type-safe Go code from these queries
 	// ============================================
@@ -68,6 +72,10 @@ type Querier interface {
 	// TAG QUERIES
 	// ============================================
 	GetAllTags(ctx context.Context) ([]ZmanTag, error)
+	GetAstronomicalPrimitiveByName(ctx context.Context, variableName string) (AstronomicalPrimitive, error)
+	GetAstronomicalPrimitivesByCategory(ctx context.Context, category string) ([]AstronomicalPrimitive, error)
+	// Returns primitives with category for grouping in UI
+	GetAstronomicalPrimitivesGrouped(ctx context.Context) ([]AstronomicalPrimitive, error)
 	GetCitiesCoveredCount(ctx context.Context, publisherID string) (int32, error)
 	GetCitiesForCoverage(ctx context.Context, arg GetCitiesForCoverageParams) ([]GetCitiesForCoverageRow, error)
 	GetCityByID(ctx context.Context, id string) (GetCityByIDRow, error)

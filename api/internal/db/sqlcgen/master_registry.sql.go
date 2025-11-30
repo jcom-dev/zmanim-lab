@@ -19,7 +19,7 @@ INSERT INTO master_zmanim_registry (
     canonical_english_name,
     time_category,
     default_formula_dsl,
-    is_fundamental,
+    is_core,
     sort_order,
     description
 )
@@ -35,7 +35,7 @@ SELECT
 FROM zman_registry_requests zrr
 WHERE zrr.id = $1
 RETURNING id, zman_key, canonical_hebrew_name, canonical_english_name, time_category,
-    default_formula_dsl, is_fundamental, sort_order, created_at, updated_at
+    default_formula_dsl, is_core, sort_order, created_at, updated_at
 `
 
 type AddMasterZmanFromRequestRow struct {
@@ -45,7 +45,7 @@ type AddMasterZmanFromRequestRow struct {
 	CanonicalEnglishName string    `json:"canonical_english_name"`
 	TimeCategory         string    `json:"time_category"`
 	DefaultFormulaDsl    string    `json:"default_formula_dsl"`
-	IsFundamental        *bool     `json:"is_fundamental"`
+	IsCore               *bool     `json:"is_core"`
 	SortOrder            *int32    `json:"sort_order"`
 	CreatedAt            time.Time `json:"created_at"`
 	UpdatedAt            time.Time `json:"updated_at"`
@@ -61,7 +61,7 @@ func (q *Queries) AddMasterZmanFromRequest(ctx context.Context, id string) (AddM
 		&i.CanonicalEnglishName,
 		&i.TimeCategory,
 		&i.DefaultFormulaDsl,
-		&i.IsFundamental,
+		&i.IsCore,
 		&i.SortOrder,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -267,13 +267,60 @@ func (q *Queries) CreateZmanVersion(ctx context.Context, arg CreateZmanVersionPa
 	return i, err
 }
 
+const getAllAstronomicalPrimitives = `-- name: GetAllAstronomicalPrimitives :many
+
+SELECT
+    id, variable_name, display_name, description, formula_dsl,
+    category, calculation_type, solar_angle, is_dawn, edge_type,
+    sort_order, created_at, updated_at
+FROM astronomical_primitives
+ORDER BY sort_order, variable_name
+`
+
+// ============================================
+// ASTRONOMICAL PRIMITIVES QUERIES
+// ============================================
+func (q *Queries) GetAllAstronomicalPrimitives(ctx context.Context) ([]AstronomicalPrimitive, error) {
+	rows, err := q.db.Query(ctx, getAllAstronomicalPrimitives)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AstronomicalPrimitive{}
+	for rows.Next() {
+		var i AstronomicalPrimitive
+		if err := rows.Scan(
+			&i.ID,
+			&i.VariableName,
+			&i.DisplayName,
+			&i.Description,
+			&i.FormulaDsl,
+			&i.Category,
+			&i.CalculationType,
+			&i.SolarAngle,
+			&i.IsDawn,
+			&i.EdgeType,
+			&i.SortOrder,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getAllMasterZmanim = `-- name: GetAllMasterZmanim :many
 
 
 SELECT
     id, zman_key, canonical_hebrew_name, canonical_english_name,
     transliteration, description, halachic_notes, halachic_source,
-    time_category, default_formula_dsl, is_fundamental, sort_order,
+    time_category, default_formula_dsl, is_core, sort_order,
     created_at, updated_at
 FROM master_zmanim_registry
 ORDER BY time_category, sort_order, canonical_hebrew_name
@@ -290,7 +337,7 @@ type GetAllMasterZmanimRow struct {
 	HalachicSource       *string   `json:"halachic_source"`
 	TimeCategory         string    `json:"time_category"`
 	DefaultFormulaDsl    string    `json:"default_formula_dsl"`
-	IsFundamental        *bool     `json:"is_fundamental"`
+	IsCore               *bool     `json:"is_core"`
 	SortOrder            *int32    `json:"sort_order"`
 	CreatedAt            time.Time `json:"created_at"`
 	UpdatedAt            time.Time `json:"updated_at"`
@@ -321,7 +368,7 @@ func (q *Queries) GetAllMasterZmanim(ctx context.Context) ([]GetAllMasterZmanimR
 			&i.HalachicSource,
 			&i.TimeCategory,
 			&i.DefaultFormulaDsl,
-			&i.IsFundamental,
+			&i.IsCore,
 			&i.SortOrder,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -367,6 +414,134 @@ func (q *Queries) GetAllTags(ctx context.Context) ([]ZmanTag, error) {
 			&i.Color,
 			&i.SortOrder,
 			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getAstronomicalPrimitiveByName = `-- name: GetAstronomicalPrimitiveByName :one
+SELECT
+    id, variable_name, display_name, description, formula_dsl,
+    category, calculation_type, solar_angle, is_dawn, edge_type,
+    sort_order, created_at, updated_at
+FROM astronomical_primitives
+WHERE variable_name = $1
+`
+
+func (q *Queries) GetAstronomicalPrimitiveByName(ctx context.Context, variableName string) (AstronomicalPrimitive, error) {
+	row := q.db.QueryRow(ctx, getAstronomicalPrimitiveByName, variableName)
+	var i AstronomicalPrimitive
+	err := row.Scan(
+		&i.ID,
+		&i.VariableName,
+		&i.DisplayName,
+		&i.Description,
+		&i.FormulaDsl,
+		&i.Category,
+		&i.CalculationType,
+		&i.SolarAngle,
+		&i.IsDawn,
+		&i.EdgeType,
+		&i.SortOrder,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getAstronomicalPrimitivesByCategory = `-- name: GetAstronomicalPrimitivesByCategory :many
+SELECT
+    id, variable_name, display_name, description, formula_dsl,
+    category, calculation_type, solar_angle, is_dawn, edge_type,
+    sort_order, created_at, updated_at
+FROM astronomical_primitives
+WHERE category = $1
+ORDER BY sort_order, variable_name
+`
+
+func (q *Queries) GetAstronomicalPrimitivesByCategory(ctx context.Context, category string) ([]AstronomicalPrimitive, error) {
+	rows, err := q.db.Query(ctx, getAstronomicalPrimitivesByCategory, category)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AstronomicalPrimitive{}
+	for rows.Next() {
+		var i AstronomicalPrimitive
+		if err := rows.Scan(
+			&i.ID,
+			&i.VariableName,
+			&i.DisplayName,
+			&i.Description,
+			&i.FormulaDsl,
+			&i.Category,
+			&i.CalculationType,
+			&i.SolarAngle,
+			&i.IsDawn,
+			&i.EdgeType,
+			&i.SortOrder,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getAstronomicalPrimitivesGrouped = `-- name: GetAstronomicalPrimitivesGrouped :many
+SELECT
+    id, variable_name, display_name, description, formula_dsl,
+    category, calculation_type, solar_angle, is_dawn, edge_type,
+    sort_order, created_at, updated_at
+FROM astronomical_primitives
+ORDER BY
+    CASE category
+        WHEN 'horizon' THEN 1
+        WHEN 'civil_twilight' THEN 2
+        WHEN 'nautical_twilight' THEN 3
+        WHEN 'astronomical_twilight' THEN 4
+        WHEN 'solar_position' THEN 5
+        ELSE 6
+    END,
+    sort_order,
+    variable_name
+`
+
+// Returns primitives with category for grouping in UI
+func (q *Queries) GetAstronomicalPrimitivesGrouped(ctx context.Context) ([]AstronomicalPrimitive, error) {
+	rows, err := q.db.Query(ctx, getAstronomicalPrimitivesGrouped)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AstronomicalPrimitive{}
+	for rows.Next() {
+		var i AstronomicalPrimitive
+		if err := rows.Scan(
+			&i.ID,
+			&i.VariableName,
+			&i.DisplayName,
+			&i.Description,
+			&i.FormulaDsl,
+			&i.Category,
+			&i.CalculationType,
+			&i.SolarAngle,
+			&i.IsDawn,
+			&i.EdgeType,
+			&i.SortOrder,
+			&i.CreatedAt,
+			&i.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -445,7 +620,7 @@ const getMasterZmanByID = `-- name: GetMasterZmanByID :one
 SELECT
     id, zman_key, canonical_hebrew_name, canonical_english_name,
     transliteration, description, halachic_notes, halachic_source,
-    time_category, default_formula_dsl, is_fundamental, sort_order,
+    time_category, default_formula_dsl, is_core, sort_order,
     created_at, updated_at
 FROM master_zmanim_registry
 WHERE id = $1
@@ -462,7 +637,7 @@ type GetMasterZmanByIDRow struct {
 	HalachicSource       *string   `json:"halachic_source"`
 	TimeCategory         string    `json:"time_category"`
 	DefaultFormulaDsl    string    `json:"default_formula_dsl"`
-	IsFundamental        *bool     `json:"is_fundamental"`
+	IsCore               *bool     `json:"is_core"`
 	SortOrder            *int32    `json:"sort_order"`
 	CreatedAt            time.Time `json:"created_at"`
 	UpdatedAt            time.Time `json:"updated_at"`
@@ -482,7 +657,7 @@ func (q *Queries) GetMasterZmanByID(ctx context.Context, id string) (GetMasterZm
 		&i.HalachicSource,
 		&i.TimeCategory,
 		&i.DefaultFormulaDsl,
-		&i.IsFundamental,
+		&i.IsCore,
 		&i.SortOrder,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -494,7 +669,7 @@ const getMasterZmanByKey = `-- name: GetMasterZmanByKey :one
 SELECT
     id, zman_key, canonical_hebrew_name, canonical_english_name,
     transliteration, description, halachic_notes, halachic_source,
-    time_category, default_formula_dsl, is_fundamental, sort_order,
+    time_category, default_formula_dsl, is_core, sort_order,
     created_at, updated_at
 FROM master_zmanim_registry
 WHERE zman_key = $1
@@ -511,7 +686,7 @@ type GetMasterZmanByKeyRow struct {
 	HalachicSource       *string   `json:"halachic_source"`
 	TimeCategory         string    `json:"time_category"`
 	DefaultFormulaDsl    string    `json:"default_formula_dsl"`
-	IsFundamental        *bool     `json:"is_fundamental"`
+	IsCore               *bool     `json:"is_core"`
 	SortOrder            *int32    `json:"sort_order"`
 	CreatedAt            time.Time `json:"created_at"`
 	UpdatedAt            time.Time `json:"updated_at"`
@@ -531,7 +706,7 @@ func (q *Queries) GetMasterZmanByKey(ctx context.Context, zmanKey string) (GetMa
 		&i.HalachicSource,
 		&i.TimeCategory,
 		&i.DefaultFormulaDsl,
-		&i.IsFundamental,
+		&i.IsCore,
 		&i.SortOrder,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -543,7 +718,7 @@ const getMasterZmanimByCategory = `-- name: GetMasterZmanimByCategory :many
 SELECT
     id, zman_key, canonical_hebrew_name, canonical_english_name,
     transliteration, description, halachic_notes, halachic_source,
-    time_category, default_formula_dsl, is_fundamental, sort_order,
+    time_category, default_formula_dsl, is_core, sort_order,
     created_at, updated_at
 FROM master_zmanim_registry
 WHERE time_category = $1
@@ -561,7 +736,7 @@ type GetMasterZmanimByCategoryRow struct {
 	HalachicSource       *string   `json:"halachic_source"`
 	TimeCategory         string    `json:"time_category"`
 	DefaultFormulaDsl    string    `json:"default_formula_dsl"`
-	IsFundamental        *bool     `json:"is_fundamental"`
+	IsCore               *bool     `json:"is_core"`
 	SortOrder            *int32    `json:"sort_order"`
 	CreatedAt            time.Time `json:"created_at"`
 	UpdatedAt            time.Time `json:"updated_at"`
@@ -587,7 +762,7 @@ func (q *Queries) GetMasterZmanimByCategory(ctx context.Context, timeCategory st
 			&i.HalachicSource,
 			&i.TimeCategory,
 			&i.DefaultFormulaDsl,
-			&i.IsFundamental,
+			&i.IsCore,
 			&i.SortOrder,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -606,7 +781,7 @@ const getMasterZmanimByTag = `-- name: GetMasterZmanimByTag :many
 SELECT
     mr.id, mr.zman_key, mr.canonical_hebrew_name, mr.canonical_english_name,
     mr.transliteration, mr.description, mr.halachic_notes, mr.halachic_source,
-    mr.time_category, mr.default_formula_dsl, mr.is_fundamental, mr.sort_order,
+    mr.time_category, mr.default_formula_dsl, mr.is_core, mr.sort_order,
     mr.created_at, mr.updated_at
 FROM master_zmanim_registry mr
 JOIN master_zman_tags mzt ON mr.id = mzt.master_zman_id
@@ -626,7 +801,7 @@ type GetMasterZmanimByTagRow struct {
 	HalachicSource       *string   `json:"halachic_source"`
 	TimeCategory         string    `json:"time_category"`
 	DefaultFormulaDsl    string    `json:"default_formula_dsl"`
-	IsFundamental        *bool     `json:"is_fundamental"`
+	IsCore               *bool     `json:"is_core"`
 	SortOrder            *int32    `json:"sort_order"`
 	CreatedAt            time.Time `json:"created_at"`
 	UpdatedAt            time.Time `json:"updated_at"`
@@ -652,7 +827,7 @@ func (q *Queries) GetMasterZmanimByTag(ctx context.Context, name string) ([]GetM
 			&i.HalachicSource,
 			&i.TimeCategory,
 			&i.DefaultFormulaDsl,
-			&i.IsFundamental,
+			&i.IsCore,
 			&i.SortOrder,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -678,7 +853,7 @@ SELECT
             'canonical_english_name', canonical_english_name,
             'transliteration', transliteration,
             'default_formula_dsl', default_formula_dsl,
-            'is_fundamental', is_fundamental,
+            'is_core', is_core,
             'sort_order', sort_order
         ) ORDER BY sort_order, canonical_hebrew_name
     ) as zmanim
@@ -748,7 +923,7 @@ SELECT
     pz.master_zman_id,
     mr.description AS zman_description,
     mr.halachic_notes,
-    mr.is_fundamental
+    mr.is_core
 FROM publisher_zmanim pz
 LEFT JOIN master_zmanim_registry mr ON pz.master_zman_id = mr.id
 WHERE pz.publisher_id = $1
@@ -786,7 +961,7 @@ type GetPublisherZmanWithRegistryRow struct {
 	MasterZmanID      pgtype.UUID `json:"master_zman_id"`
 	ZmanDescription   *string     `json:"zman_description"`
 	HalachicNotes     *string     `json:"halachic_notes"`
-	IsFundamental     *bool       `json:"is_fundamental"`
+	IsCore            *bool       `json:"is_core"`
 }
 
 func (q *Queries) GetPublisherZmanWithRegistry(ctx context.Context, arg GetPublisherZmanWithRegistryParams) (GetPublisherZmanWithRegistryRow, error) {
@@ -817,7 +992,7 @@ func (q *Queries) GetPublisherZmanWithRegistry(ctx context.Context, arg GetPubli
 		&i.MasterZmanID,
 		&i.ZmanDescription,
 		&i.HalachicNotes,
-		&i.IsFundamental,
+		&i.IsCore,
 	)
 	return i, err
 }
@@ -849,7 +1024,7 @@ SELECT
     pz.master_zman_id,
     mr.description AS zman_description,
     mr.halachic_notes,
-    mr.is_fundamental
+    mr.is_core
 FROM publisher_zmanim pz
 LEFT JOIN master_zmanim_registry mr ON pz.master_zman_id = mr.id
 WHERE pz.publisher_id = $1
@@ -895,7 +1070,7 @@ type GetPublisherZmanimWithRegistryRow struct {
 	MasterZmanID      pgtype.UUID `json:"master_zman_id"`
 	ZmanDescription   *string     `json:"zman_description"`
 	HalachicNotes     *string     `json:"halachic_notes"`
-	IsFundamental     *bool       `json:"is_fundamental"`
+	IsCore            *bool       `json:"is_core"`
 }
 
 // ============================================
@@ -935,7 +1110,7 @@ func (q *Queries) GetPublisherZmanimWithRegistry(ctx context.Context, publisherI
 			&i.MasterZmanID,
 			&i.ZmanDescription,
 			&i.HalachicNotes,
-			&i.IsFundamental,
+			&i.IsCore,
 		); err != nil {
 			return nil, err
 		}
@@ -1434,7 +1609,7 @@ const searchMasterZmanim = `-- name: SearchMasterZmanim :many
 SELECT
     id, zman_key, canonical_hebrew_name, canonical_english_name,
     transliteration, description, halachic_notes, halachic_source,
-    time_category, default_formula_dsl, is_fundamental, sort_order,
+    time_category, default_formula_dsl, is_core, sort_order,
     created_at, updated_at
 FROM master_zmanim_registry
 WHERE
@@ -1463,7 +1638,7 @@ type SearchMasterZmanimRow struct {
 	HalachicSource       *string   `json:"halachic_source"`
 	TimeCategory         string    `json:"time_category"`
 	DefaultFormulaDsl    string    `json:"default_formula_dsl"`
-	IsFundamental        *bool     `json:"is_fundamental"`
+	IsCore               *bool     `json:"is_core"`
 	SortOrder            *int32    `json:"sort_order"`
 	CreatedAt            time.Time `json:"created_at"`
 	UpdatedAt            time.Time `json:"updated_at"`
@@ -1489,7 +1664,7 @@ func (q *Queries) SearchMasterZmanim(ctx context.Context, dollar_1 *string) ([]S
 			&i.HalachicSource,
 			&i.TimeCategory,
 			&i.DefaultFormulaDsl,
-			&i.IsFundamental,
+			&i.IsCore,
 			&i.SortOrder,
 			&i.CreatedAt,
 			&i.UpdatedAt,

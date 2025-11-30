@@ -4,7 +4,7 @@ import { ReactNode } from 'react';
 import { UserButton } from '@clerk/nextjs';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Users, BarChart3, Settings, UserPlus } from 'lucide-react';
+import { Home, Users, BarChart3, Settings, UserPlus, Sun, Clock } from 'lucide-react';
 
 interface AdminLayoutProps {
   children: ReactNode;
@@ -17,6 +17,8 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     { href: '/admin', label: 'Overview', icon: Home, exact: true },
     { href: '/admin/publishers', label: 'Publishers', icon: Users },
     { href: '/admin/publishers/new', label: 'Create Publisher', icon: UserPlus },
+    { href: '/admin/zmanim/primitives', label: 'Primitives', icon: Sun },
+    { href: '/admin/zmanim/registry', label: 'Zmanim Registry', icon: Clock },
     { href: '/admin/dashboard', label: 'Dashboard', icon: BarChart3 },
     { href: '/admin/settings', label: 'Settings', icon: Settings },
   ];

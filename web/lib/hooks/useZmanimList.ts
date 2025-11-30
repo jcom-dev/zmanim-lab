@@ -40,6 +40,7 @@ export interface PublisherZman {
   is_visible: boolean;
   is_published: boolean;
   is_custom: boolean;
+  is_event_zman: boolean;
   category: 'essential' | 'optional' | 'custom';
   dependencies: string[];
   sort_order: number;
@@ -344,7 +345,7 @@ export interface MasterZman {
   halachic_source: string | null;
   time_category: 'dawn' | 'sunrise' | 'morning' | 'midday' | 'afternoon' | 'sunset' | 'nightfall' | 'midnight';
   default_formula_dsl: string;
-  is_fundamental: boolean;
+  is_core: boolean;
   sort_order: number;
   tags: ZmanTag[];
   day_types?: DayType[];
@@ -786,3 +787,47 @@ export function usePermanentDeleteZman() {
     },
   });
 }
+
+// =============================================================================
+// Astronomical Primitives Types & Hooks
+// =============================================================================
+
+export interface AstronomicalPrimitive {
+  id: string;
+  variable_name: string;
+  display_name: string;
+  description: string | null;
+  formula_dsl: string;
+  category: string;
+  calculation_type: 'horizon' | 'solar_angle' | 'transit';
+  solar_angle: number | null;
+  is_dawn: boolean | null;
+  edge_type: string;
+  sort_order: number;
+}
+
+export interface AstronomicalPrimitivesGrouped {
+  category: string;
+  display_name: string;
+  primitives: AstronomicalPrimitive[];
+}
+
+/**
+ * Hook: Get all astronomical primitives (flat list)
+ */
+export const useAstronomicalPrimitives = () =>
+  useGlobalQuery<AstronomicalPrimitive[]>('astronomical-primitives', '/registry/primitives', {
+    staleTime: 1000 * 60 * 60, // 1 hour - primitives are static
+  });
+
+/**
+ * Hook: Get astronomical primitives grouped by category
+ */
+export const useAstronomicalPrimitivesGrouped = () =>
+  useGlobalQuery<AstronomicalPrimitivesGrouped[]>(
+    'astronomical-primitives-grouped',
+    '/registry/primitives/grouped',
+    {
+      staleTime: 1000 * 60 * 60, // 1 hour - primitives are static
+    }
+  );

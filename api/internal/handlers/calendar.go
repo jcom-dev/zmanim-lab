@@ -554,7 +554,7 @@ func (h *Handlers) GetMasterZmanimByEvent(w http.ResponseWriter, r *http.Request
 		rows, err := h.db.Pool.Query(ctx, `
 			SELECT DISTINCT mr.id, mr.zman_key, mr.canonical_hebrew_name, mr.canonical_english_name,
 				mr.transliteration, mr.description, mr.halachic_notes, mr.halachic_source,
-				mr.time_category, mr.default_formula_dsl, mr.is_fundamental, mr.sort_order,
+				mr.time_category, mr.default_formula_dsl, mr.is_core, mr.sort_order,
 				mr.created_at, mr.updated_at
 			FROM master_zmanim_registry mr
 			JOIN master_zman_events mze ON mr.id = mze.master_zman_id
@@ -575,7 +575,7 @@ func (h *Handlers) GetMasterZmanimByEvent(w http.ResponseWriter, r *http.Request
 			if err := rows.Scan(
 				&z.ID, &z.ZmanKey, &z.CanonicalHebrewName, &z.CanonicalEnglishName,
 				&z.Transliteration, &z.Description, &z.HalachicNotes, &z.HalachicSource,
-				&z.TimeCategory, &z.DefaultFormulaDSL, &z.IsFundamental, &z.SortOrder,
+				&z.TimeCategory, &z.DefaultFormulaDSL, &z.IsCore, &z.SortOrder,
 				&z.CreatedAt, &z.UpdatedAt,
 			); err != nil {
 				continue
@@ -587,7 +587,7 @@ func (h *Handlers) GetMasterZmanimByEvent(w http.ResponseWriter, r *http.Request
 		rows, err := h.db.Pool.Query(ctx, `
 			SELECT DISTINCT mr.id, mr.zman_key, mr.canonical_hebrew_name, mr.canonical_english_name,
 				mr.transliteration, mr.description, mr.halachic_notes, mr.halachic_source,
-				mr.time_category, mr.default_formula_dsl, mr.is_fundamental, mr.sort_order,
+				mr.time_category, mr.default_formula_dsl, mr.is_core, mr.sort_order,
 				mr.created_at, mr.updated_at
 			FROM master_zmanim_registry mr
 			JOIN master_zman_events mze ON mr.id = mze.master_zman_id
@@ -606,7 +606,7 @@ func (h *Handlers) GetMasterZmanimByEvent(w http.ResponseWriter, r *http.Request
 			if err := rows.Scan(
 				&z.ID, &z.ZmanKey, &z.CanonicalHebrewName, &z.CanonicalEnglishName,
 				&z.Transliteration, &z.Description, &z.HalachicNotes, &z.HalachicSource,
-				&z.TimeCategory, &z.DefaultFormulaDSL, &z.IsFundamental, &z.SortOrder,
+				&z.TimeCategory, &z.DefaultFormulaDSL, &z.IsCore, &z.SortOrder,
 				&z.CreatedAt, &z.UpdatedAt,
 			); err != nil {
 				continue

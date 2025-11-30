@@ -9,7 +9,7 @@
 SELECT
     id, zman_key, canonical_hebrew_name, canonical_english_name,
     transliteration, description, halachic_notes, halachic_source,
-    time_category, default_formula_dsl, is_fundamental, sort_order,
+    time_category, default_formula_dsl, is_core, sort_order,
     created_at, updated_at
 FROM master_zmanim_registry
 ORDER BY time_category, sort_order, canonical_hebrew_name;
@@ -18,7 +18,7 @@ ORDER BY time_category, sort_order, canonical_hebrew_name;
 SELECT
     id, zman_key, canonical_hebrew_name, canonical_english_name,
     transliteration, description, halachic_notes, halachic_source,
-    time_category, default_formula_dsl, is_fundamental, sort_order,
+    time_category, default_formula_dsl, is_core, sort_order,
     created_at, updated_at
 FROM master_zmanim_registry
 WHERE time_category = $1
@@ -28,7 +28,7 @@ ORDER BY sort_order, canonical_hebrew_name;
 SELECT
     id, zman_key, canonical_hebrew_name, canonical_english_name,
     transliteration, description, halachic_notes, halachic_source,
-    time_category, default_formula_dsl, is_fundamental, sort_order,
+    time_category, default_formula_dsl, is_core, sort_order,
     created_at, updated_at
 FROM master_zmanim_registry
 WHERE zman_key = $1;
@@ -37,7 +37,7 @@ WHERE zman_key = $1;
 SELECT
     id, zman_key, canonical_hebrew_name, canonical_english_name,
     transliteration, description, halachic_notes, halachic_source,
-    time_category, default_formula_dsl, is_fundamental, sort_order,
+    time_category, default_formula_dsl, is_core, sort_order,
     created_at, updated_at
 FROM master_zmanim_registry
 WHERE id = $1;
@@ -46,7 +46,7 @@ WHERE id = $1;
 SELECT
     id, zman_key, canonical_hebrew_name, canonical_english_name,
     transliteration, description, halachic_notes, halachic_source,
-    time_category, default_formula_dsl, is_fundamental, sort_order,
+    time_category, default_formula_dsl, is_core, sort_order,
     created_at, updated_at
 FROM master_zmanim_registry
 WHERE
@@ -74,7 +74,7 @@ SELECT
             'canonical_english_name', canonical_english_name,
             'transliteration', transliteration,
             'default_formula_dsl', default_formula_dsl,
-            'is_fundamental', is_fundamental,
+            'is_core', is_core,
             'sort_order', sort_order
         ) ORDER BY sort_order, canonical_hebrew_name
     ) as zmanim
@@ -131,7 +131,7 @@ ORDER BY t.tag_type, t.sort_order;
 SELECT
     mr.id, mr.zman_key, mr.canonical_hebrew_name, mr.canonical_english_name,
     mr.transliteration, mr.description, mr.halachic_notes, mr.halachic_source,
-    mr.time_category, mr.default_formula_dsl, mr.is_fundamental, mr.sort_order,
+    mr.time_category, mr.default_formula_dsl, mr.is_core, mr.sort_order,
     mr.created_at, mr.updated_at
 FROM master_zmanim_registry mr
 JOIN master_zman_tags mzt ON mr.id = mzt.master_zman_id
@@ -169,7 +169,7 @@ SELECT
     pz.master_zman_id,
     mr.description AS zman_description,
     mr.halachic_notes,
-    mr.is_fundamental
+    mr.is_core
 FROM publisher_zmanim pz
 LEFT JOIN master_zmanim_registry mr ON pz.master_zman_id = mr.id
 WHERE pz.publisher_id = $1
@@ -215,7 +215,7 @@ SELECT
     pz.master_zman_id,
     mr.description AS zman_description,
     mr.halachic_notes,
-    mr.is_fundamental
+    mr.is_core
 FROM publisher_zmanim pz
 LEFT JOIN master_zmanim_registry mr ON pz.master_zman_id = mr.id
 WHERE pz.publisher_id = $1
@@ -445,7 +445,7 @@ INSERT INTO master_zmanim_registry (
     canonical_english_name,
     time_category,
     default_formula_dsl,
-    is_fundamental,
+    is_core,
     sort_order,
     description
 )
@@ -461,4 +461,52 @@ SELECT
 FROM zman_registry_requests zrr
 WHERE zrr.id = $1
 RETURNING id, zman_key, canonical_hebrew_name, canonical_english_name, time_category,
-    default_formula_dsl, is_fundamental, sort_order, created_at, updated_at;
+    default_formula_dsl, is_core, sort_order, created_at, updated_at;
+
+-- ============================================
+-- ASTRONOMICAL PRIMITIVES QUERIES
+-- ============================================
+
+-- name: GetAllAstronomicalPrimitives :many
+SELECT
+    id, variable_name, display_name, description, formula_dsl,
+    category, calculation_type, solar_angle, is_dawn, edge_type,
+    sort_order, created_at, updated_at
+FROM astronomical_primitives
+ORDER BY sort_order, variable_name;
+
+-- name: GetAstronomicalPrimitivesByCategory :many
+SELECT
+    id, variable_name, display_name, description, formula_dsl,
+    category, calculation_type, solar_angle, is_dawn, edge_type,
+    sort_order, created_at, updated_at
+FROM astronomical_primitives
+WHERE category = $1
+ORDER BY sort_order, variable_name;
+
+-- name: GetAstronomicalPrimitiveByName :one
+SELECT
+    id, variable_name, display_name, description, formula_dsl,
+    category, calculation_type, solar_angle, is_dawn, edge_type,
+    sort_order, created_at, updated_at
+FROM astronomical_primitives
+WHERE variable_name = $1;
+
+-- name: GetAstronomicalPrimitivesGrouped :many
+-- Returns primitives with category for grouping in UI
+SELECT
+    id, variable_name, display_name, description, formula_dsl,
+    category, calculation_type, solar_angle, is_dawn, edge_type,
+    sort_order, created_at, updated_at
+FROM astronomical_primitives
+ORDER BY
+    CASE category
+        WHEN 'horizon' THEN 1
+        WHEN 'civil_twilight' THEN 2
+        WHEN 'nautical_twilight' THEN 3
+        WHEN 'astronomical_twilight' THEN 4
+        WHEN 'solar_position' THEN 5
+        ELSE 6
+    END,
+    sort_order,
+    variable_name;

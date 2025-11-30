@@ -77,6 +77,29 @@ type Algorithm struct {
 	ForkCount *int32 `json:"fork_count"`
 }
 
+// Canonical registry of astronomical times that can be referenced in DSL formulas. These are pure astronomical calculations with no halachic interpretation.
+type AstronomicalPrimitive struct {
+	ID string `json:"id"`
+	// The unique identifier used in DSL formulas (e.g., sunrise, nautical_dawn). Must be snake_case.
+	VariableName string  `json:"variable_name"`
+	DisplayName  string  `json:"display_name"`
+	Description  *string `json:"description"`
+	// The DSL formula that calculates this time. Base primitives use their own name, derived use solar() function.
+	FormulaDsl string `json:"formula_dsl"`
+	Category   string `json:"category"`
+	// How to compute: horizon (0° crossing), solar_angle (degrees below horizon), transit (noon/midnight)
+	CalculationType string `json:"calculation_type"`
+	// Degrees below horizon for solar_angle calculations (6° civil, 12° nautical, 18° astronomical)
+	SolarAngle pgtype.Numeric `json:"solar_angle"`
+	// True for morning events (dawn/sunrise), false for evening events (dusk/sunset), NULL for position events (noon/midnight)
+	IsDawn *bool `json:"is_dawn"`
+	// Which part of the sun: center (geometric), top_edge (visible sunrise/sunset), bottom_edge
+	EdgeType  *string   `json:"edge_type"`
+	SortOrder *int32    `json:"sort_order"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
 type AuditLog struct {
 	ID         string             `json:"id"`
 	EntityType string             `json:"entity_type"`
@@ -134,7 +157,7 @@ type CoverageArea struct {
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
 
-// Types of days for which zmanim can be configured (Shabbos, Yom Tov, Taanis, etc.)
+// DEPRECATED: Use jewish_events instead. This table will be removed in a future migration.
 type DayType struct {
 	ID                 string  `json:"id"`
 	Name               string  `json:"name"`
@@ -193,13 +216,44 @@ type GeographicRegion struct {
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
 
-// Default day type applicability for master registry zmanim
+// Canonical list of Jewish events (Shabbos, Yom Tov, fasts, etc.) with Israel/Diaspora duration differences
+type JewishEvent struct {
+	ID          string `json:"id"`
+	Code        string `json:"code"`
+	NameHebrew  string `json:"name_hebrew"`
+	NameEnglish string `json:"name_english"`
+	// Type of event: weekly (Shabbos), yom_tov, fast, or informational (no linked zmanim)
+	EventType string `json:"event_type"`
+	// Number of days this event lasts in Israel
+	DurationDaysIsrael *int32 `json:"duration_days_israel"`
+	// Number of days this event lasts in the Diaspora
+	DurationDaysDiaspora *int32 `json:"duration_days_diaspora"`
+	// For fasts: dawn (regular fasts) or sunset (Yom Kippur, Tisha B'Av)
+	FastStartType   *string   `json:"fast_start_type"`
+	ParentEventCode *string   `json:"parent_event_code"`
+	SortOrder       *int32    `json:"sort_order"`
+	CreatedAt       time.Time `json:"created_at"`
+}
+
+// DEPRECATED: Use master_zman_events instead. This table will be removed in a future migration.
 type MasterZmanDayType struct {
 	MasterZmanID string `json:"master_zman_id"`
 	DayTypeID    string `json:"day_type_id"`
 	// If true, this zman is shown by default on this day type
 	IsDefault *bool     `json:"is_default"`
 	CreatedAt time.Time `json:"created_at"`
+}
+
+// Links zmanim to the Jewish events they apply to
+type MasterZmanEvent struct {
+	ID            string `json:"id"`
+	MasterZmanID  string `json:"master_zman_id"`
+	JewishEventID string `json:"jewish_event_id"`
+	IsDefault     *bool  `json:"is_default"`
+	// NULL = all days of event, 1 = day 1 only, 2 = day 2 only (for 2-day Yom Tov in Diaspora)
+	AppliesToDay *int32    `json:"applies_to_day"`
+	Notes        *string   `json:"notes"`
+	CreatedAt    time.Time `json:"created_at"`
 }
 
 // Many-to-many relationship between zmanim and tags
@@ -224,13 +278,21 @@ type MasterZmanimRegistry struct {
 	// Time of day grouping for UI display
 	TimeCategory      string `json:"time_category"`
 	DefaultFormulaDsl string `json:"default_formula_dsl"`
-	// If true, this zman cannot be removed from the registry
-	IsFundamental *bool     `json:"is_fundamental"`
-	SortOrder     *int32    `json:"sort_order"`
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
+	// If true, this zman is a core/essential zman that cannot be removed from the registry
+	IsCore    *bool     `json:"is_core"`
+	SortOrder *int32    `json:"sort_order"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 	// Category for event-specific zmanim. NULL means everyday zman. Values: candles, havdalah, yom_kippur, fast_day, tisha_bav, pesach
 	EventCategory *string `json:"event_category"`
+	// When to display this zman relative to the event: day_before (candle lighting), day_of (most zmanim), day_after (rare)
+	DisplayOffset *string `json:"display_offset"`
+	// When true, this zman is hidden from public registry queries but visible to admins. Useful for deprecated or experimental zmanim.
+	IsHidden bool `json:"is_hidden"`
+	// Clerk user ID of the admin who created this zman
+	CreatedBy *string `json:"created_by"`
+	// Clerk user ID of the admin who last updated this zman
+	UpdatedBy *string `json:"updated_by"`
 }
 
 type PasswordResetToken struct {
@@ -321,11 +383,22 @@ type PublisherRequest struct {
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 }
 
-// Publisher overrides for day type visibility
+// DEPRECATED: Use publisher_zman_events instead. This table will be removed in a future migration.
 type PublisherZmanDayType struct {
 	PublisherZmanID string    `json:"publisher_zman_id"`
 	DayTypeID       string    `json:"day_type_id"`
 	IsVisible       *bool     `json:"is_visible"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
+}
+
+// Publisher overrides for which events their zmanim apply to
+type PublisherZmanEvent struct {
+	ID              string    `json:"id"`
+	PublisherZmanID string    `json:"publisher_zman_id"`
+	JewishEventID   string    `json:"jewish_event_id"`
+	IsEnabled       *bool     `json:"is_enabled"`
+	AppliesToDay    *int32    `json:"applies_to_day"`
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`
 }
@@ -398,7 +471,7 @@ type PublisherZmanimWithRegistry struct {
 	ZmanDescription   *string            `json:"zman_description"`
 	HalachicNotes     *string            `json:"halachic_notes"`
 	HalachicSource    *string            `json:"halachic_source"`
-	IsFundamental     *bool              `json:"is_fundamental"`
+	IsCore            *bool              `json:"is_core"`
 }
 
 // System-wide configuration settings manageable by admins
@@ -441,6 +514,18 @@ type ZmanDefinition struct {
 	HalachicNotes *string `json:"halachic_notes"`
 	// Primary halachic source reference
 	HalachicSource *string `json:"halachic_source"`
+}
+
+// Context-specific display names for zmanim with the same calculation but different labels
+type ZmanDisplayContext struct {
+	ID           string `json:"id"`
+	MasterZmanID string `json:"master_zman_id"`
+	// Context identifier - matches jewish_events.code or special values
+	ContextCode        string    `json:"context_code"`
+	DisplayNameHebrew  string    `json:"display_name_hebrew"`
+	DisplayNameEnglish string    `json:"display_name_english"`
+	SortOrder          *int32    `json:"sort_order"`
+	CreatedAt          time.Time `json:"created_at"`
 }
 
 // Requests from publishers to add new zmanim to the master registry

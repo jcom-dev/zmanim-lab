@@ -508,6 +508,61 @@ All colors MUST come from the design system defined in `tailwind.config.ts` and 
 <div className="hidden md:block">
 ```
 
+### Time Formatting - MANDATORY 12-HOUR FORMAT
+
+**RULE: All times displayed to users MUST use 12-hour AM/PM format**
+
+```tsx
+// FORBIDDEN - 24-hour format confuses users
+<span>14:30:36</span>
+<span>{result.time}</span>  // If backend returns "14:30:36"
+
+// REQUIRED - 12-hour AM/PM format
+<span>2:30:36 PM</span>
+<span>{formatTime(result.time)}</span>
+```
+
+**Use the shared time formatting utility:**
+```tsx
+import { formatTime, formatTimeShort } from '@/lib/utils';
+
+// Full format with seconds: "2:30:36 PM"
+formatTime('14:30:36')
+
+// Short format without seconds: "2:30 PM"
+formatTimeShort('14:30:36')
+```
+
+**Implementation (add to lib/utils.ts if not present):**
+```tsx
+export function formatTime(time: string): string {
+  // Handle HH:MM:SS or HH:MM format
+  const [hours, minutes, seconds] = time.split(':').map(Number);
+  const period = hours >= 12 ? 'PM' : 'AM';
+  const hour12 = hours % 12 || 12;
+
+  if (seconds !== undefined) {
+    return `${hour12}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')} ${period}`;
+  }
+  return `${hour12}:${minutes.toString().padStart(2, '0')} ${period}`;
+}
+
+export function formatTimeShort(time: string): string {
+  const [hours, minutes] = time.split(':').map(Number);
+  const period = hours >= 12 ? 'PM' : 'AM';
+  const hour12 = hours % 12 || 12;
+  return `${hour12}:${minutes.toString().padStart(2, '0')} ${period}`;
+}
+```
+
+**Where this applies:**
+- Calculated zman times (Formula Builder, Algorithm Editor)
+- Preview results
+- Weekly preview dialog
+- Any time display in the UI
+
+---
+
 ### Icons (Lucide React)
 
 **DO:**
@@ -1272,12 +1327,108 @@ When deviating:
 
 ---
 
-_Last Updated: 2025-11-29_
+## Database Migrations
+
+### Running Migrations in Coder Environment
+
+When developing in the Coder cloud IDE, the database runs in a local Docker container (not Supabase). Use the following methods to run migrations:
+
+**Method 1: Use the migrate script (Recommended)**
+```bash
+./scripts/migrate.sh
+```
+
+This script:
+- Auto-detects if you're in Coder environment
+- Uses local PostgreSQL from `api/.env` DATABASE_URL
+- Tracks applied migrations in `schema_migrations` table
+- Skips already-applied migrations
+
+**Method 2: Direct psql (for single migrations)**
+```bash
+# Source the database credentials
+source api/.env
+
+# Apply a specific migration
+PGPASSWORD=<password> psql -h postgres -U zmanim -d zmanim \
+  -f supabase/migrations/20240028_rename_fundamental_to_core.sql
+```
+
+**Method 3: Extract and run (when you need the credentials)**
+```bash
+# The DATABASE_URL format is: postgresql://user:password@host:port/database
+# Example: postgresql://zmanim:zmanim_dev_xxx@postgres:5432/zmanim
+
+# Parse from api/.env and run
+source api/.env
+echo $DATABASE_URL  # See the connection string
+```
+
+### Creating New Migrations
+
+1. Create a new SQL file in `supabase/migrations/` with timestamp prefix:
+   ```
+   supabase/migrations/20240029_your_migration_name.sql
+   ```
+
+2. Write idempotent SQL (use `IF NOT EXISTS`, `ON CONFLICT DO NOTHING`):
+   ```sql
+   -- Migration: Description of what this does
+
+   ALTER TABLE your_table ADD COLUMN IF NOT EXISTS new_column TEXT;
+
+   -- For column renames (not idempotent, be careful)
+   ALTER TABLE your_table RENAME COLUMN old_name TO new_name;
+   ```
+
+3. Run the migration:
+   ```bash
+   ./scripts/migrate.sh
+   ```
+
+4. Update SQLc queries if schema changed:
+   ```bash
+   cd api && go run github.com/sqlc-dev/sqlc/cmd/sqlc@latest generate
+   ```
+
+5. Rebuild Go code:
+   ```bash
+   cd api && go build ./...
+   ```
+
+### Migration Best Practices
+
+| Do | Don't |
+|----|-------|
+| Use timestamp prefixes (20240029_) | Use sequential numbers (001_) |
+| Make migrations idempotent when possible | Assume clean state |
+| Test migrations locally first | Push untested migrations |
+| Update SQLc queries after schema changes | Forget to regenerate sqlc |
+| Include rollback comments | Leave migrations undocumented |
+
+### Environment Detection
+
+The migrate script detects the environment:
+- **Coder**: Uses local PostgreSQL via Docker network (`postgres:5432`)
+- **Production**: Uses Supabase CLI (`npx supabase migration up`)
+
+Connection info is read from `api/.env`:
+```
+DATABASE_URL=postgresql://zmanim:password@postgres:5432/zmanim
+```
+
+---
+
+_Last Updated: 2025-11-30_
 _Based on: Story 3.2 Codebase Audit, Epic 1-4 Implementation, Production Refactoring_
 
 ---
 
 ## Changelog
+
+### 2025-11-30 - Database Migration Tooling
+- Added `scripts/migrate.sh` for environment-aware migrations
+- Added documentation for running migrations in Coder environment
 
 ### 2025-11-29 - Production Refactoring
 - **Frontend**: Replaced `useAuthenticatedFetch` with unified `useApi` hook from `@/lib/api-client`

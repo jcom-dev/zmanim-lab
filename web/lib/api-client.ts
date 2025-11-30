@@ -331,7 +331,7 @@ export function createApiClient(
  * }
  * ```
  */
-export function useApi() {
+export function usePublisherApi() {
   const { getToken } = useAuth();
   const publisherContext = usePublisherContext();
 
@@ -342,6 +342,11 @@ export function useApi() {
 
   return api;
 }
+
+/**
+ * @deprecated Use usePublisherApi instead. This alias exists for backward compatibility.
+ */
+export const useApi = usePublisherApi;
 
 /**
  * Lightweight hook that only provides the API client factory.
@@ -357,6 +362,34 @@ export function useApiFactory() {
   );
 
   return { createClient, getToken };
+}
+
+/**
+ * React hook for admin API requests that don't require publisher context.
+ * Use this in admin pages that are outside the PublisherProvider.
+ *
+ * @example
+ * ```tsx
+ * function AdminPage() {
+ *   const api = useAdminApi();
+ *
+ *   const fetchData = async () => {
+ *     const zmanim = await api.get('/admin/registry/zmanim');
+ *     const categories = await api.get('/admin/registry/time-categories');
+ *   };
+ * }
+ * ```
+ */
+export function useAdminApi() {
+  const { getToken } = useAuth();
+
+  const api = useMemo(
+    () => createApiClient(getToken, null),
+    [getToken]
+  );
+
+  // Return admin API methods that skip publisher ID
+  return api.admin;
 }
 
 // =============================================================================
