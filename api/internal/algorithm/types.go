@@ -75,6 +75,7 @@ type ZmanimResults struct {
 type LocationInfo struct {
 	Latitude  float64 `json:"latitude"`
 	Longitude float64 `json:"longitude"`
+	Elevation float64 `json:"elevation"` // Elevation in meters above sea level
 	Timezone  string  `json:"timezone"`
 	CityName  string  `json:"city_name,omitempty"`
 }

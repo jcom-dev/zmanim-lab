@@ -361,18 +361,100 @@ func (h *Handlers) GetPublishersForCity(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
+// GetContinents returns list of continents with city counts
+func (h *Handlers) GetContinents(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	query := `
+		SELECT DISTINCT continent, COUNT(*) as city_count
+		FROM cities
+		WHERE continent IS NOT NULL AND continent != ''
+		GROUP BY continent
+		ORDER BY continent
+	`
+
+	rows, err := h.db.Pool.Query(ctx, query)
+	if err != nil {
+		RespondInternalError(w, r, "Failed to fetch continents")
+		return
+	}
+	defer rows.Close()
+
+	type Continent struct {
+		Code      string `json:"code"`
+		Name      string `json:"name"`
+		CityCount int    `json:"city_count"`
+	}
+
+	// Map continent codes to full names
+	continentNames := map[string]string{
+		"AF": "Africa",
+		"AN": "Antarctica",
+		"AS": "Asia",
+		"EU": "Europe",
+		"NA": "North America",
+		"OC": "Oceania",
+		"SA": "South America",
+	}
+
+	var continents []Continent
+	for rows.Next() {
+		var code string
+		var cityCount int
+		if err := rows.Scan(&code, &cityCount); err != nil {
+			continue
+		}
+		name := continentNames[code]
+		if name == "" {
+			name = code
+		}
+		continents = append(continents, Continent{
+			Code:      code,
+			Name:      name,
+			CityCount: cityCount,
+		})
+	}
+
+	if continents == nil {
+		continents = []Continent{}
+	}
+
+	RespondJSON(w, r, http.StatusOK, map[string]interface{}{
+		"continents": continents,
+		"total":      len(continents),
+	})
+}
+
 // GetCountries returns list of unique countries from cities table
 func (h *Handlers) GetCountries(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	query := `
-		SELECT country_code, country, COUNT(*) as city_count
-		FROM cities
-		GROUP BY country_code, country
-		ORDER BY country
-	`
+	// Check for continent filter
+	continent := strings.TrimSpace(r.URL.Query().Get("continent"))
 
-	rows, err := h.db.Pool.Query(ctx, query)
+	var query string
+	var rows pgx.Rows
+	var err error
+
+	if continent != "" {
+		query = `
+			SELECT country_code, country, COUNT(*) as city_count
+			FROM cities
+			WHERE continent = $1
+			GROUP BY country_code, country
+			ORDER BY country
+		`
+		rows, err = h.db.Pool.Query(ctx, query, continent)
+	} else {
+		query = `
+			SELECT country_code, country, COUNT(*) as city_count
+			FROM cities
+			GROUP BY country_code, country
+			ORDER BY country
+		`
+		rows, err = h.db.Pool.Query(ctx, query)
+	}
+
 	if err != nil {
 		RespondInternalError(w, r, "Failed to fetch countries")
 		return

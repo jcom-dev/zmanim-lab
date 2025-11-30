@@ -213,8 +213,8 @@ export function CustomizeZmanimStep({ state, onUpdate, onNext, onBack }: Customi
   const searchInputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Fetch zmanim from registry
-  const { data: everydayZmanim, isLoading: loadingEveryday } = useMasterZmanimGrouped('weekday');
+  // Fetch zmanim from registry (no day_types filter - gets all zmanim)
+  const { data: everydayZmanim, isLoading: loadingEveryday } = useMasterZmanimGrouped();
   const { data: eventZmanim, isLoading: loadingEvents } = useEventZmanimGrouped();
 
   const isLoading = viewMode === 'everyday' ? loadingEveryday : loadingEvents;

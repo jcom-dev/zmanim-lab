@@ -62,6 +62,8 @@ type City struct {
 	Longitude   float64  `json:"longitude"`
 	Timezone    string   `json:"timezone"`
 	Population  *int     `json:"population,omitempty"`
+	Elevation   *int     `json:"elevation,omitempty"`  // Elevation in meters above sea level
+	Continent   *string  `json:"continent,omitempty"`  // Continent code (AF, AN, AS, EU, NA, OC, SA)
 	// Computed display field
 	DisplayName string `json:"display_name"`
 }

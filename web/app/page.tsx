@@ -2,11 +2,17 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { MapPin, ChevronRight, Building2, Globe, Loader2 } from 'lucide-react';
+import { MapPin, ChevronRight, Building2, Globe, Loader2, Mountain } from 'lucide-react';
 import { SignInButton, UserButton, useUser } from '@clerk/nextjs';
 import { RoleNavigation } from '@/components/home/RoleNavigation';
 
 import { API_BASE } from '@/lib/api';
+
+interface Continent {
+  code: string;
+  name: string;
+  city_count: number;
+}
 
 interface Country {
   code: string;
@@ -29,10 +35,13 @@ interface City {
   latitude: number;
   longitude: number;
   timezone: string;
+  elevation: number | null;
+  continent: string | null;
   display_name: string;
 }
 
 // localStorage keys
+const STORAGE_KEY_CONTINENT = 'zmanim_selected_continent';
 const STORAGE_KEY_COUNTRY = 'zmanim_selected_country';
 const STORAGE_KEY_REGION = 'zmanim_selected_region';
 const STORAGE_KEY_CITY = 'zmanim_selected_city';
@@ -42,25 +51,28 @@ export default function Home() {
   const { isSignedIn, isLoaded: userLoaded } = useUser();
 
   // Selection state
+  const [selectedContinent, setSelectedContinent] = useState<Continent | null>(null);
   const [selectedCountry, setSelectedCountry] = useState<Country | null>(null);
   const [selectedRegion, setSelectedRegion] = useState<Region | null>(null);
   const [selectedCity, setSelectedCity] = useState<City | null>(null);
 
   // Data state
+  const [continents, setContinents] = useState<Continent[]>([]);
   const [countries, setCountries] = useState<Country[]>([]);
   const [regions, setRegions] = useState<Region[]>([]);
   const [cities, setCities] = useState<City[]>([]);
 
   // Loading state
-  const [loadingCountries, setLoadingCountries] = useState(true);
+  const [loadingContinents, setLoadingContinents] = useState(true);
+  const [loadingCountries, setLoadingCountries] = useState(false);
   const [loadingRegions, setLoadingRegions] = useState(false);
   const [loadingCities, setLoadingCities] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
 
-  // Load countries on mount
+  // Load continents on mount
   useEffect(() => {
-    loadCountries();
+    loadContinents();
     loadSavedSelections();
   }, []);
 
@@ -77,12 +89,33 @@ export default function Home() {
     }
   };
 
-  const loadCountries = async () => {
+  const loadContinents = async () => {
+    try {
+      setLoadingContinents(true);
+      setError(null);
+
+      const response = await fetch(`${API_BASE}/api/v1/continents`);
+      if (!response.ok) throw new Error('Failed to load continents');
+
+      const data = await response.json();
+      setContinents(data.data?.continents || data.continents || []);
+    } catch (err) {
+      console.error('Failed to load continents:', err);
+      setError('Failed to load continents. Please try again.');
+    } finally {
+      setLoadingContinents(false);
+    }
+  };
+
+  const loadCountries = useCallback(async (continentCode: string) => {
     try {
       setLoadingCountries(true);
       setError(null);
+      setCountries([]);
+      setRegions([]);
+      setCities([]);
 
-      const response = await fetch(`${API_BASE}/api/v1/countries`);
+      const response = await fetch(`${API_BASE}/api/v1/countries?continent=${continentCode}`);
       if (!response.ok) throw new Error('Failed to load countries');
 
       const data = await response.json();
@@ -93,7 +126,7 @@ export default function Home() {
     } finally {
       setLoadingCountries(false);
     }
-  };
+  }, []);
 
   const loadRegions = useCallback(async (countryCode: string) => {
     try {
@@ -144,6 +177,18 @@ export default function Home() {
     }
   };
 
+  const handleContinentSelect = (continent: Continent) => {
+    setSelectedContinent(continent);
+    setSelectedCountry(null);
+    setSelectedRegion(null);
+    setSelectedCity(null);
+    localStorage.setItem(STORAGE_KEY_CONTINENT, JSON.stringify(continent));
+    localStorage.removeItem(STORAGE_KEY_COUNTRY);
+    localStorage.removeItem(STORAGE_KEY_REGION);
+    localStorage.removeItem(STORAGE_KEY_CITY);
+    loadCountries(continent.code);
+  };
+
   const handleCountrySelect = (country: Country) => {
     setSelectedCountry(country);
     setSelectedRegion(null);
@@ -184,11 +229,18 @@ export default function Home() {
       setRegions([]);
       setCities([]);
       localStorage.removeItem(STORAGE_KEY_COUNTRY);
+    } else if (selectedContinent) {
+      setSelectedContinent(null);
+      setCountries([]);
+      setRegions([]);
+      setCities([]);
+      localStorage.removeItem(STORAGE_KEY_CONTINENT);
     }
   };
 
   // Determine current step
   const getCurrentStep = () => {
+    if (!selectedContinent) return 'continent';
     if (!selectedCountry) return 'country';
     if (regions.length > 0 && !selectedRegion) return 'region';
     if (!selectedCity) return 'city';
@@ -196,6 +248,14 @@ export default function Home() {
   };
 
   const step = getCurrentStep();
+
+  // Format elevation for display
+  const formatElevation = (elevation: number | null) => {
+    if (elevation === null || elevation === undefined) return null;
+    if (elevation < 0) return `${elevation}m (below sea level)`;
+    if (elevation === 0) return 'Sea level';
+    return `${elevation}m`;
+  };
 
   return (
     <main className="min-h-screen bg-background">
@@ -244,20 +304,40 @@ export default function Home() {
       {/* Breadcrumb Navigation */}
       <div className="bg-card/50 border-b border-border">
         <div className="container mx-auto px-4 py-3">
-          <div className="flex items-center gap-2 text-sm">
+          <div className="flex items-center gap-2 text-sm flex-wrap">
             <button
               onClick={() => {
+                setSelectedContinent(null);
                 setSelectedCountry(null);
                 setSelectedRegion(null);
                 setSelectedCity(null);
+                setCountries([]);
                 setRegions([]);
                 setCities([]);
               }}
-              className={`${!selectedCountry ? 'text-blue-400' : 'text-muted-foreground hover:text-foreground'}`}
+              className={`${!selectedContinent ? 'text-blue-400' : 'text-muted-foreground hover:text-foreground'}`}
             >
               <Globe className="w-4 h-4 inline mr-1" />
               Select Location
             </button>
+
+            {selectedContinent && (
+              <>
+                <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                <button
+                  onClick={() => {
+                    setSelectedCountry(null);
+                    setSelectedRegion(null);
+                    setSelectedCity(null);
+                    setRegions([]);
+                    setCities([]);
+                  }}
+                  className={`${!selectedCountry ? 'text-blue-400' : 'text-muted-foreground hover:text-foreground'}`}
+                >
+                  {selectedContinent.name}
+                </button>
+              </>
+            )}
 
             {selectedCountry && (
               <>
@@ -298,10 +378,52 @@ export default function Home() {
           </div>
         )}
 
+        {/* Continent Selection */}
+        {step === 'continent' && (
+          <div>
+            <h2 className="text-2xl font-bold text-foreground mb-6">Select Continent</h2>
+
+            {loadingContinents ? (
+              <div className="flex justify-center py-12">
+                <Loader2 className="w-8 h-8 text-blue-400 animate-spin" />
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {continents.map((continent) => (
+                  <button
+                    key={continent.code}
+                    onClick={() => handleContinentSelect(continent)}
+                    className="flex items-center justify-between p-4 bg-card border border-border rounded-lg hover:bg-muted hover:border-border transition-colors text-left"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Globe className="w-5 h-5 text-muted-foreground" />
+                      <div>
+                        <div className="text-foreground font-medium">{continent.name}</div>
+                        <div className="text-sm text-muted-foreground">{continent.city_count.toLocaleString()} cities</div>
+                      </div>
+                    </div>
+                    <ChevronRight className="w-5 h-5 text-muted-foreground" />
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Country Selection */}
         {step === 'country' && (
           <div>
-            <h2 className="text-2xl font-bold text-foreground mb-6">Select Country</h2>
+            <div className="flex items-center gap-4 mb-6">
+              <button
+                onClick={handleBack}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                ← Back
+              </button>
+              <h2 className="text-2xl font-bold text-foreground">
+                Select Country in {selectedContinent?.name}
+              </h2>
+            </div>
 
             {loadingCountries ? (
               <div className="flex justify-center py-12">
@@ -319,7 +441,7 @@ export default function Home() {
                       <Globe className="w-5 h-5 text-muted-foreground" />
                       <div>
                         <div className="text-foreground font-medium">{country.name}</div>
-                        <div className="text-sm text-muted-foreground">{country.city_count} cities</div>
+                        <div className="text-sm text-muted-foreground">{country.city_count.toLocaleString()} cities</div>
                       </div>
                     </div>
                     <ChevronRight className="w-5 h-5 text-muted-foreground" />
@@ -410,6 +532,12 @@ export default function Home() {
                         <div className="text-sm text-muted-foreground">
                           {city.region && `${city.region}, `}{city.country}
                         </div>
+                        {city.elevation !== null && city.elevation !== undefined && (
+                          <div className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                            <Mountain className="w-3 h-3" />
+                            {formatElevation(city.elevation)}
+                          </div>
+                        )}
                       </div>
                     </div>
                     <ChevronRight className="w-5 h-5 text-muted-foreground" />

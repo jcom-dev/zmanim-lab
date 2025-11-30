@@ -634,6 +634,8 @@ func (e *Executor) executeConditionVar(n *ConditionVarNode) Value {
 		return Value{Type: ValueTypeNumber, Number: e.ctx.Latitude}
 	case "longitude":
 		return Value{Type: ValueTypeNumber, Number: e.ctx.Longitude}
+	case "elevation":
+		return Value{Type: ValueTypeNumber, Number: e.ctx.Elevation}
 	case "day_length":
 		minutes := e.ctx.DayLength()
 		return Value{Type: ValueTypeDuration, Duration: time.Duration(minutes * float64(time.Minute))}

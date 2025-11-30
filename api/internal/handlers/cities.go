@@ -44,8 +44,8 @@ func (h *Handlers) SearchCities(w http.ResponseWriter, r *http.Request) {
 	// Build dynamic query
 	var queryBuilder strings.Builder
 	queryBuilder.WriteString(`
-		SELECT id, name, country, country_code, region, region_type,
-		       latitude, longitude, timezone, population
+		SELECT id, name, country, country_code, region,
+		       latitude, longitude, timezone, population, elevation, continent
 		FROM cities
 		WHERE 1=1`)
 
@@ -112,11 +112,12 @@ func (h *Handlers) SearchCities(w http.ResponseWriter, r *http.Request) {
 			&city.Country,
 			&city.CountryCode,
 			&city.Region,
-			&city.RegionType,
 			&city.Latitude,
 			&city.Longitude,
 			&city.Timezone,
 			&city.Population,
+			&city.Elevation,
+			&city.Continent,
 		)
 		if err != nil {
 			slog.Error("failed to scan city row", "error", err)
@@ -165,8 +166,8 @@ func (h *Handlers) GetNearbyCity(w http.ResponseWriter, r *http.Request) {
 
 	// Find nearest city using PostGIS ST_Distance
 	query := `
-		SELECT id, name, country, country_code, region, region_type,
-		       latitude, longitude, timezone, population,
+		SELECT id, name, country, country_code, region,
+		       latitude, longitude, timezone, population, elevation, continent,
 		       ST_Distance(location, ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography) as distance_meters
 		FROM cities
 		ORDER BY location <-> ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography
@@ -181,11 +182,12 @@ func (h *Handlers) GetNearbyCity(w http.ResponseWriter, r *http.Request) {
 		&city.Country,
 		&city.CountryCode,
 		&city.Region,
-		&city.RegionType,
 		&city.Latitude,
 		&city.Longitude,
 		&city.Timezone,
 		&city.Population,
+		&city.Elevation,
+		&city.Continent,
 		&distanceMeters,
 	)
 
@@ -224,8 +226,8 @@ func (h *Handlers) GetCityByID(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query := `
-		SELECT id, name, country, country_code, region, region_type,
-		       latitude, longitude, timezone, population
+		SELECT id, name, country, country_code, region,
+		       latitude, longitude, timezone, population, elevation, continent
 		FROM cities
 		WHERE id = $1
 	`
@@ -237,11 +239,12 @@ func (h *Handlers) GetCityByID(w http.ResponseWriter, r *http.Request) {
 		&city.Country,
 		&city.CountryCode,
 		&city.Region,
-		&city.RegionType,
 		&city.Latitude,
 		&city.Longitude,
 		&city.Timezone,
 		&city.Population,
+		&city.Elevation,
+		&city.Continent,
 	)
 
 	if err != nil {

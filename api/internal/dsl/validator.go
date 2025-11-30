@@ -337,10 +337,10 @@ func (v *Validator) validateCondition(n *ConditionNode) {
 	_ = GetValueType(n.Left) // leftType used implicitly in validation
 	rightType := GetValueType(n.Right)
 
-	// latitude/longitude comparisons should be with numbers
+	// latitude/longitude/elevation comparisons should be with numbers
 	if condVar, ok := n.Left.(*ConditionVarNode); ok {
 		switch condVar.Name {
-		case "latitude", "longitude":
+		case "latitude", "longitude", "elevation":
 			if rightType != ValueTypeNumber {
 				v.addError(n.Pos, "%s comparison requires a number, got %s", condVar.Name, rightType)
 			}

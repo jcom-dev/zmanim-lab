@@ -60,8 +60,14 @@ func (s *ZmanimService) CalculateZmanim(ctx context.Context, req *models.ZmanimR
 		}
 	}
 
+	// Get elevation from request or default to 0
+	elevation := 0.0
+	if req.Elevation != nil {
+		elevation = float64(*req.Elevation)
+	}
+
 	// Calculate zmanim using the algorithm
-	zmanim, err := s.calculateWithAlgorithm(ctx, date, req.Latitude, req.Longitude, req.Timezone, algorithm)
+	zmanim, err := s.calculateWithAlgorithm(ctx, date, req.Latitude, req.Longitude, elevation, req.Timezone, algorithm)
 	if err != nil {
 		return nil, fmt.Errorf("failed to calculate zmanim: %w", err)
 	}
@@ -172,7 +178,7 @@ func (s *ZmanimService) cacheResult(ctx context.Context, date time.Time, latitud
 }
 
 // calculateWithAlgorithm performs the actual zmanim calculation
-func (s *ZmanimService) calculateWithAlgorithm(ctx context.Context, date time.Time, latitude, longitude float64, timezone string, alg *models.Algorithm) (map[string]string, error) {
+func (s *ZmanimService) calculateWithAlgorithm(ctx context.Context, date time.Time, latitude, longitude, elevation float64, timezone string, alg *models.Algorithm) (map[string]string, error) {
 	loc, err := time.LoadLocation(timezone)
 	if err != nil {
 		loc = time.UTC
@@ -193,8 +199,8 @@ func (s *ZmanimService) calculateWithAlgorithm(ctx context.Context, date time.Ti
 		algorithmConfig = algorithm.DefaultAlgorithm()
 	}
 
-	// Create executor and run calculations
-	executor := algorithm.NewExecutor(date, latitude, longitude, loc)
+	// Create executor with elevation and run calculations
+	executor := algorithm.NewExecutorWithElevation(date, latitude, longitude, elevation, loc)
 	results, err := executor.Execute(algorithmConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute algorithm: %w", err)

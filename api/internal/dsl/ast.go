@@ -173,7 +173,7 @@ func (n *ConditionNode) String() string {
 
 // ConditionVarNode represents a condition variable (latitude, day_length, etc.)
 type ConditionVarNode struct {
-	Name string   // "latitude", "longitude", "day_length", "month", "season"
+	Name string   // "latitude", "longitude", "elevation", "day_length", "month", "season"
 	Pos  Position // Source position
 }
 

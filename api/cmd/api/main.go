@@ -186,7 +186,8 @@ func main() {
 			r.Get("/cities/nearby", h.GetNearbyCity)
 			r.Get("/cities/{cityId}/publishers", h.GetPublishersForCity)
 
-			// Countries and regions for coverage selection
+			// Continents, countries and regions for coverage selection
+			r.Get("/continents", h.GetContinents)
 			r.Get("/countries", h.GetCountries)
 			r.Get("/regions", h.GetRegions)
 

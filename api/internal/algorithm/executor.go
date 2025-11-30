@@ -13,6 +13,7 @@ type Executor struct {
 	date      time.Time
 	latitude  float64
 	longitude float64
+	elevation float64 // Elevation in meters above sea level
 	timezone  *time.Location
 
 	// Cached core calculations
@@ -22,10 +23,16 @@ type Executor struct {
 	calculated map[string]time.Time
 }
 
-// NewExecutor creates a new algorithm executor
+// NewExecutor creates a new algorithm executor (sea level)
 func NewExecutor(date time.Time, latitude, longitude float64, tz *time.Location) *Executor {
-	// Calculate core sun times
-	sunTimes := astro.CalculateSunTimes(date, latitude, longitude, tz)
+	return NewExecutorWithElevation(date, latitude, longitude, 0, tz)
+}
+
+// NewExecutorWithElevation creates a new algorithm executor with elevation support
+// Elevation is in meters above sea level and affects sunrise/sunset calculations
+func NewExecutorWithElevation(date time.Time, latitude, longitude, elevation float64, tz *time.Location) *Executor {
+	// Calculate core sun times with elevation adjustment
+	sunTimes := astro.CalculateSunTimesWithElevation(date, latitude, longitude, elevation, tz)
 
 	// Calculate alos/tzeis 72 for MGA calculations
 	alos72 := astro.SubtractMinutes(sunTimes.Sunrise, 72)
@@ -35,6 +42,7 @@ func NewExecutor(date time.Time, latitude, longitude float64, tz *time.Location)
 		date:       date,
 		latitude:   latitude,
 		longitude:  longitude,
+		elevation:  elevation,
 		timezone:   tz,
 		sunTimes:   sunTimes,
 		alos72:     alos72,
@@ -50,6 +58,7 @@ func (e *Executor) Execute(config *AlgorithmConfig) (*ZmanimResults, error) {
 		Location: LocationInfo{
 			Latitude:  e.latitude,
 			Longitude: e.longitude,
+			Elevation: e.elevation,
 			Timezone:  e.timezone.String(),
 		},
 		Zmanim: []ZmanResult{},
@@ -138,7 +147,8 @@ func (e *Executor) calculateSolarAngle(config *ZmanConfig) (time.Time, error) {
 	// tzeis/dusk times use smaller angles (<10°) and are evening
 	// But we need to check the context - we return the appropriate time based on usage
 
-	dawn, dusk := astro.SunTimeAtAngle(e.date, e.latitude, e.longitude, e.timezone, degrees)
+	// Use elevation-adjusted calculation
+	dawn, dusk := astro.SunTimeAtAngleWithElevation(e.date, e.latitude, e.longitude, e.elevation, e.timezone, degrees)
 
 	// If degrees > 10, it's likely alos (return dawn)
 	// If degrees < 10, it's likely tzeis (return dusk)

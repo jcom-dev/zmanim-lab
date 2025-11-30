@@ -13,6 +13,7 @@ type SunTimes struct {
 	Date      time.Time
 	Latitude  float64
 	Longitude float64
+	Elevation float64 // Elevation in meters above sea level
 	Timezone  *time.Location
 
 	// Core times
@@ -30,21 +31,31 @@ const (
 	deg2rad = math.Pi / 180.0
 	// Radians to degrees
 	rad2deg = 180.0 / math.Pi
+	// Earth's radius in meters (mean radius)
+	earthRadiusMeters = 6371000.0
 )
 
 // CalculateSunTimes calculates sunrise, solar noon, and sunset for a given date and location
+// This version assumes sea level (elevation = 0). Use CalculateSunTimesWithElevation for elevation-adjusted times.
 func CalculateSunTimes(date time.Time, latitude, longitude float64, tz *time.Location) *SunTimes {
+	return CalculateSunTimesWithElevation(date, latitude, longitude, 0, tz)
+}
+
+// CalculateSunTimesWithElevation calculates sunrise, solar noon, and sunset with elevation adjustment
+// Elevation is in meters above sea level. Higher elevations see sunrise earlier and sunset later
+// due to the extended horizon visible from elevated positions.
+func CalculateSunTimesWithElevation(date time.Time, latitude, longitude, elevation float64, tz *time.Location) *SunTimes {
 	// Julian day calculation
 	jd := julianDay(date)
 
-	// Calculate solar noon first
+	// Calculate solar noon first (not affected by elevation)
 	solarNoon := calcSolarNoon(jd, longitude, tz, date)
 
-	// Calculate sunrise
-	sunrise := calcSunriseOrSunset(jd, latitude, longitude, tz, date, true)
+	// Calculate sunrise with elevation adjustment
+	sunrise := calcSunriseOrSunsetWithElevation(jd, latitude, longitude, elevation, tz, date, true)
 
-	// Calculate sunset
-	sunset := calcSunriseOrSunset(jd, latitude, longitude, tz, date, false)
+	// Calculate sunset with elevation adjustment
+	sunset := calcSunriseOrSunsetWithElevation(jd, latitude, longitude, elevation, tz, date, false)
 
 	// Calculate day length
 	dayLength := 0.0
@@ -56,6 +67,7 @@ func CalculateSunTimes(date time.Time, latitude, longitude float64, tz *time.Loc
 		Date:             date,
 		Latitude:         latitude,
 		Longitude:        longitude,
+		Elevation:        elevation,
 		Timezone:         tz,
 		Sunrise:          sunrise,
 		SolarNoon:        solarNoon,
@@ -67,14 +79,21 @@ func CalculateSunTimes(date time.Time, latitude, longitude float64, tz *time.Loc
 // SunTimeAtAngle calculates the time when the sun is at a specific angle below the horizon
 // Positive angle = below horizon (e.g., 16.1 for alos hashachar)
 // Returns both dawn (before sunrise) and dusk (after sunset) times
+// This version assumes sea level. Use SunTimeAtAngleWithElevation for elevation-adjusted times.
 func SunTimeAtAngle(date time.Time, latitude, longitude float64, tz *time.Location, angle float64) (dawn, dusk time.Time) {
+	return SunTimeAtAngleWithElevation(date, latitude, longitude, 0, tz, angle)
+}
+
+// SunTimeAtAngleWithElevation calculates sun angle times with elevation adjustment
+// Elevation is in meters above sea level
+func SunTimeAtAngleWithElevation(date time.Time, latitude, longitude, elevation float64, tz *time.Location, angle float64) (dawn, dusk time.Time) {
 	jd := julianDay(date)
 
 	// Calculate dawn (before sunrise)
-	dawn = calcSunAngleTime(jd, latitude, longitude, tz, date, angle, true)
+	dawn = calcSunAngleTimeWithElevation(jd, latitude, longitude, elevation, tz, date, angle, true)
 
 	// Calculate dusk (after sunset)
-	dusk = calcSunAngleTime(jd, latitude, longitude, tz, date, angle, false)
+	dusk = calcSunAngleTimeWithElevation(jd, latitude, longitude, elevation, tz, date, angle, false)
 
 	return dawn, dusk
 }
@@ -185,6 +204,22 @@ func calcEquationOfTime(t float64) float64 {
 	return eqTime * rad2deg * 4 // Convert to minutes
 }
 
+// calcElevationAdjustment calculates the zenith adjustment for elevation
+// At higher elevations, the visible horizon is lower, so the sun appears to rise earlier
+// and set later. This returns the additional angle in degrees to add to the zenith.
+// Formula: adjustment = arccos(R / (R + h)) where R = Earth radius, h = elevation
+// This equals the depression angle to the geometric horizon from the elevated position.
+func calcElevationAdjustment(elevationMeters float64) float64 {
+	if elevationMeters <= 0 {
+		return 0
+	}
+	// Depression angle to horizon from elevated position
+	// cos(angle) = R / (R + h), so angle = acos(R / (R + h))
+	// This angle needs to be subtracted from the zenith (making sun visible earlier)
+	cosAngle := earthRadiusMeters / (earthRadiusMeters + elevationMeters)
+	return math.Acos(cosAngle) * rad2deg
+}
+
 // calcHourAngleSunrise calculates the hour angle of sunrise for the given latitude and solar declination
 // zenith is in degrees (90.833 for sunrise/sunset accounting for refraction)
 func calcHourAngleSunrise(lat, solarDec, zenith float64) float64 {
@@ -222,20 +257,40 @@ func calcSolarNoon(jd, longitude float64, tz *time.Location, date time.Time) tim
 	return utcTime.In(tz)
 }
 
-// calcSunriseOrSunset calculates sunrise or sunset time
+// calcSunriseOrSunset calculates sunrise or sunset time (sea level)
 func calcSunriseOrSunset(jd, latitude, longitude float64, tz *time.Location, date time.Time, isSunrise bool) time.Time {
+	return calcSunriseOrSunsetWithElevation(jd, latitude, longitude, 0, tz, date, isSunrise)
+}
+
+// calcSunriseOrSunsetWithElevation calculates sunrise or sunset time with elevation adjustment
+func calcSunriseOrSunsetWithElevation(jd, latitude, longitude, elevation float64, tz *time.Location, date time.Time, isSunrise bool) time.Time {
 	// Standard zenith for sunrise/sunset (includes atmospheric refraction)
 	zenith := 90.833
 
-	return calcSunTimeForZenith(jd, latitude, longitude, tz, date, zenith, isSunrise)
+	// Apply elevation adjustment - higher elevation means the horizon is lower,
+	// so we reduce the zenith angle (sun is visible when it's geometrically lower)
+	elevationAdj := calcElevationAdjustment(elevation)
+	adjustedZenith := zenith - elevationAdj
+
+	return calcSunTimeForZenith(jd, latitude, longitude, tz, date, adjustedZenith, isSunrise)
 }
 
-// calcSunAngleTime calculates time when sun is at a specific angle below horizon
+// calcSunAngleTime calculates time when sun is at a specific angle below horizon (sea level)
 func calcSunAngleTime(jd, latitude, longitude float64, tz *time.Location, date time.Time, angle float64, isDawn bool) time.Time {
+	return calcSunAngleTimeWithElevation(jd, latitude, longitude, 0, tz, date, angle, isDawn)
+}
+
+// calcSunAngleTimeWithElevation calculates time when sun is at a specific angle below horizon with elevation
+func calcSunAngleTimeWithElevation(jd, latitude, longitude, elevation float64, tz *time.Location, date time.Time, angle float64, isDawn bool) time.Time {
 	// Zenith = 90 + angle (angle below horizon)
 	zenith := 90.0 + angle
 
-	return calcSunTimeForZenith(jd, latitude, longitude, tz, date, zenith, isDawn)
+	// Apply elevation adjustment - higher elevation means the horizon is lower,
+	// so we reduce the zenith angle (sun is visible when it's geometrically lower)
+	elevationAdj := calcElevationAdjustment(elevation)
+	adjustedZenith := zenith - elevationAdj
+
+	return calcSunTimeForZenith(jd, latitude, longitude, tz, date, adjustedZenith, isDawn)
 }
 
 // calcSunTimeForZenith calculates the time when the sun reaches a specific zenith angle
