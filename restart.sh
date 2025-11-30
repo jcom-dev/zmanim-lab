@@ -46,6 +46,10 @@ for port in 8080 3001; do
 done
 
 echo ""
+echo "🗃️  Running database migrations..."
+"$SCRIPT_DIR/scripts/migrate.sh"
+
+echo ""
 echo "🚀 Starting services in background..."
 
 # Run the startup script in the background (no-attach mode)
@@ -67,4 +71,7 @@ echo ""
 echo "🌐 Service URLs:"
 echo "  - Web App: http://localhost:3001"
 echo "  - Go API:  http://localhost:8080"
+echo ""
+echo "🤖 To generate RAG embeddings (optional, requires OPENAI_API_KEY):"
+echo "  cd api && go run cmd/indexer/main.go"
 echo ""

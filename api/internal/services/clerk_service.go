@@ -419,76 +419,92 @@ type UserWithRoles struct {
 func (s *ClerkService) GetUsersWithPublisherAccess(ctx context.Context, publisherID string) ([]PublisherUserInfo, error) {
 	var result []PublisherUserInfo
 
-	// List all users
+	// List all users with pagination
 	// Note: In production with many users, consider caching or using a database to track user-publisher relationships
-	params := &clerkUser.ListParams{}
+	var offset int64 = 0
+	const limit int64 = 100
 
-	users, err := clerkUser.List(ctx, params)
-	if err != nil {
-		return nil, fmt.Errorf("failed to list users: %w", err)
-	}
-
-	if users == nil {
-		return result, nil
-	}
-
-	for _, user := range users.Users {
-		if user.PublicMetadata == nil {
-			continue
+	for {
+		params := &clerkUser.ListParams{
+			ListParams: clerk.ListParams{
+				Limit:  clerk.Int64(limit),
+				Offset: clerk.Int64(offset),
+			},
 		}
 
-		var metadata map[string]interface{}
-		if err := json.Unmarshal(user.PublicMetadata, &metadata); err != nil {
-			continue
+		users, err := clerkUser.List(ctx, params)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list users: %w", err)
 		}
 
-		// Check if user has this publisher in their access list
-		accessList, ok := metadata["publisher_access_list"].([]interface{})
-		if !ok {
-			continue
+		if users == nil || len(users.Users) == 0 {
+			break
 		}
 
-		hasAccess := false
-		for _, id := range accessList {
-			if idStr, ok := id.(string); ok && idStr == publisherID {
-				hasAccess = true
-				break
-			}
-		}
-
-		if hasAccess {
-			// Get primary email
-			email := ""
-			if len(user.EmailAddresses) > 0 {
-				email = user.EmailAddresses[0].EmailAddress
+		for _, user := range users.Users {
+			if user.PublicMetadata == nil {
+				continue
 			}
 
-			// Get name
-			name := ""
-			if user.FirstName != nil {
-				name = *user.FirstName
+			var metadata map[string]interface{}
+			if err := json.Unmarshal(user.PublicMetadata, &metadata); err != nil {
+				continue
 			}
-			if user.LastName != nil {
-				if name != "" {
-					name += " "
+
+			// Check if user has this publisher in their access list
+			accessList, ok := metadata["publisher_access_list"].([]interface{})
+			if !ok {
+				continue
+			}
+
+			hasAccess := false
+			for _, id := range accessList {
+				if idStr, ok := id.(string); ok && idStr == publisherID {
+					hasAccess = true
+					break
 				}
-				name += *user.LastName
 			}
 
-			// Get image URL safely
-			imageURL := ""
-			if user.ImageURL != nil {
-				imageURL = *user.ImageURL
-			}
+			if hasAccess {
+				// Get primary email
+				email := ""
+				if len(user.EmailAddresses) > 0 {
+					email = user.EmailAddresses[0].EmailAddress
+				}
 
-			result = append(result, PublisherUserInfo{
-				ClerkUserID: user.ID,
-				Email:       email,
-				Name:        name,
-				ImageURL:    imageURL,
-				CreatedAt:   user.CreatedAt,
-			})
+				// Get name
+				name := ""
+				if user.FirstName != nil {
+					name = *user.FirstName
+				}
+				if user.LastName != nil {
+					if name != "" {
+						name += " "
+					}
+					name += *user.LastName
+				}
+
+				// Get image URL safely
+				imageURL := ""
+				if user.ImageURL != nil {
+					imageURL = *user.ImageURL
+				}
+
+				result = append(result, PublisherUserInfo{
+					ClerkUserID: user.ID,
+					Email:       email,
+					Name:        name,
+					ImageURL:    imageURL,
+					CreatedAt:   user.CreatedAt,
+				})
+			}
 		}
+
+		// Check if we've fetched all users
+		if int64(len(users.Users)) < limit {
+			break
+		}
+		offset += limit
 	}
 
 	return result, nil
@@ -592,89 +608,107 @@ func (s *ClerkService) DeleteUserIfNoRoles(ctx context.Context, clerkUserID stri
 func (s *ClerkService) GetAllUsersWithRoles(ctx context.Context) ([]UserWithRoles, error) {
 	var result []UserWithRoles
 
-	params := &clerkUser.ListParams{}
-	users, err := clerkUser.List(ctx, params)
-	if err != nil {
-		return nil, fmt.Errorf("failed to list users: %w", err)
-	}
+	// Paginate through all users
+	var offset int64 = 0
+	const limit int64 = 100
 
-	if users == nil {
-		return result, nil
-	}
+	for {
+		params := &clerkUser.ListParams{
+			ListParams: clerk.ListParams{
+				Limit:  clerk.Int64(limit),
+				Offset: clerk.Int64(offset),
+			},
+		}
 
-	for _, user := range users.Users {
-		var metadata map[string]interface{}
-		if user.PublicMetadata != nil {
-			if err := json.Unmarshal(user.PublicMetadata, &metadata); err != nil {
+		users, err := clerkUser.List(ctx, params)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list users: %w", err)
+		}
+
+		if users == nil || len(users.Users) == 0 {
+			break
+		}
+
+		for _, user := range users.Users {
+			var metadata map[string]interface{}
+			if user.PublicMetadata != nil {
+				if err := json.Unmarshal(user.PublicMetadata, &metadata); err != nil {
+					metadata = make(map[string]interface{})
+				}
+			} else {
 				metadata = make(map[string]interface{})
 			}
-		} else {
-			metadata = make(map[string]interface{})
-		}
 
-		// Check admin status
-		isAdmin := false
-		if adminFlag, ok := metadata["is_admin"].(bool); ok && adminFlag {
-			isAdmin = true
-		} else if role, ok := metadata["role"].(string); ok && role == "admin" {
-			isAdmin = true
-		}
+			// Check admin status
+			isAdmin := false
+			if adminFlag, ok := metadata["is_admin"].(bool); ok && adminFlag {
+				isAdmin = true
+			} else if role, ok := metadata["role"].(string); ok && role == "admin" {
+				isAdmin = true
+			}
 
-		// Get publisher access list
-		var publisherAccessList []string
-		if accessList, ok := metadata["publisher_access_list"].([]interface{}); ok {
-			for _, v := range accessList {
-				if s, ok := v.(string); ok {
-					publisherAccessList = append(publisherAccessList, s)
+			// Get publisher access list
+			var publisherAccessList []string
+			if accessList, ok := metadata["publisher_access_list"].([]interface{}); ok {
+				for _, v := range accessList {
+					if s, ok := v.(string); ok {
+						publisherAccessList = append(publisherAccessList, s)
+					}
 				}
 			}
-		}
 
-		// Skip users with no roles
-		if !isAdmin && len(publisherAccessList) == 0 {
-			continue
-		}
-
-		// Get primary publisher ID
-		primaryPublisherID := ""
-		if primary, ok := metadata["primary_publisher_id"].(string); ok {
-			primaryPublisherID = primary
-		}
-
-		// Get email
-		email := ""
-		if len(user.EmailAddresses) > 0 {
-			email = user.EmailAddresses[0].EmailAddress
-		}
-
-		// Get name
-		name := ""
-		if user.FirstName != nil {
-			name = *user.FirstName
-		}
-		if user.LastName != nil {
-			if name != "" {
-				name += " "
+			// Skip users with no roles
+			if !isAdmin && len(publisherAccessList) == 0 {
+				continue
 			}
-			name += *user.LastName
+
+			// Get primary publisher ID
+			primaryPublisherID := ""
+			if primary, ok := metadata["primary_publisher_id"].(string); ok {
+				primaryPublisherID = primary
+			}
+
+			// Get email
+			email := ""
+			if len(user.EmailAddresses) > 0 {
+				email = user.EmailAddresses[0].EmailAddress
+			}
+
+			// Get name
+			name := ""
+			if user.FirstName != nil {
+				name = *user.FirstName
+			}
+			if user.LastName != nil {
+				if name != "" {
+					name += " "
+				}
+				name += *user.LastName
+			}
+
+			// Get image URL
+			imageURL := ""
+			if user.ImageURL != nil {
+				imageURL = *user.ImageURL
+			}
+
+			result = append(result, UserWithRoles{
+				ClerkUserID:         user.ID,
+				Email:               email,
+				Name:                name,
+				ImageURL:            imageURL,
+				IsAdmin:             isAdmin,
+				PublisherAccessList: publisherAccessList,
+				PrimaryPublisherID:  primaryPublisherID,
+				CreatedAt:           user.CreatedAt,
+			})
 		}
 
-		// Get image URL
-		imageURL := ""
-		if user.ImageURL != nil {
-			imageURL = *user.ImageURL
+		// Check if we've fetched all users
+		if int64(len(users.Users)) < limit {
+			break
 		}
-
-		result = append(result, UserWithRoles{
-			ClerkUserID:         user.ID,
-			Email:               email,
-			Name:                name,
-			ImageURL:            imageURL,
-			IsAdmin:             isAdmin,
-			PublisherAccessList: publisherAccessList,
-			PrimaryPublisherID:  primaryPublisherID,
-			CreatedAt:           user.CreatedAt,
-		})
+		offset += limit
 	}
 
 	return result, nil
