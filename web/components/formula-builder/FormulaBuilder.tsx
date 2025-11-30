@@ -29,7 +29,7 @@ interface FormulaBuilderProps {
 
 export function FormulaBuilder({
   initialFormula,
-  onSave,
+  onChange,
   onParseError,
   className,
 }: FormulaBuilderProps) {
@@ -38,9 +38,9 @@ export function FormulaBuilder({
     generatedFormula: initialFormula || initialState.generatedFormula,
   }));
 
-  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
   const [lastParsedFormula, setLastParsedFormula] = useState<string | null>(null);
+  const isInitialMount = useRef(true);
 
   // Parse initial formula and auto-select the correct method
   // Re-parse when initialFormula changes (e.g., when data loads asynchronously)
@@ -78,9 +78,16 @@ export function FormulaBuilder({
       isValid: formula.length > 0,
       validationErrors: [],
     }));
+
+    // Call onChange to update parent (skip on initial mount to avoid overwriting initial formula)
+    if (!isInitialMount.current && formula !== initialFormula) {
+      onChange?.(formula);
+    }
+    isInitialMount.current = false;
   }, [
     lastParsedFormula,
     initialFormula,
+    onChange,
     state.baseTime,
     state.method,
     state.selectedFixedZman,
@@ -142,19 +149,6 @@ export function FormulaBuilder({
   const handleCustomEndChange = useCallback((value: string) => {
     setState((prev) => ({ ...prev, customEnd: value }));
   }, []);
-
-  const handleSave = useCallback(() => {
-    if (initialFormula && initialFormula !== state.generatedFormula) {
-      setShowConfirmDialog(true);
-    } else {
-      onSave?.(state.generatedFormula);
-    }
-  }, [initialFormula, state.generatedFormula, onSave]);
-
-  const handleConfirmSave = useCallback(() => {
-    setShowConfirmDialog(false);
-    onSave?.(state.generatedFormula);
-  }, [state.generatedFormula, onSave]);
 
   // If there's a parse error, show disabled state with error message
   if (parseError) {
@@ -274,46 +268,6 @@ export function FormulaBuilder({
           </MethodCard>
         </div>
       </div>
-
-      {/* Action Buttons - Prominent */}
-      <div className="flex gap-4 pt-2">
-        {onSave && (
-          <Button
-            onClick={handleSave}
-            disabled={!state.isValid}
-            size="lg"
-            className="h-12 px-6 text-base font-semibold"
-          >
-            <Save className="h-5 w-5 mr-2" />
-            Save Formula
-          </Button>
-        )}
-      </div>
-
-      {/* Confirmation Dialog */}
-      {showConfirmDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-card rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
-            <div className="flex items-start gap-3">
-              <AlertCircle className="h-6 w-6 text-amber-500 flex-shrink-0" />
-              <div>
-                <h3 className="font-semibold text-lg">Overwrite Formula?</h3>
-                <p className="text-sm text-muted-foreground mt-1">
-                  This will replace the existing formula. This action cannot be undone.
-                </p>
-                <div className="flex gap-3 mt-4">
-                  <Button variant="outline" onClick={() => setShowConfirmDialog(false)}>
-                    Cancel
-                  </Button>
-                  <Button onClick={handleConfirmSave}>
-                    Overwrite
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

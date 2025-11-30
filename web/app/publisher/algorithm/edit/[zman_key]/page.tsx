@@ -321,11 +321,6 @@ export default function ZmanEditorPage() {
     setFormula(selectedFormula);
   }, []);
 
-  // Handle formula from builder
-  const handleBuilderSave = useCallback((newFormula: string) => {
-    setFormula(newFormula);
-  }, []);
-
   // Handle parse error from formula builder - auto-switch to advanced mode
   const handleParseError = useCallback((error: string) => {
     // Auto-switch to advanced mode when formula can't be parsed by guided builder
