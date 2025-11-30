@@ -392,7 +392,11 @@ export default function ZmanEditorPage() {
 
           {/* Save */}
           <Button
-            onClick={handleSave}
+            type="button"
+            onClick={() => {
+              console.log('[Save Button] Clicked!');
+              handleSave();
+            }}
             disabled={
               (!hasChanges && !isNewZman) ||
               updateZman.isPending ||
@@ -476,7 +480,7 @@ export default function ZmanEditorPage() {
             {mode === 'guided' ? (
               <FormulaBuilder
                 initialFormula={formula}
-                onSave={handleBuilderSave}
+                onChange={setFormula}
                 onParseError={handleParseError}
               />
             ) : (

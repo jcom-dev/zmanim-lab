@@ -1,8 +1,7 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
-import { Save, AlertCircle } from 'lucide-react';
+import { useState, useCallback, useEffect, useRef } from 'react';
+import { AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 import { MethodCard } from './MethodCard';
@@ -16,7 +15,6 @@ import {
   type SolarDirection,
   type OffsetDirection,
   type ShaosBase,
-  type ParseResult,
   initialState,
   generateFormula,
   parseFormula,
@@ -24,7 +22,7 @@ import {
 
 interface FormulaBuilderProps {
   initialFormula?: string;
-  onSave?: (formula: string) => void;
+  onChange?: (formula: string) => void;
   onParseError?: (error: string) => void;
   className?: string;
 }
