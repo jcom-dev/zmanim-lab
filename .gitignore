@@ -59,6 +59,9 @@ next-env.d.ts
 # Go (api/)
 api/api
 api/main
+api/indexer
+api/zmanim-api
+zmanim-api
 *.exe
 *.exe~
 *.dll
