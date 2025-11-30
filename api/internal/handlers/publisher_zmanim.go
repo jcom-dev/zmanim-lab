@@ -3,6 +3,8 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"log"
 	"net/http"
 	"regexp"
 	"strings"
@@ -10,8 +12,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
-	"github.com/jcom-dev/zmanim-lab/internal/middleware"
 	"github.com/jackc/pgx/v5"
+	"github.com/jcom-dev/zmanim-lab/internal/db/sqlcgen"
 )
 
 // PublisherZman represents a single zman formula for a publisher
@@ -26,6 +28,7 @@ type PublisherZman struct {
 	PublisherComment *string   `json:"publisher_comment" db:"publisher_comment"`
 	IsEnabled        bool      `json:"is_enabled" db:"is_enabled"`
 	IsVisible        bool      `json:"is_visible" db:"is_visible"`
+	IsPublished      bool      `json:"is_published" db:"is_published"`
 	IsCustom         bool      `json:"is_custom" db:"is_custom"`
 	Category         string    `json:"category" db:"category"`
 	Dependencies     []string  `json:"dependencies" db:"dependencies"`
@@ -71,6 +74,8 @@ type UpdateZmanRequest struct {
 	PublisherComment *string `json:"publisher_comment"`
 	IsEnabled        *bool   `json:"is_enabled"`
 	IsVisible        *bool   `json:"is_visible"`
+	IsPublished      *bool   `json:"is_published"`
+	Category         *string `json:"category"`
 	SortOrder        *int    `json:"sort_order"`
 }
 
@@ -100,100 +105,215 @@ func extractDependencies(formula string) []string {
 // GET /api/v1/publisher/zmanim
 func (h *Handlers) GetPublisherZmanim(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := middleware.GetUserID(ctx)
-	if userID == "" {
-		RespondUnauthorized(w, r, "User ID not found")
-		return
+
+	// Use PublisherResolver to get publisher context
+	pc := h.publisherResolver.MustResolve(w, r)
+	if pc == nil {
+		return // Response already sent
 	}
+	publisherID := pc.PublisherID
 
-	// Get and validate publisher ID from header (validated against JWT claims)
-	// Admins can impersonate any publisher via X-Publisher-Id header
-	requestedID := r.Header.Get("X-Publisher-Id")
-	publisherID := middleware.GetValidatedPublisherID(ctx, requestedID)
-	if publisherID == "" {
-		RespondForbidden(w, r, "No access to the requested publisher")
-		return
-	}
+	// Log the publisher ID being queried
+	log.Printf("INFO fetching zmanim publisher_id=%s", publisherID)
 
-	query := `
-		SELECT
-			id, publisher_id, zman_key, hebrew_name, english_name,
-			formula_dsl, ai_explanation, publisher_comment,
-			is_enabled, is_visible, is_custom, category,
-			dependencies, sort_order, created_at, updated_at
-		FROM publisher_zmanim
-		WHERE publisher_id = $1
-		ORDER BY category, sort_order, hebrew_name
-	`
-
-	rows, err := h.db.Pool.Query(ctx, query, publisherID)
+	// Use SQLc generated query
+	sqlcZmanim, err := h.db.Queries.GetPublisherZmanim(ctx, publisherID)
 	if err != nil {
+		log.Printf("ERROR failed to fetch zmanim error=%v publisher_id=%s", err, publisherID)
 		RespondInternalError(w, r, "Failed to fetch zmanim")
 		return
 	}
-	defer rows.Close()
 
-	zmanim := []PublisherZman{}
-	for rows.Next() {
-		var z PublisherZman
-		err := rows.Scan(
-			&z.ID, &z.PublisherID, &z.ZmanKey, &z.HebrewName, &z.EnglishName,
-			&z.FormulaDSL, &z.AIExplanation, &z.PublisherComment,
-			&z.IsEnabled, &z.IsVisible, &z.IsCustom, &z.Category,
-			&z.Dependencies, &z.SortOrder, &z.CreatedAt, &z.UpdatedAt,
-		)
-		if err != nil {
-			RespondInternalError(w, r, "Failed to scan zman")
-			return
-		}
-		zmanim = append(zmanim, z)
+	// Log the result count
+	log.Printf("INFO fetched zmanim count=%d publisher_id=%s", len(sqlcZmanim), publisherID)
+
+	// Convert SQLc types to handler types for consistent API response
+	zmanim := make([]PublisherZman, len(sqlcZmanim))
+	for i, z := range sqlcZmanim {
+		zmanim[i] = getPublisherZmanimRowToPublisherZman(z)
 	}
 
-	RespondJSON(w, r, http.StatusOK, map[string]interface{}{
-		"data": zmanim,
-	})
+	RespondJSON(w, r, http.StatusOK, zmanim)
+}
+
+// sqlcZmanRow is an interface for SQLc generated row types
+type sqlcZmanRow interface {
+	GetID() string
+	GetPublisherID() string
+	GetZmanKey() string
+	GetHebrewName() string
+	GetEnglishName() string
+	GetFormulaDsl() string
+	GetAiExplanation() *string
+	GetPublisherComment() *string
+	GetIsEnabled() bool
+	GetIsVisible() bool
+	GetIsPublished() bool
+	GetIsCustom() bool
+	GetCategory() string
+	GetDependencies() []string
+	GetSortOrder() int32
+	GetCreatedAt() time.Time
+	GetUpdatedAt() time.Time
+}
+
+// Convert GetPublisherZmanimRow to PublisherZman
+func getPublisherZmanimRowToPublisherZman(z sqlcgen.GetPublisherZmanimRow) PublisherZman {
+	return PublisherZman{
+		ID:               z.ID,
+		PublisherID:      z.PublisherID,
+		ZmanKey:          z.ZmanKey,
+		HebrewName:       z.HebrewName,
+		EnglishName:      z.EnglishName,
+		FormulaDSL:       z.FormulaDsl,
+		AIExplanation:    z.AiExplanation,
+		PublisherComment: z.PublisherComment,
+		IsEnabled:        z.IsEnabled,
+		IsVisible:        z.IsVisible,
+		IsPublished:      z.IsPublished,
+		IsCustom:         z.IsCustom,
+		Category:         z.Category,
+		Dependencies:     z.Dependencies,
+		SortOrder:        int(z.SortOrder),
+		CreatedAt:        z.CreatedAt,
+		UpdatedAt:        z.UpdatedAt,
+	}
+}
+
+// Convert GetPublisherZmanByKeyRow to PublisherZman
+func getPublisherZmanByKeyRowToPublisherZman(z sqlcgen.GetPublisherZmanByKeyRow) PublisherZman {
+	return PublisherZman{
+		ID:               z.ID,
+		PublisherID:      z.PublisherID,
+		ZmanKey:          z.ZmanKey,
+		HebrewName:       z.HebrewName,
+		EnglishName:      z.EnglishName,
+		FormulaDSL:       z.FormulaDsl,
+		AIExplanation:    z.AiExplanation,
+		PublisherComment: z.PublisherComment,
+		IsEnabled:        z.IsEnabled,
+		IsVisible:        z.IsVisible,
+		IsPublished:      z.IsPublished,
+		IsCustom:         z.IsCustom,
+		Category:         z.Category,
+		Dependencies:     z.Dependencies,
+		SortOrder:        int(z.SortOrder),
+		CreatedAt:        z.CreatedAt,
+		UpdatedAt:        z.UpdatedAt,
+	}
+}
+
+// Convert CreatePublisherZmanRow to PublisherZman
+func createPublisherZmanRowToPublisherZman(z sqlcgen.CreatePublisherZmanRow) PublisherZman {
+	return PublisherZman{
+		ID:               z.ID,
+		PublisherID:      z.PublisherID,
+		ZmanKey:          z.ZmanKey,
+		HebrewName:       z.HebrewName,
+		EnglishName:      z.EnglishName,
+		FormulaDSL:       z.FormulaDsl,
+		AIExplanation:    z.AiExplanation,
+		PublisherComment: z.PublisherComment,
+		IsEnabled:        z.IsEnabled,
+		IsVisible:        z.IsVisible,
+		IsPublished:      z.IsPublished,
+		IsCustom:         z.IsCustom,
+		Category:         z.Category,
+		Dependencies:     z.Dependencies,
+		SortOrder:        int(z.SortOrder),
+		CreatedAt:        z.CreatedAt,
+		UpdatedAt:        z.UpdatedAt,
+	}
+}
+
+// Convert UpdatePublisherZmanRow to PublisherZman
+func updatePublisherZmanRowToPublisherZman(z sqlcgen.UpdatePublisherZmanRow) PublisherZman {
+	return PublisherZman{
+		ID:               z.ID,
+		PublisherID:      z.PublisherID,
+		ZmanKey:          z.ZmanKey,
+		HebrewName:       z.HebrewName,
+		EnglishName:      z.EnglishName,
+		FormulaDSL:       z.FormulaDsl,
+		AIExplanation:    z.AiExplanation,
+		PublisherComment: z.PublisherComment,
+		IsEnabled:        z.IsEnabled,
+		IsVisible:        z.IsVisible,
+		IsPublished:      z.IsPublished,
+		IsCustom:         z.IsCustom,
+		Category:         z.Category,
+		Dependencies:     z.Dependencies,
+		SortOrder:        int(z.SortOrder),
+		CreatedAt:        z.CreatedAt,
+		UpdatedAt:        z.UpdatedAt,
+	}
+}
+
+// Convert ImportZmanimFromTemplatesRow to PublisherZman
+func importZmanimFromTemplatesRowToPublisherZman(z sqlcgen.ImportZmanimFromTemplatesRow) PublisherZman {
+	return PublisherZman{
+		ID:               z.ID,
+		PublisherID:      z.PublisherID,
+		ZmanKey:          z.ZmanKey,
+		HebrewName:       z.HebrewName,
+		EnglishName:      z.EnglishName,
+		FormulaDSL:       z.FormulaDsl,
+		AIExplanation:    z.AiExplanation,
+		PublisherComment: z.PublisherComment,
+		IsEnabled:        z.IsEnabled,
+		IsVisible:        z.IsVisible,
+		IsPublished:      z.IsPublished,
+		IsCustom:         z.IsCustom,
+		Category:         z.Category,
+		Dependencies:     z.Dependencies,
+		SortOrder:        int(z.SortOrder),
+		CreatedAt:        z.CreatedAt,
+		UpdatedAt:        z.UpdatedAt,
+	}
+}
+
+// Convert ImportZmanimFromTemplatesByKeysRow to PublisherZman
+func importZmanimFromTemplatesByKeysRowToPublisherZman(z sqlcgen.ImportZmanimFromTemplatesByKeysRow) PublisherZman {
+	return PublisherZman{
+		ID:               z.ID,
+		PublisherID:      z.PublisherID,
+		ZmanKey:          z.ZmanKey,
+		HebrewName:       z.HebrewName,
+		EnglishName:      z.EnglishName,
+		FormulaDSL:       z.FormulaDsl,
+		AIExplanation:    z.AiExplanation,
+		PublisherComment: z.PublisherComment,
+		IsEnabled:        z.IsEnabled,
+		IsVisible:        z.IsVisible,
+		IsPublished:      z.IsPublished,
+		IsCustom:         z.IsCustom,
+		Category:         z.Category,
+		Dependencies:     z.Dependencies,
+		SortOrder:        int(z.SortOrder),
+		CreatedAt:        z.CreatedAt,
+		UpdatedAt:        z.UpdatedAt,
+	}
 }
 
 // GetPublisherZman returns a single zman by key
 // GET /api/v1/publisher/zmanim/{zmanKey}
 func (h *Handlers) GetPublisherZman(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := middleware.GetUserID(ctx)
-	if userID == "" {
-		RespondUnauthorized(w, r, "User ID not found")
-		return
+
+	// Use PublisherResolver to get publisher context
+	pc := h.publisherResolver.MustResolve(w, r)
+	if pc == nil {
+		return // Response already sent
 	}
+	publisherID := pc.PublisherID
 
 	zmanKey := chi.URLParam(r, "zmanKey")
 
-	// Get publisher ID
-	var publisherID string
-	err := h.db.Pool.QueryRow(ctx,
-		"SELECT id FROM publishers WHERE clerk_user_id = $1",
-		userID,
-	).Scan(&publisherID)
-	if err != nil {
-		RespondNotFound(w, r, "Publisher not found")
-		return
-	}
-
-	query := `
-		SELECT
-			id, publisher_id, zman_key, hebrew_name, english_name,
-			formula_dsl, ai_explanation, publisher_comment,
-			is_enabled, is_visible, is_custom, category,
-			dependencies, sort_order, created_at, updated_at
-		FROM publisher_zmanim
-		WHERE publisher_id = $1 AND zman_key = $2
-	`
-
-	var z PublisherZman
-	err = h.db.Pool.QueryRow(ctx, query, publisherID, zmanKey).Scan(
-		&z.ID, &z.PublisherID, &z.ZmanKey, &z.HebrewName, &z.EnglishName,
-		&z.FormulaDSL, &z.AIExplanation, &z.PublisherComment,
-		&z.IsEnabled, &z.IsVisible, &z.IsCustom, &z.Category,
-		&z.Dependencies, &z.SortOrder, &z.CreatedAt, &z.UpdatedAt,
-	)
+	// Use SQLc generated query
+	sqlcZman, err := h.db.Queries.GetPublisherZmanByKey(ctx, sqlcgen.GetPublisherZmanByKeyParams{
+		PublisherID: publisherID,
+		ZmanKey:     zmanKey,
+	})
 
 	if err == pgx.ErrNoRows {
 		RespondNotFound(w, r, "Zman not found")
@@ -204,31 +324,22 @@ func (h *Handlers) GetPublisherZman(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	RespondJSON(w, r, http.StatusOK, map[string]interface{}{
-		"data": z,
-	})
+	z := getPublisherZmanByKeyRowToPublisherZman(sqlcZman)
+
+	RespondJSON(w, r, http.StatusOK, z)
 }
 
 // CreatePublisherZman creates a new custom zman
 // POST /api/v1/publisher/zmanim
 func (h *Handlers) CreatePublisherZman(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := middleware.GetUserID(ctx)
-	if userID == "" {
-		RespondUnauthorized(w, r, "User ID not found")
-		return
-	}
 
-	// Get publisher ID
-	var publisherID string
-	err := h.db.Pool.QueryRow(ctx,
-		"SELECT id FROM publishers WHERE clerk_user_id = $1",
-		userID,
-	).Scan(&publisherID)
-	if err != nil {
-		RespondNotFound(w, r, "Publisher not found")
-		return
+	// Use PublisherResolver to get publisher context
+	pc := h.publisherResolver.MustResolve(w, r)
+	if pc == nil {
+		return // Response already sent
 	}
+	publisherID := pc.PublisherID
 
 	var req CreateZmanRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -256,46 +367,35 @@ func (h *Handlers) CreatePublisherZman(w http.ResponseWriter, r *http.Request) {
 		isVisible = *req.IsVisible
 	}
 
-	sortOrder := 0
+	sortOrder := int32(0)
 	if req.SortOrder != nil {
-		sortOrder = *req.SortOrder
+		sortOrder = int32(*req.SortOrder)
 	}
 
 	id := uuid.New().String()
 
-	query := `
-		INSERT INTO publisher_zmanim (
-			id, publisher_id, zman_key, hebrew_name, english_name,
-			formula_dsl, ai_explanation, publisher_comment,
-			is_enabled, is_visible, is_custom, category,
-			dependencies, sort_order
-		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
-		)
-		RETURNING id, publisher_id, zman_key, hebrew_name, english_name,
-			formula_dsl, ai_explanation, publisher_comment,
-			is_enabled, is_visible, is_custom, category,
-			dependencies, sort_order, created_at, updated_at
-	`
+	// Use SQLc generated query
+	sqlcZman, insertErr := h.db.Queries.CreatePublisherZman(ctx, sqlcgen.CreatePublisherZmanParams{
+		ID:               id,
+		PublisherID:      publisherID,
+		ZmanKey:          req.ZmanKey,
+		HebrewName:       req.HebrewName,
+		EnglishName:      req.EnglishName,
+		FormulaDsl:       req.FormulaDSL,
+		AiExplanation:    req.AIExplanation,
+		PublisherComment: req.PublisherComment,
+		IsEnabled:        isEnabled,
+		IsVisible:        isVisible,
+		IsPublished:      false, // New zmanim start unpublished
+		IsCustom:         true,  // Custom zmanim are always user-created
+		Category:         "custom",
+		Dependencies:     dependencies,
+		SortOrder:        sortOrder,
+	})
 
-	var z PublisherZman
-	err = h.db.Pool.QueryRow(
-		ctx,
-		query,
-		id, publisherID, req.ZmanKey, req.HebrewName, req.EnglishName,
-		req.FormulaDSL, req.AIExplanation, req.PublisherComment,
-		isEnabled, isVisible, true, "custom", // is_custom=true for user-created
-		dependencies, sortOrder,
-	).Scan(
-		&z.ID, &z.PublisherID, &z.ZmanKey, &z.HebrewName, &z.EnglishName,
-		&z.FormulaDSL, &z.AIExplanation, &z.PublisherComment,
-		&z.IsEnabled, &z.IsVisible, &z.IsCustom, &z.Category,
-		&z.Dependencies, &z.SortOrder, &z.CreatedAt, &z.UpdatedAt,
-	)
-
-	if err != nil {
+	if insertErr != nil {
 		// Check for unique constraint violation
-		if strings.Contains(err.Error(), "duplicate key") {
+		if strings.Contains(insertErr.Error(), "duplicate key") {
 			RespondBadRequest(w, r, fmt.Sprintf("Zman with key '%s' already exists", req.ZmanKey))
 			return
 		}
@@ -303,172 +403,123 @@ func (h *Handlers) CreatePublisherZman(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	RespondJSON(w, r, http.StatusCreated, map[string]interface{}{
-		"data": z,
-	})
+	z := createPublisherZmanRowToPublisherZman(sqlcZman)
+
+	RespondJSON(w, r, http.StatusCreated, z)
 }
 
 // UpdatePublisherZman updates an existing zman
 // PUT /api/v1/publisher/zmanim/{zmanKey}
 func (h *Handlers) UpdatePublisherZman(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := middleware.GetUserID(ctx)
-	if userID == "" {
-		RespondUnauthorized(w, r, "User ID not found")
-		return
+
+	// Use PublisherResolver to get publisher context
+	pc := h.publisherResolver.MustResolve(w, r)
+	if pc == nil {
+		return // Response already sent
 	}
+	publisherID := pc.PublisherID
 
 	zmanKey := chi.URLParam(r, "zmanKey")
 
-	// Get publisher ID
-	var publisherID string
-	err := h.db.Pool.QueryRow(ctx,
-		"SELECT id FROM publishers WHERE clerk_user_id = $1",
-		userID,
-	).Scan(&publisherID)
-	if err != nil {
-		RespondNotFound(w, r, "Publisher not found")
+	// Read and log the raw body for debugging
+	bodyBytes, readErr := io.ReadAll(r.Body)
+	if readErr != nil {
+		log.Printf("ERROR [UpdatePublisherZman] Failed to read body: %v", readErr)
+		RespondBadRequest(w, r, "Failed to read request body")
 		return
 	}
+	log.Printf("DEBUG [UpdatePublisherZman] Raw body for zman %s: %s", zmanKey, string(bodyBytes))
 
 	var req UpdateZmanRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.Unmarshal(bodyBytes, &req); err != nil {
+		log.Printf("ERROR [UpdatePublisherZman] Failed to decode body: %v", err)
 		RespondBadRequest(w, r, "Invalid request body")
 		return
 	}
 
-	// Build dynamic update query
-	updates := []string{}
-	args := []interface{}{publisherID, zmanKey}
-	argCount := 2
+	log.Printf("INFO [UpdatePublisherZman] Request for zman %s: Category=%v, IsEnabled=%v, IsPublished=%v",
+		zmanKey, req.Category, req.IsEnabled, req.IsPublished)
 
-	if req.HebrewName != nil {
-		argCount++
-		updates = append(updates, fmt.Sprintf("hebrew_name = $%d", argCount))
-		args = append(args, *req.HebrewName)
-	}
-
-	if req.EnglishName != nil {
-		argCount++
-		updates = append(updates, fmt.Sprintf("english_name = $%d", argCount))
-		args = append(args, *req.EnglishName)
-	}
-
-	if req.FormulaDSL != nil {
-		argCount++
-		updates = append(updates, fmt.Sprintf("formula_dsl = $%d", argCount))
-		args = append(args, *req.FormulaDSL)
-
-		// Re-extract dependencies when formula changes
-		argCount++
-		updates = append(updates, fmt.Sprintf("dependencies = $%d", argCount))
-		args = append(args, extractDependencies(*req.FormulaDSL))
-	}
-
-	if req.AIExplanation != nil {
-		argCount++
-		updates = append(updates, fmt.Sprintf("ai_explanation = $%d", argCount))
-		args = append(args, *req.AIExplanation)
-	}
-
-	if req.PublisherComment != nil {
-		argCount++
-		updates = append(updates, fmt.Sprintf("publisher_comment = $%d", argCount))
-		args = append(args, *req.PublisherComment)
-	}
-
-	if req.IsEnabled != nil {
-		argCount++
-		updates = append(updates, fmt.Sprintf("is_enabled = $%d", argCount))
-		args = append(args, *req.IsEnabled)
-	}
-
-	if req.IsVisible != nil {
-		argCount++
-		updates = append(updates, fmt.Sprintf("is_visible = $%d", argCount))
-		args = append(args, *req.IsVisible)
-	}
-
-	if req.SortOrder != nil {
-		argCount++
-		updates = append(updates, fmt.Sprintf("sort_order = $%d", argCount))
-		args = append(args, *req.SortOrder)
-	}
-
-	if len(updates) == 0 {
+	// At least one field must be provided
+	if req.HebrewName == nil && req.EnglishName == nil && req.FormulaDSL == nil &&
+		req.AIExplanation == nil && req.PublisherComment == nil &&
+		req.IsEnabled == nil && req.IsVisible == nil && req.IsPublished == nil &&
+		req.Category == nil && req.SortOrder == nil {
+		log.Printf("ERROR [UpdatePublisherZman] No fields to update")
 		RespondBadRequest(w, r, "No fields to update")
 		return
 	}
 
-	query := fmt.Sprintf(`
-		UPDATE publisher_zmanim
-		SET %s
-		WHERE publisher_id = $1 AND zman_key = $2
-		RETURNING id, publisher_id, zman_key, hebrew_name, english_name,
-			formula_dsl, ai_explanation, publisher_comment,
-			is_enabled, is_visible, is_custom, category,
-			dependencies, sort_order, created_at, updated_at
-	`, strings.Join(updates, ", "))
+	// Extract dependencies if formula is updated
+	var dependencies []string
+	if req.FormulaDSL != nil {
+		dependencies = extractDependencies(*req.FormulaDSL)
+	}
 
-	var z PublisherZman
-	err = h.db.Pool.QueryRow(ctx, query, args...).Scan(
-		&z.ID, &z.PublisherID, &z.ZmanKey, &z.HebrewName, &z.EnglishName,
-		&z.FormulaDSL, &z.AIExplanation, &z.PublisherComment,
-		&z.IsEnabled, &z.IsVisible, &z.IsCustom, &z.Category,
-		&z.Dependencies, &z.SortOrder, &z.CreatedAt, &z.UpdatedAt,
-	)
+	// Convert sort order to int32 pointer
+	var sortOrder *int32
+	if req.SortOrder != nil {
+		so := int32(*req.SortOrder)
+		sortOrder = &so
+	}
 
-	if err == pgx.ErrNoRows {
+	// Use SQLc generated query
+	sqlcZman, updateErr := h.db.Queries.UpdatePublisherZman(ctx, sqlcgen.UpdatePublisherZmanParams{
+		PublisherID:      publisherID,
+		ZmanKey:          zmanKey,
+		HebrewName:       req.HebrewName,
+		EnglishName:      req.EnglishName,
+		FormulaDsl:       req.FormulaDSL,
+		AiExplanation:    req.AIExplanation,
+		PublisherComment: req.PublisherComment,
+		IsEnabled:        req.IsEnabled,
+		IsVisible:        req.IsVisible,
+		IsPublished:      req.IsPublished,
+		Category:         req.Category,
+		SortOrder:        sortOrder,
+		Dependencies:     dependencies,
+	})
+
+	if updateErr == pgx.ErrNoRows {
 		RespondNotFound(w, r, "Zman not found")
 		return
 	}
-	if err != nil {
+	if updateErr != nil {
 		RespondInternalError(w, r, "Failed to update zman")
 		return
 	}
 
-	RespondJSON(w, r, http.StatusOK, map[string]interface{}{
-		"data": z,
-	})
+	z := updatePublisherZmanRowToPublisherZman(sqlcZman)
+
+	RespondJSON(w, r, http.StatusOK, z)
 }
 
 // DeletePublisherZman deletes a custom zman
 // DELETE /api/v1/publisher/zmanim/{zmanKey}
 func (h *Handlers) DeletePublisherZman(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := middleware.GetUserID(ctx)
-	if userID == "" {
-		RespondUnauthorized(w, r, "User ID not found")
-		return
+
+	// Use PublisherResolver to get publisher context
+	pc := h.publisherResolver.MustResolve(w, r)
+	if pc == nil {
+		return // Response already sent
 	}
+	publisherID := pc.PublisherID
 
 	zmanKey := chi.URLParam(r, "zmanKey")
 
-	// Get publisher ID
-	var publisherID string
-	err := h.db.Pool.QueryRow(ctx,
-		"SELECT id FROM publishers WHERE clerk_user_id = $1",
-		userID,
-	).Scan(&publisherID)
-	if err != nil {
-		RespondNotFound(w, r, "Publisher not found")
-		return
-	}
+	// Use SQLc generated query
+	_, deleteErr := h.db.Queries.DeletePublisherZman(ctx, sqlcgen.DeletePublisherZmanParams{
+		PublisherID: publisherID,
+		ZmanKey:     zmanKey,
+	})
 
-	query := `
-		DELETE FROM publisher_zmanim
-		WHERE publisher_id = $1 AND zman_key = $2 AND is_custom = true
-		RETURNING id
-	`
-
-	var deletedID string
-	err = h.db.Pool.QueryRow(ctx, query, publisherID, zmanKey).Scan(&deletedID)
-
-	if err == pgx.ErrNoRows {
+	if deleteErr == pgx.ErrNoRows {
 		RespondBadRequest(w, r, "Can only delete custom zmanim, or zman not found")
 		return
 	}
-	if err != nil {
+	if deleteErr != nil {
 		RespondInternalError(w, r, "Failed to delete zman")
 		return
 	}
@@ -479,45 +530,216 @@ func (h *Handlers) DeletePublisherZman(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// ImportZmanimRequest represents the request body for importing zmanim
+type ImportZmanimRequest struct {
+	Source      string   `json:"source"`       // "defaults" or "publisher"
+	PublisherID *string  `json:"publisher_id"` // Required if source is "publisher"
+	ZmanKeys    []string `json:"zman_keys"`    // Optional: specific keys to import (empty = all)
+}
+
+// ImportZmanim bulk imports zmanim from defaults or another publisher
+// POST /api/v1/publisher/zmanim/import
+func (h *Handlers) ImportZmanim(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// Use PublisherResolver to get publisher context
+	pc := h.publisherResolver.MustResolve(w, r)
+	if pc == nil {
+		return // Response already sent
+	}
+	publisherID := pc.PublisherID
+
+	var req ImportZmanimRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		RespondBadRequest(w, r, "Invalid request body")
+		return
+	}
+
+	// Validate source
+	if req.Source != "defaults" && req.Source != "publisher" {
+		RespondBadRequest(w, r, "Source must be 'defaults' or 'publisher'")
+		return
+	}
+
+	if req.Source == "publisher" && (req.PublisherID == nil || *req.PublisherID == "") {
+		RespondBadRequest(w, r, "publisher_id is required when source is 'publisher'")
+		return
+	}
+
+	var imported []PublisherZman
+
+	if req.Source == "defaults" {
+		// Import from zmanim_templates table using SQLc
+		var err error
+
+		if len(req.ZmanKeys) > 0 {
+			// Import specific templates
+			sqlcImported, importErr := h.db.Queries.ImportZmanimFromTemplatesByKeys(ctx, sqlcgen.ImportZmanimFromTemplatesByKeysParams{
+				PublisherID: publisherID,
+				Column2:     req.ZmanKeys,
+			})
+			err = importErr
+			if err == nil {
+				for _, z := range sqlcImported {
+					imported = append(imported, importZmanimFromTemplatesByKeysRowToPublisherZman(z))
+				}
+			}
+		} else {
+			// Import all templates
+			sqlcImported, importErr := h.db.Queries.ImportZmanimFromTemplates(ctx, publisherID)
+			err = importErr
+			if err == nil {
+				for _, z := range sqlcImported {
+					imported = append(imported, importZmanimFromTemplatesRowToPublisherZman(z))
+				}
+			}
+		}
+
+		if err != nil {
+			RespondInternalError(w, r, "Failed to import templates: "+err.Error())
+			return
+		}
+
+	} else {
+		// Import from another publisher
+		sourcePublisherID := *req.PublisherID
+
+		// Verify source publisher exists and has public algorithm
+		var isPublic bool
+		err := h.db.Pool.QueryRow(ctx,
+			"SELECT COALESCE(algorithm_public, false) FROM publishers WHERE id = $1",
+			sourcePublisherID,
+		).Scan(&isPublic)
+		if err == pgx.ErrNoRows {
+			RespondNotFound(w, r, "Source publisher not found")
+			return
+		}
+		if err != nil {
+			RespondInternalError(w, r, "Failed to check source publisher")
+			return
+		}
+		if !isPublic {
+			RespondForbidden(w, r, "Source publisher's algorithm is not public")
+			return
+		}
+
+		// Note: Import from publisher still uses raw SQL as it's not in SQLc queries
+		// This is intentional - less common operation, more complex query
+		var query string
+		var args []interface{}
+
+		if len(req.ZmanKeys) > 0 {
+			query = `
+				INSERT INTO publisher_zmanim (
+					id, publisher_id, zman_key, hebrew_name, english_name,
+					formula_dsl, ai_explanation, publisher_comment,
+					is_enabled, is_visible, is_custom, category,
+					dependencies, sort_order
+				)
+				SELECT
+					gen_random_uuid(), $1, zman_key, hebrew_name, english_name,
+					formula_dsl, ai_explanation, NULL,
+					true, true, false, category,
+					dependencies, sort_order
+				FROM publisher_zmanim
+				WHERE publisher_id = $2 AND zman_key = ANY($3)
+				ON CONFLICT (publisher_id, zman_key) DO NOTHING
+				RETURNING id, publisher_id, zman_key, hebrew_name, english_name,
+					formula_dsl, ai_explanation, publisher_comment,
+					is_enabled, is_visible, is_custom, category,
+					dependencies, sort_order, created_at, updated_at
+			`
+			args = []interface{}{publisherID, sourcePublisherID, req.ZmanKeys}
+		} else {
+			query = `
+				INSERT INTO publisher_zmanim (
+					id, publisher_id, zman_key, hebrew_name, english_name,
+					formula_dsl, ai_explanation, publisher_comment,
+					is_enabled, is_visible, is_custom, category,
+					dependencies, sort_order
+				)
+				SELECT
+					gen_random_uuid(), $1, zman_key, hebrew_name, english_name,
+					formula_dsl, ai_explanation, NULL,
+					true, true, false, category,
+					dependencies, sort_order
+				FROM publisher_zmanim
+				WHERE publisher_id = $2
+				ON CONFLICT (publisher_id, zman_key) DO NOTHING
+				RETURNING id, publisher_id, zman_key, hebrew_name, english_name,
+					formula_dsl, ai_explanation, publisher_comment,
+					is_enabled, is_visible, is_custom, category,
+					dependencies, sort_order, created_at, updated_at
+			`
+			args = []interface{}{publisherID, sourcePublisherID}
+		}
+
+		rows, err := h.db.Pool.Query(ctx, query, args...)
+		if err != nil {
+			RespondInternalError(w, r, "Failed to import from publisher: "+err.Error())
+			return
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var z PublisherZman
+			err := rows.Scan(
+				&z.ID, &z.PublisherID, &z.ZmanKey, &z.HebrewName, &z.EnglishName,
+				&z.FormulaDSL, &z.AIExplanation, &z.PublisherComment,
+				&z.IsEnabled, &z.IsVisible, &z.IsCustom, &z.Category,
+				&z.Dependencies, &z.SortOrder, &z.CreatedAt, &z.UpdatedAt,
+			)
+			if err != nil {
+				RespondInternalError(w, r, "Failed to scan imported zman")
+				return
+			}
+			imported = append(imported, z)
+		}
+	}
+
+	RespondJSON(w, r, http.StatusOK, map[string]interface{}{
+		"imported": imported,
+		"count":    len(imported),
+		"message":  fmt.Sprintf("Successfully imported %d zmanim", len(imported)),
+	})
+}
+
 // GetZmanimTemplates returns all system templates
 // GET /api/v1/zmanim/templates
 func (h *Handlers) GetZmanimTemplates(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	query := `
-		SELECT
-			id, zman_key, hebrew_name, english_name, formula_dsl,
-			category, description, is_required, sort_order,
-			created_at, updated_at
-		FROM zmanim_templates
-		ORDER BY category, sort_order, hebrew_name
-	`
-
-	rows, err := h.db.Pool.Query(ctx, query)
+	// Use SQLc generated query
+	sqlcTemplates, err := h.db.Queries.GetZmanimTemplates(ctx)
 	if err != nil {
 		RespondInternalError(w, r, "Failed to fetch templates")
 		return
 	}
-	defer rows.Close()
 
-	templates := []ZmanimTemplate{}
-	for rows.Next() {
-		var t ZmanimTemplate
-		err := rows.Scan(
-			&t.ID, &t.ZmanKey, &t.HebrewName, &t.EnglishName, &t.FormulaDSL,
-			&t.Category, &t.Description, &t.IsRequired, &t.SortOrder,
-			&t.CreatedAt, &t.UpdatedAt,
-		)
-		if err != nil {
-			RespondInternalError(w, r, "Failed to scan template")
-			return
-		}
-		templates = append(templates, t)
+	// Convert to handler types
+	templates := make([]ZmanimTemplate, len(sqlcTemplates))
+	for i, t := range sqlcTemplates {
+		templates[i] = sqlcTemplateToZmanimTemplate(t)
 	}
 
-	RespondJSON(w, r, http.StatusOK, map[string]interface{}{
-		"data": templates,
-	})
+	RespondJSON(w, r, http.StatusOK, templates)
+}
+
+// sqlcTemplateToZmanimTemplate converts SQLc generated type to handler type
+func sqlcTemplateToZmanimTemplate(t sqlcgen.ZmanimTemplate) ZmanimTemplate {
+	return ZmanimTemplate{
+		ID:          t.ID,
+		ZmanKey:     t.ZmanKey,
+		HebrewName:  t.HebrewName,
+		EnglishName: t.EnglishName,
+		FormulaDSL:  t.FormulaDsl,
+		Category:    t.Category,
+		Description: t.Description,
+		IsRequired:  t.IsRequired,
+		SortOrder:   int(t.SortOrder),
+		CreatedAt:   t.CreatedAt,
+		UpdatedAt:   t.UpdatedAt,
+	}
 }
 
 // BrowsePublicZmanim allows browsing public zmanim from other publishers
@@ -527,44 +749,15 @@ func (h *Handlers) BrowsePublicZmanim(w http.ResponseWriter, r *http.Request) {
 	searchQuery := r.URL.Query().Get("q")
 	category := r.URL.Query().Get("category")
 
-	query := `
-		SELECT
-			z.id, z.publisher_id, z.zman_key, z.hebrew_name, z.english_name,
-			z.formula_dsl, z.category,
-			p.name as publisher_name,
-			COUNT(*) OVER (PARTITION BY z.zman_key) as usage_count
-		FROM publisher_zmanim z
-		JOIN publishers p ON p.id = z.publisher_id
-		WHERE z.is_visible = true
-	`
-
-	args := []interface{}{}
-	argCount := 0
-
-	if searchQuery != "" {
-		argCount++
-		query += fmt.Sprintf(` AND (
-			z.hebrew_name ILIKE $%d OR
-			z.english_name ILIKE $%d OR
-			z.formula_dsl ILIKE $%d
-		)`, argCount, argCount, argCount)
-		args = append(args, "%"+searchQuery+"%")
-	}
-
-	if category != "" {
-		argCount++
-		query += fmt.Sprintf(" AND z.category = $%d", argCount)
-		args = append(args, category)
-	}
-
-	query += " ORDER BY usage_count DESC, z.hebrew_name LIMIT 50"
-
-	rows, err := h.db.Pool.Query(ctx, query, args...)
+	// Use SQLc generated query
+	sqlcResults, err := h.db.Queries.BrowsePublicZmanim(ctx, sqlcgen.BrowsePublicZmanimParams{
+		Column1: searchQuery, // Search term (can be empty)
+		Column2: category,    // Category filter (can be empty)
+	})
 	if err != nil {
 		RespondInternalError(w, r, "Failed to browse zmanim")
 		return
 	}
-	defer rows.Close()
 
 	type BrowseResult struct {
 		ID            string `json:"id"`
@@ -578,21 +771,20 @@ func (h *Handlers) BrowsePublicZmanim(w http.ResponseWriter, r *http.Request) {
 		UsageCount    int    `json:"usage_count"`
 	}
 
-	results := []BrowseResult{}
-	for rows.Next() {
-		var br BrowseResult
-		err := rows.Scan(
-			&br.ID, &br.PublisherID, &br.ZmanKey, &br.HebrewName, &br.EnglishName,
-			&br.FormulaDSL, &br.Category, &br.PublisherName, &br.UsageCount,
-		)
-		if err != nil {
-			RespondInternalError(w, r, "Failed to scan result")
-			return
+	results := make([]BrowseResult, len(sqlcResults))
+	for i, r := range sqlcResults {
+		results[i] = BrowseResult{
+			ID:            r.ID,
+			PublisherID:   r.PublisherID,
+			PublisherName: r.PublisherName,
+			ZmanKey:       r.ZmanKey,
+			HebrewName:    r.HebrewName,
+			EnglishName:   r.EnglishName,
+			FormulaDSL:    r.FormulaDsl,
+			Category:      r.Category,
+			UsageCount:    int(r.UsageCount),
 		}
-		results = append(results, br)
 	}
 
-	RespondJSON(w, r, http.StatusOK, map[string]interface{}{
-		"data": results,
-	})
+	RespondJSON(w, r, http.StatusOK, results)
 }

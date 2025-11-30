@@ -1,9 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import {
   Dialog,
   DialogContent,
@@ -13,7 +11,6 @@ import {
 } from '@/components/ui/dialog';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Calendar,
   Loader2,
@@ -21,6 +18,10 @@ import {
   Moon,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
+  ChevronDown,
+  ChevronsUp,
+  ChevronsDown,
   Star,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -48,6 +49,21 @@ function formatDate(dateStr: string): string {
 function getDayOfWeek(dateStr: string): string {
   const date = new Date(dateStr);
   return date.toLocaleDateString('en-US', { weekday: 'long' });
+}
+
+// Month names for dropdown
+const months = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
+];
+
+// Generate years for dropdown (current year -2 to +5)
+const currentYear = new Date().getFullYear();
+const years = Array.from({ length: 8 }, (_, i) => currentYear - 2 + i);
+
+// Get days in a month
+function getDaysInMonth(year: number, month: number): number {
+  return new Date(year, month + 1, 0).getDate();
 }
 
 export function WeeklyPreviewDialog({
@@ -104,6 +120,25 @@ export function WeeklyPreviewDialog({
     setStartDate(new Date().toISOString().split('T')[0]);
   };
 
+  // Scroll ref and functions
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const scrollToTop = () => {
+    scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const scrollToBottom = () => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+  };
+
+  const scrollUp = () => {
+    scrollRef.current?.scrollBy({ top: -150, behavior: 'smooth' });
+  };
+
+  const scrollDown = () => {
+    scrollRef.current?.scrollBy({ top: 150, behavior: 'smooth' });
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
@@ -123,34 +158,116 @@ export function WeeklyPreviewDialog({
         </DialogHeader>
 
         {/* Date Navigation */}
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="icon" onClick={goToPreviousWeek}>
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <Button variant="outline" size="icon" onClick={goToNextWeek}>
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="sm" onClick={goToToday}>
-              Today
-            </Button>
+        <div className="flex flex-col gap-3">
+          {/* Navigation buttons row */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="icon" onClick={goToPreviousWeek}>
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="sm" onClick={goToToday}>
+                Today
+              </Button>
+              <Button variant="outline" size="icon" onClick={goToNextWeek}>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Label htmlFor="start-date" className="text-sm">
-              Start:
-            </Label>
-            <Input
-              id="start-date"
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="w-40"
-            />
+
+          {/* Year / Month / Day Selectors */}
+          <div className="flex flex-wrap items-center gap-3 p-3 bg-muted/30 rounded-lg border border-border">
+            {/* Year Selector */}
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-muted-foreground font-medium">Year:</label>
+              <select
+                value={new Date(startDate).getFullYear()}
+                onChange={(e) => {
+                  const date = new Date(startDate);
+                  date.setFullYear(parseInt(e.target.value));
+                  // Adjust day if needed (e.g., Feb 29 -> Feb 28)
+                  const maxDay = getDaysInMonth(parseInt(e.target.value), date.getMonth());
+                  if (date.getDate() > maxDay) date.setDate(maxDay);
+                  setStartDate(date.toISOString().split('T')[0]);
+                }}
+                className="bg-background border border-input rounded-md px-2 py-1.5 text-sm min-w-[80px] focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                {years.map((year) => (
+                  <option key={year} value={year}>{year}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Month Selector */}
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-muted-foreground font-medium">Month:</label>
+              <select
+                value={new Date(startDate).getMonth()}
+                onChange={(e) => {
+                  const date = new Date(startDate);
+                  const newMonth = parseInt(e.target.value);
+                  // Adjust day if needed
+                  const maxDay = getDaysInMonth(date.getFullYear(), newMonth);
+                  if (date.getDate() > maxDay) date.setDate(maxDay);
+                  date.setMonth(newMonth);
+                  setStartDate(date.toISOString().split('T')[0]);
+                }}
+                className="bg-background border border-input rounded-md px-2 py-1.5 text-sm min-w-[110px] focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                {months.map((month, index) => (
+                  <option key={month} value={index}>{month}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Day Selector */}
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-muted-foreground font-medium">Day:</label>
+              <select
+                value={new Date(startDate).getDate()}
+                onChange={(e) => {
+                  const date = new Date(startDate);
+                  date.setDate(parseInt(e.target.value));
+                  setStartDate(date.toISOString().split('T')[0]);
+                }}
+                className="bg-background border border-input rounded-md px-2 py-1.5 text-sm min-w-[60px] focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                {Array.from(
+                  { length: getDaysInMonth(new Date(startDate).getFullYear(), new Date(startDate).getMonth()) },
+                  (_, i) => i + 1
+                ).map((day) => (
+                  <option key={day} value={day}>{day}</option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
 
-        {/* Weekly Grid */}
-        <ScrollArea className="flex-1 h-[450px]">
+        {/* Legend - Always visible at top */}
+        <div className="flex items-center gap-4 text-xs text-muted-foreground py-2 border-b">
+          <div className="flex items-center gap-1">
+            <div className="w-3 h-3 rounded border border-primary/50 bg-primary/10" />
+            <span>Shabbat</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="w-3 h-3 rounded border border-amber-500/50 bg-amber-50 dark:bg-amber-950" />
+            <span>Yom Tov</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <Sun className="h-3 w-3 text-amber-500" />
+            <span>Sunrise</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <Moon className="h-3 w-3 text-blue-500" />
+            <span>Sunset</span>
+          </div>
+        </div>
+
+        {/* Weekly Grid with Scroll */}
+        <div className="relative flex-1">
+          <div
+            ref={scrollRef}
+            className="h-[400px] overflow-y-auto pr-4"
+          >
           {previewWeek.isPending ? (
             <div className="flex items-center justify-center h-32">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -221,26 +338,49 @@ export function WeeklyPreviewDialog({
               ))}
             </div>
           )}
-        </ScrollArea>
+          </div>
 
-        {/* Legend */}
-        <div className="flex items-center gap-4 text-xs text-muted-foreground pt-2 border-t">
-          <div className="flex items-center gap-1">
-            <div className="w-3 h-3 rounded border border-primary/50 bg-primary/10" />
-            <span>Shabbat</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <div className="w-3 h-3 rounded border border-amber-500/50 bg-amber-50 dark:bg-amber-950" />
-            <span>Yom Tov</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <Sun className="h-3 w-3 text-amber-500" />
-            <span>Sunrise</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <Moon className="h-3 w-3 text-blue-500" />
-            <span>Sunset</span>
-          </div>
+          {/* Scroll Navigation Buttons */}
+          {days.length > 0 && (
+            <div className="absolute right-0 top-1/2 -translate-y-1/2 flex flex-col gap-1 bg-background/80 backdrop-blur-sm rounded-lg p-1 shadow-lg border">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={scrollToTop}
+                title="Scroll to top"
+              >
+                <ChevronsUp className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={scrollUp}
+                title="Scroll up"
+              >
+                <ChevronUp className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={scrollDown}
+                title="Scroll down"
+              >
+                <ChevronDown className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={scrollToBottom}
+                title="Scroll to bottom"
+              >
+                <ChevronsDown className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
         </div>
       </DialogContent>
     </Dialog>

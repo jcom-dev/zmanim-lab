@@ -23,7 +23,7 @@ type ClaudeService struct {
 func NewClaudeService(apiKey string) *ClaudeService {
 	return &ClaudeService{
 		apiKey: apiKey,
-		model:  "claude-3-5-sonnet-20241022",
+		model:  "claude-sonnet-4-20250514",
 		httpClient: &http.Client{
 			Timeout: 60 * time.Second,
 		},

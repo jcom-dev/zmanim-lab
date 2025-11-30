@@ -1,22 +1,24 @@
 'use client';
-import { API_BASE } from '@/lib/api';
 
 import { useState, useRef, DragEvent, ChangeEvent } from 'react';
 import NextImage from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Upload, X, Image as ImageIcon } from 'lucide-react';
+import { useApi } from '@/lib/api-client';
 
 interface LogoUploadProps {
   currentLogoUrl?: string | null;
   onUploadComplete: (logoUrl: string) => void;
   onUploadError: (error: string) => void;
-  getToken: () => Promise<string | null>;
+  /** @deprecated No longer needed - component uses useApi internally */
+  getToken?: () => Promise<string | null>;
 }
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
 
-export function LogoUpload({ currentLogoUrl, onUploadComplete, onUploadError, getToken }: LogoUploadProps) {
+export function LogoUpload({ currentLogoUrl, onUploadComplete, onUploadError }: LogoUploadProps) {
+  const api = useApi();
   const [preview, setPreview] = useState<string | null>(currentLogoUrl || null);
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -66,26 +68,14 @@ export function LogoUpload({ currentLogoUrl, onUploadComplete, onUploadError, ge
         });
       }, 100);
 
-      const token = await getToken();
-      
-      const response = await fetch(`${API_BASE}/api/v1/publisher/logo`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
+      const data = await api.post<{ logo_url: string }>('/publisher/logo', {
         body: formData,
       });
 
       clearInterval(progressInterval);
       setUploadProgress(100);
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || 'Failed to upload logo');
-      }
-
-      const data = await response.json();
-      const logoUrl = data.logo_url || data.data?.logo_url;
+      const logoUrl = data.logo_url;
 
       if (!logoUrl) {
         throw new Error('No logo URL returned from server');

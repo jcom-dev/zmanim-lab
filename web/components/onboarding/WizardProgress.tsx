@@ -12,7 +12,7 @@ interface WizardProgressProps {
   completedSteps: number[];
 }
 
-export function WizardProgress({ steps, currentStep, completedSteps }: WizardProgressProps) {
+export function WizardProgress({ steps, currentStep, completedSteps = [] }: WizardProgressProps) {
   return (
     <nav aria-label="Wizard progress" className="flex justify-between">
       {steps.map((step, index) => {

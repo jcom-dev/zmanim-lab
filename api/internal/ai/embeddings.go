@@ -86,9 +86,23 @@ func (s *EmbeddingService) GenerateEmbeddings(ctx context.Context, texts []strin
 		return nil, nil
 	}
 
+	// Filter out empty strings which cause OpenAI API errors
+	var validTexts []string
+	var originalIndices []int
+	for i, t := range texts {
+		if t != "" {
+			validTexts = append(validTexts, t)
+			originalIndices = append(originalIndices, i)
+		}
+	}
+
+	if len(validTexts) == 0 {
+		return nil, fmt.Errorf("all texts were empty")
+	}
+
 	reqBody := embeddingRequest{
 		Model: EmbeddingModel,
-		Input: texts,
+		Input: validTexts,
 	}
 
 	jsonBody, err := json.Marshal(reqBody)
@@ -123,9 +137,12 @@ func (s *EmbeddingService) GenerateEmbeddings(ctx context.Context, texts []strin
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 
+	// Map results back to original indices
 	result := make([][]float32, len(texts))
 	for _, data := range embResp.Data {
-		result[data.Index] = data.Embedding
+		if data.Index < len(originalIndices) {
+			result[originalIndices[data.Index]] = data.Embedding
+		}
 	}
 
 	return result, nil

@@ -1,7 +1,15 @@
 'use client';
 
 import { Input } from '@/components/ui/input';
-import { Select } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import type { OffsetDirection } from '../types';
 import { baseTimeOptions } from '../types';
@@ -118,12 +126,23 @@ export function FixedOffsetForm({
       {/* Base time selection */}
       <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
         <label className="text-sm font-medium">Base Time</label>
-        <Select
-          value={base}
-          onChange={onBaseChange}
-          groups={baseTimeOptions}
-          placeholder="Select base time..."
-        />
+        <Select value={base} onValueChange={onBaseChange}>
+          <SelectTrigger>
+            <SelectValue placeholder="Select base time..." />
+          </SelectTrigger>
+          <SelectContent>
+            {baseTimeOptions.map((group) => (
+              <SelectGroup key={group.label}>
+                <SelectLabel>{group.label}</SelectLabel>
+                {group.options.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
     </div>
   );

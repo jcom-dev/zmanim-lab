@@ -1,30 +1,9 @@
 'use client';
-import { API_BASE } from '@/lib/api';
 
-import { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-
-interface ZmanConfig {
-  method: string;
-  params: Record<string, unknown>;
-}
-
-interface AlgorithmConfig {
-  name: string;
-  description?: string;
-  zmanim: Record<string, ZmanConfig>;
-}
-
-interface PreviewZman {
-  name: string;
-  key: string;
-  time: string;
-  formula: {
-    method: string;
-    display_name: string;
-    explanation: string;
-  };
-}
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { PublisherZman } from '@/lib/hooks/useZmanimList';
+import { useApi } from '@/lib/api-client';
 
 export interface PreviewLocation {
   latitude: number;
@@ -33,24 +12,35 @@ export interface PreviewLocation {
   displayName: string;
 }
 
-interface AlgorithmPreviewProps {
-  configuration: AlgorithmConfig;
-  getToken: () => Promise<string | null>;
-  location: PreviewLocation;
+interface PreviewResult {
+  key: string;
+  name: string;
+  time: string | null;
+  error?: string;
 }
 
-export function AlgorithmPreview({ configuration, getToken, location }: AlgorithmPreviewProps) {
-  const [preview, setPreview] = useState<PreviewZman[]>([]);
+interface AlgorithmPreviewProps {
+  zmanim: PublisherZman[];
+  location: PreviewLocation;
+  selectedDate: Date;
+}
+
+export function AlgorithmPreview({ zmanim, location, selectedDate }: AlgorithmPreviewProps) {
+  const api = useApi();
+  const [preview, setPreview] = useState<PreviewResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const date = new Date().toISOString().split('T')[0];
 
-  useEffect(() => {
-    loadPreview();
-  }, [configuration, location]);
+  // Format selected date as YYYY-MM-DD
+  const dateStr = useMemo(() => {
+    return selectedDate.toISOString().split('T')[0];
+  }, [selectedDate]);
 
-  const loadPreview = async () => {
-    if (Object.keys(configuration.zmanim).length === 0) {
+  const loadPreview = useCallback(async () => {
+    // Only preview enabled zmanim
+    const enabledZmanim = zmanim.filter(z => z.is_enabled);
+
+    if (enabledZmanim.length === 0) {
       setPreview([]);
       return;
     }
@@ -59,51 +49,81 @@ export function AlgorithmPreview({ configuration, getToken, location }: Algorith
       setLoading(true);
       setError(null);
 
-      const token = await getToken();
-      if (!token) {
-        setError('Not authenticated');
-        setLoading(false);
-        return;
-      }
+      // Calculate preview for each zman using the DSL preview endpoint
+      const results = await Promise.allSettled(
+        enabledZmanim.slice(0, 20).map(async (zman) => {
+          // Use api.post - it handles auth automatically
+          const result = await api.post<{ result?: string; time?: string }>('/dsl/preview', {
+            body: JSON.stringify({
+              formula: zman.formula_dsl,
+              date: dateStr,
+              latitude: location.latitude,
+              longitude: location.longitude,
+              timezone: location.timezone,
+            }),
+          });
+          return {
+            key: zman.zman_key,
+            name: zman.english_name,
+            time: result.result || result.time || null,
+          };
+        })
+      );
 
-      const response = await fetch(`${API_BASE}/api/v1/publisher/algorithm/preview`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          configuration,
-          date,
-          latitude: location.latitude,
-          longitude: location.longitude,
-          timezone: location.timezone,
-        }),
+      const previewResults: PreviewResult[] = results.map((result, index) => {
+        if (result.status === 'fulfilled') {
+          return result.value;
+        } else {
+          return {
+            key: enabledZmanim[index].zman_key,
+            name: enabledZmanim[index].english_name,
+            time: null,
+            error: result.reason?.message || 'Error',
+          };
+        }
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to load preview');
-      }
-
-      const data = await response.json();
-      setPreview(data.data?.zmanim || data.zmanim || []);
+      setPreview(previewResults);
     } catch (err) {
       console.error('Failed to load preview:', err);
       setError('Failed to calculate preview');
     } finally {
       setLoading(false);
     }
+  }, [api, zmanim, location, dateStr]);
+
+  useEffect(() => {
+    // Debounce the preview calculation
+    const timeoutId = setTimeout(() => {
+      loadPreview();
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [loadPreview]);
+
+  // Format time for display (HH:MM:SS -> h:mm AM/PM)
+  const formatTime = (timeStr: string): string => {
+    try {
+      const [hours, minutes] = timeStr.split(':').map(Number);
+      const period = hours >= 12 ? 'PM' : 'AM';
+      const displayHours = hours % 12 || 12;
+      return `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
+    } catch {
+      return timeStr;
+    }
   };
 
   return (
     <Card data-testid="algorithm-preview">
-      <CardHeader>
-        <CardTitle>Live Preview</CardTitle>
-        <CardDescription>
-          Today&apos;s zmanim for {location.displayName}
-        </CardDescription>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base">Live Preview</CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-3">
+        {/* Location info */}
+        <div className="text-xs text-muted-foreground">
+          {location.displayName}
+        </div>
+
         {loading && (
           <div className="text-center py-4 text-muted-foreground">
             Calculating...
@@ -118,23 +138,32 @@ export function AlgorithmPreview({ configuration, getToken, location }: Algorith
 
         {!loading && !error && preview.length === 0 && (
           <div className="text-center py-4 text-muted-foreground">
-            Configure zmanim to see preview
+            {zmanim.length === 0
+              ? 'No zmanim configured yet'
+              : 'No enabled zmanim to preview'}
           </div>
         )}
 
         {!loading && !error && preview.length > 0 && (
           <div className="space-y-3">
-            {preview.map((zman) => (
+            {preview.map((item) => (
               <div
-                key={zman.key}
+                key={item.key}
                 className="flex justify-between items-center py-2 border-b border-border last:border-0"
-                data-testid={`preview-${zman.key}`}
+                data-testid={`preview-${item.key}`}
               >
-                <div>
-                  <div className="font-medium text-foreground text-sm">{zman.name}</div>
-                  <div className="text-xs text-muted-foreground">{zman.formula.display_name}</div>
+                <div className="font-medium text-foreground text-sm truncate max-w-[60%]">
+                  {item.name}
                 </div>
-                <div className="text-lg font-mono text-primary">{zman.time}</div>
+                {item.error ? (
+                  <div className="text-sm text-destructive">Error</div>
+                ) : item.time ? (
+                  <div className="text-lg font-mono text-primary">
+                    {formatTime(item.time)}
+                  </div>
+                ) : (
+                  <div className="text-sm text-muted-foreground">--:--</div>
+                )}
               </div>
             ))}
           </div>

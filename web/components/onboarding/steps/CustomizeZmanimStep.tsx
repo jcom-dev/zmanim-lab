@@ -1,13 +1,75 @@
-import { useState, useEffect } from 'react';
+'use client';
+
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
 import { HighlightedFormula } from '@/components/shared/HighlightedFormula';
-import { ChevronDown, ChevronUp, Check } from 'lucide-react';
+import {
+  ChevronDown,
+  ChevronUp,
+  Check,
+  MapPin,
+  Search,
+  X,
+  Loader2,
+  CalendarDays,
+  Flame,
+  Sunrise,
+  Sun,
+  Sunset,
+  Moon,
+  Clock,
+  CandlestickChart,
+  Timer,
+  Utensils,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { OnboardingState, ZmanCustomization } from '../OnboardingWizard';
+import { useApi } from '@/lib/api-client';
+import {
+  useMasterZmanimGrouped,
+  useEventZmanimGrouped,
+  MasterZman,
+  GroupedMasterZmanim,
+} from '@/lib/hooks/useZmanimList';
+import type { OnboardingState, SelectedZmanCustomization } from '../OnboardingWizard';
+
+// Default preview location (Jerusalem)
+const DEFAULT_PREVIEW_LOCATION = {
+  latitude: 31.7683,
+  longitude: 35.2137,
+  timezone: 'Asia/Jerusalem',
+  displayName: 'Jerusalem, Israel',
+};
+
+interface PreviewLocation {
+  latitude: number;
+  longitude: number;
+  timezone: string;
+  displayName: string;
+}
+
+interface City {
+  id: string;
+  name: string;
+  country: string;
+  country_code: string;
+  region: string | null;
+  latitude: number;
+  longitude: number;
+  timezone: string;
+  display_name: string;
+}
 
 interface CustomizeZmanimStepProps {
   state: OnboardingState;
@@ -16,125 +78,690 @@ interface CustomizeZmanimStepProps {
   onBack: () => void;
 }
 
-interface ExtendedZmanCustomization extends ZmanCustomization {
-  category: 'essential' | 'optional';
-  enabled: boolean;
-}
+// Use the exported type from OnboardingWizard
+type SelectedZman = SelectedZmanCustomization;
 
-// Default zmanim for GRA template with categories
-const DEFAULT_ZMANIM: ExtendedZmanCustomization[] = [
-  // Essential zmanim
-  { key: 'alos', nameHebrew: 'עלות השחר', nameEnglish: 'Dawn', formula: 'solar(16.1, before_sunrise)', modified: false, category: 'essential', enabled: true },
-  { key: 'sunrise', nameHebrew: 'נץ החמה', nameEnglish: 'Sunrise', formula: 'sunrise', modified: false, category: 'essential', enabled: true },
-  { key: 'sof_zman_shema', nameHebrew: 'סוף זמן שמע', nameEnglish: 'Latest Shema', formula: 'sunrise + shaos(3, gra)', modified: false, category: 'essential', enabled: true },
-  { key: 'sof_zman_tefillah', nameHebrew: 'סוף זמן תפילה', nameEnglish: 'Latest Shacharit', formula: 'sunrise + shaos(4, gra)', modified: false, category: 'essential', enabled: true },
-  { key: 'chatzos', nameHebrew: 'חצות', nameEnglish: 'Midday', formula: 'solar_noon', modified: false, category: 'essential', enabled: true },
-  { key: 'mincha_gedola', nameHebrew: 'מנחה גדולה', nameEnglish: 'Earliest Mincha', formula: 'solar_noon + shaos(0.5, gra)', modified: false, category: 'essential', enabled: true },
-  { key: 'sunset', nameHebrew: 'שקיעה', nameEnglish: 'Sunset', formula: 'sunset', modified: false, category: 'essential', enabled: true },
-  { key: 'tzais', nameHebrew: 'צאת הכוכבים', nameEnglish: 'Nightfall', formula: 'solar(8.5, after_sunset)', modified: false, category: 'essential', enabled: true },
-  // Optional zmanim
-  { key: 'misheyakir', nameHebrew: 'משיכיר', nameEnglish: 'Earliest Tallit', formula: 'solar(11.5, before_sunrise)', modified: false, category: 'optional', enabled: false },
-  { key: 'mincha_ketana', nameHebrew: 'מנחה קטנה', nameEnglish: 'Mincha Ketana', formula: 'sunset - shaos(2.5, gra)', modified: false, category: 'optional', enabled: false },
-  { key: 'plag_hamincha', nameHebrew: 'פלג המנחה', nameEnglish: 'Plag HaMincha', formula: 'sunset - shaos(1.25, gra)', modified: false, category: 'optional', enabled: false },
-  { key: 'tzais_rt', nameHebrew: 'צאת ר"ת', nameEnglish: 'Nightfall (R"T)', formula: 'sunset + 72min', modified: false, category: 'optional', enabled: false },
+// Time category config for everyday zmanim
+const TIME_CATEGORY_CONFIG: Record<
+  string,
+  { icon: React.ElementType; label: string; description: string }
+> = {
+  dawn: { icon: Sunrise, label: 'Dawn', description: 'Alos HaShachar variants' },
+  sunrise: { icon: Sun, label: 'Sunrise', description: 'Sunrise and early morning' },
+  morning: { icon: Clock, label: 'Morning', description: 'Shema and Tefillah times' },
+  midday: { icon: Sun, label: 'Midday', description: 'Chatzos and Mincha Gedolah' },
+  afternoon: { icon: Clock, label: 'Afternoon', description: 'Mincha and Plag times' },
+  sunset: { icon: Sunset, label: 'Sunset', description: 'Shkiah' },
+  nightfall: { icon: Moon, label: 'Nightfall', description: 'Tzeis HaKochavim variants' },
+  midnight: { icon: Moon, label: 'Midnight', description: 'Chatzos Layla' },
+};
+
+// Event category config
+const EVENT_CATEGORY_CONFIG: Record<
+  string,
+  { icon: React.ElementType; label: string; hebrewLabel: string; description: string }
+> = {
+  candles: {
+    icon: CandlestickChart,
+    label: 'Candle Lighting',
+    hebrewLabel: 'הדלקת נרות',
+    description: 'Shabbos, Yom Tov, and Yom Kippur',
+  },
+  havdalah: {
+    icon: Flame,
+    label: 'Havdalah',
+    hebrewLabel: 'הבדלה',
+    description: 'End of Shabbos and Yom Tov',
+  },
+  yom_kippur: {
+    icon: Moon,
+    label: 'Yom Kippur',
+    hebrewLabel: 'יום כיפור',
+    description: 'Fast start and end times',
+  },
+  fast_day: {
+    icon: Timer,
+    label: 'Fast Days',
+    hebrewLabel: 'תענית',
+    description: 'Fast end times (regular fasts)',
+  },
+  tisha_bav: {
+    icon: Moon,
+    label: "Tisha B'Av",
+    hebrewLabel: 'תשעה באב',
+    description: 'Fast starts at sunset, ends at nightfall',
+  },
+  pesach: {
+    icon: Utensils,
+    label: 'Pesach',
+    hebrewLabel: 'פסח',
+    description: 'Chametz eating and burning times',
+  },
+};
+
+const EVERYDAY_CATEGORY_ORDER = ['dawn', 'sunrise', 'morning', 'midday', 'afternoon', 'sunset', 'nightfall', 'midnight'];
+const EVENT_CATEGORY_ORDER = ['candles', 'havdalah', 'yom_kippur', 'fast_day', 'tisha_bav', 'pesach'];
+
+// Default everyday zman keys that should be pre-selected
+// Based on standard luach requirements
+const DEFAULT_EVERYDAY_KEYS = [
+  // Dawn
+  'alos_hashachar',
+  // Sunrise
+  'misheyakir',
+  'sunrise',
+  // Morning
+  'sof_zman_shma_gra',
+  'sof_zman_tfila_gra',
+  // Midday
+  'chatzos',
+  'mincha_gedola',
+  // Afternoon
+  'mincha_ketana',
+  'plag_hamincha',
+  // Sunset
+  'sunset',
+  // Nightfall
+  'tzais',
+];
+
+// Default event zman keys that should be pre-selected
+const DEFAULT_EVENT_KEYS = [
+  // Candle lighting
+  'candle_lighting',
+  // Havdalah
+  'shabbos_ends',
+  // Fast days
+  'fast_ends',
+  // Yom Kippur
+  'yom_kippur_starts',
+  'yom_kippur_ends',
+  // Tisha B'Av
+  'tisha_bav_starts',
+  'tisha_bav_ends',
+  // Pesach
+  'sof_zman_achilas_chametz_gra',
+  'sof_zman_biur_chametz_gra',
 ];
 
 export function CustomizeZmanimStep({ state, onUpdate, onNext, onBack }: CustomizeZmanimStepProps) {
-  const [zmanim, setZmanim] = useState<ExtendedZmanCustomization[]>(
-    (state.data.customizations as ExtendedZmanCustomization[]) || DEFAULT_ZMANIM
+  const api = useApi();
+  const [viewMode, setViewMode] = useState<'everyday' | 'events'>('everyday');
+  const [selectedZmanim, setSelectedZmanim] = useState<Map<string, SelectedZman>>(
+    () => {
+      // Initialize from state if available
+      if (state.data.customizations && Array.isArray(state.data.customizations)) {
+        const map = new Map<string, SelectedZman>();
+        (state.data.customizations as SelectedZman[]).forEach((z) => {
+          map.set(z.zman_key, z);
+        });
+        return map;
+      }
+      return new Map();
+    }
   );
+  const [previewTimes, setPreviewTimes] = useState<Record<string, string | null>>({});
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Location selector state
+  const [previewLocation, setPreviewLocation] = useState<PreviewLocation>(DEFAULT_PREVIEW_LOCATION);
+  const [showLocationSearch, setShowLocationSearch] = useState(false);
+  const [citySearch, setCitySearch] = useState('');
+  const [cityResults, setCityResults] = useState<City[]>([]);
+  const [citySearchLoading, setCitySearchLoading] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Fetch zmanim from registry
+  const { data: everydayZmanim, isLoading: loadingEveryday } = useMasterZmanimGrouped('weekday');
+  const { data: eventZmanim, isLoading: loadingEvents } = useEventZmanimGrouped();
+
+  const isLoading = viewMode === 'everyday' ? loadingEveryday : loadingEvents;
+  const rawGroups = viewMode === 'everyday' ? everydayZmanim : eventZmanim;
+  const categoryOrder = viewMode === 'everyday' ? EVERYDAY_CATEGORY_ORDER : EVENT_CATEGORY_ORDER;
+  const categoryConfig = viewMode === 'everyday' ? TIME_CATEGORY_CONFIG : EVENT_CATEGORY_CONFIG;
+
+  // Initialize default selections when data loads
+  useEffect(() => {
+    if (everydayZmanim && selectedZmanim.size === 0) {
+      const initialSelections = new Map<string, SelectedZman>();
+
+      // Add default everyday zmanim
+      Object.values(everydayZmanim).flat().forEach((zman) => {
+        if (DEFAULT_EVERYDAY_KEYS.includes(zman.zman_key)) {
+          initialSelections.set(zman.zman_key, {
+            master_zman_id: zman.id,
+            zman_key: zman.zman_key,
+            hebrew_name: zman.canonical_hebrew_name,
+            english_name: zman.canonical_english_name,
+            formula: zman.default_formula_dsl,
+            category: 'everyday',
+            time_category: zman.time_category,
+            enabled: true,
+            modified: false,
+          });
+        }
+      });
+
+      // Add default event zmanim when that data loads
+      if (eventZmanim) {
+        Object.values(eventZmanim).flat().forEach((zman) => {
+          if (DEFAULT_EVENT_KEYS.includes(zman.zman_key)) {
+            initialSelections.set(zman.zman_key, {
+              master_zman_id: zman.id,
+              zman_key: zman.zman_key,
+              hebrew_name: zman.canonical_hebrew_name,
+              english_name: zman.canonical_english_name,
+              formula: zman.default_formula_dsl,
+              category: 'event',
+              time_category: zman.time_category,
+              enabled: true,
+              modified: false,
+            });
+          }
+        });
+      }
+
+      if (initialSelections.size > 0) {
+        setSelectedZmanim(initialSelections);
+      }
+    }
+  }, [everydayZmanim, eventZmanim, selectedZmanim.size]);
+
+  // Filter groups by search
+  const filteredGroups = useMemo(() => {
+    if (!rawGroups) return {};
+
+    const result: Record<string, MasterZman[]> = {};
+    const query = searchQuery.toLowerCase();
+
+    for (const [category, zmanim] of Object.entries(rawGroups)) {
+      const filtered = zmanim.filter((z) => {
+        if (query) {
+          return (
+            z.canonical_hebrew_name.toLowerCase().includes(query) ||
+            z.canonical_english_name.toLowerCase().includes(query) ||
+            z.transliteration?.toLowerCase().includes(query) ||
+            z.zman_key.toLowerCase().includes(query)
+          );
+        }
+        return true;
+      });
+
+      if (filtered.length > 0) {
+        result[category] = filtered;
+      }
+    }
+
+    // Sort entries by category order
+    const sortedResult: Record<string, MasterZman[]> = {};
+    for (const cat of categoryOrder) {
+      if (result[cat]) {
+        sortedResult[cat] = result[cat];
+      }
+    }
+
+    return sortedResult;
+  }, [rawGroups, searchQuery, categoryOrder]);
+
+  // Fetch preview times for selected zmanim
+  const fetchPreviewTimes = useCallback(async () => {
+    const enabledZmanim = Array.from(selectedZmanim.values()).filter((z) => z.enabled);
+
+    if (enabledZmanim.length === 0) {
+      setPreviewTimes({});
+      return;
+    }
+
+    setPreviewLoading(true);
+    const date = new Date().toISOString().split('T')[0];
+    const times: Record<string, string | null> = {};
+
+    try {
+      const results = await Promise.allSettled(
+        enabledZmanim.map(async (zman) => {
+          const response = await api.post<{ result?: string; time?: string }>('/dsl/preview', {
+            body: JSON.stringify({
+              formula: zman.formula,
+              date,
+              latitude: previewLocation.latitude,
+              longitude: previewLocation.longitude,
+              timezone: previewLocation.timezone,
+            }),
+          });
+          return { key: zman.zman_key, time: response.result || response.time || null };
+        })
+      );
+
+      results.forEach((result, index) => {
+        const key = enabledZmanim[index].zman_key;
+        if (result.status === 'fulfilled') {
+          times[key] = result.value.time;
+        } else {
+          times[key] = null;
+        }
+      });
+
+      setPreviewTimes(times);
+    } catch (err) {
+      console.error('Failed to fetch preview times:', err);
+    } finally {
+      setPreviewLoading(false);
+    }
+  }, [selectedZmanim, api, previewLocation]);
+
+  // Fetch preview times on mount and when selections change
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      fetchPreviewTimes();
+    }, 500);
+    return () => clearTimeout(timeoutId);
+  }, [fetchPreviewTimes]);
 
   // Save customizations when they change
   useEffect(() => {
-    onUpdate({ customizations: zmanim });
-  }, [zmanim]);
+    const customizations = Array.from(selectedZmanim.values());
+    onUpdate({ customizations });
+  }, [selectedZmanim]);
 
-  const updateZman = (key: string, field: keyof ExtendedZmanCustomization, value: string | boolean) => {
-    setZmanim((prev) =>
-      prev.map((z) =>
-        z.key === key ? { ...z, [field]: value, modified: field !== 'enabled' ? true : z.modified } : z
-      )
-    );
+  // City search with debounce
+  useEffect(() => {
+    if (citySearch.length < 2) {
+      setCityResults([]);
+      return;
+    }
+
+    const timeoutId = setTimeout(async () => {
+      setCitySearchLoading(true);
+      try {
+        const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+        const url = `${apiBase}/api/v1/cities?search=${encodeURIComponent(citySearch)}&limit=10`;
+        const response = await fetch(url);
+        if (!response.ok) {
+          throw new Error(`Search failed: ${response.status}`);
+        }
+        const json = await response.json();
+        const cities = json.data?.cities || json.cities || [];
+        setCityResults(cities);
+      } catch (err) {
+        console.error('[CitySearch] Error:', err);
+        setCityResults([]);
+      } finally {
+        setCitySearchLoading(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [citySearch]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node) &&
+        searchInputRef.current &&
+        !searchInputRef.current.contains(event.target as Node)
+      ) {
+        setShowLocationSearch(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Focus search input when dropdown opens
+  useEffect(() => {
+    if (showLocationSearch && searchInputRef.current) {
+      searchInputRef.current.focus();
+    }
+  }, [showLocationSearch]);
+
+  const selectCity = (city: City) => {
+    const displayName =
+      city.display_name || `${city.name}${city.region ? `, ${city.region}` : ''}, ${city.country}`;
+    setPreviewLocation({
+      latitude: city.latitude,
+      longitude: city.longitude,
+      timezone: city.timezone,
+      displayName,
+    });
+    setShowLocationSearch(false);
+    setCitySearch('');
+    setCityResults([]);
   };
 
-  const toggleZman = (key: string) => {
-    setZmanim((prev) =>
-      prev.map((z) =>
-        z.key === key ? { ...z, enabled: !z.enabled } : z
-      )
-    );
+  const toggleZman = (zman: MasterZman, category: 'everyday' | 'event') => {
+    setSelectedZmanim((prev) => {
+      const newMap = new Map(prev);
+      if (newMap.has(zman.zman_key)) {
+        // Toggle enabled state or remove if disabling
+        const existing = newMap.get(zman.zman_key)!;
+        if (existing.enabled) {
+          newMap.delete(zman.zman_key);
+        } else {
+          newMap.set(zman.zman_key, { ...existing, enabled: true });
+        }
+      } else {
+        // Add new selection
+        newMap.set(zman.zman_key, {
+          master_zman_id: zman.id,
+          zman_key: zman.zman_key,
+          hebrew_name: zman.canonical_hebrew_name,
+          english_name: zman.canonical_english_name,
+          formula: zman.default_formula_dsl,
+          category,
+          time_category: zman.time_category,
+          enabled: true,
+          modified: false,
+        });
+      }
+      return newMap;
+    });
   };
 
-  const essentialZmanim = zmanim.filter(z => z.category === 'essential');
-  const optionalZmanim = zmanim.filter(z => z.category === 'optional');
-  const enabledCount = zmanim.filter(z => z.enabled).length;
+  const isSelected = (zmanKey: string) => {
+    const selection = selectedZmanim.get(zmanKey);
+    return selection?.enabled ?? false;
+  };
+
+  const enabledCount = Array.from(selectedZmanim.values()).filter((z) => z.enabled).length;
+  const everydayCount = Array.from(selectedZmanim.values()).filter(
+    (z) => z.enabled && z.category === 'everyday'
+  ).length;
+  const eventCount = Array.from(selectedZmanim.values()).filter(
+    (z) => z.enabled && z.category === 'event'
+  ).length;
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="text-center space-y-2">
-        <h2 className="text-2xl font-bold">Customize Your Zmanim</h2>
+        <h2 className="text-2xl font-bold">Select Your Zmanim</h2>
         <p className="text-muted-foreground">
-          Review and adjust the times. Toggle optional zmanim on/off, and click to expand for editing.
+          Choose which zmanim to include. You can customize formulas later in the Algorithm Editor.
         </p>
       </div>
 
-      {/* Selection counter */}
-      <div className="flex justify-center">
+      {/* Selection counter and preview location */}
+      <div className="flex flex-col sm:flex-row justify-center items-center gap-3">
         <Badge variant="secondary" className="text-sm">
-          {enabledCount} zmanim selected
+          {enabledCount} zmanim selected ({everydayCount} everyday, {eventCount} events)
         </Badge>
+
+        {/* Location selector */}
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setShowLocationSearch(!showLocationSearch)}
+            className="flex items-center gap-2 px-3 py-1.5 text-sm border rounded-md hover:bg-accent transition-colors"
+          >
+            <MapPin className="h-4 w-4 text-primary" />
+            <span className="max-w-[200px] truncate">{previewLocation.displayName}</span>
+            {previewLoading ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <ChevronDown className="h-3 w-3" />
+            )}
+          </button>
+
+          {/* City search dropdown */}
+          {showLocationSearch && (
+            <div
+              ref={dropdownRef}
+              className="absolute top-full left-0 mt-1 w-80 bg-background border rounded-md shadow-lg z-50"
+            >
+              <div className="p-2 border-b">
+                <div className="relative">
+                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    ref={searchInputRef}
+                    type="text"
+                    placeholder="Search any city..."
+                    value={citySearch}
+                    onChange={(e) => setCitySearch(e.target.value)}
+                    className="pl-8 pr-8 h-9"
+                  />
+                  {citySearch && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCitySearch('');
+                        setCityResults([]);
+                      }}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="max-h-60 overflow-y-auto">
+                {citySearchLoading ? (
+                  <div className="p-4 text-center text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin mx-auto mb-1" />
+                    Searching...
+                  </div>
+                ) : cityResults.length > 0 ? (
+                  <div className="py-1">
+                    {cityResults.map((city) => (
+                      <button
+                        key={city.id}
+                        type="button"
+                        onClick={() => selectCity(city)}
+                        className="w-full px-3 py-2 text-left text-sm hover:bg-accent flex items-start gap-2"
+                      >
+                        <MapPin className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                        <div>
+                          <div className="font-medium">{city.name}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {city.region ? `${city.region}, ` : ''}
+                            {city.country}
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                ) : citySearch.length >= 2 ? (
+                  <div className="p-4 text-center text-sm text-muted-foreground">
+                    No cities found for &quot;{citySearch}&quot;
+                  </div>
+                ) : (
+                  <div className="p-4 text-center text-sm text-muted-foreground">
+                    Type at least 2 characters to search
+                  </div>
+                )}
+              </div>
+
+              {/* Quick select for common cities */}
+              <div className="border-t p-2">
+                <div className="text-xs text-muted-foreground mb-2">Quick select:</div>
+                <div className="flex flex-wrap gap-1">
+                  {[
+                    { name: 'Jerusalem', lat: 31.7683, lng: 35.2137, tz: 'Asia/Jerusalem', country: 'Israel' },
+                    { name: 'New York', lat: 40.7128, lng: -74.006, tz: 'America/New_York', country: 'USA' },
+                    { name: 'London', lat: 51.5074, lng: -0.1278, tz: 'Europe/London', country: 'UK' },
+                    { name: 'Los Angeles', lat: 34.0522, lng: -118.2437, tz: 'America/Los_Angeles', country: 'USA' },
+                  ].map((city) => (
+                    <button
+                      key={city.name}
+                      type="button"
+                      onClick={() => {
+                        setPreviewLocation({
+                          latitude: city.lat,
+                          longitude: city.lng,
+                          timezone: city.tz,
+                          displayName: `${city.name}, ${city.country}`,
+                        });
+                        setShowLocationSearch(false);
+                      }}
+                      className="px-2 py-1 text-xs border rounded hover:bg-accent"
+                    >
+                      {city.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Essential Zmanim */}
-      <div className="space-y-3">
-        <div className="flex items-center gap-2">
-          <h3 className="font-semibold text-lg">Essential Zmanim</h3>
-          <Badge variant="outline">{essentialZmanim.length}</Badge>
-        </div>
-        <p className="text-sm text-muted-foreground">
-          Core times that are always included in your algorithm
-        </p>
-        <div className="space-y-2">
-          {essentialZmanim.map((zman) => (
-            <ZmanRow
-              key={zman.key}
-              zman={zman}
-              onUpdate={(field, value) => updateZman(zman.key, field, value)}
-              onToggle={() => toggleZman(zman.key)}
-              isEssential
-            />
-          ))}
-        </div>
+      {/* Tabs for Everyday / Events */}
+      <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'everyday' | 'events')}>
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="everyday" className="gap-2">
+            <CalendarDays className="h-4 w-4" />
+            Everyday Zmanim
+            {everydayCount > 0 && (
+              <Badge variant="secondary" className="ml-1 text-xs">
+                {everydayCount}
+              </Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="events" className="gap-2">
+            <Flame className="h-4 w-4" />
+            Event Zmanim
+            {eventCount > 0 && (
+              <Badge variant="secondary" className="ml-1 text-xs">
+                {eventCount}
+              </Badge>
+            )}
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
+
+      {/* Search */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Search by name..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="pl-9"
+        />
       </div>
 
-      {/* Optional Zmanim */}
-      <div className="space-y-3">
-        <div className="flex items-center gap-2">
-          <h3 className="font-semibold text-lg">Optional Zmanim</h3>
-          <Badge variant="outline">{optionalZmanim.filter(z => z.enabled).length}/{optionalZmanim.length}</Badge>
-        </div>
-        <p className="text-sm text-muted-foreground">
-          Click to enable additional times for your community
-        </p>
-        <div className="space-y-2">
-          {optionalZmanim.map((zman) => (
-            <ZmanRow
-              key={zman.key}
-              zman={zman}
-              onUpdate={(field, value) => updateZman(zman.key, field, value)}
-              onToggle={() => toggleZman(zman.key)}
-            />
-          ))}
-        </div>
-      </div>
+      {/* Zmanim List */}
+      <ScrollArea className="h-[350px]">
+        {isLoading ? (
+          <div className="flex justify-center py-8">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : Object.keys(filteredGroups).length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground">
+            {searchQuery ? <p>No matching zmanim found</p> : <p>No zmanim available</p>}
+          </div>
+        ) : (
+          <Accordion type="multiple" defaultValue={[]} className="w-full">
+            {Object.entries(filteredGroups).map(([category, zmanim]) => {
+              const config = categoryConfig[category] || {
+                icon: Clock,
+                label: category,
+                description: '',
+              };
+              const Icon = config.icon;
+              const selectedInCategory = zmanim.filter((z) => isSelected(z.zman_key)).length;
+
+              return (
+                <AccordionItem key={category} value={category}>
+                  <AccordionTrigger className="hover:no-underline">
+                    <div className="flex items-center gap-3">
+                      <Icon className="h-4 w-4 text-muted-foreground" />
+                      <div className="text-left">
+                        <span className="font-medium">{config.label}</span>
+                        {'hebrewLabel' in config && (
+                          <span className="text-muted-foreground ml-2 text-sm">
+                            {(config as (typeof EVENT_CATEGORY_CONFIG)[string]).hebrewLabel}
+                          </span>
+                        )}
+                      </div>
+                      <Badge variant="outline" className="text-xs ml-auto mr-2">
+                        {selectedInCategory}/{zmanim.length}
+                      </Badge>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    {'description' in config && config.description && (
+                      <p className="text-xs text-muted-foreground mb-2 pl-7">{config.description}</p>
+                    )}
+                    <div className="space-y-1 pl-7">
+                      {zmanim.map((zman) => {
+                        const selected = isSelected(zman.zman_key);
+                        const previewTime = previewTimes[zman.zman_key];
+
+                        return (
+                          <button
+                            key={zman.id}
+                            onClick={() => toggleZman(zman, viewMode === 'everyday' ? 'everyday' : 'event')}
+                            className={cn(
+                              'w-full text-left p-3 rounded-lg border transition-colors flex items-start gap-3',
+                              selected
+                                ? 'border-primary/50 bg-primary/5'
+                                : 'border-transparent hover:border-primary/30 hover:bg-primary/5'
+                            )}
+                          >
+                            {/* Checkbox */}
+                            <div
+                              className={cn(
+                                'mt-0.5 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors flex-shrink-0',
+                                selected
+                                  ? 'bg-primary border-primary text-primary-foreground'
+                                  : 'border-muted-foreground/30'
+                              )}
+                            >
+                              {selected && <Check className="h-3 w-3" />}
+                            </div>
+
+                            {/* Zman Info */}
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium">
+                                {zman.canonical_hebrew_name}
+                                <span className="text-muted-foreground mx-2">•</span>
+                                {zman.canonical_english_name}
+                              </div>
+                              {zman.description && (
+                                <p className="text-xs text-muted-foreground mt-0.5">
+                                  {zman.description}
+                                </p>
+                              )}
+                              <div className="mt-1">
+                                <HighlightedFormula
+                                  formula={zman.default_formula_dsl}
+                                  inline
+                                  className="text-xs"
+                                />
+                              </div>
+                            </div>
+
+                            {/* Preview Time */}
+                            {selected && previewTime && (
+                              <div className="text-right min-w-[60px]">
+                                <span className="font-mono text-sm font-medium text-primary">
+                                  {previewTime}
+                                </span>
+                              </div>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              );
+            })}
+          </Accordion>
+        )}
+      </ScrollArea>
 
       {/* Link to advanced */}
       <div className="text-center pt-2">
         <p className="text-sm text-muted-foreground">
           Need more control? You can fine-tune every formula in the{' '}
-          <span className="text-primary font-medium">Algorithm Editor</span>{' '}
-          after completing setup.
+          <span className="text-primary font-medium">Algorithm Editor</span> after completing setup.
         </p>
       </div>
 
@@ -143,133 +770,10 @@ export function CustomizeZmanimStep({ state, onUpdate, onNext, onBack }: Customi
         <Button variant="outline" onClick={onBack}>
           Back
         </Button>
-        <Button onClick={onNext}>Continue</Button>
+        <Button onClick={onNext} disabled={enabledCount === 0}>
+          Continue
+        </Button>
       </div>
     </div>
-  );
-}
-
-function ZmanRow({
-  zman,
-  onUpdate,
-  onToggle,
-  isEssential = false,
-}: {
-  zman: ExtendedZmanCustomization;
-  onUpdate: (field: keyof ExtendedZmanCustomization, value: string | boolean) => void;
-  onToggle: () => void;
-  isEssential?: boolean;
-}) {
-  const [expanded, setExpanded] = useState(false);
-
-  return (
-    <Card className={cn(
-      'transition-all',
-      !zman.enabled && !isEssential && 'opacity-60',
-      zman.enabled && 'border-primary/30'
-    )}>
-      <CardContent className="py-3 px-4">
-        <div className="flex items-start gap-3">
-          {/* Toggle checkbox for optional zmanim */}
-          {!isEssential && (
-            <button
-              type="button"
-              onClick={onToggle}
-              className={cn(
-                'mt-1 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors',
-                zman.enabled
-                  ? 'bg-primary border-primary text-primary-foreground'
-                  : 'border-muted-foreground/30 hover:border-primary/50'
-              )}
-            >
-              {zman.enabled && <Check className="h-3 w-3" />}
-            </button>
-          )}
-          {isEssential && (
-            <div className="mt-1 w-5 h-5 rounded bg-primary/20 flex items-center justify-center">
-              <Check className="h-3 w-3 text-primary" />
-            </div>
-          )}
-
-          {/* Zman info */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-medium">{zman.nameEnglish}</span>
-              <span className="text-sm text-muted-foreground font-hebrew" dir="rtl">
-                {zman.nameHebrew}
-              </span>
-              {zman.modified && (
-                <Badge variant="outline" className="text-xs bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-amber-300">
-                  Modified
-                </Badge>
-              )}
-            </div>
-            {/* Formula preview with syntax highlighting */}
-            <div className="mt-1">
-              <HighlightedFormula formula={zman.formula} inline className="text-xs" />
-            </div>
-          </div>
-
-          {/* Expand button */}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setExpanded(!expanded)}
-            className="h-8 px-2"
-          >
-            {expanded ? (
-              <ChevronUp className="h-4 w-4" />
-            ) : (
-              <ChevronDown className="h-4 w-4" />
-            )}
-          </Button>
-        </div>
-
-        {/* Expanded edit form */}
-        {expanded && (
-          <div className="mt-4 pt-4 border-t space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor={`${zman.key}-english`} className="text-xs">
-                  English Name
-                </Label>
-                <Input
-                  id={`${zman.key}-english`}
-                  value={zman.nameEnglish}
-                  onChange={(e) => onUpdate('nameEnglish', e.target.value)}
-                  className="h-9"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor={`${zman.key}-hebrew`} className="text-xs">
-                  Hebrew Name
-                </Label>
-                <Input
-                  id={`${zman.key}-hebrew`}
-                  value={zman.nameHebrew}
-                  onChange={(e) => onUpdate('nameHebrew', e.target.value)}
-                  className="h-9 font-hebrew"
-                  dir="rtl"
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor={`${zman.key}-formula`} className="text-xs">
-                Formula (DSL)
-              </Label>
-              <Input
-                id={`${zman.key}-formula`}
-                value={zman.formula}
-                onChange={(e) => onUpdate('formula', e.target.value)}
-                className="h-9 font-mono text-sm"
-              />
-              <p className="text-xs text-muted-foreground">
-                Use the advanced editor for full syntax highlighting and validation
-              </p>
-            </div>
-          </div>
-        )}
-      </CardContent>
-    </Card>
   );
 }

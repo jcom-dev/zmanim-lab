@@ -2,14 +2,12 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@clerk/nextjs';
 import { usePublisherContext } from '@/providers/PublisherContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { LogoUpload } from '@/components/publisher/LogoUpload';
-
-import { API_BASE } from '@/lib/api';
+import { useApi } from '@/lib/api-client';
 
 interface PublisherProfile {
   id: string;
@@ -24,7 +22,7 @@ interface PublisherProfile {
 
 export default function PublisherProfilePage() {
   const router = useRouter();
-  const { getToken } = useAuth();
+  const api = useApi();
   const { selectedPublisher } = usePublisherContext();
   const [profile, setProfile] = useState<PublisherProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -46,21 +44,7 @@ export default function PublisherProfilePage() {
       setLoading(true);
       setError(null);
 
-      const token = await getToken();
-      const response = await fetch(`${API_BASE}/api/v1/publisher/profile`, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-          'X-Publisher-Id': selectedPublisher.id,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to load profile');
-      }
-
-      const data = await response.json();
-      const profileData = data.data || data;
+      const profileData = await api.get<PublisherProfile>('/publisher/profile');
 
       setProfile(profileData);
       setName(profileData.name || '');
@@ -74,7 +58,7 @@ export default function PublisherProfilePage() {
     } finally {
       setLoading(false);
     }
-  }, [getToken, selectedPublisher]);
+  }, [api, selectedPublisher]);
 
   useEffect(() => {
     if (selectedPublisher) {
@@ -105,14 +89,7 @@ export default function PublisherProfilePage() {
     try {
       setSaving(true);
 
-      const token = await getToken();
-      const response = await fetch(`${API_BASE}/api/v1/publisher/profile`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-          'X-Publisher-Id': selectedPublisher.id,
-        },
+      const updatedProfile = await api.put<PublisherProfile>('/publisher/profile', {
         body: JSON.stringify({
           name,
           organization: organization || null,
@@ -121,14 +98,6 @@ export default function PublisherProfilePage() {
           bio: bio || null,
         }),
       });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || 'Failed to update profile');
-      }
-
-      const data = await response.json();
-      const updatedProfile = data.data || data;
 
       setProfile(updatedProfile);
       setSuccess(true);
@@ -260,7 +229,6 @@ export default function PublisherProfilePage() {
                   onUploadError={(errorMsg) => {
                     setError(errorMsg);
                   }}
-                  getToken={getToken}
                 />
               </div>
 

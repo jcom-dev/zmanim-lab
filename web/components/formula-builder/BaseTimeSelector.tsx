@@ -1,6 +1,14 @@
 'use client';
 
-import { Select } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { baseTimeOptions } from './types';
 import { cn } from '@/lib/utils';
 
@@ -20,12 +28,23 @@ export function BaseTimeSelector({
       <label className="text-sm font-medium text-foreground">
         Base Time
       </label>
-      <Select
-        value={value}
-        onChange={onChange}
-        groups={baseTimeOptions}
-        placeholder="Select base time..."
-      />
+      <Select value={value} onValueChange={onChange}>
+        <SelectTrigger>
+          <SelectValue placeholder="Select base time..." />
+        </SelectTrigger>
+        <SelectContent>
+          {baseTimeOptions.map((group) => (
+            <SelectGroup key={group.label}>
+              <SelectLabel>{group.label}</SelectLabel>
+              {group.options.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          ))}
+        </SelectContent>
+      </Select>
       <p className="text-xs text-muted-foreground">
         Choose the reference point for your calculation
       </p>

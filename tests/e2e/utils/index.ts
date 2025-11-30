@@ -65,3 +65,73 @@ export {
 
 // Re-export existing helpers
 export { BASE_URL, TIMEOUTS, sleep, pages, selectors, testData } from '../helpers/mcp-playwright';
+
+// Algorithm Fixtures
+export {
+  AlgorithmConfigs,
+  GRA_CONFIG,
+  MGA_CONFIG,
+  MINIMAL_CONFIG,
+  EMPTY_CONFIG,
+  getAlgorithmConfig,
+  createFullAlgorithmConfig,
+  createTestAlgorithmConfig,
+  generateTestAlgorithmName,
+  validateAlgorithmConfig,
+  getZmanKeys,
+  hasZman,
+  type AlgorithmConfig,
+  type FullAlgorithmConfig,
+  type AlgorithmConfigName,
+  type ZmanCalculation,
+} from './algorithm-fixtures';
+
+// Wait Helpers
+export {
+  Timeouts,
+  waitForPageReady,
+  waitForClerkReady,
+  waitForNavigation,
+  waitForContent,
+  waitForElementText,
+  waitForLoadingComplete,
+  waitForApiContent,
+  retryAction,
+  pollUntil,
+  waitFor,
+  waitForElementStable,
+  type WaitForPageReadyOptions,
+  type WaitForContentOptions,
+  type WaitForApiOptions,
+  type RetryOptions,
+} from './wait-helpers';
+
+// Test Builders
+export {
+  TestPublisher,
+  TestContext,
+  TestEntityTracker,
+  createMinimalPublisher,
+  createVerifiedPublisherWithAlgorithm,
+  createFullTestSetup,
+  generateTestName,
+  generateTestEmail,
+  type TestPublisherData,
+  type TestAlgorithmData,
+  type TestCoverageData,
+  type TestPublisherBuildResult,
+  type TestContextData,
+} from './test-builders';
+
+// Shared Fixtures (for parallel tests)
+export {
+  getSharedPublisher,
+  getSharedPublisherAsync,
+  getAnyVerifiedPublisher,
+  getPublisherWithAlgorithm,
+  getEmptyPublisher,
+  getAllSharedPublishers,
+  isSharedFixturesInitialized,
+  getAvailablePublisherKeys,
+  type SharedPublisher,
+} from './shared-fixtures';

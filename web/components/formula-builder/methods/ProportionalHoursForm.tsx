@@ -1,7 +1,15 @@
 'use client';
 
 import { Slider } from '@/components/ui/slider';
-import { Select } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import type { ShaosBase } from '../types';
 import { baseTimeOptions } from '../types';
@@ -122,21 +130,43 @@ export function ProportionalHoursForm({
         <div className="space-y-3 p-3 bg-muted/50 rounded-lg" onClick={(e) => e.stopPropagation()}>
           <div className="space-y-2">
             <label className="text-sm font-medium">Day Start Reference</label>
-            <Select
-              value={customStart || ''}
-              onChange={onCustomStartChange}
-              groups={baseTimeOptions}
-              placeholder="Select start time..."
-            />
+            <Select value={customStart || ''} onValueChange={onCustomStartChange}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select start time..." />
+              </SelectTrigger>
+              <SelectContent>
+                {baseTimeOptions.map((group) => (
+                  <SelectGroup key={group.label}>
+                    <SelectLabel>{group.label}</SelectLabel>
+                    {group.options.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium">Day End Reference</label>
-            <Select
-              value={customEnd || ''}
-              onChange={onCustomEndChange}
-              groups={baseTimeOptions}
-              placeholder="Select end time..."
-            />
+            <Select value={customEnd || ''} onValueChange={onCustomEndChange}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select end time..." />
+              </SelectTrigger>
+              <SelectContent>
+                {baseTimeOptions.map((group) => (
+                  <SelectGroup key={group.label}>
+                    <SelectLabel>{group.label}</SelectLabel>
+                    {group.options.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
       )}

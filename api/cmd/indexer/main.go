@@ -1,0 +1,864 @@
+// RAG Indexer - Indexes documentation for AI-powered formula generation
+//
+// This tool reads documentation files, chunks them, generates embeddings,
+// and stores them in the PostgreSQL database for semantic search.
+//
+// Usage:
+//
+//	cd api && go run cmd/indexer/main.go
+//
+// Environment variables:
+//
+//	DATABASE_URL - PostgreSQL connection string
+//	OPENAI_API_KEY - OpenAI API key for embeddings
+//
+// When to run:
+//
+//	After initial deployment to seed the knowledge base
+//	After significant documentation updates
+//	Can be added to CI/CD pipeline after migrations
+//
+// CI/CD Integration:
+//
+//	Add this step after database migrations:
+//	  go run cmd/indexer/main.go
+//
+// Current indexed sources:
+//
+//	DSL specification documentation
+//	DSL design story
+//	DSL parser story
+//	Master zmanim registry from database
+//	Inline DSL examples with halachic context
+//
+// Future enhancements (requires external repo cloning):
+//
+//	KosherJava zmanim library documentation
+//	hebcal-go library documentation
+package main
+
+import (
+	"context"
+	"fmt"
+	"log"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jcom-dev/zmanim-lab/internal/ai"
+	pgvector "github.com/pgvector/pgvector-go"
+)
+
+// DocumentSource defines a source document to index
+type DocumentSource struct {
+	Path        string
+	Source      string // e.g., "dsl-spec", "halacha", "examples"
+	ContentType string // e.g., "documentation", "example", "reference"
+}
+
+func main() {
+	ctx := context.Background()
+
+	// Get environment variables
+	databaseURL := os.Getenv("DATABASE_URL")
+	openAIKey := os.Getenv("OPENAI_API_KEY")
+
+	if databaseURL == "" {
+		log.Fatal("DATABASE_URL environment variable is required")
+	}
+	if openAIKey == "" {
+		log.Fatal("OPENAI_API_KEY environment variable is required")
+	}
+
+	// Connect to database
+	pool, err := pgxpool.New(ctx, databaseURL)
+	if err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
+	}
+	defer pool.Close()
+
+	// Initialize services
+	embeddings := ai.NewEmbeddingService(openAIKey)
+	chunker := ai.NewChunker()
+
+	// Define documents to index
+	projectRoot := findProjectRoot()
+	sources := []DocumentSource{
+		{
+			Path:        filepath.Join(projectRoot, "docs/sprint-artifacts/epic-4-dsl-specification.md"),
+			Source:      "dsl-spec",
+			ContentType: "documentation",
+		},
+		{
+			Path:        filepath.Join(projectRoot, "docs/sprint-artifacts/stories/4-1-zmanim-dsl-design.md"),
+			Source:      "dsl-design",
+			ContentType: "documentation",
+		},
+		{
+			Path:        filepath.Join(projectRoot, "docs/sprint-artifacts/stories/4-2-zmanim-dsl-parser.md"),
+			Source:      "dsl-parser",
+			ContentType: "documentation",
+		},
+	}
+
+	// Add master zmanim registry data
+	log.Println("📚 Starting RAG indexer...")
+	log.Printf("   Project root: %s", projectRoot)
+
+	// Clear existing embeddings (optional - for reindexing)
+	log.Println("🗑️  Clearing existing embeddings...")
+	_, err = pool.Exec(ctx, "DELETE FROM embeddings")
+	if err != nil {
+		log.Printf("Warning: Could not clear embeddings: %v", err)
+	}
+
+	totalChunks := 0
+	totalTokens := 0
+
+	// Index documents
+	for _, source := range sources {
+		chunks, tokens, err := indexDocument(ctx, pool, embeddings, chunker, source)
+		if err != nil {
+			log.Printf("❌ Failed to index %s: %v", source.Path, err)
+			continue
+		}
+		totalChunks += chunks
+		totalTokens += tokens
+		log.Printf("✅ Indexed %s: %d chunks, ~%d tokens", filepath.Base(source.Path), chunks, tokens)
+	}
+
+	// Index master zmanim registry from database
+	zmanimChunks, zmanimTokens, err := indexMasterZmanim(ctx, pool, embeddings, chunker)
+	if err != nil {
+		log.Printf("❌ Failed to index master zmanim: %v", err)
+	} else {
+		totalChunks += zmanimChunks
+		totalTokens += zmanimTokens
+		log.Printf("✅ Indexed master zmanim registry: %d chunks, ~%d tokens", zmanimChunks, zmanimTokens)
+	}
+
+	// Generate DSL examples
+	examplesChunks, examplesTokens, err := indexDSLExamples(ctx, pool, embeddings, chunker)
+	if err != nil {
+		log.Printf("❌ Failed to index DSL examples: %v", err)
+	} else {
+		totalChunks += examplesChunks
+		totalTokens += examplesTokens
+		log.Printf("✅ Indexed DSL examples: %d chunks, ~%d tokens", examplesChunks, examplesTokens)
+	}
+
+	// Clone and index external repositories
+	tempDir := filepath.Join("/tmp", "rag-indexer-"+uuid.New().String())
+	log.Printf("📦 Cloning external repositories to %s...", tempDir)
+
+	// Index KosherJava zmanim library
+	kosherJavaChunks, kosherJavaTokens, err := indexKosherJava(ctx, pool, embeddings, chunker, tempDir)
+	if err != nil {
+		log.Printf("❌ Failed to index KosherJava: %v", err)
+	} else {
+		totalChunks += kosherJavaChunks
+		totalTokens += kosherJavaTokens
+		log.Printf("✅ Indexed KosherJava: %d chunks, ~%d tokens", kosherJavaChunks, kosherJavaTokens)
+	}
+
+	// Index hebcal-go library
+	hebcalChunks, hebcalTokens, err := indexHebcalGo(ctx, pool, embeddings, chunker, tempDir)
+	if err != nil {
+		log.Printf("❌ Failed to index hebcal-go: %v", err)
+	} else {
+		totalChunks += hebcalChunks
+		totalTokens += hebcalTokens
+		log.Printf("✅ Indexed hebcal-go: %d chunks, ~%d tokens", hebcalChunks, hebcalTokens)
+	}
+
+	// Cleanup temp directory
+	log.Println("🧹 Cleaning up temporary files...")
+	os.RemoveAll(tempDir)
+
+	log.Println("")
+	log.Printf("📊 Indexing complete!")
+	log.Printf("   Total chunks: %d", totalChunks)
+	log.Printf("   Total tokens: ~%d", totalTokens)
+}
+
+func findProjectRoot() string {
+	// Start from current directory and look for go.mod
+	dir, _ := os.Getwd()
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			// Found go.mod, go up one level to project root
+			return filepath.Dir(dir)
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			// Reached root, use current directory
+			return "."
+		}
+		dir = parent
+	}
+}
+
+func indexDocument(ctx context.Context, pool *pgxpool.Pool, embeddings *ai.EmbeddingService, chunker *ai.Chunker, source DocumentSource) (int, int, error) {
+	// Read file
+	content, err := os.ReadFile(source.Path)
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to read file: %w", err)
+	}
+
+	// Chunk document
+	chunks := chunker.ChunkDocument(string(content), source.Source, source.ContentType)
+	if len(chunks) == 0 {
+		return 0, 0, nil
+	}
+
+	totalTokens := 0
+
+	// Process chunks in batches
+	batchSize := 10
+	for i := 0; i < len(chunks); i += batchSize {
+		end := i + batchSize
+		if end > len(chunks) {
+			end = len(chunks)
+		}
+		batch := chunks[i:end]
+
+		// Extract content for embedding - filter out empty strings
+		var texts []string
+		var validChunks []ai.Chunk
+		for _, chunk := range batch {
+			trimmed := strings.TrimSpace(chunk.Content)
+			if trimmed != "" {
+				texts = append(texts, trimmed)
+				validChunks = append(validChunks, chunk)
+				totalTokens += chunk.TokenCount
+			}
+		}
+
+		if len(texts) == 0 {
+			continue
+		}
+
+		// Generate embeddings
+		embeds, err := embeddings.GenerateEmbeddings(ctx, texts)
+		if err != nil {
+			return 0, 0, fmt.Errorf("failed to generate embeddings: %w", err)
+		}
+
+		// Insert into database
+		for j, chunk := range validChunks {
+			vec := pgvector.NewVector(embeds[j])
+			_, err := pool.Exec(ctx, `
+				INSERT INTO embeddings (content, source, content_type, chunk_index, metadata, embedding)
+				VALUES ($1, $2, $3, $4, $5, $6)
+			`, chunk.Content, source.Source, source.ContentType, chunk.Index, chunk.Metadata, vec)
+			if err != nil {
+				return 0, 0, fmt.Errorf("failed to insert embedding: %w", err)
+			}
+		}
+
+		// Rate limit to avoid OpenAI API limits
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	return len(chunks), totalTokens, nil
+}
+
+func indexMasterZmanim(ctx context.Context, pool *pgxpool.Pool, embeddings *ai.EmbeddingService, chunker *ai.Chunker) (int, int, error) {
+	// Query master zmanim registry
+	rows, err := pool.Query(ctx, `
+		SELECT zman_key, canonical_hebrew_name, canonical_english_name, time_category, description, default_formula_dsl
+		FROM master_zmanim_registry
+		ORDER BY sort_order
+	`)
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to query master zmanim: %w", err)
+	}
+	defer rows.Close()
+
+	var content strings.Builder
+	content.WriteString("# Master Zmanim Registry\n\n")
+	content.WriteString("This is the complete list of zmanim (Jewish prayer times) with their formulas.\n\n")
+
+	for rows.Next() {
+		var zmanKey, canonicalHebrew, canonicalEnglish, timeCategory string
+		var description, defaultFormula *string
+
+		if err := rows.Scan(&zmanKey, &canonicalHebrew, &canonicalEnglish, &timeCategory, &description, &defaultFormula); err != nil {
+			continue
+		}
+
+		content.WriteString(fmt.Sprintf("## %s (%s)\n", canonicalEnglish, canonicalHebrew))
+		content.WriteString(fmt.Sprintf("- **Key:** `%s`\n", zmanKey))
+		content.WriteString(fmt.Sprintf("- **Time Category:** %s\n", timeCategory))
+		if description != nil && *description != "" {
+			content.WriteString(fmt.Sprintf("- **Description:** %s\n", *description))
+		}
+		if defaultFormula != nil && *defaultFormula != "" {
+			content.WriteString(fmt.Sprintf("- **Default Formula:** `%s`\n", *defaultFormula))
+		}
+		content.WriteString("\n")
+	}
+
+	// Chunk and index
+	chunks := chunker.ChunkDocument(content.String(), "master-registry", "reference")
+
+	totalTokens := 0
+	for _, chunk := range chunks {
+		totalTokens += chunk.TokenCount
+
+		// Generate embedding
+		embed, err := embeddings.GenerateEmbedding(ctx, chunk.Content)
+		if err != nil {
+			return 0, 0, fmt.Errorf("failed to generate embedding: %w", err)
+		}
+
+		vec := pgvector.NewVector(embed)
+		_, err = pool.Exec(ctx, `
+			INSERT INTO embeddings (content, source, content_type, chunk_index, metadata, embedding)
+			VALUES ($1, $2, $3, $4, $5, $6)
+		`, chunk.Content, "master-registry", "reference", chunk.Index, chunk.Metadata, vec)
+		if err != nil {
+			return 0, 0, fmt.Errorf("failed to insert embedding: %w", err)
+		}
+
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	return len(chunks), totalTokens, nil
+}
+
+func indexDSLExamples(ctx context.Context, pool *pgxpool.Pool, embeddings *ai.EmbeddingService, chunker *ai.Chunker) (int, int, error) {
+	// Create example content
+	examples := `# DSL Formula Examples
+
+## Time Offset Examples
+
+### Fixed Minutes Before Sunrise
+Request: "72 minutes before sunrise"
+Formula: sunrise - 72min
+Explanation: Alos HaShachar according to many Ashkenazi opinions
+
+### Fixed Minutes After Sunset
+Request: "42 minutes after sunset"
+Formula: sunset + 42min
+Explanation: Tzais according to Rabbeinu Tam
+
+### Hours Before Sunrise
+Request: "2 hours before sunrise"
+Formula: sunrise - 2hr
+Explanation: Some opinions for Misheyakir
+
+## Solar Angle Examples
+
+### Degrees Before Sunrise
+Request: "When sun is 16.1 degrees below horizon before sunrise"
+Formula: solar(16.1, before_sunrise)
+Explanation: Alos according to the degree-based calculation
+
+### Degrees After Sunset
+Request: "When sun is 8.5 degrees below horizon after sunset"
+Formula: solar(8.5, after_sunset)
+Explanation: Tzais HaKochavim - 3 small stars visible
+
+### Standard Twilight Angles
+Request: "Tzais when 3 medium stars visible"
+Formula: solar(7.083, after_sunset)
+Explanation: Based on Dr. Baruch Cohn's calculations
+
+## Proportional Hours (Shaos Zmaniyos) Examples
+
+### GRA Method
+Request: "End of Shema according to GRA"
+Formula: shaos(3, gra)
+Explanation: 3 proportional hours into the day using GRA (sunrise to sunset)
+
+### MGA Method
+Request: "End of Shema according to Magen Avraham"
+Formula: shaos(3, mga)
+Explanation: 3 proportional hours using MGA (72 minutes before sunrise to 72 after sunset)
+
+### Chatzos
+Request: "Midday"
+Formula: shaos(6, gra)
+Explanation: Exactly half of the day
+
+### Mincha Gedola
+Request: "Earliest time for Mincha"
+Formula: shaos(6.5, gra)
+Explanation: Half an hour after midday
+
+### Mincha Ketana
+Request: "Mincha Ketana"
+Formula: shaos(9.5, gra)
+Explanation: 2.5 hours before sunset
+
+### Plag HaMincha
+Request: "Plag HaMincha"
+Formula: shaos(10.75, gra)
+Explanation: 1.25 hours before sunset
+
+## Midpoint Examples
+
+### Between Two Times
+Request: "Midpoint between sunrise and sunset"
+Formula: midpoint(sunrise, sunset)
+Explanation: Solar noon approximation
+
+### Complex Midpoint
+Request: "Middle of the period between alos and sunrise"
+Formula: midpoint(sunrise - 72min, sunrise)
+Explanation: 36 minutes before sunrise
+
+## Reference Examples
+
+### Using Another Zman
+Request: "15 minutes before candle lighting"
+Formula: @candle_lighting - 15min
+Explanation: References the candle_lighting zman
+
+## Combined Examples
+
+### Complex Calculation
+Request: "Misheyakir - when you can distinguish between blue and white"
+Formula: solar(11.5, before_sunrise)
+Explanation: 52 minutes before sunrise in Jerusalem at equinox
+
+### Rabbeinu Tam Tzais
+Request: "Nightfall according to Rabbeinu Tam"
+Formula: sunset + 72min
+Explanation: 72 fixed minutes after sunset
+
+### 90 Minute Alos
+Request: "Dawn according to stricter opinion"
+Formula: sunrise - 90min
+Explanation: Some opinions use 90 minutes
+
+## Halachic Context
+
+### Shabbos Candle Lighting
+Most communities light 18 minutes before sunset:
+Formula: sunset - 18min
+
+Jerusalem custom is 40 minutes before:
+Formula: sunset - 40min
+
+### Havdalah
+Standard is 42 minutes after sunset:
+Formula: sunset + 42min
+
+More stringent opinions wait 72 minutes:
+Formula: sunset + 72min
+
+### Fast Days
+Minor fasts begin at alos (dawn):
+Formula: sunrise - 72min
+
+Major fasts (Yom Kippur, Tisha B'Av) begin at sunset the night before.
+`
+
+	// Chunk and index
+	chunks := chunker.ChunkDocument(examples, "dsl-examples", "example")
+
+	totalTokens := 0
+	indexedCount := 0
+	for _, chunk := range chunks {
+		// Skip empty chunks
+		trimmed := strings.TrimSpace(chunk.Content)
+		if trimmed == "" {
+			continue
+		}
+
+		totalTokens += chunk.TokenCount
+
+		// Generate embedding
+		embed, err := embeddings.GenerateEmbedding(ctx, trimmed)
+		if err != nil {
+			return 0, 0, fmt.Errorf("failed to generate embedding: %w", err)
+		}
+
+		vec := pgvector.NewVector(embed)
+		_, err = pool.Exec(ctx, `
+			INSERT INTO embeddings (content, source, content_type, chunk_index, metadata, embedding)
+			VALUES ($1, $2, $3, $4, $5, $6)
+		`, chunk.Content, "dsl-examples", "example", chunk.Index, chunk.Metadata, vec)
+		if err != nil {
+			return 0, 0, fmt.Errorf("failed to insert embedding: %w", err)
+		}
+
+		indexedCount++
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	return indexedCount, totalTokens, nil
+}
+
+// cloneRepo clones a git repository to the specified directory
+func cloneRepo(repoURL, destDir string) error {
+	cmd := exec.Command("git", "clone", "--depth", "1", repoURL, destDir)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
+// indexKosherJava clones the KosherJava zmanim library and indexes its documentation
+func indexKosherJava(ctx context.Context, pool *pgxpool.Pool, embeddings *ai.EmbeddingService, chunker *ai.Chunker, tempDir string) (int, int, error) {
+	repoDir := filepath.Join(tempDir, "KosherJava")
+
+	log.Println("   Cloning KosherJava zmanim library...")
+	err := cloneRepo("https://github.com/KosherJava/zmanim.git", repoDir)
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to clone KosherJava: %w", err)
+	}
+
+	totalChunks := 0
+	totalTokens := 0
+
+	// Index README
+	readmePath := filepath.Join(repoDir, "README.md")
+	if content, err := os.ReadFile(readmePath); err == nil {
+		chunks, tokens, err := indexContent(ctx, pool, embeddings, chunker, string(content), "kosherjava", "documentation")
+		if err != nil {
+			log.Printf("   Warning: Failed to index KosherJava README: %v", err)
+		} else {
+			totalChunks += chunks
+			totalTokens += tokens
+		}
+	}
+
+	// Index key source files with Javadoc documentation
+	javaFiles := []string{
+		"src/main/java/com/kosherjava/zmanim/ZmanimCalendar.java",
+		"src/main/java/com/kosherjava/zmanim/ComplexZmanimCalendar.java",
+		"src/main/java/com/kosherjava/zmanim/AstronomicalCalendar.java",
+		"src/main/java/com/kosherjava/zmanim/util/GeoLocation.java",
+		"src/main/java/com/kosherjava/zmanim/util/NOAACalculator.java",
+		"src/main/java/com/kosherjava/zmanim/util/SunTimesCalculator.java",
+	}
+
+	for _, javaFile := range javaFiles {
+		filePath := filepath.Join(repoDir, javaFile)
+		if content, err := os.ReadFile(filePath); err == nil {
+			// Extract Javadoc comments and method signatures for context
+			extracted := extractJavadocContent(string(content))
+			if extracted != "" {
+				// Use filename in source to avoid unique constraint conflicts
+				sourceID := fmt.Sprintf("kosherjava:%s", filepath.Base(javaFile))
+				chunks, tokens, err := indexContent(ctx, pool, embeddings, chunker, extracted, sourceID, "reference")
+				if err != nil {
+					log.Printf("   Warning: Failed to index %s: %v", javaFile, err)
+				} else {
+					totalChunks += chunks
+					totalTokens += tokens
+					log.Printf("   Indexed %s: %d chunks", filepath.Base(javaFile), chunks)
+				}
+			}
+		}
+	}
+
+	return totalChunks, totalTokens, nil
+}
+
+// extractJavadocContent extracts Javadoc comments and method signatures from Java source
+func extractJavadocContent(content string) string {
+	var result strings.Builder
+
+	// Match Javadoc comments followed by method signatures
+	// Pattern: /** ... */ followed by public/protected method
+	javadocPattern := regexp.MustCompile(`(?s)/\*\*(.+?)\*/\s*((?:public|protected)\s+[^\{]+)`)
+	matches := javadocPattern.FindAllStringSubmatch(content, -1)
+
+	for _, match := range matches {
+		if len(match) >= 3 {
+			javadoc := strings.TrimSpace(match[1])
+			signature := strings.TrimSpace(match[2])
+
+			// Clean up Javadoc - remove asterisks at line starts
+			javadoc = regexp.MustCompile(`(?m)^\s*\*\s?`).ReplaceAllString(javadoc, "")
+
+			// Skip getters/setters and trivial methods
+			if strings.Contains(signature, "get") && len(javadoc) < 50 {
+				continue
+			}
+			if strings.Contains(signature, "set") && len(javadoc) < 50 {
+				continue
+			}
+
+			result.WriteString("### ")
+			result.WriteString(extractMethodName(signature))
+			result.WriteString("\n\n")
+			result.WriteString("```java\n")
+			result.WriteString(signature)
+			result.WriteString("\n```\n\n")
+			result.WriteString(javadoc)
+			result.WriteString("\n\n---\n\n")
+		}
+	}
+
+	return result.String()
+}
+
+// extractMethodName extracts the method name from a Java method signature
+func extractMethodName(signature string) string {
+	// Remove access modifier and return type to find method name
+	methodPattern := regexp.MustCompile(`(\w+)\s*\(`)
+	match := methodPattern.FindStringSubmatch(signature)
+	if len(match) >= 2 {
+		return match[1]
+	}
+	return "Unknown"
+}
+
+// indexHebcalGo clones the hebcal-go library and indexes its documentation
+func indexHebcalGo(ctx context.Context, pool *pgxpool.Pool, embeddings *ai.EmbeddingService, chunker *ai.Chunker, tempDir string) (int, int, error) {
+	repoDir := filepath.Join(tempDir, "hebcal-go")
+
+	log.Println("   Cloning hebcal-go library...")
+	err := cloneRepo("https://github.com/hebcal/hebcal-go.git", repoDir)
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to clone hebcal-go: %w", err)
+	}
+
+	totalChunks := 0
+	totalTokens := 0
+
+	// Index README
+	readmePath := filepath.Join(repoDir, "README.md")
+	if content, err := os.ReadFile(readmePath); err == nil {
+		chunks, tokens, err := indexContent(ctx, pool, embeddings, chunker, string(content), "hebcal-go", "documentation")
+		if err != nil {
+			log.Printf("   Warning: Failed to index hebcal-go README: %v", err)
+		} else {
+			totalChunks += chunks
+			totalTokens += tokens
+		}
+	}
+
+	// Find and index Go files with package documentation
+	goFiles, err := findGoFiles(repoDir)
+	if err != nil {
+		log.Printf("   Warning: Failed to find Go files: %v", err)
+	} else {
+		for _, goFile := range goFiles {
+			if content, err := os.ReadFile(goFile); err == nil {
+				// Extract Go doc comments
+				extracted := extractGoDocContent(string(content), goFile)
+				if extracted != "" {
+					// Use filename in source to avoid unique constraint conflicts
+					sourceID := fmt.Sprintf("hebcal-go:%s", filepath.Base(goFile))
+					chunks, tokens, err := indexContent(ctx, pool, embeddings, chunker, extracted, sourceID, "reference")
+					if err != nil {
+						log.Printf("   Warning: Failed to index %s: %v", goFile, err)
+					} else {
+						totalChunks += chunks
+						totalTokens += tokens
+					}
+				}
+			}
+		}
+	}
+
+	// Also index the zmanim package specifically
+	zmanimDir := filepath.Join(repoDir, "zmanim")
+	if _, err := os.Stat(zmanimDir); err == nil {
+		zmanimFiles, err := findGoFiles(zmanimDir)
+		if err == nil {
+			for _, goFile := range zmanimFiles {
+				if content, err := os.ReadFile(goFile); err == nil {
+					extracted := extractGoDocContent(string(content), goFile)
+					if extracted != "" {
+						// Use package:filename to avoid conflicts
+						sourceID := fmt.Sprintf("hebcal-go:zmanim:%s", filepath.Base(goFile))
+						chunks, tokens, err := indexContent(ctx, pool, embeddings, chunker, extracted, sourceID, "reference")
+						if err != nil {
+							log.Printf("   Warning: Failed to index %s: %v", goFile, err)
+						} else {
+							totalChunks += chunks
+							totalTokens += tokens
+							log.Printf("   Indexed %s: %d chunks", filepath.Base(goFile), chunks)
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return totalChunks, totalTokens, nil
+}
+
+// findGoFiles recursively finds all .go files in a directory (excluding test files)
+func findGoFiles(dir string) ([]string, error) {
+	var files []string
+	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil // Skip files we can't access
+		}
+		if info.IsDir() {
+			// Skip vendor and test directories
+			if info.Name() == "vendor" || info.Name() == "testdata" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if strings.HasSuffix(path, ".go") && !strings.HasSuffix(path, "_test.go") {
+			files = append(files, path)
+		}
+		return nil
+	})
+	return files, err
+}
+
+// extractGoDocContent extracts Go documentation comments from source
+func extractGoDocContent(content, filename string) string {
+	var result strings.Builder
+	result.WriteString(fmt.Sprintf("# File: %s\n\n", filepath.Base(filename)))
+
+	// Extract package documentation (comments before package declaration)
+	packageDocPattern := regexp.MustCompile(`(?s)^((?://[^\n]*\n)+)\s*package\s+(\w+)`)
+	if match := packageDocPattern.FindStringSubmatch(content); len(match) >= 3 {
+		doc := strings.TrimSpace(match[1])
+		doc = regexp.MustCompile(`(?m)^//\s?`).ReplaceAllString(doc, "")
+		if doc != "" {
+			result.WriteString("## Package Documentation\n\n")
+			result.WriteString(doc)
+			result.WriteString("\n\n")
+		}
+	}
+
+	// Extract function/type documentation
+	funcDocPattern := regexp.MustCompile(`(?m)((?://[^\n]*\n)+)\s*(func\s+(?:\([^)]+\)\s*)?\w+[^\{]+)`)
+	matches := funcDocPattern.FindAllStringSubmatch(content, -1)
+
+	for _, match := range matches {
+		if len(match) >= 3 {
+			doc := strings.TrimSpace(match[1])
+			doc = regexp.MustCompile(`(?m)^//\s?`).ReplaceAllString(doc, "")
+			signature := strings.TrimSpace(match[2])
+
+			// Skip short/trivial docs
+			if len(doc) < 20 {
+				continue
+			}
+
+			result.WriteString("### ")
+			result.WriteString(extractGoFuncName(signature))
+			result.WriteString("\n\n")
+			result.WriteString("```go\n")
+			result.WriteString(signature)
+			result.WriteString("\n```\n\n")
+			result.WriteString(doc)
+			result.WriteString("\n\n---\n\n")
+		}
+	}
+
+	// Extract type documentation
+	typeDocPattern := regexp.MustCompile(`(?m)((?://[^\n]*\n)+)\s*(type\s+\w+\s+(?:struct|interface)[^\{]*)`)
+	typeMatches := typeDocPattern.FindAllStringSubmatch(content, -1)
+
+	for _, match := range typeMatches {
+		if len(match) >= 3 {
+			doc := strings.TrimSpace(match[1])
+			doc = regexp.MustCompile(`(?m)^//\s?`).ReplaceAllString(doc, "")
+			signature := strings.TrimSpace(match[2])
+
+			if len(doc) < 20 {
+				continue
+			}
+
+			result.WriteString("### ")
+			result.WriteString(extractGoTypeName(signature))
+			result.WriteString("\n\n")
+			result.WriteString("```go\n")
+			result.WriteString(signature)
+			result.WriteString("\n```\n\n")
+			result.WriteString(doc)
+			result.WriteString("\n\n---\n\n")
+		}
+	}
+
+	return result.String()
+}
+
+// extractGoFuncName extracts the function name from a Go function signature
+func extractGoFuncName(signature string) string {
+	// Handle both regular functions and methods
+	pattern := regexp.MustCompile(`func\s+(?:\([^)]+\)\s*)?(\w+)`)
+	match := pattern.FindStringSubmatch(signature)
+	if len(match) >= 2 {
+		return match[1]
+	}
+	return "Unknown"
+}
+
+// extractGoTypeName extracts the type name from a Go type definition
+func extractGoTypeName(signature string) string {
+	pattern := regexp.MustCompile(`type\s+(\w+)`)
+	match := pattern.FindStringSubmatch(signature)
+	if len(match) >= 2 {
+		return match[1]
+	}
+	return "Unknown"
+}
+
+// indexContent is a helper to index arbitrary content
+func indexContent(ctx context.Context, pool *pgxpool.Pool, embeddings *ai.EmbeddingService, chunker *ai.Chunker, content, source, contentType string) (int, int, error) {
+	chunks := chunker.ChunkDocument(content, source, contentType)
+	if len(chunks) == 0 {
+		return 0, 0, nil
+	}
+
+	totalTokens := 0
+
+	// Process chunks in batches
+	batchSize := 10
+	for i := 0; i < len(chunks); i += batchSize {
+		end := i + batchSize
+		if end > len(chunks) {
+			end = len(chunks)
+		}
+		batch := chunks[i:end]
+
+		// Extract content for embedding - filter out empty strings
+		var texts []string
+		var validChunks []ai.Chunk
+		for _, chunk := range batch {
+			trimmed := strings.TrimSpace(chunk.Content)
+			if trimmed != "" {
+				texts = append(texts, trimmed)
+				validChunks = append(validChunks, chunk)
+				totalTokens += chunk.TokenCount
+			}
+		}
+
+		if len(texts) == 0 {
+			continue
+		}
+
+		// Generate embeddings
+		embeds, err := embeddings.GenerateEmbeddings(ctx, texts)
+		if err != nil {
+			return 0, 0, fmt.Errorf("failed to generate embeddings: %w", err)
+		}
+
+		// Insert into database
+		for j, chunk := range validChunks {
+			vec := pgvector.NewVector(embeds[j])
+			_, err := pool.Exec(ctx, `
+				INSERT INTO embeddings (content, source, content_type, chunk_index, metadata, embedding)
+				VALUES ($1, $2, $3, $4, $5, $6)
+			`, chunk.Content, source, contentType, chunk.Index, chunk.Metadata, vec)
+			if err != nil {
+				return 0, 0, fmt.Errorf("failed to insert embedding: %w", err)
+			}
+		}
+
+		// Rate limit to avoid OpenAI API limits
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	return len(chunks), totalTokens, nil
+}

@@ -1,9 +1,9 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect, ReactNode, useCallback, Suspense } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef, Suspense } from 'react';
 import { useUser, useAuth } from '@clerk/nextjs';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
-import { API_BASE } from '@/lib/api';
+import { createApiClient, ApiError } from '@/lib/api-client';
 import type { ClerkPublicMetadata } from '@/types/clerk';
 
 interface Publisher {
@@ -46,6 +46,24 @@ function PublisherProviderInner({ children }: { children: ReactNode }) {
   const [isImpersonating, setIsImpersonating] = useState(false);
   const [impersonatedPublisher, setImpersonatedPublisher] = useState<Publisher | null>(null);
 
+  // Use refs to avoid stale closures in async operations
+  const selectedPublisherIdRef = useRef(selectedPublisherId);
+  const fetchInProgressRef = useRef(false);
+  const mountedRef = useRef(true);
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    selectedPublisherIdRef.current = selectedPublisherId;
+  }, [selectedPublisherId]);
+
+  // Track mount status
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
   // Extract publisher IDs from Clerk metadata
   const metadata = user?.publicMetadata as ClerkPublicMetadata | undefined;
   const primaryPublisherId = metadata?.primary_publisher_id;
@@ -57,34 +75,34 @@ function PublisherProviderInner({ children }: { children: ReactNode }) {
       return;
     }
 
+    // Prevent concurrent fetches
+    if (fetchInProgressRef.current) {
+      return;
+    }
+    fetchInProgressRef.current = true;
+
     try {
       setIsLoading(true);
       setError(null);
 
-      const token = await getToken();
-      if (!token) {
-        setError('Not authenticated');
-        setIsLoading(false);
+      // Create API client without publisher context (we're bootstrapping it)
+      const api = createApiClient(getToken, null);
+
+      const data = await api.get<{ publishers: Publisher[] }>('/publisher/accessible', {
+        skipPublisherId: true,
+      });
+
+      // Check if component is still mounted
+      if (!mountedRef.current) {
         return;
       }
 
-      const response = await fetch(`${API_BASE}/api/v1/publisher/accessible`, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch accessible publishers');
-      }
-
-      const data = await response.json();
-      const fetchedPublishers = data.data?.publishers || data.publishers || [];
+      const fetchedPublishers = data.publishers || [];
       setPublishers(fetchedPublishers);
 
       // Initialize selection if we have publishers but no selection yet
-      if (fetchedPublishers.length > 0 && !selectedPublisherId) {
+      // Use ref to get current value, avoiding stale closure
+      if (fetchedPublishers.length > 0 && !selectedPublisherIdRef.current) {
         const urlPublisherId = searchParams.get('p');
         const storedId = typeof window !== 'undefined' ? localStorage.getItem('selectedPublisherId') : null;
 
@@ -102,19 +120,30 @@ function PublisherProviderInner({ children }: { children: ReactNode }) {
         }
 
         setSelectedPublisherIdState(initialId);
+        selectedPublisherIdRef.current = initialId;
         if (typeof window !== 'undefined' && initialId) {
           localStorage.setItem('selectedPublisherId', initialId);
         }
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load publishers');
+      if (!mountedRef.current) {
+        return;
+      }
+      if (err instanceof ApiError && err.isUnauthorized) {
+        setError('Not authenticated');
+      } else {
+        setError(err instanceof Error ? err.message : 'Failed to load publishers');
+      }
       console.error('Failed to fetch publishers:', err);
     } finally {
-      setIsLoading(false);
+      fetchInProgressRef.current = false;
+      if (mountedRef.current) {
+        setIsLoading(false);
+      }
     }
-  }, [userLoaded, user, getToken, selectedPublisherId, searchParams, primaryPublisherId]);
+  }, [userLoaded, user, getToken, searchParams, primaryPublisherId]);
 
-  // Fetch publishers on mount
+  // Fetch publishers on mount - only run once when user is ready
   useEffect(() => {
     if (userLoaded && user) {
       fetchPublishers();
@@ -124,6 +153,7 @@ function PublisherProviderInner({ children }: { children: ReactNode }) {
   // Handle publisher selection change
   const setSelectedPublisherId = useCallback((id: string) => {
     setSelectedPublisherIdState(id);
+    selectedPublisherIdRef.current = id;
 
     if (typeof window !== 'undefined') {
       localStorage.setItem('selectedPublisherId', id);

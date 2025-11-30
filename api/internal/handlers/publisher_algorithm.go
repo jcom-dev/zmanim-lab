@@ -7,7 +7,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jcom-dev/zmanim-lab/internal/algorithm"
-	"github.com/jcom-dev/zmanim-lab/internal/middleware"
 )
 
 // AlgorithmResponse represents the algorithm configuration response
@@ -63,21 +62,12 @@ type AlgorithmPreviewResponse struct {
 func (h *Handlers) GetPublisherAlgorithmHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	// Get user ID from context
-	userID := middleware.GetUserID(ctx)
-	if userID == "" {
-		RespondUnauthorized(w, r, "User ID not found in context")
-		return
+	// Use PublisherResolver to get publisher context
+	pc := h.publisherResolver.MustResolve(w, r)
+	if pc == nil {
+		return // Response already sent
 	}
-
-	// Get and validate publisher ID from header (validated against JWT claims)
-	// Admins can impersonate any publisher via X-Publisher-Id header
-	requestedID := r.Header.Get("X-Publisher-Id")
-	publisherID := middleware.GetValidatedPublisherID(ctx, requestedID)
-	if publisherID == "" {
-		RespondForbidden(w, r, "No access to the requested publisher")
-		return
-	}
+	publisherID := pc.PublisherID
 
 	// Get algorithm for this publisher (prefer draft, then published)
 	var err error
@@ -168,12 +158,12 @@ func (h *Handlers) GetPublisherAlgorithmHandler(w http.ResponseWriter, r *http.R
 func (h *Handlers) UpdatePublisherAlgorithmHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	// Get user ID from context
-	userID := middleware.GetUserID(ctx)
-	if userID == "" {
-		RespondUnauthorized(w, r, "User ID not found in context")
-		return
+	// Use PublisherResolver to get publisher context
+	pc := h.publisherResolver.MustResolve(w, r)
+	if pc == nil {
+		return // Response already sent
 	}
+	publisherID := pc.PublisherID
 
 	// Parse request body
 	var req AlgorithmUpdateRequest
@@ -186,18 +176,6 @@ func (h *Handlers) UpdatePublisherAlgorithmHandler(w http.ResponseWriter, r *htt
 	if err := algorithm.ValidateAlgorithm(&req.Configuration); err != nil {
 		RespondValidationError(w, r, err.Error(), nil)
 		return
-	}
-
-	// Get publisher ID from header first, fall back to clerk_user_id lookup
-	publisherID := r.Header.Get("X-Publisher-Id")
-	if publisherID == "" {
-		if err := h.db.Pool.QueryRow(ctx,
-			"SELECT id FROM publishers WHERE clerk_user_id = $1",
-			userID,
-		).Scan(&publisherID); err != nil {
-			RespondNotFound(w, r, "Publisher not found")
-			return
-		}
 	}
 
 	// Convert configuration to JSON
@@ -599,24 +577,12 @@ func (h *Handlers) GetZmanMethods(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) PublishAlgorithm(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	// Get user ID from context
-	userID := middleware.GetUserID(ctx)
-	if userID == "" {
-		RespondUnauthorized(w, r, "User ID not found in context")
-		return
+	// Use PublisherResolver to get publisher context
+	pc := h.publisherResolver.MustResolve(w, r)
+	if pc == nil {
+		return // Response already sent
 	}
-
-	// Get publisher ID from header first, fall back to clerk_user_id lookup
-	publisherID := r.Header.Get("X-Publisher-Id")
-	if publisherID == "" {
-		if err := h.db.Pool.QueryRow(ctx,
-			"SELECT id FROM publishers WHERE clerk_user_id = $1",
-			userID,
-		).Scan(&publisherID); err != nil {
-			RespondNotFound(w, r, "Publisher not found")
-			return
-		}
-	}
+	publisherID := pc.PublisherID
 
 	// Get the draft algorithm
 	var algID, algName, description string
@@ -717,24 +683,12 @@ func (h *Handlers) PublishAlgorithm(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) GetAlgorithmVersions(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	// Get user ID from context
-	userID := middleware.GetUserID(ctx)
-	if userID == "" {
-		RespondUnauthorized(w, r, "User ID not found in context")
-		return
+	// Use PublisherResolver to get publisher context
+	pc := h.publisherResolver.MustResolve(w, r)
+	if pc == nil {
+		return // Response already sent
 	}
-
-	// Get publisher ID from header first, fall back to clerk_user_id lookup
-	publisherID := r.Header.Get("X-Publisher-Id")
-	if publisherID == "" {
-		if err := h.db.Pool.QueryRow(ctx,
-			"SELECT id FROM publishers WHERE clerk_user_id = $1",
-			userID,
-		).Scan(&publisherID); err != nil {
-			RespondNotFound(w, r, "Publisher not found")
-			return
-		}
-	}
+	publisherID := pc.PublisherID
 
 	// Get all versions
 	query := `
@@ -786,30 +740,18 @@ func (h *Handlers) GetAlgorithmVersions(w http.ResponseWriter, r *http.Request) 
 func (h *Handlers) DeprecateAlgorithmVersion(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	// Get user ID from context
-	userID := middleware.GetUserID(ctx)
-	if userID == "" {
-		RespondUnauthorized(w, r, "User ID not found in context")
-		return
+	// Use PublisherResolver to get publisher context
+	pc := h.publisherResolver.MustResolve(w, r)
+	if pc == nil {
+		return // Response already sent
 	}
+	publisherID := pc.PublisherID
 
 	// Get version ID from URL using chi
 	versionID := chi.URLParam(r, "id")
 	if versionID == "" {
 		RespondBadRequest(w, r, "Version ID is required")
 		return
-	}
-
-	// Get publisher ID from header first, fall back to clerk_user_id lookup
-	publisherID := r.Header.Get("X-Publisher-Id")
-	if publisherID == "" {
-		if err := h.db.Pool.QueryRow(ctx,
-			"SELECT id FROM publishers WHERE clerk_user_id = $1",
-			userID,
-		).Scan(&publisherID); err != nil {
-			RespondNotFound(w, r, "Publisher not found")
-			return
-		}
 	}
 
 	// Verify version belongs to publisher and update
@@ -841,30 +783,18 @@ func (h *Handlers) DeprecateAlgorithmVersion(w http.ResponseWriter, r *http.Requ
 func (h *Handlers) GetAlgorithmVersion(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	// Get user ID from context
-	userID := middleware.GetUserID(ctx)
-	if userID == "" {
-		RespondUnauthorized(w, r, "User ID not found in context")
-		return
+	// Use PublisherResolver to get publisher context
+	pc := h.publisherResolver.MustResolve(w, r)
+	if pc == nil {
+		return // Response already sent
 	}
+	publisherID := pc.PublisherID
 
 	// Get version ID from URL using chi
 	versionID := chi.URLParam(r, "id")
 	if versionID == "" {
 		RespondBadRequest(w, r, "Version ID is required")
 		return
-	}
-
-	// Get publisher ID from header first, fall back to clerk_user_id lookup
-	publisherID := r.Header.Get("X-Publisher-Id")
-	if publisherID == "" {
-		if err := h.db.Pool.QueryRow(ctx,
-			"SELECT id FROM publishers WHERE clerk_user_id = $1",
-			userID,
-		).Scan(&publisherID); err != nil {
-			RespondNotFound(w, r, "Publisher not found")
-			return
-		}
 	}
 
 	// Get version

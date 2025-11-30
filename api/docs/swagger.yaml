@@ -1,0 +1,21 @@
+basePath: /api/v1
+host: localhost:8080
+info:
+  contact:
+    email: support@zmanim-lab.com
+    name: Zmanim Lab Support
+  description: API for Jewish prayer times calculation and publisher management
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  termsOfService: https://zmanim-lab.com/terms
+  title: Zmanim Lab API
+  version: "1.0"
+paths: {}
+securityDefinitions:
+  BearerAuth:
+    description: JWT Bearer token from Clerk authentication
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

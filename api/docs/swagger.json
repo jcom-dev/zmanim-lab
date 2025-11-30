@@ -1,0 +1,28 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "description": "API for Jewish prayer times calculation and publisher management",
+        "title": "Zmanim Lab API",
+        "termsOfService": "https://zmanim-lab.com/terms",
+        "contact": {
+            "name": "Zmanim Lab Support",
+            "email": "support@zmanim-lab.com"
+        },
+        "license": {
+            "name": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+        },
+        "version": "1.0"
+    },
+    "host": "localhost:8080",
+    "basePath": "/api/v1",
+    "paths": {},
+    "securityDefinitions": {
+        "BearerAuth": {
+            "description": "JWT Bearer token from Clerk authentication",
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header"
+        }
+    }
+}

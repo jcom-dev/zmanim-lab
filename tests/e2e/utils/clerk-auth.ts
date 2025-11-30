@@ -10,8 +10,48 @@
 import { createClerkClient } from '@clerk/backend';
 import { setupClerkTestingToken, clerk } from '@clerk/testing/playwright';
 import type { Page } from '@playwright/test';
+import { Pool } from 'pg';
 import { createTestInbox } from './email-testing';
 import { linkClerkUserToPublisher } from './test-fixtures';
+
+// Cache for slug -> ID resolution
+const slugCache: Map<string, string> = new Map();
+
+/**
+ * Resolve a publisher slug to its actual UUID
+ */
+async function resolvePublisherSlug(slug: string): Promise<string | null> {
+  // Check cache first
+  if (slugCache.has(slug)) {
+    return slugCache.get(slug) || null;
+  }
+
+  const databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl) {
+    console.warn('DATABASE_URL not set - cannot resolve slug');
+    return null;
+  }
+
+  const pool = new Pool({ connectionString: databaseUrl });
+  try {
+    const result = await pool.query(
+      'SELECT id FROM publishers WHERE slug = $1',
+      [slug]
+    );
+
+    if (result.rows.length > 0) {
+      const id = result.rows[0].id;
+      slugCache.set(slug, id);
+      return id;
+    }
+    return null;
+  } catch (error) {
+    console.warn('Failed to resolve slug:', error);
+    return null;
+  } finally {
+    await pool.end();
+  }
+}
 
 // Initialize Clerk client
 const getClerkClient = () => {
@@ -329,11 +369,25 @@ export async function loginAsAdmin(page: Page): Promise<void> {
 /**
  * Inject publisher authentication into a Playwright page
  * Also links the Clerk user to the publisher in the database
+ *
+ * @param page - Playwright page
+ * @param publisherIdOrSlug - Publisher ID (UUID) or slug (e2e-shared-*)
  */
 export async function loginAsPublisher(
   page: Page,
-  publisherId: string
+  publisherIdOrSlug: string
 ): Promise<void> {
+  // Resolve slug to actual ID if needed
+  let publisherId = publisherIdOrSlug;
+
+  // Check if this looks like a slug (e2e-shared-*) vs a UUID
+  if (publisherIdOrSlug.startsWith('e2e-shared-')) {
+    const resolvedId = await resolvePublisherSlug(publisherIdOrSlug);
+    if (resolvedId) {
+      publisherId = resolvedId;
+    }
+  }
+
   const user = await createTestPublisher(publisherId);
 
   // Link the Clerk user to the publisher in the database

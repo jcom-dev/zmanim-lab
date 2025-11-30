@@ -1,10 +1,9 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useAuth } from '@clerk/nextjs';
 import { usePublisherContext } from '@/providers/PublisherContext';
 import { Clock, User, Code, MapPin, UserPlus, Loader2, History } from 'lucide-react';
-import { API_BASE } from '@/lib/api';
+import { useApi, ApiError } from '@/lib/api-client';
 
 interface ActivityEntry {
   id: string;
@@ -16,7 +15,7 @@ interface ActivityEntry {
 }
 
 export default function PublisherActivityPage() {
-  const { getToken } = useAuth();
+  const api = useApi();
   const { selectedPublisher, isLoading: contextLoading } = usePublisherContext();
   const [activities, setActivities] = useState<ActivityEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -26,34 +25,21 @@ export default function PublisherActivityPage() {
 
     try {
       setIsLoading(true);
-      const token = await getToken();
 
-      const response = await fetch(`${API_BASE}/api/v1/publisher/activity`, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-          'X-Publisher-Id': selectedPublisher.id,
-        },
-      });
-
-      if (!response.ok) {
-        // If endpoint doesn't exist yet, show empty state
-        if (response.status === 404) {
-          setActivities([]);
-          return;
-        }
-        throw new Error('Failed to fetch activities');
+      const data = await api.get<{ activities: ActivityEntry[] }>('/publisher/activity');
+      setActivities(data.activities || []);
+    } catch (err) {
+      // If endpoint doesn't exist yet, show empty state
+      if (err instanceof ApiError && err.isNotFound) {
+        setActivities([]);
+        return;
       }
-
-      const data = await response.json();
-      setActivities(data.data?.activities || data.activities || []);
-    } catch {
       // Don't show error for now since endpoint may not exist
       setActivities([]);
     } finally {
       setIsLoading(false);
     }
-  }, [getToken, selectedPublisher]);
+  }, [api, selectedPublisher]);
 
   useEffect(() => {
     if (selectedPublisher) {

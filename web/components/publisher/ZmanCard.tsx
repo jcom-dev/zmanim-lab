@@ -6,8 +6,24 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { HighlightedFormula } from '@/components/shared/HighlightedFormula';
-import { PublisherZman, useUpdateZman, useDeleteZman } from '@/lib/hooks/useZmanimList';
-import { Pencil, Eye, EyeOff, Trash2, GripVertical } from 'lucide-react';
+import {
+  PublisherZman,
+  useUpdateZman,
+  useDeleteZman,
+  useZmanVersionHistory,
+  useRollbackZmanVersion,
+  ZmanVersion,
+} from '@/lib/hooks/useZmanimList';
+import {
+  Pencil,
+  Trash2,
+  Globe,
+  CircleDashed,
+  History,
+  RotateCcw,
+  Loader2,
+} from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,10 +34,68 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
+
+// Event tags for event zmanim - maps zman_key to applicable events
+// Using design tokens: primary for Shabbos/YT, destructive for fasts, muted for others
+const EVENT_ZMAN_TAGS: Record<string, string[]> = {
+  // Candle lighting - Shabbos & Yom Tov
+  candle_lighting: ['Shabbos', 'Yom Tov'],
+  candle_lighting_18: ['Shabbos', 'Yom Tov'],
+  candle_lighting_20: ['Shabbos', 'Yom Tov'],
+  candle_lighting_22: ['Shabbos', 'Yom Tov'],
+  candle_lighting_40: ['Shabbos', 'Yom Tov'],
+  // Havdalah / Shabbos ends - Shabbos & Yom Tov
+  shabbos_ends: ['Shabbos', 'Yom Tov'],
+  havdalah: ['Shabbos', 'Yom Tov'],
+  havdalah_42: ['Shabbos', 'Yom Tov'],
+  havdalah_50: ['Shabbos', 'Yom Tov'],
+  havdalah_72: ['Shabbos', 'Yom Tov'],
+  // Yom Kippur
+  yom_kippur_starts: ['Yom Kippur'],
+  yom_kippur_ends: ['Yom Kippur'],
+  // Fast days
+  fast_begins: ['Fast Day'],
+  fast_ends: ['Fast Day'],
+  fast_ends_42: ['Fast Day'],
+  fast_ends_50: ['Fast Day'],
+  // Tisha B'Av
+  tisha_bav_starts: ["Tisha B'Av"],
+  tisha_bav_ends: ["Tisha B'Av"],
+  // Pesach
+  sof_zman_achilas_chametz_gra: ['Erev Pesach'],
+  sof_zman_achilas_chametz_mga: ['Erev Pesach'],
+  sof_zman_biur_chametz_gra: ['Erev Pesach'],
+  sof_zman_biur_chametz_mga: ['Erev Pesach'],
+};
+
+// Get badge variant based on event type - uses design tokens
+function getEventBadgeVariant(event: string): 'default' | 'secondary' | 'outline' | 'destructive' {
+  switch (event) {
+    case 'Shabbos':
+    case 'Yom Tov':
+      return 'default'; // primary color
+    case 'Yom Kippur':
+    case "Tisha B'Av":
+    case 'Fast Day':
+      return 'secondary'; // muted for solemn occasions
+    case 'Erev Pesach':
+      return 'outline'; // neutral
+    default:
+      return 'outline';
+  }
+}
 
 interface ZmanCardProps {
   zman: PublisherZman;
-  category: 'essential' | 'optional' | 'custom';
+  category: 'essential' | 'optional';
   onEdit?: (zmanKey: string) => void;
 }
 
@@ -38,9 +112,15 @@ interface ZmanCardProps {
 export function ZmanCard({ zman, category, onEdit }: ZmanCardProps) {
   const router = useRouter();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showHistoryDialog, setShowHistoryDialog] = useState(false);
+  const [selectedVersion, setSelectedVersion] = useState<ZmanVersion | null>(null);
 
   const updateZman = useUpdateZman(zman.zman_key);
   const deleteZman = useDeleteZman();
+  const { data: versionHistory, isLoading: historyLoading } = useZmanVersionHistory(
+    showHistoryDialog ? zman.zman_key : null
+  );
+  const rollbackVersion = useRollbackZmanVersion(zman.zman_key);
 
   const handleEdit = () => {
     if (onEdit) {
@@ -50,43 +130,74 @@ export function ZmanCard({ zman, category, onEdit }: ZmanCardProps) {
     }
   };
 
-  const handleToggleVisibility = async () => {
-    if (category === 'essential') return; // Can't toggle essential zmanim
-
+  const handleTogglePublished = async () => {
     await updateZman.mutateAsync({
-      is_visible: !zman.is_visible,
+      is_published: !zman.is_published,
+    });
+  };
+
+  const handleToggleCategory = async () => {
+    const newCategory = zman.category === 'essential' ? 'optional' : 'essential';
+    console.log('[ZmanCard] Toggling category from', zman.category, 'to', newCategory, 'for', zman.zman_key);
+    try {
+      const result = await updateZman.mutateAsync({
+        category: newCategory,
+      });
+      console.log('[ZmanCard] Update result:', result);
+    } catch (error: unknown) {
+      console.error('[ZmanCard] Update error:', error);
+      // Log more details about the error
+      if (error && typeof error === 'object') {
+        const e = error as { status?: number; message?: string; data?: unknown };
+        console.error('[ZmanCard] Error details - status:', e.status, 'message:', e.message, 'data:', e.data);
+      }
+    }
+  };
+
+  const handleToggleEnabled = async () => {
+    await updateZman.mutateAsync({
+      is_enabled: !zman.is_enabled,
     });
   };
 
   const handleDelete = async () => {
-    if (category !== 'custom') return; // Can only delete custom zmanim
-
     await deleteZman.mutateAsync(zman.zman_key);
     setShowDeleteDialog(false);
   };
 
-  const isEssential = category === 'essential';
-  const isCustom = category === 'custom';
+  const handleRollback = async (version: ZmanVersion) => {
+    await rollbackVersion.mutateAsync({ version_number: version.version_number });
+    setShowHistoryDialog(false);
+    setSelectedVersion(null);
+  };
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  // Use zman.category for actual state (not the prop which is for grid styling)
+  const isEssential = zman.category === 'essential';
+  const isOptional = zman.category === 'optional';
 
   return (
     <>
       <Card
         className={`
           hover:border-primary/50 transition-colors group
-          ${!zman.is_enabled || !zman.is_visible ? 'opacity-60' : ''}
+          ${!zman.is_enabled ? 'opacity-60' : ''}
         `}
       >
         <CardHeader className="pb-3">
           <div className="flex items-start justify-between gap-4">
             {/* Left: Name and Dependencies */}
             <div className="flex-1 min-w-0">
-              {/* Drag Handle (for custom zmanim) */}
-              {isCustom && (
-                <div className="float-left mr-2 mt-1 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing">
-                  <GripVertical className="h-5 w-5 text-muted-foreground" />
-                </div>
-              )}
-
               {/* Name */}
               <h3 className="text-lg font-semibold leading-tight mb-2">
                 <span className="text-foreground">{zman.hebrew_name}</span>
@@ -105,29 +216,60 @@ export function ZmanCard({ zman, category, onEdit }: ZmanCardProps) {
                 </div>
               )}
 
-              {/* Status Indicators */}
-              <div className="flex gap-2 mt-2">
-                {isEssential && (
-                  <Badge variant="secondary" className="text-xs">
-                    Essential
+              {/* Status Toggles */}
+              <div className="flex flex-wrap items-center gap-4 mt-3">
+                {/* Enabled/Disabled Toggle */}
+                <div className="flex items-center gap-2">
+                  <span className={`text-xs ${!zman.is_enabled ? 'text-muted-foreground' : 'font-medium text-foreground'}`}>
+                    Enabled
+                  </span>
+                  <Switch
+                    checked={zman.is_enabled}
+                    onCheckedChange={handleToggleEnabled}
+                    disabled={updateZman.isPending}
+                  />
+                </div>
+
+                {/* Essential/Optional Flag - clickable badge */}
+                <Badge
+                  variant={isEssential ? 'default' : 'outline'}
+                  className={`cursor-pointer transition-colors select-none ${
+                    isEssential
+                      ? 'bg-primary hover:bg-primary/80'
+                      : 'hover:bg-muted'
+                  } ${updateZman.isPending ? 'opacity-50 pointer-events-none' : ''}`}
+                  onClick={handleToggleCategory}
+                  title={isEssential ? 'Click to mark as optional' : 'Click to mark as essential'}
+                >
+                  {isEssential ? 'Essential' : 'Optional'}
+                </Badge>
+
+                {/* Published Status Badge */}
+                {zman.is_published ? (
+                  <Badge className="text-xs bg-green-600 hover:bg-green-700">
+                    Published
                   </Badge>
-                )}
-                {isCustom && (
-                  <Badge variant="default" className="text-xs">
-                    Custom
-                  </Badge>
-                )}
-                {!zman.is_enabled && (
-                  <Badge variant="destructive" className="text-xs">
-                    Disabled
-                  </Badge>
-                )}
-                {!zman.is_visible && (
-                  <Badge variant="outline" className="text-xs">
-                    Hidden
+                ) : (
+                  <Badge variant="outline" className="text-xs text-amber-600 border-amber-600">
+                    Draft
                   </Badge>
                 )}
               </div>
+
+              {/* Event Tags - Show which events this zman applies to */}
+              {EVENT_ZMAN_TAGS[zman.zman_key] && (
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {EVENT_ZMAN_TAGS[zman.zman_key].map((event) => (
+                    <Badge
+                      key={event}
+                      variant={getEventBadgeVariant(event)}
+                      className="text-xs"
+                    >
+                      {event}
+                    </Badge>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Right: Quick Actions */}
@@ -143,31 +285,40 @@ export function ZmanCard({ zman, category, onEdit }: ZmanCardProps) {
                 <Pencil className="h-4 w-4" />
               </Button>
 
-              {/* Toggle Visibility (not for essential) */}
-              {!isEssential && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={handleToggleVisibility}
-                  title={zman.is_visible ? 'Hide zman' : 'Show zman'}
-                  className="h-8 w-8"
-                  disabled={updateZman.isPending}
-                >
-                  {zman.is_visible ? (
-                    <Eye className="h-4 w-4" />
-                  ) : (
-                    <EyeOff className="h-4 w-4 opacity-50" />
-                  )}
-                </Button>
-              )}
+              {/* Toggle Published - shows globe icon */}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleTogglePublished}
+                title={zman.is_published ? 'Unpublish zman' : 'Publish zman'}
+                className={`h-8 w-8 ${zman.is_published ? 'text-green-600 hover:text-green-700' : 'text-amber-600 hover:text-amber-700'}`}
+                disabled={updateZman.isPending}
+              >
+                {zman.is_published ? (
+                  <Globe className="h-4 w-4" />
+                ) : (
+                  <CircleDashed className="h-4 w-4" />
+                )}
+              </Button>
 
-              {/* Delete (custom only) */}
-              {isCustom && (
+              {/* Version History */}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setShowHistoryDialog(true)}
+                title="View version history"
+                className="h-8 w-8"
+              >
+                <History className="h-4 w-4" />
+              </Button>
+
+              {/* Delete (only for disabled zmanim) */}
+              {!zman.is_enabled && (
                 <Button
                   variant="ghost"
                   size="icon"
                   onClick={() => setShowDeleteDialog(true)}
-                  title="Delete custom zman"
+                  title="Delete zman"
                   className="h-8 w-8 text-destructive hover:text-destructive"
                 >
                   <Trash2 className="h-4 w-4" />
@@ -205,10 +356,10 @@ export function ZmanCard({ zman, category, onEdit }: ZmanCardProps) {
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Custom Zman?</AlertDialogTitle>
+            <AlertDialogTitle>Delete Zman?</AlertDialogTitle>
             <AlertDialogDescription>
               Are you sure you want to delete <strong>{zman.english_name}</strong>?
-              This action cannot be undone.
+              You can restore it later from the Deleted tab.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -222,6 +373,83 @@ export function ZmanCard({ zman, category, onEdit }: ZmanCardProps) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Version History Dialog */}
+      <Dialog open={showHistoryDialog} onOpenChange={setShowHistoryDialog}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Version History</DialogTitle>
+            <DialogDescription>
+              {zman.hebrew_name} • {zman.english_name}
+            </DialogDescription>
+          </DialogHeader>
+
+          {historyLoading ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : versionHistory?.versions && versionHistory.versions.length > 0 ? (
+            <ScrollArea className="max-h-[400px]">
+              <div className="space-y-3">
+                {versionHistory.versions.map((version) => (
+                  <div
+                    key={version.id}
+                    className={`
+                      p-4 rounded-lg border
+                      ${version.version_number === versionHistory.current_version
+                        ? 'border-primary bg-primary/5'
+                        : 'border-border hover:border-muted-foreground/50'}
+                    `}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <Badge
+                          variant={version.version_number === versionHistory.current_version ? 'default' : 'outline'}
+                        >
+                          v{version.version_number}
+                        </Badge>
+                        {version.version_number === versionHistory.current_version && (
+                          <span className="text-xs text-primary font-medium">Current</span>
+                        )}
+                      </div>
+                      <span className="text-xs text-muted-foreground">
+                        {formatDate(version.created_at)}
+                      </span>
+                    </div>
+
+                    <div className="text-sm font-mono bg-muted p-2 rounded mb-2 overflow-x-auto">
+                      <code className="text-xs">{version.formula_dsl}</code>
+                    </div>
+
+                    {version.version_number !== versionHistory.current_version && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleRollback(version)}
+                        disabled={rollbackVersion.isPending}
+                        className="mt-2"
+                      >
+                        {rollbackVersion.isPending ? (
+                          <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                        ) : (
+                          <RotateCcw className="h-3 w-3 mr-1" />
+                        )}
+                        Restore this version
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              <History className="h-12 w-12 mx-auto mb-3 opacity-50" />
+              <p>No version history available</p>
+              <p className="text-xs mt-1">Changes to the formula will be tracked here</p>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
@@ -235,7 +463,7 @@ export function ZmanGrid({
   onEdit,
 }: {
   zmanim: PublisherZman[];
-  category: 'essential' | 'optional' | 'custom';
+  category: 'essential' | 'optional';
   onEdit?: (zmanKey: string) => void;
 }) {
   if (zmanim.length === 0) {

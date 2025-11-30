@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useAuth } from '@clerk/nextjs';
 import { usePublisherContext } from '@/providers/PublisherContext';
 import { MapPin, Globe, Building2, Plus, Trash2, ChevronRight, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -23,7 +22,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { API_BASE } from '@/lib/api';
+import { useApi } from '@/lib/api-client';
 
 interface Coverage {
   id: string;
@@ -61,7 +60,7 @@ interface City {
 }
 
 export default function PublisherCoveragePage() {
-  const { getToken } = useAuth();
+  const api = useApi();
   const { selectedPublisher, isLoading: contextLoading } = usePublisherContext();
 
   const [coverage, setCoverage] = useState<Coverage[]>([]);
@@ -86,28 +85,15 @@ export default function PublisherCoveragePage() {
     try {
       setIsLoading(true);
       setError(null);
-      const token = await getToken();
 
-      const response = await fetch(`${API_BASE}/api/v1/publisher/coverage`, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-          'X-Publisher-Id': selectedPublisher.id,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch coverage');
-      }
-
-      const data = await response.json();
-      setCoverage(data.data?.coverage || data.coverage || []);
+      const data = await api.get<{ coverage: Coverage[] }>('/publisher/coverage');
+      setCoverage(data.coverage || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load coverage');
     } finally {
       setIsLoading(false);
     }
-  }, [getToken, selectedPublisher]);
+  }, [api, selectedPublisher]);
 
   useEffect(() => {
     if (selectedPublisher) {
@@ -118,19 +104,9 @@ export default function PublisherCoveragePage() {
   const fetchCountries = async () => {
     try {
       setLoadingCountries(true);
-      const token = await getToken();
 
-      const response = await fetch(`${API_BASE}/api/v1/countries`, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) throw new Error('Failed to fetch countries');
-
-      const data = await response.json();
-      setCountries(data.data?.countries || data.countries || []);
+      const data = await api.get<{ countries: Country[] }>('/countries', { skipPublisherId: true });
+      setCountries(data.countries || []);
     } catch (err) {
       console.error('Failed to fetch countries:', err);
     } finally {
@@ -143,19 +119,9 @@ export default function PublisherCoveragePage() {
       setLoadingRegions(true);
       setRegions([]);
       setCities([]);
-      const token = await getToken();
 
-      const response = await fetch(`${API_BASE}/api/v1/regions?country_code=${countryCode}`, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) throw new Error('Failed to fetch regions');
-
-      const data = await response.json();
-      const regionList = data.data?.regions || data.regions || [];
+      const data = await api.get<{ regions: Region[] }>(`/regions?country_code=${countryCode}`, { skipPublisherId: true });
+      const regionList = data.regions || [];
       setRegions(regionList);
 
       // If no regions, load cities directly
@@ -172,24 +138,14 @@ export default function PublisherCoveragePage() {
   const fetchCities = async (countryCode: string, regionName: string | null) => {
     try {
       setLoadingCities(true);
-      const token = await getToken();
 
-      let url = `${API_BASE}/api/v1/cities?country_code=${countryCode}&limit=100`;
+      let url = `/cities?country_code=${countryCode}&limit=100`;
       if (regionName) {
         url += `&region=${encodeURIComponent(regionName)}`;
       }
 
-      const response = await fetch(url, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) throw new Error('Failed to fetch cities');
-
-      const data = await response.json();
-      setCities(data.data?.cities || data.cities || []);
+      const data = await api.get<{ cities: City[] }>(url, { skipPublisherId: true });
+      setCities(data.cities || []);
     } catch (err) {
       console.error('Failed to fetch cities:', err);
     } finally {
@@ -224,7 +180,6 @@ export default function PublisherCoveragePage() {
 
     try {
       setAddingCoverage(true);
-      const token = await getToken();
 
       const body: Record<string, unknown> = { coverage_level: level };
 
@@ -237,20 +192,9 @@ export default function PublisherCoveragePage() {
         body.city_id = cityId;
       }
 
-      const response = await fetch(`${API_BASE}/api/v1/publisher/coverage`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-          'X-Publisher-Id': selectedPublisher.id,
-        },
+      await api.post('/publisher/coverage', {
         body: JSON.stringify(body),
       });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || data.message || 'Failed to add coverage');
-      }
 
       await fetchCoverage();
       setAddDialogOpen(false);
@@ -265,21 +209,7 @@ export default function PublisherCoveragePage() {
     if (!selectedPublisher) return;
 
     try {
-      const token = await getToken();
-
-      const response = await fetch(`${API_BASE}/api/v1/publisher/coverage/${coverageId}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-          'X-Publisher-Id': selectedPublisher.id,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to delete coverage');
-      }
-
+      await api.delete(`/publisher/coverage/${coverageId}`);
       await fetchCoverage();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete coverage');
@@ -290,22 +220,9 @@ export default function PublisherCoveragePage() {
     if (!selectedPublisher) return;
 
     try {
-      const token = await getToken();
-
-      const response = await fetch(`${API_BASE}/api/v1/publisher/coverage/${coverageItem.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-          'X-Publisher-Id': selectedPublisher.id,
-        },
+      await api.put(`/publisher/coverage/${coverageItem.id}`, {
         body: JSON.stringify({ is_active: !coverageItem.is_active }),
       });
-
-      if (!response.ok) {
-        throw new Error('Failed to update coverage');
-      }
-
       await fetchCoverage();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update coverage');

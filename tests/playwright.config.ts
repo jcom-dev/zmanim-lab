@@ -31,7 +31,7 @@ export default defineConfig({
   // Test directory
   testDir: './e2e',
 
-  // Run tests in parallel
+  // Run tests in parallel (significantly speeds up test execution)
   fullyParallel: true,
 
   // Fail the build on CI if you accidentally left test.only in the source code
@@ -40,8 +40,10 @@ export default defineConfig({
   // Retry on CI only
   retries: process.env.CI ? 2 : 0,
 
-  // Opt out of parallel tests on CI
-  workers: process.env.CI ? 1 : undefined,
+  // Number of parallel workers
+  // - CI: 4 workers for parallel execution
+  // - Local: Use 50% of CPUs for balance between speed and system responsiveness
+  workers: process.env.CI ? 4 : '50%',
 
   // Reporter to use
   reporter: [

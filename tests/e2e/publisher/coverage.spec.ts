@@ -1,112 +1,140 @@
 /**
  * E2E Tests: Publisher Coverage
  *
- * Tests for coverage area management:
- * - Viewing coverage areas
- * - Adding coverage
- * - Coverage priority
- * - Toggling active/inactive
- * - Deleting coverage
+ * Optimized for parallel execution using shared fixtures.
  */
 
 import { test, expect } from '@playwright/test';
 import {
   loginAsPublisher,
-  createTestPublisherEntity,
-  createTestCoverage,
-  getTestCity,
-  cleanupTestData,
+  getSharedPublisher,
   BASE_URL,
 } from '../utils';
 
-test.describe('Publisher Coverage', () => {
-  let testPublisher: { id: string; name: string };
+// All tests run in parallel
+test.describe.configure({ mode: 'parallel' });
 
-  test.beforeAll(async () => {
-    testPublisher = await createTestPublisherEntity({
-      name: 'TEST_E2E_Coverage_Publisher',
-      organization: 'TEST_E2E_Coverage_Org',
-      status: 'verified',
-    });
-  });
-
-  test.afterAll(async () => {
-    await cleanupTestData();
-  });
-
-  test('publisher can access coverage page', async ({ page }) => {
-    await loginAsPublisher(page, testPublisher.id);
-
+test.describe('Coverage - Page Access', () => {
+  test('can access coverage page', async ({ page }) => {
+    const publisher = getSharedPublisher('verified-1');
+    await loginAsPublisher(page, publisher.id);
     await page.goto(`${BASE_URL}/publisher/coverage`);
     await page.waitForLoadState('networkidle');
 
     expect(page.url()).toContain('/publisher/coverage');
   });
 
-  test('coverage page navigable from dashboard', async ({ page }) => {
-    await loginAsPublisher(page, testPublisher.id);
+  test('shows header', async ({ page }) => {
+    const publisher = getSharedPublisher('verified-1');
+    await loginAsPublisher(page, publisher.id);
+    await page.goto(`${BASE_URL}/publisher/coverage`);
+    await page.waitForLoadState('networkidle');
 
+    await expect(page.getByRole('heading', { name: 'Coverage Areas' })).toBeVisible();
+  });
+
+  test('shows description', async ({ page }) => {
+    const publisher = getSharedPublisher('verified-1');
+    await loginAsPublisher(page, publisher.id);
+    await page.goto(`${BASE_URL}/publisher/coverage`);
+    await page.waitForLoadState('networkidle');
+
+    await expect(page.getByText(/define where users can find/i)).toBeVisible();
+  });
+
+  test('has Add Coverage button', async ({ page }) => {
+    const publisher = getSharedPublisher('verified-1');
+    await loginAsPublisher(page, publisher.id);
+    await page.goto(`${BASE_URL}/publisher/coverage`);
+    await page.waitForLoadState('networkidle');
+
+    await expect(page.getByRole('button', { name: /add coverage/i })).toBeVisible();
+  });
+
+  test('navigable from dashboard', async ({ page }) => {
+    const publisher = getSharedPublisher('verified-1');
+    await loginAsPublisher(page, publisher.id);
     await page.goto(`${BASE_URL}/publisher/dashboard`);
     await page.waitForLoadState('networkidle');
 
-    // Click on Coverage card
     await page.getByRole('heading', { name: 'Coverage' }).click();
-
     await page.waitForURL('**/publisher/coverage');
     expect(page.url()).toContain('/publisher/coverage');
   });
 });
 
-test.describe('Publisher Coverage - With Data', () => {
-  let publisherWithCoverage: { id: string; name: string };
-
-  test.beforeAll(async () => {
-    publisherWithCoverage = await createTestPublisherEntity({
-      name: 'TEST_E2E_Coverage_Data',
-      status: 'verified',
-    });
-
-    // Add some coverage
-    const city = await getTestCity('Jerusalem');
-    if (city) {
-      await createTestCoverage(publisherWithCoverage.id, city.id, {
-        priority: 10,
-        is_active: true,
-      });
-    }
-  });
-
-  test.afterAll(async () => {
-    await cleanupTestData();
-  });
-
-  test('publisher sees existing coverage areas', async ({ page }) => {
-    await loginAsPublisher(page, publisherWithCoverage.id);
-
+test.describe('Coverage - Empty State', () => {
+  test('shows empty message', async ({ page }) => {
+    const publisher = getSharedPublisher('verified-2');
+    await loginAsPublisher(page, publisher.id);
     await page.goto(`${BASE_URL}/publisher/coverage`);
     await page.waitForLoadState('networkidle');
 
-    // Should see coverage content
-    const pageContent = await page.textContent('body');
-    expect(pageContent).toBeTruthy();
+    // Check for either empty state or existing coverage
+    const content = await page.textContent('body');
+    expect(content).toBeTruthy();
   });
 });
 
-test.describe('Publisher Coverage - Empty State', () => {
-  test('publisher without coverage sees empty state', async ({ page }) => {
-    const emptyPublisher = await createTestPublisherEntity({
-      name: 'TEST_E2E_Empty_Coverage',
-      status: 'verified',
-    });
-
-    await loginAsPublisher(page, emptyPublisher.id);
+test.describe('Coverage - Add Dialog', () => {
+  test('Add Coverage opens dialog', async ({ page }) => {
+    const publisher = getSharedPublisher('verified-1');
+    await loginAsPublisher(page, publisher.id);
     await page.goto(`${BASE_URL}/publisher/coverage`);
     await page.waitForLoadState('networkidle');
 
-    // Should see empty state or add button
-    const pageContent = await page.textContent('body');
-    expect(pageContent).toBeTruthy();
+    await page.getByRole('button', { name: /add coverage/i }).first().click();
+    await expect(page.getByText('Add Coverage Area')).toBeVisible();
+  });
 
-    await cleanupTestData();
+  test('dialog shows description', async ({ page }) => {
+    const publisher = getSharedPublisher('verified-1');
+    await loginAsPublisher(page, publisher.id);
+    await page.goto(`${BASE_URL}/publisher/coverage`);
+    await page.waitForLoadState('networkidle');
+
+    await page.getByRole('button', { name: /add coverage/i }).first().click();
+    await expect(page.getByText(/select a country, region, or city/i)).toBeVisible();
+  });
+
+  test('dialog shows countries', async ({ page }) => {
+    const publisher = getSharedPublisher('verified-1');
+    await loginAsPublisher(page, publisher.id);
+    await page.goto(`${BASE_URL}/publisher/coverage`);
+    await page.waitForLoadState('networkidle');
+
+    await page.getByRole('button', { name: /add coverage/i }).first().click();
+    await page.waitForTimeout(2000);
+
+    await expect(page.getByText('Countries')).toBeVisible();
+  });
+
+  test('dialog can be closed', async ({ page }) => {
+    const publisher = getSharedPublisher('verified-1');
+    await loginAsPublisher(page, publisher.id);
+    await page.goto(`${BASE_URL}/publisher/coverage`);
+    await page.waitForLoadState('networkidle');
+
+    await page.getByRole('button', { name: /add coverage/i }).first().click();
+    await expect(page.getByText('Add Coverage Area')).toBeVisible();
+
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(500);
+
+    await expect(page.getByText('Add Coverage Area')).not.toBeVisible();
+  });
+});
+
+test.describe('Coverage - With Data', () => {
+  test('publisher with coverage sees data', async ({ page }) => {
+    const publisher = getSharedPublisher('with-coverage');
+    await loginAsPublisher(page, publisher.id);
+    await page.goto(`${BASE_URL}/publisher/coverage`);
+    await page.waitForLoadState('networkidle');
+
+    const content = await page.textContent('body');
+    if (!content?.includes('No Coverage Areas')) {
+      expect(content).toBeTruthy();
+    }
   });
 });

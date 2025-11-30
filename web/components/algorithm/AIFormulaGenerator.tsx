@@ -25,7 +25,7 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { useAuthenticatedFetch } from '@/lib/hooks/useAuthenticatedFetch';
+import { useApi } from '@/lib/api-client';
 
 interface AIFormulaGeneratorProps {
   open: boolean;
@@ -55,7 +55,7 @@ export function AIFormulaGenerator({
   onAccept,
   currentFormula,
 }: AIFormulaGeneratorProps) {
-  const { fetchWithAuth } = useAuthenticatedFetch();
+  const api = useApi();
   const [prompt, setPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [result, setResult] = useState<GeneratedResult | null>(null);
@@ -72,10 +72,7 @@ export function AIFormulaGenerator({
     setResult(null);
 
     try {
-      const response = await fetchWithAuth<{
-        data: GeneratedResult;
-      }>('/api/v1/ai/generate-formula', {
-        method: 'POST',
+      const response = await api.post<{ data: GeneratedResult }>('/ai/generate-formula', {
         body: JSON.stringify({
           prompt: prompt.trim(),
           current_formula: currentFormula,
@@ -92,7 +89,7 @@ export function AIFormulaGenerator({
     } finally {
       setIsGenerating(false);
     }
-  }, [prompt, currentFormula, fetchWithAuth]);
+  }, [prompt, currentFormula, api]);
 
   const handleAccept = useCallback(() => {
     if (result) {

@@ -32,8 +32,24 @@ fi
 # Kill existing session if it exists
 tmux kill-session -t zmanim 2>/dev/null || true
 
-# Create a new tmux session with the API service
-tmux new-session -d -s zmanim -n api "cd $PROJECT_ROOT/api && go run cmd/api/main.go"
+# Create logs directory
+LOG_DIR="$PROJECT_ROOT/logs"
+mkdir -p "$LOG_DIR"
+
+# Build the Go API binary (ensures latest code is used)
+echo "🔨 Building Go API..."
+cd "$PROJECT_ROOT/api"
+if go build -o zmanim-api ./cmd/api/main.go 2>&1; then
+    echo "✅ API build successful"
+else
+    echo "❌ API build failed! Check $LOG_DIR/api-build.log"
+    go build -o zmanim-api ./cmd/api/main.go 2>&1 | tee "$LOG_DIR/api-build.log"
+    exit 1
+fi
+cd "$PROJECT_ROOT"
+
+# Create a new tmux session with the API service (using built binary, with logging)
+tmux new-session -d -s zmanim -n api "cd $PROJECT_ROOT/api && ./zmanim-api 2>&1 | tee $LOG_DIR/api.log"
 
 # Create window for web service (port 3001)
 tmux new-window -t zmanim -n web "cd $PROJECT_ROOT/web && npm run dev -- -p ${WEB_PORT:-3001}"

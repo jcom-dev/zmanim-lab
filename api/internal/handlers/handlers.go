@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 
@@ -21,6 +22,8 @@ type Handlers struct {
 	zmanimService    *services.ZmanimService
 	clerkService     *services.ClerkService
 	emailService     *services.EmailService
+	// PublisherResolver consolidates publisher ID resolution logic
+	publisherResolver *PublisherResolver
 	// AI services (optional - may be nil if not configured)
 	aiSearch    *ai.SearchService
 	aiContext   *ai.ContextService
@@ -38,14 +41,24 @@ func New(database *db.DB) *Handlers {
 		fmt.Printf("Warning: Clerk service initialization failed: %v\n", err)
 	}
 	emailService := services.NewEmailService()
+	publisherResolver := NewPublisherResolver(database)
 
 	return &Handlers{
-		db:               database,
-		publisherService: publisherService,
-		zmanimService:    zmanimService,
-		clerkService:     clerkService,
-		emailService:     emailService,
+		db:                database,
+		publisherService:  publisherService,
+		zmanimService:     zmanimService,
+		clerkService:      clerkService,
+		emailService:      emailService,
+		publisherResolver: publisherResolver,
 	}
+}
+
+// SetAIServices configures the AI services (optional - services may be nil if not configured)
+func (h *Handlers) SetAIServices(claude *ai.ClaudeService, search *ai.SearchService, context *ai.ContextService, embedding *ai.EmbeddingService) {
+	h.aiClaude = claude
+	h.aiSearch = search
+	h.aiContext = context
+	h.aiEmbedding = embedding
 }
 
 // HealthCheck returns the health status of the API
@@ -330,10 +343,34 @@ func (h *Handlers) GetAccessiblePublishers(w http.ResponseWriter, r *http.Reques
 		var id, name, organization, status string
 		err := h.db.Pool.QueryRow(ctx, query, userID).Scan(&id, &name, &organization, &status)
 		if err != nil {
-			RespondJSON(w, r, http.StatusOK, map[string]interface{}{
-				"publishers": []interface{}{},
-			})
-			return
+			// Auto-create a publisher for users with publisher role who don't have one
+			userRole := middleware.GetUserRole(ctx)
+			if userRole == "publisher" || userRole == "admin" {
+				log.Printf("INFO [GetAccessiblePublishers] Auto-creating publisher for user %s with role %s", userID, userRole)
+				// Create a default publisher record with unique slug and placeholder email
+				createQuery := `
+					INSERT INTO publishers (name, organization, slug, email, clerk_user_id, status)
+					VALUES ($1, $2, $3, $4, $5, 'verified')
+					RETURNING id, name, organization, status
+				`
+				defaultName := "My Organization"
+				slug := "pub-" + userID[5:13] // Use chars 5-13 of user ID for unique slug
+				email := userID + "@publisher.zmanim.local"
+				err := h.db.Pool.QueryRow(ctx, createQuery, defaultName, defaultName, slug, email, userID).Scan(&id, &name, &organization, &status)
+				if err != nil {
+					log.Printf("ERROR [GetAccessiblePublishers] Failed to auto-create publisher: %v", err)
+					RespondJSON(w, r, http.StatusOK, map[string]interface{}{
+						"publishers": []interface{}{},
+					})
+					return
+				}
+				log.Printf("INFO [GetAccessiblePublishers] Auto-created publisher %s for user %s", id, userID)
+			} else {
+				RespondJSON(w, r, http.StatusOK, map[string]interface{}{
+					"publishers": []interface{}{},
+				})
+				return
+			}
 		}
 
 		RespondJSON(w, r, http.StatusOK, map[string]interface{}{
@@ -359,10 +396,33 @@ func (h *Handlers) GetAccessiblePublishers(w http.ResponseWriter, r *http.Reques
 		var id, name, organization, status string
 		err := h.db.Pool.QueryRow(ctx, query, userID).Scan(&id, &name, &organization, &status)
 		if err != nil {
-			RespondJSON(w, r, http.StatusOK, map[string]interface{}{
-				"publishers": []interface{}{},
-			})
-			return
+			// Auto-create a publisher for users with publisher role
+			userRole := middleware.GetUserRole(ctx)
+			if userRole == "publisher" || userRole == "admin" {
+				log.Printf("INFO [GetAccessiblePublishers] Auto-creating publisher for user %s (Clerk fallback)", userID)
+				createQuery := `
+					INSERT INTO publishers (name, organization, slug, email, clerk_user_id, status)
+					VALUES ($1, $2, $3, $4, $5, 'verified')
+					RETURNING id, name, organization, status
+				`
+				defaultName := "My Organization"
+				slug := "pub-" + userID[5:13]
+				email := userID + "@publisher.zmanim.local"
+				err := h.db.Pool.QueryRow(ctx, createQuery, defaultName, defaultName, slug, email, userID).Scan(&id, &name, &organization, &status)
+				if err != nil {
+					log.Printf("ERROR [GetAccessiblePublishers] Failed to auto-create publisher: %v", err)
+					RespondJSON(w, r, http.StatusOK, map[string]interface{}{
+						"publishers": []interface{}{},
+					})
+					return
+				}
+				log.Printf("INFO [GetAccessiblePublishers] Auto-created publisher %s for user %s", id, userID)
+			} else {
+				RespondJSON(w, r, http.StatusOK, map[string]interface{}{
+					"publishers": []interface{}{},
+				})
+				return
+			}
 		}
 
 		RespondJSON(w, r, http.StatusOK, map[string]interface{}{
@@ -386,8 +446,39 @@ func (h *Handlers) GetAccessiblePublishers(w http.ResponseWriter, r *http.Reques
 		}
 	}
 
-	// If no publisher access list, return empty array
+	// If no publisher access list, try to auto-create one
 	if len(publisherIDs) == 0 {
+		userRole := middleware.GetUserRole(ctx)
+		if userRole == "publisher" || userRole == "admin" {
+			log.Printf("INFO [GetAccessiblePublishers] No publisher_access_list, auto-creating publisher for user %s", userID)
+			var id, name, organization, status string
+			createQuery := `
+				INSERT INTO publishers (name, organization, slug, email, clerk_user_id, status)
+				VALUES ($1, $2, $3, $4, $5, 'verified')
+				RETURNING id, name, organization, status
+			`
+			defaultName := "My Organization"
+			slug := "pub-" + userID[5:13]
+			email := userID + "@publisher.zmanim.local"
+			err := h.db.Pool.QueryRow(ctx, createQuery, defaultName, defaultName, slug, email, userID).Scan(&id, &name, &organization, &status)
+			if err != nil {
+				log.Printf("ERROR [GetAccessiblePublishers] Failed to auto-create publisher: %v", err)
+				RespondJSON(w, r, http.StatusOK, map[string]interface{}{
+					"publishers": []interface{}{},
+				})
+				return
+			}
+			log.Printf("INFO [GetAccessiblePublishers] Auto-created publisher %s for user %s", id, userID)
+			RespondJSON(w, r, http.StatusOK, map[string]interface{}{
+				"publishers": []map[string]string{{
+					"id":           id,
+					"name":         name,
+					"organization": organization,
+					"status":       status,
+				}},
+			})
+			return
+		}
 		RespondJSON(w, r, http.StatusOK, map[string]interface{}{
 			"publishers": []interface{}{},
 		})
@@ -421,6 +512,38 @@ func (h *Handlers) GetAccessiblePublishers(w http.ResponseWriter, r *http.Reques
 			"organization": organization,
 			"status":       status,
 		})
+	}
+
+	// If IDs from Clerk don't match any records, auto-create for publisher role users
+	if len(publishers) == 0 {
+		userRole := middleware.GetUserRole(ctx)
+		if userRole == "publisher" || userRole == "admin" {
+			log.Printf("INFO [GetAccessiblePublishers] Publisher IDs from Clerk don't exist, auto-creating for user %s", userID)
+			var id, name, organization, status string
+			createQuery := `
+				INSERT INTO publishers (name, organization, slug, email, clerk_user_id, status)
+				VALUES ($1, $2, $3, $4, $5, 'verified')
+				RETURNING id, name, organization, status
+			`
+			defaultName := "My Organization"
+			slug := "pub-" + userID[5:13]
+			email := userID + "@publisher.zmanim.local"
+			err := h.db.Pool.QueryRow(ctx, createQuery, defaultName, defaultName, slug, email, userID).Scan(&id, &name, &organization, &status)
+			if err != nil {
+				log.Printf("ERROR [GetAccessiblePublishers] Failed to auto-create publisher: %v", err)
+				RespondJSON(w, r, http.StatusOK, map[string]interface{}{
+					"publishers": []interface{}{},
+				})
+				return
+			}
+			log.Printf("INFO [GetAccessiblePublishers] Auto-created publisher %s for user %s", id, userID)
+			publishers = append(publishers, map[string]string{
+				"id":           id,
+				"name":         name,
+				"organization": organization,
+				"status":       status,
+			})
+		}
 	}
 
 	RespondJSON(w, r, http.StatusOK, map[string]interface{}{

@@ -1,3 +1,49 @@
+// Zmanim Lab API
+//
+// Production-grade API for Jewish prayer times (zmanim) calculation and management.
+// Provides endpoints for publishers to manage their zmanim algorithms, coverage areas,
+// and integrations.
+//
+//	@title			Zmanim Lab API
+//	@version		1.0
+//	@description	API for Jewish prayer times calculation and publisher management
+//	@termsOfService	https://zmanim-lab.com/terms
+//
+//	@contact.name	Zmanim Lab Support
+//	@contact.email	support@zmanim-lab.com
+//
+//	@license.name	MIT
+//	@license.url	https://opensource.org/licenses/MIT
+//
+//	@host			localhost:8080
+//	@BasePath		/api/v1
+//
+//	@securityDefinitions.apikey	BearerAuth
+//	@in							header
+//	@name						Authorization
+//	@description				JWT Bearer token from Clerk authentication
+//
+//	@tag.name			Publishers
+//	@tag.description	Publisher profile and management endpoints
+//
+//	@tag.name			Zmanim
+//	@tag.description	Zmanim calculation and retrieval endpoints
+//
+//	@tag.name			Coverage
+//	@tag.description	Geographic coverage area management
+//
+//	@tag.name			Algorithm
+//	@tag.description	Algorithm configuration and versioning
+//
+//	@tag.name			Cities
+//	@tag.description	City search and location endpoints
+//
+//	@tag.name			DSL
+//	@tag.description	Domain-specific language for zmanim formulas
+//
+//	@tag.name			Admin
+//	@tag.description	Administrative endpoints (requires admin role)
+
 package main
 
 import (
@@ -12,10 +58,14 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
+	"github.com/jcom-dev/zmanim-lab/internal/ai"
 	"github.com/jcom-dev/zmanim-lab/internal/config"
 	"github.com/jcom-dev/zmanim-lab/internal/db"
 	"github.com/jcom-dev/zmanim-lab/internal/handlers"
 	custommw "github.com/jcom-dev/zmanim-lab/internal/middleware"
+	httpSwagger "github.com/swaggo/http-swagger/v2"
+
+	_ "github.com/jcom-dev/zmanim-lab/docs" // Swagger generated docs
 )
 
 func main() {
@@ -36,6 +86,32 @@ func main() {
 
 	// Initialize handlers
 	h := handlers.New(database)
+
+	// Initialize AI services (optional - only if API keys are set)
+	var claudeService *ai.ClaudeService
+	var searchService *ai.SearchService
+	var contextService *ai.ContextService
+	var embeddingService *ai.EmbeddingService
+
+	// Claude service for formula generation/explanation
+	if apiKey := os.Getenv("ANTHROPIC_API_KEY"); apiKey != "" {
+		claudeService = ai.NewClaudeService(apiKey)
+		log.Println("Claude AI service initialized")
+	} else {
+		log.Println("Warning: ANTHROPIC_API_KEY not set - AI generation features will be disabled")
+	}
+
+	// OpenAI embeddings and RAG services
+	if apiKey := os.Getenv("OPENAI_API_KEY"); apiKey != "" {
+		embeddingService = ai.NewEmbeddingService(apiKey)
+		searchService = ai.NewSearchService(database.Pool, embeddingService)
+		contextService = ai.NewContextService(searchService)
+		log.Println("OpenAI embedding and RAG services initialized")
+	} else {
+		log.Println("Warning: OPENAI_API_KEY not set - RAG search features will be disabled")
+	}
+
+	h.SetAIServices(claudeService, searchService, contextService, embeddingService)
 
 	// Setup router
 	r := chi.NewRouter()
@@ -60,6 +136,13 @@ func main() {
 
 	// Health check endpoint
 	r.Get("/health", h.HealthCheck)
+
+	// Swagger documentation UI
+	r.Get("/swagger/*", httpSwagger.Handler(
+		httpSwagger.URL("/swagger/doc.json"), // URL pointing to API definition
+		httpSwagger.DocExpansion("list"),
+		httpSwagger.DomID("swagger-ui"),
+	))
 
 	// Initialize auth middleware
 	authMiddleware := custommw.NewAuthMiddleware(cfg.JWT.JWKSUrl, cfg.JWT.Issuer)
@@ -119,11 +202,25 @@ func main() {
 			// Hebrew calendar endpoints (Story 4-10)
 			r.Get("/calendar/week", h.GetWeekCalendar)
 			r.Get("/calendar/hebrew-date", h.GetHebrewDate)
+			r.Get("/calendar/gregorian-date", h.GetGregorianDate)
 			r.Get("/calendar/shabbat", h.GetShabbatTimes)
 
 			// Public algorithm browsing (Story 4-12)
 			r.Get("/algorithms/public", h.BrowsePublicAlgorithms)
 			r.Get("/algorithms/{id}/public", h.GetPublicAlgorithm)
+
+			// Zmanim templates (Story 4-4) - public, no auth required
+			r.Get("/zmanim/templates", h.GetZmanimTemplates)
+			r.Get("/zmanim/browse", h.BrowsePublicZmanim)
+
+			// Master Zmanim Registry (public)
+			r.Get("/registry/zmanim", h.GetMasterZmanim)
+			r.Get("/registry/zmanim/grouped", h.GetMasterZmanimGrouped)
+			r.Get("/registry/zmanim/events", h.GetEventZmanimGrouped)
+			r.Get("/registry/zmanim/{zmanKey}", h.GetMasterZman)
+			r.Get("/registry/zmanim/{zmanKey}/day-types", h.GetZmanApplicableDayTypes)
+			r.Get("/registry/tags", h.GetAllTags)
+			r.Get("/registry/day-types", h.GetAllDayTypes)
 		})
 
 		// Authenticated routes for algorithm actions (Story 4-12)
@@ -150,6 +247,21 @@ func main() {
 			r.Get("/algorithm/methods", h.GetZmanMethods)
 			// Publisher zmanim management (Story 4-4)
 			r.Get("/zmanim", h.GetPublisherZmanim)
+			r.Post("/zmanim", h.CreatePublisherZmanFromRegistry) // Updated: create from registry
+			r.Post("/zmanim/import", h.ImportZmanim)
+			r.Get("/zmanim/{zmanKey}", h.GetPublisherZman)
+			r.Put("/zmanim/{zmanKey}", h.UpdatePublisherZman)
+			r.Delete("/zmanim/{zmanKey}", h.SoftDeletePublisherZman) // Updated: soft delete
+			// Soft delete & restore
+			r.Get("/zmanim/deleted", h.GetDeletedZmanim)
+			r.Post("/zmanim/{zmanKey}/restore", h.RestorePublisherZman)
+			r.Delete("/zmanim/{zmanKey}/permanent", h.PermanentDeletePublisherZman)
+			// Per-zman version history
+			r.Get("/zmanim/{zmanKey}/history", h.GetZmanVersionHistory)
+			r.Get("/zmanim/{zmanKey}/history/{version}", h.GetZmanVersionDetail)
+			r.Post("/zmanim/{zmanKey}/rollback", h.RollbackZmanVersion)
+			// Zman registry requests (edge case)
+			r.Post("/registry/zmanim/request", h.CreateZmanRegistryRequest)
 			r.Post("/algorithm/publish", h.PublishAlgorithm)
 			r.Get("/algorithm/versions", h.GetAlgorithmVersions)
 			r.Get("/algorithm/versions/{id}", h.GetAlgorithmVersion)
@@ -176,15 +288,12 @@ func main() {
 			r.Put("/onboarding", h.SaveOnboardingState)
 			r.Post("/onboarding/complete", h.CompleteOnboarding)
 			r.Post("/onboarding/skip", h.SkipOnboarding)
+			r.Delete("/onboarding", h.ResetOnboarding)
 			// Algorithm collaboration (Story 4-12)
 			r.Put("/algorithm/visibility", h.SetAlgorithmVisibility)
 			r.Get("/algorithm/forks", h.GetMyForks)
-			// Version history (Story 4-13)
-			r.Get("/algorithm/history", h.GetVersionHistory)
-			r.Get("/algorithm/history/{version}", h.GetVersionDetail)
-			r.Get("/algorithm/diff", h.GetVersionDiff)
-			r.Post("/algorithm/rollback", h.RollbackVersion)
-			r.Post("/algorithm/snapshot", h.CreateVersionSnapshot)
+			// Note: Algorithm-wide version history removed (Story 4-13)
+			// Version history is now per-zman at /zmanim/{zmanKey}/history
 		})
 
 		// User routes (authenticated)
@@ -227,6 +336,10 @@ func main() {
 			r.Get("/ai/stats", h.GetAIIndexStats)
 			r.Post("/ai/reindex", h.TriggerReindex)
 			r.Get("/ai/audit", h.GetAIAuditLogs)
+
+			// Zman registry request management
+			r.Get("/registry/requests", h.AdminGetZmanRegistryRequests)
+			r.Put("/registry/requests/{id}", h.AdminReviewZmanRegistryRequest)
 		})
 	})
 

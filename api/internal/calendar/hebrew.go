@@ -95,6 +95,28 @@ func NewCalendarService() *CalendarService {
 	return &CalendarService{}
 }
 
+// HebrewToGregorian converts a Hebrew date to Gregorian date string
+func (s *CalendarService) HebrewToGregorian(yearStr, monthStr, dayStr string) (string, error) {
+	var year, month, day int
+	_, err := fmt.Sscanf(yearStr, "%d", &year)
+	if err != nil {
+		return "", fmt.Errorf("invalid year: %s", yearStr)
+	}
+	_, err = fmt.Sscanf(monthStr, "%d", &month)
+	if err != nil {
+		return "", fmt.Errorf("invalid month: %s", monthStr)
+	}
+	_, err = fmt.Sscanf(dayStr, "%d", &day)
+	if err != nil {
+		return "", fmt.Errorf("invalid day: %s", dayStr)
+	}
+
+	// Create Hebrew date and convert to Gregorian
+	hd := hdate.New(year, hdate.HMonth(month), day)
+	gregorian := hd.Gregorian()
+	return gregorian.Format("2006-01-02"), nil
+}
+
 // GetHebrewDate converts a Gregorian date to Hebrew date
 func (s *CalendarService) GetHebrewDate(date time.Time) HebrewDate {
 	hd := hdate.FromTime(date)
@@ -154,12 +176,13 @@ func (s *CalendarService) GetHolidays(date time.Time) []Holiday {
 	year := hd.Year()
 
 	// Get calendar events for the Hebrew year
+	// NoModern: true excludes modern Israeli holidays (Yom HaAtzmaut, Yom HaZikaron, etc.)
 	opts := hebcal.CalOptions{
 		Year:             year,
 		IsHebrewYear:     true,
 		NoHolidays:       false,
 		NoMinorFast:      false,
-		NoModern:         false,
+		NoModern:         true,
 		NoRoshChodesh:    false,
 		NoSpecialShabbat: false,
 		ShabbatMevarchim: true,

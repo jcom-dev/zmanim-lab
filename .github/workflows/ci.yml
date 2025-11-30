@@ -22,7 +22,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
           cache: 'npm'
           cache-dependency-path: web/package-lock.json
 
@@ -30,10 +30,16 @@ jobs:
         run: npm ci
 
       - name: Type check
-        run: npm run type-check || npm run build
+        run: npm run type-check
 
       - name: Lint
         run: npm run lint || true
+
+      - name: Unit tests
+        run: npm run test
+
+      - name: Build
+        run: npm run build
 
   # Backend checks
   api:
@@ -62,8 +68,19 @@ jobs:
       - name: Build
         run: go build -v ./...
 
-      - name: Test
-        run: go test -v ./... || true
+      - name: Test with coverage
+        run: |
+          go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+          go tool cover -func=coverage.out
 
       - name: Vet
         run: go vet ./...
+
+      - name: Check coverage threshold
+        run: |
+          COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | tr -d '%')
+          echo "Total coverage: ${COVERAGE}%"
+          if (( $(echo "$COVERAGE < 30" | bc -l) )); then
+            echo "Coverage ${COVERAGE}% is below 30% threshold"
+            exit 1
+          fi

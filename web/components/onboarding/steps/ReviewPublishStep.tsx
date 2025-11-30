@@ -1,21 +1,43 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import type { OnboardingState } from '../OnboardingWizard';
+import type { OnboardingState, ZmanCustomization, SelectedZmanCustomization } from '../OnboardingWizard';
 
 interface ReviewPublishStepProps {
   state: OnboardingState;
   onBack: () => void;
   onComplete: () => void;
+  onDismiss?: () => void;
+}
+
+// Helper to get zman key/name regardless of format
+function getZmanKey(z: ZmanCustomization | SelectedZmanCustomization): string {
+  return 'key' in z ? z.key : z.zman_key;
+}
+
+function getZmanEnglishName(z: ZmanCustomization | SelectedZmanCustomization): string {
+  return 'nameEnglish' in z ? z.nameEnglish : z.english_name;
+}
+
+function isZmanModified(z: ZmanCustomization | SelectedZmanCustomization): boolean {
+  return z.modified;
+}
+
+function isZmanEnabled(z: ZmanCustomization | SelectedZmanCustomization): boolean {
+  if ('enabled' in z) return z.enabled;
+  return true; // Legacy format assumes enabled
 }
 
 const TEMPLATE_NAMES: Record<string, { en: string; he: string }> = {
+  default: { en: 'Standard Defaults', he: 'ברירות מחדל סטנדרטיות' },
+  copy_publisher: { en: 'Copied from Publisher', he: 'הועתק ממפרסם' },
+  // Legacy templates (for backwards compatibility)
   gra: { en: 'GRA Standard', he: 'גר"א סטנדרטי' },
   mga: { en: 'Magen Avraham', he: 'מגן אברהם' },
   rabbeinu_tam: { en: 'Rabbeinu Tam', he: 'רבינו תם' },
   custom: { en: 'Custom', he: 'מותאם אישית' },
 };
 
-export function ReviewPublishStep({ state, onBack, onComplete }: ReviewPublishStepProps) {
+export function ReviewPublishStep({ state, onBack, onComplete, onDismiss }: ReviewPublishStepProps) {
   const [publishing, setPublishing] = useState(false);
   const [published, setPublished] = useState(false);
 
@@ -46,27 +68,41 @@ export function ReviewPublishStep({ state, onBack, onComplete }: ReviewPublishSt
         </div>
 
         <div className="space-y-2">
-          <h2 className="text-2xl font-bold text-green-600 dark:text-green-400">Congratulations!</h2>
+          <h2 className="text-2xl font-bold text-green-600 dark:text-green-400">Setup Complete!</h2>
           <p className="text-lg text-muted-foreground">
-            Your algorithm is now live!
+            Your zmanim have been saved as drafts.
           </p>
           <p className="text-muted-foreground" dir="rtl">
-            מזל טוב! האלגוריתם שלך פעיל
+            מזל טוב! הזמנים שלך נשמרו כטיוטות
+          </p>
+        </div>
+
+        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4 max-w-md mx-auto">
+          <h3 className="font-medium mb-2 text-amber-800 dark:text-amber-200">Important: Publish Your Zmanim</h3>
+          <p className="text-sm text-amber-700 dark:text-amber-300 mb-3">
+            Your zmanim are currently in draft mode and not visible to users.
+            Go to the Algorithm Editor to publish individual zmanim when you&apos;re ready.
           </p>
         </div>
 
         <div className="bg-muted rounded-lg p-4 max-w-md mx-auto">
           <h3 className="font-medium mb-2">What&apos;s next?</h3>
           <ul className="text-sm text-muted-foreground text-left space-y-1">
+            <li>• <strong>Publish zmanim</strong> from the Algorithm Editor</li>
             <li>• Add more zmanim to your algorithm</li>
             <li>• Expand your coverage to more cities</li>
             <li>• Customize names and descriptions</li>
-            <li>• Share your times with your community</li>
           </ul>
         </div>
 
-        <Button size="lg" asChild>
-          <a href="/publisher/algorithm">Go to Dashboard</a>
+        <Button
+          size="lg"
+          onClick={() => {
+            onDismiss?.();
+            window.location.href = '/publisher/algorithm';
+          }}
+        >
+          Go to Algorithm Editor
         </Button>
       </div>
     );
@@ -76,9 +112,9 @@ export function ReviewPublishStep({ state, onBack, onComplete }: ReviewPublishSt
     <div className="space-y-6">
       {/* Header */}
       <div className="text-center space-y-2">
-        <h2 className="text-2xl font-bold">Review & Publish</h2>
+        <h2 className="text-2xl font-bold">Review & Finish</h2>
         <p className="text-muted-foreground">
-          Review your settings before publishing your algorithm.
+          Review your settings before completing setup.
         </p>
       </div>
 
@@ -97,17 +133,17 @@ export function ReviewPublishStep({ state, onBack, onComplete }: ReviewPublishSt
         {/* Zmanim */}
         <SummarySection title="Zmanim">
           <div className="grid grid-cols-2 gap-2 text-sm">
-            {customizations.slice(0, 6).map((z) => (
-              <div key={z.key} className="flex justify-between">
-                <span>{z.nameEnglish}</span>
-                {z.modified && (
+            {customizations.filter(isZmanEnabled).slice(0, 6).map((z) => (
+              <div key={getZmanKey(z)} className="flex justify-between">
+                <span>{getZmanEnglishName(z)}</span>
+                {isZmanModified(z) && (
                   <span className="text-xs text-amber-600">(customized)</span>
                 )}
               </div>
             ))}
-            {customizations.length > 6 && (
+            {customizations.filter(isZmanEnabled).length > 6 && (
               <div className="text-muted-foreground">
-                +{customizations.length - 6} more
+                +{customizations.filter(isZmanEnabled).length - 6} more
               </div>
             )}
           </div>
@@ -134,11 +170,11 @@ export function ReviewPublishStep({ state, onBack, onComplete }: ReviewPublishSt
           <InfoIcon className="w-5 h-5 text-primary shrink-0 mt-0.5" />
           <div>
             <p className="font-medium text-foreground">
-              Ready to publish?
+              Ready to finish setup?
             </p>
             <p className="text-muted-foreground">
-              Your algorithm will immediately be available for users in your covered cities.
-              You can make changes at any time from your dashboard.
+              Your zmanim will be saved but not published yet. You can preview and publish
+              individual times from your Algorithm Editor whenever you&apos;re ready.
             </p>
           </div>
         </div>
@@ -157,12 +193,12 @@ export function ReviewPublishStep({ state, onBack, onComplete }: ReviewPublishSt
           {publishing ? (
             <>
               <LoaderIcon className="mr-2 h-4 w-4 animate-spin" />
-              Publishing...
+              Finishing...
             </>
           ) : (
             <>
-              <RocketIcon className="mr-2 h-4 w-4" />
-              Publish Algorithm
+              <CheckIcon className="mr-2 h-4 w-4" />
+              Finish Setup
             </>
           )}
         </Button>

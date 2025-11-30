@@ -36,17 +36,18 @@ className="border-border"
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 ```
 
-**REQUIRED - Import from lib/api.ts:**
+**REQUIRED - Use the unified API client:**
 ```tsx
-import { API_BASE } from '@/lib/api';
-// OR use the API client
-import { api, authenticatedFetch } from '@/lib/api';
+import { useApi } from '@/lib/api-client';
+
+const api = useApi();
+const data = await api.get('/publisher/profile');
 ```
 
-### 3. Duplicated Fetch Logic - EXTRACT TO HOOKS
+### 3. Duplicated Fetch Logic - USE UNIFIED API CLIENT
 
 ```tsx
-// FORBIDDEN - Duplicated auth/fetch pattern in every component
+// FORBIDDEN - Raw fetch with manual auth handling
 const token = await getToken();
 const response = await fetch(`${API_BASE}/api/v1/endpoint`, {
   headers: {
@@ -57,12 +58,38 @@ const response = await fetch(`${API_BASE}/api/v1/endpoint`, {
 });
 ```
 
-**REQUIRED - Use centralized hooks:**
+**REQUIRED - Use the unified API client (useApi hook):**
 ```tsx
-import { useAuthenticatedFetch } from '@/lib/hooks/useAuthenticatedFetch';
+import { useApi } from '@/lib/api-client';
 
-const { fetchWithAuth } = useAuthenticatedFetch();
-const data = await fetchWithAuth<DataType>('/api/v1/endpoint');
+// In component
+const api = useApi();
+const data = await api.get<DataType>('/publisher/profile');
+await api.post('/publisher/zmanim', { body: JSON.stringify(zman) });
+
+// For public endpoints (no auth)
+const countries = await api.public.get('/countries');
+
+// For admin endpoints (no X-Publisher-Id)
+const stats = await api.admin.get('/admin/stats');
+```
+
+**For React Query data fetching, use factory hooks:**
+```tsx
+import { usePublisherQuery, usePublisherMutation } from '@/lib/hooks';
+
+// Query with automatic caching and publisher context
+const { data, isLoading, error } = usePublisherQuery<ProfileData>(
+  'publisher-profile',
+  '/publisher/profile'
+);
+
+// Mutation with automatic cache invalidation
+const updateProfile = usePublisherMutation<Profile, UpdateRequest>(
+  '/publisher/profile',
+  'PUT',
+  { invalidateKeys: ['publisher-profile'] }
+);
 ```
 
 ### 4. Authentication - CORRECT PATTERNS (No Broken Code)
@@ -123,13 +150,13 @@ fetch(`${API_BASE}/api/v1/publisher/profile`, {
 });
 ```
 
-**RULE: Use centralized hook to prevent mistakes:**
+**RULE: Use the unified API client to prevent mistakes:**
 ```tsx
 // This hook handles all auth correctly - USE IT
-import { useAuthenticatedFetch } from '@/lib/hooks/useAuthenticatedFetch';
+import { useApi } from '@/lib/api-client';
 
-const { fetchWithAuth } = useAuthenticatedFetch();
-const data = await fetchWithAuth('/api/v1/publisher/profile');
+const api = useApi();
+const data = await api.get('/publisher/profile');
 // Token and X-Publisher-Id handled automatically
 ```
 
@@ -353,37 +380,70 @@ const {
 
 ### API Integration
 
-**DO: Use consistent fetch pattern**
+**RULE: Use the unified API client (useApi hook) - NEVER raw fetch**
 
 ```tsx
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+import { useApi } from '@/lib/api-client';
 
-// GET request
-const response = await fetch(`${API_BASE}/api/v1/endpoint`, {
-  headers: {
-    'Authorization': `Bearer ${token}`,
-    'X-Publisher-Id': publisherId,  // When publisher-specific
-  },
-});
+function MyComponent() {
+  const api = useApi();
 
-// POST request
-const response = await fetch(`${API_BASE}/api/v1/endpoint`, {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${token}`,
-  },
-  body: JSON.stringify(data),
-});
+  // GET request (auth + X-Publisher-Id automatic)
+  const profile = await api.get<ProfileData>('/publisher/profile');
 
-// Handle response wrapper
-const result = await response.json();
-const actualData = result.data || result;  // Handle wrapped/unwrapped
+  // POST request
+  await api.post('/publisher/zmanim', {
+    body: JSON.stringify(zmanData),
+  });
+
+  // Public endpoint (no auth)
+  const countries = await api.public.get<Country[]>('/countries');
+
+  // Admin endpoint (auth but no X-Publisher-Id)
+  const stats = await api.admin.get('/admin/stats');
+}
 ```
 
+**RULE: Use React Query hooks for data fetching**
+
+```tsx
+import {
+  usePublisherQuery,
+  usePublisherMutation,
+  useGlobalQuery,
+} from '@/lib/hooks';
+
+// Publisher-scoped query (auto-includes X-Publisher-Id)
+const { data, isLoading, error } = usePublisherQuery<ProfileData>(
+  'publisher-profile',
+  '/publisher/profile'
+);
+
+// Global query (no publisher context)
+const { data: templates } = useGlobalQuery<Template[]>(
+  'templates',
+  '/zmanim/templates',
+  { staleTime: 1000 * 60 * 60 } // 1 hour cache
+);
+
+// Mutation with cache invalidation
+const updateProfile = usePublisherMutation<Profile, UpdateRequest>(
+  '/publisher/profile',
+  'PUT',
+  { invalidateKeys: ['publisher-profile'] }
+);
+
+// Usage
+await updateProfile.mutateAsync(formData);
+```
+
+**Reference:** `web/lib/api-client.ts`, `web/lib/hooks/useApiQuery.ts`
+
 **DON'T:**
-- Don't forget to include auth token for protected routes
-- Don't forget X-Publisher-Id header for publisher-specific endpoints
+- Don't use raw `fetch()` - use `useApi()` hook
+- Don't define API_BASE in components - it's in api-client.ts
+- Don't manually add auth headers - useApi handles it
+- Don't forget to handle loading/error states
 
 ### Styling (Tailwind CSS) - MANDATORY DESIGN TOKEN USAGE
 
@@ -519,7 +579,7 @@ const handleSubmit = async (e: React.FormEvent) => {
 
 ### Handler Structure (6-Step Pattern)
 
-**DO: Follow this template**
+**DO: Follow this template using PublisherResolver**
 
 ```go
 package handlers
@@ -537,10 +597,15 @@ import (
 func (h *Handlers) HandlerName(w http.ResponseWriter, r *http.Request) {
     ctx := r.Context()
 
-    // Step 1: Extract URL parameters
-    id := chi.URLParam(r, "id")
+    // Step 1: Resolve publisher context (handles X-Publisher-Id, auth, errors)
+    pc := h.publisherResolver.MustResolve(w, r)
+    if pc == nil {
+        return // Response already sent
+    }
+    publisherID := pc.PublisherID
 
-    // Step 2: Validate required parameters
+    // Step 2: Extract URL parameters
+    id := chi.URLParam(r, "id")
     if id == "" {
         RespondValidationError(w, r, "ID is required", nil)
         return
@@ -566,8 +631,11 @@ func (h *Handlers) HandlerName(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    // Step 5: Call service layer (business logic)
-    result, err := h.service.DoSomething(ctx, id, req.Name)
+    // Step 5: Use SQLc generated queries (preferred) or service layer
+    result, err := h.db.Queries.GetSomething(ctx, sqlcgen.GetSomethingParams{
+        PublisherID: publisherID,
+        ID:          id,
+    })
     if err != nil {
         slog.Error("operation failed", "error", err, "id", id)
         RespondInternalError(w, r, "Failed to process request")
@@ -576,12 +644,73 @@ func (h *Handlers) HandlerName(w http.ResponseWriter, r *http.Request) {
 
     // Step 6: Respond with success
     RespondJSON(w, r, http.StatusOK, map[string]interface{}{
-        "result": result,
+        "data": result,
     })
 }
 ```
 
-**Reference:** `api/internal/handlers/admin.go:17-59`
+**Reference:** `api/internal/handlers/publisher_zmanim.go`
+
+### PublisherResolver Pattern (REQUIRED for publisher endpoints)
+
+**RULE: Use PublisherResolver instead of manual auth checks**
+
+```go
+// FORBIDDEN - Manual publisher ID extraction (verbose, error-prone)
+userID := middleware.GetUserID(ctx)
+if userID == "" {
+    RespondUnauthorized(w, r, "User ID not found")
+    return
+}
+requestedID := r.Header.Get("X-Publisher-Id")
+publisherID := middleware.GetValidatedPublisherID(ctx, requestedID)
+if publisherID == "" {
+    RespondForbidden(w, r, "No access")
+    return
+}
+
+// REQUIRED - Use PublisherResolver (handles all cases)
+pc := h.publisherResolver.MustResolve(w, r)
+if pc == nil {
+    return // Response already sent
+}
+publisherID := pc.PublisherID
+```
+
+**PublisherResolver methods:**
+```go
+// MustResolve - Returns nil and sends error response if resolution fails
+pc := h.publisherResolver.MustResolve(w, r)
+
+// Resolve - Returns PublisherContext or error (for custom error handling)
+pc, err := h.publisherResolver.Resolve(ctx, r)
+
+// ResolveOptional - Doesn't fail if publisher not found (for mixed endpoints)
+pc := h.publisherResolver.ResolveOptional(ctx, r)
+```
+
+**Reference:** `api/internal/handlers/publisher_context.go`
+
+### SQLc for Database Queries (REQUIRED)
+
+**RULE: Use SQLc generated queries instead of raw SQL**
+
+```go
+// FORBIDDEN - Raw SQL in handlers (error-prone, no type safety)
+query := `SELECT id, name FROM publishers WHERE id = $1`
+rows, err := h.db.Pool.Query(ctx, query, publisherID)
+
+// REQUIRED - SQLc generated queries (type-safe, maintainable)
+result, err := h.db.Queries.GetPublisher(ctx, publisherID)
+
+// For complex results, convert SQLc types to handler types
+zmanim := make([]PublisherZman, len(sqlcZmanim))
+for i, z := range sqlcZmanim {
+    zmanim[i] = sqlcZmanToPublisherZman(z)
+}
+```
+
+**Reference:** `api/internal/db/queries/*.sql`, `api/internal/handlers/publisher_zmanim.go`
 
 **DON'T:**
 - Don't put business logic in handlers (use services)
@@ -772,6 +901,36 @@ _, err = clerkUser.UpdateMetadata(ctx, clerkUserID, params)
 
 ## Testing Standards
 
+### CRITICAL: Parallel Test Execution
+
+Tests MUST be designed for parallel execution. This is a non-negotiable requirement for fast CI/CD pipelines.
+
+**RULE: Use shared fixtures, not per-test data creation**
+```typescript
+// FORBIDDEN - Creates data per test (slow, causes conflicts)
+test.beforeEach(async () => {
+  testPublisher = await createTestPublisherEntity({ name: 'Test' });
+});
+test.afterEach(async () => {
+  await cleanupTestData();
+});
+
+// REQUIRED - Use pre-created shared publishers
+import { getSharedPublisher, getPublisherWithAlgorithm } from '../utils';
+
+test('can access dashboard', async ({ page }) => {
+  const publisher = getSharedPublisher('verified-1');
+  await loginAsPublisher(page, publisher.id);
+  // Test logic...
+});
+```
+
+**RULE: Enable parallel mode in all test files**
+```typescript
+// REQUIRED at top of every spec file
+test.describe.configure({ mode: 'parallel' });
+```
+
 ### Test File Organization
 
 ```
@@ -783,96 +942,125 @@ tests/
 │   │   └── impersonation.spec.ts
 │   ├── publisher/          # Publisher flow tests
 │   │   ├── dashboard.spec.ts
-│   │   ├── algorithm.spec.ts
-│   │   └── coverage.spec.ts
-│   ├── user/               # End user tests
-│   │   ├── location.spec.ts
-│   │   └── zmanim.spec.ts
-│   ├── registration/       # Registration flows
-│   ├── errors/             # Error handling
+│   │   ├── algorithm-editor.spec.ts
+│   │   ├── coverage.spec.ts
+│   │   ├── team.spec.ts
+│   │   └── onboarding.spec.ts
+│   ├── auth/               # Authentication tests
+│   │   └── authentication.spec.ts
+│   ├── public/             # Public page tests
+│   │   └── public-pages.spec.ts
 │   ├── setup/              # Global setup/teardown
+│   │   ├── global-setup.ts
+│   │   └── global-teardown.ts
 │   └── utils/              # Shared utilities
-│       ├── clerk-auth.ts   # Auth helpers
-│       ├── test-fixtures.ts # DB fixtures
-│       ├── email-testing.ts # Email helpers
-│       └── cleanup.ts      # Cleanup utilities
+│       ├── clerk-auth.ts       # Auth helpers
+│       ├── test-fixtures.ts    # DB fixtures
+│       ├── shared-fixtures.ts  # Shared publisher pool
+│       ├── algorithm-fixtures.ts # Algorithm test data
+│       ├── wait-helpers.ts     # Wait utilities
+│       ├── test-builders.ts    # Entity builders
+│       └── index.ts            # Unified exports
 ```
 
 ### Test File Pattern
 
-**DO:**
+**DO: Use shared fixtures for parallel execution**
 ```typescript
+/**
+ * E2E Tests: Feature Name
+ *
+ * Optimized for parallel execution using shared fixtures.
+ */
 import { test, expect } from '@playwright/test';
 import {
-  loginAsAdmin,
   loginAsPublisher,
-  createTestPublisherEntity,
-  cleanupTestData,
+  getSharedPublisher,
+  getPublisherWithAlgorithm,
   BASE_URL,
 } from '../utils';
 
-test.describe('Feature Name', () => {
-  let testPublisher: { id: string; name: string };
+// REQUIRED: Enable parallel mode
+test.describe.configure({ mode: 'parallel' });
 
-  // Create shared test data ONCE
-  test.beforeAll(async () => {
-    testPublisher = await createTestPublisherEntity({
-      name: 'TEST_E2E_Feature_Name',
-      organization: 'TEST_E2E_Org',
-      status: 'verified',
-    });
-  });
+test.describe('Feature Name - Section', () => {
+  test('test case description', async ({ page }) => {
+    // Get pre-created shared publisher (NO creation/deletion)
+    const publisher = getSharedPublisher('verified-1');
+    await loginAsPublisher(page, publisher.id);
 
-  // Clean up AFTER all tests
-  test.afterAll(async () => {
-    await cleanupTestData();
-  });
-
-  // Login BEFORE each test
-  test.beforeEach(async ({ page }) => {
-    await loginAsAdmin(page);
-  });
-
-  test('describes what the test verifies', async ({ page }) => {
     // Navigate
-    await page.goto(`${BASE_URL}/admin/publishers`);
+    await page.goto(`${BASE_URL}/publisher/dashboard`);
     await page.waitForLoadState('networkidle');
 
     // Assert
-    await expect(page.getByRole('heading', { name: 'Publisher Management' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
   });
 
-  test('another test in the same describe block', async ({ page }) => {
-    // Uses same testPublisher, same login
+  test('another independent test', async ({ page }) => {
+    // Each test is completely independent - can run in parallel
+    const publisher = getSharedPublisher('verified-2'); // Use different publisher
+    await loginAsPublisher(page, publisher.id);
+    // Test logic...
   });
 });
 ```
 
-**Reference:** `tests/e2e/admin/publishers.spec.ts`
+**Reference:** `tests/e2e/publisher/team.spec.ts`
+
+### Shared Publisher Types
+
+The shared fixture pool provides these pre-created publishers:
+
+| Key | Type | Use Case |
+|-----|------|----------|
+| `verified-1` through `verified-5` | verified | General tests needing auth |
+| `pending` | pending | Testing pending status flows |
+| `suspended` | suspended | Testing suspended status flows |
+| `with-algorithm-1`, `with-algorithm-2` | verified + algorithm | Algorithm editor tests |
+| `with-coverage` | verified + coverage | Coverage page tests |
+| `empty-1` through `empty-3` | verified (no data) | Onboarding/empty state tests |
+
+```typescript
+// Get specific publisher by key
+const publisher = getSharedPublisher('verified-1');
+
+// Get publisher with algorithm pre-created
+const publisher = getPublisherWithAlgorithm();
+
+// Get empty publisher for onboarding tests
+const publisher = getEmptyPublisher(1);
+
+// Get any available verified publisher
+const publisher = getAnyVerifiedPublisher();
+```
 
 ### Test Data Conventions
 
 **DO:**
 ```typescript
-// Entity names - TEST_ prefix
-const publisher = await createTestPublisherEntity({
-  name: 'TEST_E2E_Publisher_Feature',
-  organization: 'TEST_E2E_Organization',
-});
+// Use shared fixtures - data is pre-created
+const publisher = getSharedPublisher('verified-1');
 
-// Test emails - use example.com domain
-const email = `test-user-${Date.now()}@test-zmanim.example.com`;
+// When you must create data, use TEST_ prefix and unique identifiers
+const name = `TEST_E2E_${Date.now()}_Feature`;
+
+// Test emails - use zmanim.com domain or MailSlurp
+const email = `e2e-test-${Date.now()}@test.zmanim.com`;
 ```
 
 **DON'T:**
 ```typescript
-// Don't use .local domains (Clerk rejects them)
-const email = 'test@test.zmanim-lab.local';  // Bad
-
-// Don't use production-like names
-const publisher = await createTestPublisherEntity({
-  name: 'Real Publisher Name',  // Bad - not identifiable as test
+// Don't create/delete data in individual tests (breaks parallelism)
+test.beforeEach(async () => {
+  testPublisher = await createTestPublisherEntity({...}); // BAD
 });
+
+// Don't use .local domains (Clerk rejects them)
+const email = 'test@test.zmanim-lab.local';  // BAD
+
+// Don't use non-unique names (causes conflicts in parallel)
+const publisher = { name: 'Test Publisher' };  // BAD - collides
 ```
 
 ### Auth Injection
@@ -1084,5 +1272,17 @@ When deviating:
 
 ---
 
-_Last Updated: 2025-11-27_
-_Based on: Story 3.2 Codebase Audit, Epic 1 & 2 Implementation_
+_Last Updated: 2025-11-29_
+_Based on: Story 3.2 Codebase Audit, Epic 1-4 Implementation, Production Refactoring_
+
+---
+
+## Changelog
+
+### 2025-11-29 - Production Refactoring
+- **Frontend**: Replaced `useAuthenticatedFetch` with unified `useApi` hook from `@/lib/api-client`
+- **Frontend**: Added React Query factory hooks (`usePublisherQuery`, `usePublisherMutation`)
+- **Backend**: Added `PublisherResolver` pattern for consistent auth/publisher extraction
+- **Backend**: Migrated to SQLc generated queries for type-safe database access
+- **Testing**: Added shared fixtures system for parallel test execution
+- **Testing**: Added `test.describe.configure({ mode: 'parallel' })` requirement

@@ -23,8 +23,11 @@ echo "🛑 Stopping tmux session 'zmanim'..."
 tmux kill-session -t zmanim 2>/dev/null || true
 
 # Kill any stray processes
-kill_processes "go run cmd/api/main.go" "Go API server"
+kill_processes "go run cmd/api/main.go" "Go API server (go run)"
+kill_processes "zmanim-api" "Go API server (binary)"
 kill_processes "next dev" "Next.js dev server"
+# Also kill any compiled "main" binaries from go run
+pkill -9 -f "api.*main" 2>/dev/null || true
 
 # Wait a moment for processes to fully terminate
 sleep 2
@@ -51,8 +54,15 @@ echo "🚀 Starting services in background..."
 echo ""
 echo "✅ Services restarted successfully!"
 echo ""
-echo "📺 To view service logs:"
+echo "📺 To view services:"
 echo "  tmux attach -t zmanim"
+echo ""
+echo "📋 Log files:"
+echo "  - API: $SCRIPT_DIR/logs/api.log"
+echo "  - Web: (view in tmux window 1)"
+echo ""
+echo "🔍 Quick log check:"
+echo "  tail -f $SCRIPT_DIR/logs/api.log"
 echo ""
 echo "🌐 Service URLs:"
 echo "  - Web App: http://localhost:3001"

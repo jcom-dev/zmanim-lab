@@ -10,7 +10,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
-	"github.com/jcom-dev/zmanim-lab/internal/middleware"
 )
 
 // PublisherInvitation represents a team invitation
@@ -41,29 +40,12 @@ type TeamMember struct {
 func (h *Handlers) GetPublisherTeam(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	userID := middleware.GetUserID(ctx)
-	if userID == "" {
-		RespondUnauthorized(w, r, "User ID not found in context")
-		return
+	// Use PublisherResolver to get publisher context
+	pc := h.publisherResolver.MustResolve(w, r)
+	if pc == nil {
+		return // Response already sent
 	}
-
-	// Get publisher ID from header or query
-	publisherID := r.Header.Get("X-Publisher-Id")
-	if publisherID == "" {
-		publisherID = r.URL.Query().Get("publisher_id")
-	}
-
-	// If no publisher ID provided, get from database
-	if publisherID == "" {
-		err := h.db.Pool.QueryRow(ctx,
-			"SELECT id FROM publishers WHERE clerk_user_id = $1",
-			userID,
-		).Scan(&publisherID)
-		if err != nil {
-			RespondNotFound(w, r, "Publisher not found")
-			return
-		}
-	}
+	publisherID := pc.PublisherID
 
 	// Get the publisher's owner (clerk_user_id)
 	var ownerID *string
@@ -141,11 +123,13 @@ func (h *Handlers) GetPublisherTeam(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) InvitePublisherTeamMember(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	userID := middleware.GetUserID(ctx)
-	if userID == "" {
-		RespondUnauthorized(w, r, "User ID not found in context")
-		return
+	// Use PublisherResolver to get publisher context
+	pc := h.publisherResolver.MustResolve(w, r)
+	if pc == nil {
+		return // Response already sent
 	}
+	publisherID := pc.PublisherID
+	userID := pc.UserID
 
 	var req struct {
 		Email string `json:"email"`
@@ -159,24 +143,6 @@ func (h *Handlers) InvitePublisherTeamMember(w http.ResponseWriter, r *http.Requ
 	if req.Email == "" || !isValidEmail(req.Email) {
 		RespondValidationError(w, r, "Valid email is required", map[string]string{"email": "Valid email is required"})
 		return
-	}
-
-	// Get publisher ID from header or query
-	publisherID := r.Header.Get("X-Publisher-Id")
-	if publisherID == "" {
-		publisherID = r.URL.Query().Get("publisher_id")
-	}
-
-	// If no publisher ID provided, get from database
-	if publisherID == "" {
-		err := h.db.Pool.QueryRow(ctx,
-			"SELECT id FROM publishers WHERE clerk_user_id = $1",
-			userID,
-		).Scan(&publisherID)
-		if err != nil {
-			RespondNotFound(w, r, "Publisher not found")
-			return
-		}
 	}
 
 	// Get publisher name for the email
@@ -283,34 +249,18 @@ func (h *Handlers) InvitePublisherTeamMember(w http.ResponseWriter, r *http.Requ
 func (h *Handlers) RemovePublisherTeamMember(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	currentUserID := middleware.GetUserID(ctx)
-	if currentUserID == "" {
-		RespondUnauthorized(w, r, "User ID not found in context")
-		return
+	// Use PublisherResolver to get publisher context
+	pc := h.publisherResolver.MustResolve(w, r)
+	if pc == nil {
+		return // Response already sent
 	}
+	publisherID := pc.PublisherID
+	currentUserID := pc.UserID
 
 	memberUserID := chi.URLParam(r, "userId")
 	if memberUserID == "" {
 		RespondValidationError(w, r, "User ID is required", nil)
 		return
-	}
-
-	// Get publisher ID from header or query
-	publisherID := r.Header.Get("X-Publisher-Id")
-	if publisherID == "" {
-		publisherID = r.URL.Query().Get("publisher_id")
-	}
-
-	// If no publisher ID provided, get from database
-	if publisherID == "" {
-		err := h.db.Pool.QueryRow(ctx,
-			"SELECT id FROM publishers WHERE clerk_user_id = $1",
-			currentUserID,
-		).Scan(&publisherID)
-		if err != nil {
-			RespondNotFound(w, r, "Publisher not found")
-			return
-		}
 	}
 
 	// Prevent removing yourself
@@ -347,11 +297,12 @@ func (h *Handlers) RemovePublisherTeamMember(w http.ResponseWriter, r *http.Requ
 func (h *Handlers) ResendPublisherInvitation(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	userID := middleware.GetUserID(ctx)
-	if userID == "" {
-		RespondUnauthorized(w, r, "User ID not found in context")
-		return
+	// Use PublisherResolver to get publisher context
+	pc := h.publisherResolver.MustResolve(w, r)
+	if pc == nil {
+		return // Response already sent
 	}
+	userID := pc.UserID
 
 	invitationID := chi.URLParam(r, "id")
 	if invitationID == "" {
@@ -440,11 +391,12 @@ func (h *Handlers) ResendPublisherInvitation(w http.ResponseWriter, r *http.Requ
 func (h *Handlers) CancelPublisherInvitation(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	userID := middleware.GetUserID(ctx)
-	if userID == "" {
-		RespondUnauthorized(w, r, "User ID not found in context")
-		return
+	// Use PublisherResolver to get publisher context
+	pc := h.publisherResolver.MustResolve(w, r)
+	if pc == nil {
+		return // Response already sent
 	}
+	userID := pc.UserID
 
 	invitationID := chi.URLParam(r, "id")
 	if invitationID == "" {
@@ -484,11 +436,13 @@ func (h *Handlers) CancelPublisherInvitation(w http.ResponseWriter, r *http.Requ
 func (h *Handlers) AcceptPublisherInvitation(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	userID := middleware.GetUserID(ctx)
-	if userID == "" {
+	// Use PublisherResolver to get user context (optional publisher)
+	pc := h.publisherResolver.ResolveOptional(ctx, r)
+	if pc == nil || pc.UserID == "" {
 		RespondUnauthorized(w, r, "Please sign in to accept this invitation")
 		return
 	}
+	userID := pc.UserID
 
 	var req struct {
 		Token string `json:"token"`

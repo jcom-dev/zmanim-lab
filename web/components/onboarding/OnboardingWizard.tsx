@@ -1,28 +1,83 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { WizardProgress } from './WizardProgress';
 import { WelcomeStep } from './steps/WelcomeStep';
 import { TemplateSelectionStep } from './steps/TemplateSelectionStep';
 import { CustomizeZmanimStep } from './steps/CustomizeZmanimStep';
 import { CoverageSetupStep } from './steps/CoverageSetupStep';
 import { ReviewPublishStep } from './steps/ReviewPublishStep';
+import { useApi } from '@/lib/api-client';
+import { usePublisherContext } from '@/providers/PublisherContext';
 
+// API response uses snake_case
+interface OnboardingStateAPI {
+  current_step?: number;
+  completed_steps?: number[];
+  data?: {
+    template?: string;
+    customizations?: (ZmanCustomization | SelectedZmanCustomization)[];
+    coverage?: CoverageSelection[];
+  };
+  started_at?: string;
+  last_updated_at?: string;
+  skipped?: boolean;
+}
+
+// Frontend uses camelCase
 export interface OnboardingState {
   currentStep: number;
   completedSteps: number[];
   data: {
     template?: string;
-    customizations?: ZmanCustomization[];
+    customizations?: (ZmanCustomization | SelectedZmanCustomization)[];
     coverage?: CoverageSelection[];
   };
   startedAt: string;
   lastUpdatedAt: string;
 }
 
+// Convert API response to frontend format
+function apiToState(api: OnboardingStateAPI | null, defaults: OnboardingState): OnboardingState {
+  if (!api) return defaults;
+  return {
+    currentStep: api.current_step ?? defaults.currentStep,
+    completedSteps: api.completed_steps ?? defaults.completedSteps,
+    data: api.data ?? defaults.data,
+    startedAt: api.started_at ?? defaults.startedAt,
+    lastUpdatedAt: api.last_updated_at ?? defaults.lastUpdatedAt,
+  };
+}
+
+// Convert frontend format to API format for saving
+function stateToApi(state: OnboardingState): OnboardingStateAPI {
+  return {
+    current_step: state.currentStep,
+    completed_steps: state.completedSteps,
+    data: state.data,
+    started_at: state.startedAt,
+    last_updated_at: state.lastUpdatedAt,
+  };
+}
+
+// Legacy format (still accepted for backwards compatibility)
 export interface ZmanCustomization {
   key: string;
   nameHebrew: string;
   nameEnglish: string;
   formula: string;
+  modified: boolean;
+}
+
+// New registry-based format
+export interface SelectedZmanCustomization {
+  master_zman_id: string;
+  zman_key: string;
+  hebrew_name: string;
+  english_name: string;
+  formula: string;
+  category: 'everyday' | 'event';
+  time_category: string;
+  event_category?: string;
+  enabled: boolean;
   modified: boolean;
 }
 
@@ -47,12 +102,13 @@ const STEPS: StepDefinition[] = [
 ];
 
 interface OnboardingWizardProps {
+  /** @deprecated No longer used - publisher ID is determined from auth context */
   publisherId?: string;
   onComplete?: () => void;
   onSkip?: () => void;
 }
 
-export function OnboardingWizard({ publisherId, onComplete, onSkip }: OnboardingWizardProps) {
+export function OnboardingWizard({ onComplete, onSkip }: OnboardingWizardProps) {
   const [state, setState] = useState<OnboardingState>({
     currentStep: 0,
     completedSteps: [],
@@ -61,40 +117,39 @@ export function OnboardingWizard({ publisherId, onComplete, onSkip }: Onboarding
     lastUpdatedAt: new Date().toISOString(),
   });
   const [loading, setLoading] = useState(true);
+  const api = useApi();
+  const { selectedPublisher, isLoading: publisherLoading } = usePublisherContext();
 
-  // Load saved state on mount
-  useEffect(() => {
-    fetchOnboardingState();
-  }, []);
+  const fetchOnboardingState = useCallback(async () => {
+    // Don't fetch if no publisher selected yet
+    if (!selectedPublisher?.id) {
+      return;
+    }
 
-  const fetchOnboardingState = async () => {
     try {
-      const response = await fetch('/api/v1/publisher/onboarding', {
-        headers: { 'X-Publisher-Id': publisherId || '' },
-      });
-      if (response.ok) {
-        const data = await response.json();
-        if (data) {
-          setState(data);
-        }
-      }
+      const apiData = await api.get<OnboardingStateAPI | null>('/publisher/onboarding');
+      // Convert API response (snake_case) to frontend format (camelCase)
+      setState(prev => apiToState(apiData, prev));
     } catch (error) {
       console.error('Failed to fetch onboarding state:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [api, selectedPublisher?.id]);
+
+  // Load saved state when publisher is available
+  useEffect(() => {
+    if (!publisherLoading && selectedPublisher?.id) {
+      fetchOnboardingState();
+    }
+  }, [fetchOnboardingState, publisherLoading, selectedPublisher?.id]);
 
   const saveState = async (newState: OnboardingState) => {
     setState(newState);
     try {
-      await fetch('/api/v1/publisher/onboarding', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Publisher-Id': publisherId || '',
-        },
-        body: JSON.stringify(newState),
+      // Convert frontend format (camelCase) to API format (snake_case)
+      await api.put('/publisher/onboarding', {
+        body: JSON.stringify(stateToApi(newState)),
       });
     } catch (error) {
       console.error('Failed to save onboarding state:', error);
@@ -145,10 +200,7 @@ export function OnboardingWizard({ publisherId, onComplete, onSkip }: Onboarding
 
   const handleSkip = async () => {
     try {
-      await fetch('/api/v1/publisher/onboarding/skip', {
-        method: 'POST',
-        headers: { 'X-Publisher-Id': publisherId || '' },
-      });
+      await api.post('/publisher/onboarding/skip');
       onSkip?.();
     } catch (error) {
       console.error('Failed to skip onboarding:', error);
@@ -156,18 +208,26 @@ export function OnboardingWizard({ publisherId, onComplete, onSkip }: Onboarding
   };
 
   const handleComplete = async () => {
+    console.log('[OnboardingWizard] handleComplete called');
     try {
-      await fetch('/api/v1/publisher/onboarding/complete', {
-        method: 'POST',
-        headers: { 'X-Publisher-Id': publisherId || '' },
-      });
-      onComplete?.();
+      console.log('[OnboardingWizard] Calling POST /publisher/onboarding/complete');
+      const result = await api.post('/publisher/onboarding/complete');
+      console.log('[OnboardingWizard] Complete result:', result);
+      // Don't call onComplete here - let the ReviewPublishStep show the success screen
+      // The user will click "Go to Dashboard" to navigate away
     } catch (error) {
-      console.error('Failed to complete onboarding:', error);
+      console.error('[OnboardingWizard] Failed to complete onboarding:', error);
+      throw error; // Re-throw so ReviewPublishStep knows it failed
     }
   };
 
-  if (loading) {
+  // Called when user clicks "Go to Dashboard" after seeing success screen
+  const handleDismissWizard = () => {
+    onComplete?.();
+  };
+
+  // Show loading state while publisher context is loading or onboarding state is loading
+  if (publisherLoading || loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
@@ -187,8 +247,8 @@ export function OnboardingWizard({ publisherId, onComplete, onSkip }: Onboarding
     <div className="max-w-4xl mx-auto py-8 px-4">
       <WizardProgress
         steps={STEPS}
-        currentStep={state.currentStep}
-        completedSteps={state.completedSteps}
+        currentStep={state.currentStep ?? 0}
+        completedSteps={state.completedSteps ?? []}
       />
 
       <div className="mt-8 bg-card rounded-lg shadow-lg p-6 min-h-[400px]">
@@ -197,7 +257,7 @@ export function OnboardingWizard({ publisherId, onComplete, onSkip }: Onboarding
         {state.currentStep === 2 && <CustomizeZmanimStep {...stepProps} />}
         {state.currentStep === 3 && <CoverageSetupStep {...stepProps} />}
         {state.currentStep === 4 && (
-          <ReviewPublishStep {...stepProps} onComplete={handleComplete} />
+          <ReviewPublishStep {...stepProps} onComplete={handleComplete} onDismiss={handleDismissWizard} />
         )}
       </div>
     </div>

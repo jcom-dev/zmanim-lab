@@ -7,11 +7,13 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jcom-dev/zmanim-lab/internal/config"
+	"github.com/jcom-dev/zmanim-lab/internal/db/sqlcgen"
 )
 
-// DB wraps the database connection pool
+// DB wraps the database connection pool and SQLc queries
 type DB struct {
-	Pool *pgxpool.Pool
+	Pool    *pgxpool.Pool
+	Queries *sqlcgen.Queries
 }
 
 // New creates a new database connection pool
@@ -42,7 +44,10 @@ func New(cfg *config.Config) (*DB, error) {
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
-	return &DB{Pool: pool}, nil
+	// Initialize SQLc queries
+	queries := sqlcgen.New(pool)
+
+	return &DB{Pool: pool, Queries: queries}, nil
 }
 
 // Close closes the database connection pool

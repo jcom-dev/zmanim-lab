@@ -70,7 +70,7 @@ export async function createTestPublisherEntity(
   const testPublisher = {
     name: overrides.name || `${TEST_PREFIX}Publisher ${timestamp}`,
     organization: overrides.organization || `${TEST_PREFIX}Organization`,
-    email: overrides.email || `test-publisher-${timestamp}@${TEST_EMAIL_DOMAIN}`,
+    email: overrides.email || `test-publisher-${timestamp}-${random}@${TEST_EMAIL_DOMAIN}`,
     slug: `test-publisher-${timestamp}-${random}`,
     status: overrides.status || 'verified',
     website: overrides.website || 'https://test.example.com',

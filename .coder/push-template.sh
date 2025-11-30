@@ -2,7 +2,7 @@
 # Push Coder template with secrets from local .env files
 # This script reads from .env.clerk, .env.resend, .env.mailslurp, .env.openai, .env.claude
 # and creates terraform.tfvars, then pushes the template
-# Note: Database uses local postgres (no external Supabase needed)
+# Note: Database thuses local postgres (no external Supabase needed)
 
 set -e
 

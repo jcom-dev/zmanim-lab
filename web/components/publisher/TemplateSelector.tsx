@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useAuthenticatedFetch } from '@/lib/hooks/useAuthenticatedFetch';
+import { useApi } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -28,21 +28,21 @@ interface TemplateSelectorProps {
 }
 
 export function TemplateSelector({ onSelect }: TemplateSelectorProps) {
-  const { fetchWithAuth } = useAuthenticatedFetch();
+  const api = useApi();
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const loadTemplates = useCallback(async () => {
     try {
-      const data = await fetchWithAuth<{ templates: Template[] }>('/api/v1/publisher/algorithm/templates');
+      const data = await api.get<{ templates: Template[] }>('/publisher/algorithm/templates');
       setTemplates(data.templates || []);
     } catch (err) {
       console.error('Failed to load templates:', err);
     } finally {
       setLoading(false);
     }
-  }, [fetchWithAuth]);
+  }, [api]);
 
   useEffect(() => {
     loadTemplates();

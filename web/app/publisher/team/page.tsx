@@ -26,7 +26,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { API_BASE } from '@/lib/api';
+import { useApi } from '@/lib/api-client';
 
 interface TeamMember {
   user_id: string;
@@ -46,7 +46,8 @@ interface PendingInvitation {
 }
 
 export default function PublisherTeamPage() {
-  const { getToken, userId } = useAuth();
+  const api = useApi();
+  const { userId } = useAuth();
   const { selectedPublisher } = usePublisherContext();
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [invitations, setInvitations] = useState<PendingInvitation[]>([]);
@@ -64,29 +65,16 @@ export default function PublisherTeamPage() {
 
     try {
       setLoading(true);
-      const token = await getToken();
 
-      const response = await fetch(`${API_BASE}/api/v1/publisher/team`, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-          'X-Publisher-Id': selectedPublisher.id,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch team');
-      }
-
-      const data = await response.json();
-      setMembers(data.data?.members || data.members || []);
-      setInvitations(data.data?.pending_invitations || data.pending_invitations || []);
+      const data = await api.get<{ members: TeamMember[]; pending_invitations: PendingInvitation[] }>('/publisher/team');
+      setMembers(data.members || []);
+      setInvitations(data.pending_invitations || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setLoading(false);
     }
-  }, [getToken, selectedPublisher]);
+  }, [api, selectedPublisher]);
 
   useEffect(() => {
     fetchTeam();
@@ -109,30 +97,15 @@ export default function PublisherTeamPage() {
     setInviteLoading(true);
 
     try {
-      const token = await getToken();
-
-      const response = await fetch(`${API_BASE}/api/v1/publisher/team/invite`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-          'X-Publisher-Id': selectedPublisher?.id || '',
-        },
+      await api.post('/publisher/team/invite', {
         body: JSON.stringify({ email: inviteEmail.trim().toLowerCase() }),
       });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        setInviteError(data.message || 'Failed to send invitation');
-        return;
-      }
 
       setInviteEmail('');
       setInviteDialogOpen(false);
       fetchTeam();
-    } catch {
-      setInviteError('Network error. Please try again.');
+    } catch (err) {
+      setInviteError(err instanceof Error ? err.message : 'Network error. Please try again.');
     } finally {
       setInviteLoading(false);
     }
@@ -140,22 +113,7 @@ export default function PublisherTeamPage() {
 
   const handleRemoveMember = async (memberUserId: string) => {
     try {
-      const token = await getToken();
-
-      const response = await fetch(`${API_BASE}/api/v1/publisher/team/${memberUserId}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-          'X-Publisher-Id': selectedPublisher?.id || '',
-        },
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.message || 'Failed to remove member');
-      }
-
+      await api.delete(`/publisher/team/${memberUserId}`);
       fetchTeam();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to remove member');
@@ -164,22 +122,7 @@ export default function PublisherTeamPage() {
 
   const handleResendInvitation = async (invitationId: string) => {
     try {
-      const token = await getToken();
-
-      const response = await fetch(`${API_BASE}/api/v1/publisher/team/invitations/${invitationId}/resend`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-          'X-Publisher-Id': selectedPublisher?.id || '',
-        },
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.message || 'Failed to resend invitation');
-      }
-
+      await api.post(`/publisher/team/invitations/${invitationId}/resend`);
       fetchTeam();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to resend invitation');
@@ -188,22 +131,7 @@ export default function PublisherTeamPage() {
 
   const handleCancelInvitation = async (invitationId: string) => {
     try {
-      const token = await getToken();
-
-      const response = await fetch(`${API_BASE}/api/v1/publisher/team/invitations/${invitationId}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-          'X-Publisher-Id': selectedPublisher?.id || '',
-        },
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.message || 'Failed to cancel invitation');
-      }
-
+      await api.delete(`/publisher/team/invitations/${invitationId}`);
       fetchTeam();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to cancel invitation');

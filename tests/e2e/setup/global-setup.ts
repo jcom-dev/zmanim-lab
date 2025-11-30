@@ -13,6 +13,7 @@ import { clerkSetup } from '@clerk/testing/playwright';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 import { Pool } from 'pg';
+import { initializeSharedPublishers } from '../utils/shared-fixtures';
 
 // Load environment variables from multiple locations
 function loadEnvFiles() {
@@ -213,6 +214,10 @@ async function globalSetup(config: FullConfig) {
   // Seed test data in database
   await seedTestPublishers();
   await getTestPublisherIds();
+
+  // Initialize shared publishers for parallel tests
+  console.log('\nInitializing shared test fixtures...');
+  await initializeSharedPublishers();
 
   // Initialize Clerk testing token
   console.log('\nInitializing Clerk testing token...');

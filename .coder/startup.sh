@@ -256,7 +256,7 @@ fi
 
 # Step 8d: Install network utilities (ping, nslookup, telnet)
 print_status "Installing network utilities..."
-sudo apt-get update -qq && sudo apt-get install -y iputils-ping dnsutils telnet > /dev/null 2>&1
+sudo apt-get update -qq && sudo apt-get install -y iputils-ping dnsutils telnet net-tools iproute2 > /dev/null 2>&1
 print_success "Network utilities installed (ping, nslookup, telnet)"
 
 # Step 9: Install tmux for service management
@@ -303,6 +303,18 @@ else
     print_success "Fly.io CLI already installed"
 fi
 
+# Step 10d: Install uv (Python package manager)
+print_status "Installing uv (Python package manager)..."
+if ! command -v uv &> /dev/null; then
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    # Add to PATH for current session
+    export PATH="$HOME/.local/bin:$PATH"
+    echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+    print_success "uv installed"
+else
+    print_success "uv already installed"
+fi
+
 # Step 11: Install Claude Code CLI
 print_status "Installing Claude Code..."
 if ! command -v claude &> /dev/null; then
@@ -327,6 +339,89 @@ if [ -f "/home/coder/workspace/zmanim-lab/.coder/claude.json" ]; then
     print_success "~/.claude.json copied from template"
 fi
 
+# Step 12c: Copy API key env files from Coder secrets
+print_status "Setting up API key environment files..."
+cd /home/coder/workspace/zmanim-lab
+
+# Clerk Authentication (required by push-template.sh)
+if [ -n "$CLERK_SECRET_KEY" ]; then
+    cat > .env.clerk << ENVEOF
+# Clerk Authentication
+
+# Production Instance
+CLERK_SECRET_KEY=${CLERK_SECRET_KEY}
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}
+CLERK_JWKS_URL=${CLERK_JWKS_URL}
+CLERK_ISSUER=${CLERK_ISSUER}
+
+# Test Instance (for E2E testing)
+CLERK_TEST_SECRET_KEY=${CLERK_TEST_SECRET_KEY:-}
+CLERK_TEST_PUBLISHABLE_KEY=${CLERK_TEST_PUBLISHABLE_KEY:-}
+ENVEOF
+    print_success ".env.clerk created from Coder variables"
+else
+    print_warning "CLERK_SECRET_KEY not set - copy .env.clerk.example to .env.clerk and configure"
+    [ -f ".env.clerk.example" ] && [ ! -f ".env.clerk" ] && cp .env.clerk.example .env.clerk
+fi
+
+# Resend Email Service (required by push-template.sh)
+if [ -n "$RESEND_API_KEY" ]; then
+    cat > .env.resend << ENVEOF
+# Resend Email Service
+
+RESEND_API_KEY=${RESEND_API_KEY}
+RESEND_DOMAIN=${RESEND_DOMAIN}
+RESEND_FROM=${RESEND_FROM}
+ENVEOF
+    print_success ".env.resend created from Coder variables"
+else
+    print_warning "RESEND_API_KEY not set - copy .env.resend.example to .env.resend and configure"
+    [ -f ".env.resend.example" ] && [ ! -f ".env.resend" ] && cp .env.resend.example .env.resend
+fi
+
+# MailSlurp Email Testing (required by push-template.sh)
+if [ -n "$MAILSLURP_API_KEY" ]; then
+    cat > .env.mailslurp << ENVEOF
+# MailSlurp Email Testing
+
+MAILSLURP_API_KEY=${MAILSLURP_API_KEY}
+ENVEOF
+    print_success ".env.mailslurp created from Coder variables"
+else
+    print_warning "MAILSLURP_API_KEY not set - copy .env.mailslurp.example to .env.mailslurp and configure"
+    [ -f ".env.mailslurp.example" ] && [ ! -f ".env.mailslurp" ] && cp .env.mailslurp.example .env.mailslurp
+fi
+
+# OpenAI API Key (for RAG embeddings)
+if [ -n "$OPENAI_API_KEY" ]; then
+    cat > .env.openai << ENVEOF
+# OpenAI API Key
+# Used for: RAG embeddings (text-embedding-3-small) in Epic 4
+
+OPENAI_API_KEY=${OPENAI_API_KEY}
+ENVEOF
+    print_success ".env.openai created from Coder variables"
+else
+    print_warning "OPENAI_API_KEY not set - copy .env.openai.example to .env.openai and configure"
+    [ -f ".env.openai.example" ] && [ ! -f ".env.openai" ] && cp .env.openai.example .env.openai
+fi
+
+# Anthropic/Claude API Key (for AI formula generation)
+if [ -n "$ANTHROPIC_API_KEY" ]; then
+    cat > .env.claude << ENVEOF
+# Anthropic API Key (Claude)
+# Used for: AI formula generation and explanations in Epic 4
+
+ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+ENVEOF
+    print_success ".env.claude created from Coder variables"
+else
+    print_warning "ANTHROPIC_API_KEY not set - copy .env.claude.example to .env.claude and configure"
+    [ -f ".env.claude.example" ] && [ ! -f ".env.claude" ] && cp .env.claude.example .env.claude
+fi
+
+cd /home/coder/workspace
+
 # Step 13: Configure git user identity (with Coder variable overrides)
 print_status "Configuring git user identity..."
 GIT_USER_NAME="${GIT_USER_NAME:-Daniel Niasoff}"
@@ -350,6 +445,7 @@ echo "  - Jest $(jest --version 2>/dev/null || echo 'not found')"
 echo "  - nano $(nano --version 2>/dev/null | head -n1 || echo 'not found')"
 echo "  - Claude Code $(claude --version 2>/dev/null || echo 'not found')"
 echo "  - Fly.io CLI $(flyctl version 2>/dev/null | head -n1 || echo 'not found')"
+echo "  - uv $(uv --version 2>/dev/null || echo 'not found')"
 echo "  - Supabase CLI (via npx supabase)"
 echo "  - Playwright (Chromium)"
 echo ""

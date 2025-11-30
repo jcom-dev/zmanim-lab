@@ -24,68 +24,13 @@ CREATE TABLE IF NOT EXISTS publisher_zmanim (
 );
 
 -- Create indexes for performance
-CREATE INDEX idx_publisher_zmanim_publisher ON publisher_zmanim(publisher_id);
-CREATE INDEX idx_publisher_zmanim_enabled ON publisher_zmanim(publisher_id, is_enabled) WHERE is_enabled = true;
-CREATE INDEX idx_publisher_zmanim_category ON publisher_zmanim(category);
-CREATE INDEX idx_publisher_zmanim_custom ON publisher_zmanim(publisher_id, is_custom) WHERE is_custom = true;
+CREATE INDEX IF NOT EXISTS idx_publisher_zmanim_publisher ON publisher_zmanim(publisher_id);
+CREATE INDEX IF NOT EXISTS idx_publisher_zmanim_enabled ON publisher_zmanim(publisher_id, is_enabled) WHERE is_enabled = true;
+CREATE INDEX IF NOT EXISTS idx_publisher_zmanim_category ON publisher_zmanim(category);
+CREATE INDEX IF NOT EXISTS idx_publisher_zmanim_custom ON publisher_zmanim(publisher_id, is_custom) WHERE is_custom = true;
 
--- Add RLS (Row Level Security) policies
-ALTER TABLE publisher_zmanim ENABLE ROW LEVEL SECURITY;
-
--- Publishers can view their own zmanim
-CREATE POLICY "Publishers can view own zmanim"
-  ON publisher_zmanim
-  FOR SELECT
-  USING (
-    EXISTS (
-      SELECT 1 FROM publisher_users
-      WHERE publisher_users.publisher_id = publisher_zmanim.publisher_id
-      AND publisher_users.user_id = auth.uid()
-    )
-  );
-
--- Publishers can insert their own zmanim
-CREATE POLICY "Publishers can create own zmanim"
-  ON publisher_zmanim
-  FOR INSERT
-  WITH CHECK (
-    EXISTS (
-      SELECT 1 FROM publisher_users
-      WHERE publisher_users.publisher_id = publisher_zmanim.publisher_id
-      AND publisher_users.user_id = auth.uid()
-    )
-  );
-
--- Publishers can update their own zmanim
-CREATE POLICY "Publishers can update own zmanim"
-  ON publisher_zmanim
-  FOR UPDATE
-  USING (
-    EXISTS (
-      SELECT 1 FROM publisher_users
-      WHERE publisher_users.publisher_id = publisher_zmanim.publisher_id
-      AND publisher_users.user_id = auth.uid()
-    )
-  );
-
--- Publishers can delete only custom zmanim
-CREATE POLICY "Publishers can delete custom zmanim"
-  ON publisher_zmanim
-  FOR DELETE
-  USING (
-    is_custom = true
-    AND EXISTS (
-      SELECT 1 FROM publisher_users
-      WHERE publisher_users.publisher_id = publisher_zmanim.publisher_id
-      AND publisher_users.user_id = auth.uid()
-    )
-  );
-
--- Anyone can view public zmanim for browsing/copying
-CREATE POLICY "Public zmanim visible to all authenticated users"
-  ON publisher_zmanim
-  FOR SELECT
-  USING (is_visible = true AND auth.role() = 'authenticated');
+-- NOTE: RLS not used - this project uses Clerk auth with API-level authorization
+-- The Go API handlers validate publisher access before executing queries
 
 -- Create updated_at trigger
 CREATE OR REPLACE FUNCTION update_publisher_zmanim_updated_at()
@@ -96,6 +41,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS publisher_zmanim_updated_at ON publisher_zmanim;
 CREATE TRIGGER publisher_zmanim_updated_at
   BEFORE UPDATE ON publisher_zmanim
   FOR EACH ROW
@@ -116,8 +62,8 @@ CREATE TABLE IF NOT EXISTS zmanim_templates (
   updated_at TIMESTAMPTZ DEFAULT now() NOT NULL
 );
 
-CREATE INDEX idx_zmanim_templates_category ON zmanim_templates(category);
-CREATE INDEX idx_zmanim_templates_sort ON zmanim_templates(sort_order);
+CREATE INDEX IF NOT EXISTS idx_zmanim_templates_category ON zmanim_templates(category);
+CREATE INDEX IF NOT EXISTS idx_zmanim_templates_sort ON zmanim_templates(sort_order);
 
 -- Seed essential zmanim templates
 INSERT INTO zmanim_templates (zman_key, hebrew_name, english_name, formula_dsl, category, is_required, sort_order) VALUES

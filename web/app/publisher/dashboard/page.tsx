@@ -2,10 +2,9 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { useAuth } from '@clerk/nextjs';
 import { User, MapPin, Code, BarChart3, AlertTriangle, Clock, Loader2, Plus, CheckCircle } from 'lucide-react';
 import { usePublisherContext } from '@/providers/PublisherContext';
-import { API_BASE } from '@/lib/api';
+import { useApi } from '@/lib/api-client';
 
 interface DashboardSummary {
   profile: {
@@ -36,7 +35,7 @@ interface DashboardSummary {
 }
 
 export default function PublisherDashboardPage() {
-  const { getToken } = useAuth();
+  const api = useApi();
   const { selectedPublisher, isLoading: contextLoading } = usePublisherContext();
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -48,28 +47,15 @@ export default function PublisherDashboardPage() {
     try {
       setIsLoading(true);
       setError(null);
-      const token = await getToken();
 
-      const response = await fetch(`${API_BASE}/api/v1/publisher/dashboard`, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-          'X-Publisher-Id': selectedPublisher.id,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch dashboard');
-      }
-
-      const data = await response.json();
-      setSummary(data.data || data);
+      const data = await api.get<DashboardSummary>('/publisher/dashboard');
+      setSummary(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load dashboard');
     } finally {
       setIsLoading(false);
     }
-  }, [getToken, selectedPublisher]);
+  }, [api, selectedPublisher]);
 
   useEffect(() => {
     if (selectedPublisher) {

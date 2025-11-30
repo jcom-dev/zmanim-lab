@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/jcom-dev/zmanim-lab/internal/middleware"
+	"github.com/jackc/pgx/v5"
 	"github.com/jcom-dev/zmanim-lab/internal/models"
 )
 
@@ -14,32 +16,15 @@ import (
 func (h *Handlers) GetPublisherCoverage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	// Get user ID from context (set by auth middleware)
-	userID := middleware.GetUserID(ctx)
-	if userID == "" {
-		RespondUnauthorized(w, r, "User ID not found in context")
-		return
+	// Use PublisherResolver to get publisher context
+	pc := h.publisherResolver.MustResolve(w, r)
+	if pc == nil {
+		return // Response already sent
 	}
-
-	// Get publisher ID from header or query param
-	publisherID := r.Header.Get("X-Publisher-Id")
-	if publisherID == "" {
-		publisherID = r.URL.Query().Get("publisher_id")
-	}
-
-	// If no publisher ID provided, fall back to database lookup by clerk_user_id
-	if publisherID == "" {
-		err := h.db.Pool.QueryRow(ctx,
-			"SELECT id FROM publishers WHERE clerk_user_id = $1",
-			userID,
-		).Scan(&publisherID)
-		if err != nil {
-			RespondNotFound(w, r, "Publisher not found")
-			return
-		}
-	}
+	publisherID := pc.PublisherID
 
 	// Query coverage areas with display names
+	// For country-level coverage, look up the country name from cities table
 	query := `
 		SELECT
 			pc.id, pc.publisher_id, pc.coverage_level,
@@ -47,13 +32,16 @@ func (h *Handlers) GetPublisherCoverage(w http.ResponseWriter, r *http.Request) 
 			pc.priority, pc.is_active, pc.created_at, pc.updated_at,
 			CASE
 				WHEN pc.coverage_level = 'city' THEN c.name || ', ' || COALESCE(c.region, '') || ', ' || c.country
-				WHEN pc.coverage_level = 'region' THEN pc.region || ', ' || pc.country_code
-				WHEN pc.coverage_level = 'country' THEN pc.country_code
+				WHEN pc.coverage_level = 'region' THEN pc.region || ', ' || COALESCE(country_lookup.country, pc.country_code)
+				WHEN pc.coverage_level = 'country' THEN COALESCE(country_lookup.country, pc.country_code)
 			END as display_name,
 			COALESCE(c.name, '') as city_name,
-			COALESCE(c.country, pc.country_code, '') as country
+			COALESCE(c.country, country_lookup.country, pc.country_code, '') as country
 		FROM publisher_coverage pc
 		LEFT JOIN cities c ON pc.city_id = c.id
+		LEFT JOIN LATERAL (
+			SELECT DISTINCT country FROM cities WHERE country_code = pc.country_code LIMIT 1
+		) country_lookup ON true
 		WHERE pc.publisher_id = $1
 		ORDER BY pc.priority DESC, pc.created_at DESC
 	`
@@ -94,30 +82,12 @@ func (h *Handlers) GetPublisherCoverage(w http.ResponseWriter, r *http.Request) 
 func (h *Handlers) CreatePublisherCoverage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	// Get user ID from context
-	userID := middleware.GetUserID(ctx)
-	if userID == "" {
-		RespondUnauthorized(w, r, "User ID not found in context")
-		return
+	// Use PublisherResolver to get publisher context
+	pc := h.publisherResolver.MustResolve(w, r)
+	if pc == nil {
+		return // Response already sent
 	}
-
-	// Get publisher ID from header or query param
-	publisherID := r.Header.Get("X-Publisher-Id")
-	if publisherID == "" {
-		publisherID = r.URL.Query().Get("publisher_id")
-	}
-
-	// If no publisher ID provided, fall back to database lookup by clerk_user_id
-	if publisherID == "" {
-		err := h.db.Pool.QueryRow(ctx,
-			"SELECT id FROM publishers WHERE clerk_user_id = $1",
-			userID,
-		).Scan(&publisherID)
-		if err != nil {
-			RespondNotFound(w, r, "Publisher not found")
-			return
-		}
-	}
+	publisherID := pc.PublisherID
 
 	// Parse request body
 	var req models.PublisherCoverageCreateRequest
@@ -201,9 +171,27 @@ func (h *Handlers) CreatePublisherCoverage(w http.ResponseWriter, r *http.Reques
 			*req.CityID,
 		).Scan(&coverage.DisplayName)
 	} else if req.CoverageLevel == "region" {
-		coverage.DisplayName = *req.Region + ", " + *req.CountryCode
+		// Look up country name for region display
+		var countryName string
+		err := h.db.Pool.QueryRow(ctx,
+			"SELECT DISTINCT country FROM cities WHERE country_code = $1 LIMIT 1",
+			*req.CountryCode,
+		).Scan(&countryName)
+		if err != nil || countryName == "" {
+			countryName = *req.CountryCode
+		}
+		coverage.DisplayName = *req.Region + ", " + countryName
 	} else {
-		coverage.DisplayName = *req.CountryCode
+		// Look up country name for country-level coverage
+		var countryName string
+		err := h.db.Pool.QueryRow(ctx,
+			"SELECT DISTINCT country FROM cities WHERE country_code = $1 LIMIT 1",
+			*req.CountryCode,
+		).Scan(&countryName)
+		if err != nil || countryName == "" {
+			countryName = *req.CountryCode
+		}
+		coverage.DisplayName = countryName
 	}
 
 	RespondJSON(w, r, http.StatusCreated, coverage)
@@ -219,44 +207,21 @@ func (h *Handlers) UpdatePublisherCoverage(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Get user ID from context
-	userID := middleware.GetUserID(ctx)
-	if userID == "" {
-		RespondUnauthorized(w, r, "User ID not found in context")
-		return
+	// Use PublisherResolver to get publisher context
+	pc := h.publisherResolver.MustResolve(w, r)
+	if pc == nil {
+		return // Response already sent
 	}
 
-	// Get publisher ID from header or query param
-	publisherID := r.Header.Get("X-Publisher-Id")
-	if publisherID == "" {
-		publisherID = r.URL.Query().Get("publisher_id")
-	}
-
-	// Verify ownership - either by X-Publisher-Id or by clerk_user_id
+	// Verify ownership - coverage must belong to this publisher
 	var verifiedPublisherID string
-	if publisherID != "" {
-		// Verify the coverage belongs to the specified publisher
-		err := h.db.Pool.QueryRow(ctx,
-			`SELECT publisher_id FROM publisher_coverage WHERE id = $1 AND publisher_id = $2`,
-			coverageID, publisherID,
-		).Scan(&verifiedPublisherID)
-		if err != nil {
-			RespondNotFound(w, r, "Coverage not found or not owned by publisher")
-			return
-		}
-	} else {
-		// Fall back to clerk_user_id lookup
-		err := h.db.Pool.QueryRow(ctx,
-			`SELECT pc.publisher_id
-			 FROM publisher_coverage pc
-			 JOIN publishers p ON pc.publisher_id = p.id
-			 WHERE pc.id = $1 AND p.clerk_user_id = $2`,
-			coverageID, userID,
-		).Scan(&verifiedPublisherID)
-		if err != nil {
-			RespondNotFound(w, r, "Coverage not found or not owned by user")
-			return
-		}
+	err := h.db.Pool.QueryRow(ctx,
+		`SELECT publisher_id FROM publisher_coverage WHERE id = $1 AND publisher_id = $2`,
+		coverageID, pc.PublisherID,
+	).Scan(&verifiedPublisherID)
+	if err != nil {
+		RespondNotFound(w, r, "Coverage not found or not owned by publisher")
+		return
 	}
 
 	// Parse request body
@@ -328,37 +293,17 @@ func (h *Handlers) DeletePublisherCoverage(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Get user ID from context
-	userID := middleware.GetUserID(ctx)
-	if userID == "" {
-		RespondUnauthorized(w, r, "User ID not found in context")
-		return
+	// Use PublisherResolver to get publisher context
+	pc := h.publisherResolver.MustResolve(w, r)
+	if pc == nil {
+		return // Response already sent
 	}
 
-	// Get publisher ID from header or query param
-	publisherID := r.Header.Get("X-Publisher-Id")
-	if publisherID == "" {
-		publisherID = r.URL.Query().Get("publisher_id")
-	}
-
-	var result interface{ RowsAffected() int64 }
-	var err error
-
-	if publisherID != "" {
-		// Delete with X-Publisher-Id ownership check
-		result, err = h.db.Pool.Exec(ctx,
-			`DELETE FROM publisher_coverage WHERE id = $1 AND publisher_id = $2`,
-			coverageID, publisherID,
-		)
-	} else {
-		// Fall back to clerk_user_id ownership check
-		result, err = h.db.Pool.Exec(ctx,
-			`DELETE FROM publisher_coverage pc
-			 USING publishers p
-			 WHERE pc.id = $1 AND pc.publisher_id = p.id AND p.clerk_user_id = $2`,
-			coverageID, userID,
-		)
-	}
+	// Delete with publisher ownership check
+	result, err := h.db.Pool.Exec(ctx,
+		`DELETE FROM publisher_coverage WHERE id = $1 AND publisher_id = $2`,
+		coverageID, pc.PublisherID,
+	)
 
 	if err != nil {
 		RespondInternalError(w, r, "Failed to delete coverage")
@@ -421,8 +366,9 @@ func (h *Handlers) GetCountries(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	query := `
-		SELECT DISTINCT country_code, country
+		SELECT country_code, country, COUNT(*) as city_count
 		FROM cities
+		GROUP BY country_code, country
 		ORDER BY country
 	`
 
@@ -434,14 +380,15 @@ func (h *Handlers) GetCountries(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 
 	type Country struct {
-		Code string `json:"code"`
-		Name string `json:"name"`
+		Code      string `json:"code"`
+		Name      string `json:"name"`
+		CityCount int    `json:"city_count"`
 	}
 
 	var countries []Country
 	for rows.Next() {
 		var c Country
-		if err := rows.Scan(&c.Code, &c.Name); err != nil {
+		if err := rows.Scan(&c.Code, &c.Name, &c.CityCount); err != nil {
 			continue
 		}
 		countries = append(countries, c)
@@ -457,42 +404,77 @@ func (h *Handlers) GetCountries(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// GetRegions returns regions for a country
+// GetRegions returns regions, optionally filtered by country_code or search
 func (h *Handlers) GetRegions(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	countryCode := r.URL.Query().Get("country_code")
+	countryCode := strings.TrimSpace(r.URL.Query().Get("country_code"))
+	search := strings.TrimSpace(r.URL.Query().Get("search"))
 
-	if countryCode == "" {
-		RespondBadRequest(w, r, "country_code query parameter is required")
+	// Either country_code or search must be provided
+	if countryCode == "" && search == "" {
+		RespondBadRequest(w, r, "Either country_code or search query parameter is required")
 		return
 	}
 
-	query := `
-		SELECT DISTINCT region, region_type
-		FROM cities
-		WHERE country_code = $1 AND region IS NOT NULL
-		ORDER BY region
-	`
+	// Get limit (default 20, max 100)
+	limit := 20
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 && parsed <= 100 {
+			limit = parsed
+		}
+	}
 
-	rows, err := h.db.Pool.Query(ctx, query, countryCode)
+	type Region struct {
+		Name        string `json:"name"`
+		CountryCode string `json:"country_code"`
+		CountryName string `json:"country_name"`
+		CityCount   int    `json:"city_count"`
+	}
+
+	var rows pgx.Rows
+	var err error
+
+	if search != "" && len(search) >= 2 {
+		// Search across all regions
+		query := `
+			SELECT region, country_code, country, COUNT(*) as city_count
+			FROM cities
+			WHERE region IS NOT NULL
+			  AND (region ILIKE $1 || '%' OR region ILIKE '%' || $1 || '%')
+			GROUP BY region, country_code, country
+			ORDER BY
+				CASE WHEN region ILIKE $1 || '%' THEN 0 ELSE 1 END,
+				city_count DESC,
+				region
+			LIMIT $2
+		`
+		rows, err = h.db.Pool.Query(ctx, query, search, limit)
+	} else {
+		// Filter by country code
+		query := `
+			SELECT region, country_code, country, COUNT(*) as city_count
+			FROM cities
+			WHERE country_code = $1 AND region IS NOT NULL
+			GROUP BY region, country_code, country
+			ORDER BY region
+			LIMIT $2
+		`
+		rows, err = h.db.Pool.Query(ctx, query, countryCode, limit)
+	}
+
 	if err != nil {
 		RespondInternalError(w, r, "Failed to fetch regions")
 		return
 	}
 	defer rows.Close()
 
-	type Region struct {
-		Name string  `json:"name"`
-		Type *string `json:"type,omitempty"`
-	}
-
 	var regions []Region
 	for rows.Next() {
-		var r Region
-		if err := rows.Scan(&r.Name, &r.Type); err != nil {
+		var reg Region
+		if err := rows.Scan(&reg.Name, &reg.CountryCode, &reg.CountryName, &reg.CityCount); err != nil {
 			continue
 		}
-		regions = append(regions, r)
+		regions = append(regions, reg)
 	}
 
 	if regions == nil {
@@ -500,8 +482,7 @@ func (h *Handlers) GetRegions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	RespondJSON(w, r, http.StatusOK, map[string]interface{}{
-		"regions":      regions,
-		"total":        len(regions),
-		"country_code": countryCode,
+		"regions": regions,
+		"total":   len(regions),
 	})
 }

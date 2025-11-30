@@ -1,7 +1,32 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useAuthenticatedFetch } from './useAuthenticatedFetch';
+/**
+ * Zmanim List Hooks - Refactored Version
+ *
+ * This file contains the refactored hooks using the new factory patterns.
+ * It replaces the legacy useAuthenticatedFetch-based hooks with cleaner,
+ * more maintainable implementations using usePublisherQuery and usePublisherMutation.
+ *
+ * Key improvements:
+ * - Reduced boilerplate from ~15 lines per hook to ~3 lines
+ * - Consistent error handling via factory
+ * - Automatic cache invalidation
+ * - Type-safe throughout
+ */
 
-// Types
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  usePublisherQuery,
+  usePublisherMutation,
+  useDeleteMutation,
+  useDynamicMutation,
+  useGlobalQuery,
+} from './useApiQuery';
+import { useApi } from '@/lib/api-client';
+import { usePublisherContext } from '@/providers/PublisherContext';
+
+// =============================================================================
+// Types (unchanged from original)
+// =============================================================================
+
 export interface PublisherZman {
   id: string;
   publisher_id: string;
@@ -13,6 +38,7 @@ export interface PublisherZman {
   publisher_comment: string | null;
   is_enabled: boolean;
   is_visible: boolean;
+  is_published: boolean;
   is_custom: boolean;
   category: 'essential' | 'optional' | 'custom';
   dependencies: string[];
@@ -55,6 +81,8 @@ export interface UpdateZmanRequest {
   publisher_comment?: string;
   is_enabled?: boolean;
   is_visible?: boolean;
+  is_published?: boolean;
+  category?: 'essential' | 'optional';
   sort_order?: number;
 }
 
@@ -66,7 +94,7 @@ export interface PreviewLocation {
 }
 
 export interface PreviewResult {
-  result: string; // HH:MM:SS format
+  result: string;
   timestamp: number;
   breakdown: CalculationStep[];
 }
@@ -92,140 +120,133 @@ export interface WeeklyPreviewResult {
   days: DayPreview[];
 }
 
-// Hook: Get all zmanim for publisher
-export function useZmanimList() {
-  const { fetchWithAuth } = useAuthenticatedFetch();
-
-  return useQuery({
-    queryKey: ['publisher-zmanim'],
-    queryFn: async () => {
-      const response = await fetchWithAuth<{ data: PublisherZman[] }>('/api/v1/publisher/zmanim');
-      return response.data;
-    },
-  });
+export interface ImportZmanimRequest {
+  source: 'defaults' | 'publisher';
+  publisher_id?: string;
+  zman_keys?: string[];
 }
 
-// Hook: Get single zman by key
-export function useZmanDetails(zmanKey: string | null) {
-  const { fetchWithAuth } = useAuthenticatedFetch();
-
-  return useQuery({
-    queryKey: ['publisher-zman', zmanKey],
-    queryFn: async () => {
-      if (!zmanKey) return null;
-      const response = await fetchWithAuth<{ data: PublisherZman }>(`/api/v1/publisher/zmanim/${zmanKey}`);
-      return response.data;
-    },
-    enabled: !!zmanKey,
-  });
+export interface ImportZmanimResponse {
+  data: PublisherZman[];
+  count: number;
+  message: string;
 }
 
-// Hook: Create new zman
-export function useCreateZman() {
-  const queryClient = useQueryClient();
-  const { fetchWithAuth } = useAuthenticatedFetch();
+// =============================================================================
+// Query Hooks (Refactored)
+// =============================================================================
 
-  return useMutation({
-    mutationFn: async (zman: CreateZmanRequest) => {
-      const response = await fetchWithAuth<{ data: PublisherZman }>('/api/v1/publisher/zmanim', {
-        method: 'POST',
-        body: JSON.stringify(zman),
-      });
-      return response.data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['publisher-zmanim'] });
-    },
-  });
-}
+/**
+ * Hook: Get all zmanim for the current publisher
+ *
+ * BEFORE (15 lines):
+ * ```
+ * const { fetchWithAuth } = useAuthenticatedFetch();
+ * const { selectedPublisher, isLoading } = usePublisherContext();
+ * return useQuery({
+ *   queryKey: ['publisher-zmanim', selectedPublisher?.id],
+ *   queryFn: async () => {
+ *     const response = await fetchWithAuth<{ data: PublisherZman[] }>('/api/v1/publisher/zmanim');
+ *     return response.data;
+ *   },
+ *   enabled: !isLoading && !!selectedPublisher?.id,
+ * });
+ * ```
+ *
+ * AFTER (1 line):
+ */
+export const useZmanimList = () =>
+  usePublisherQuery<PublisherZman[]>('publisher-zmanim', '/publisher/zmanim');
 
-// Hook: Update zman
-export function useUpdateZman(zmanKey: string) {
-  const queryClient = useQueryClient();
-  const { fetchWithAuth } = useAuthenticatedFetch();
+/**
+ * Hook: Get single zman by key
+ */
+export const useZmanDetails = (zmanKey: string | null) =>
+  usePublisherQuery<PublisherZman | null>(
+    ['publisher-zman', zmanKey],
+    `/publisher/zmanim/${zmanKey}`,
+    { enabled: !!zmanKey }
+  );
 
-  return useMutation({
-    mutationFn: async (updates: UpdateZmanRequest) => {
-      const response = await fetchWithAuth<{ data: PublisherZman }>(
-        `/api/v1/publisher/zmanim/${zmanKey}`,
-        {
-          method: 'PUT',
-          body: JSON.stringify(updates),
-        }
-      );
-      return response.data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['publisher-zmanim'] });
-      queryClient.invalidateQueries({ queryKey: ['publisher-zman', zmanKey] });
-    },
-  });
-}
-
-// Hook: Delete zman (custom only)
-export function useDeleteZman() {
-  const queryClient = useQueryClient();
-  const { fetchWithAuth } = useAuthenticatedFetch();
-
-  return useMutation({
-    mutationFn: async (zmanKey: string) => {
-      await fetchWithAuth(`/api/v1/publisher/zmanim/${zmanKey}`, {
-        method: 'DELETE',
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['publisher-zmanim'] });
-    },
-  });
-}
-
-// Hook: Get zmanim templates
-export function useZmanimTemplates() {
-  const { fetchWithAuth } = useAuthenticatedFetch();
-
-  return useQuery({
-    queryKey: ['zmanim-templates'],
-    queryFn: async () => {
-      const response = await fetchWithAuth<{ data: ZmanimTemplate[] }>('/api/v1/zmanim/templates');
-      return response.data;
-    },
+/**
+ * Hook: Get zmanim templates (global, not publisher-specific)
+ */
+export const useZmanimTemplates = () =>
+  useGlobalQuery<ZmanimTemplate[]>('zmanim-templates', '/zmanim/templates', {
     staleTime: 1000 * 60 * 60, // 1 hour - templates don't change often
   });
-}
 
-// Hook: Browse public zmanim
-export function useBrowseZmanim(searchQuery?: string, category?: string) {
-  const { fetchWithAuth } = useAuthenticatedFetch();
+/**
+ * Hook: Browse public zmanim with search
+ */
+export const useBrowseZmanim = (searchQuery?: string, category?: string) =>
+  usePublisherQuery<Array<PublisherZman & { publisher_name: string; usage_count: number }>>(
+    ['browse-zmanim', searchQuery, category],
+    '/zmanim/browse',
+    {
+      params: { q: searchQuery, category },
+      enabled: !!searchQuery || !!category,
+    }
+  );
 
-  return useQuery({
-    queryKey: ['browse-zmanim', searchQuery, category],
-    queryFn: async () => {
-      const params = new URLSearchParams();
-      if (searchQuery) params.append('q', searchQuery);
-      if (category) params.append('category', category);
+// =============================================================================
+// Mutation Hooks (Refactored)
+// =============================================================================
 
-      const url = `/api/v1/zmanim/browse${params.toString() ? `?${params.toString()}` : ''}`;
-      const response = await fetchWithAuth<{
-        data: Array<PublisherZman & { publisher_name: string; usage_count: number }>;
-      }>(url);
-      return response.data;
-    },
-    enabled: !!searchQuery || !!category, // Only fetch when searching
+/**
+ * Hook: Create new zman
+ */
+export const useCreateZman = () =>
+  usePublisherMutation<PublisherZman, CreateZmanRequest>('/publisher/zmanim', 'POST', {
+    invalidateKeys: ['publisher-zmanim'],
   });
+
+/**
+ * Hook: Update zman
+ */
+export function useUpdateZman(zmanKey: string) {
+  return useDynamicMutation<PublisherZman, UpdateZmanRequest>(
+    () => `/publisher/zmanim/${zmanKey}`,
+    'PUT',
+    (data) => data,
+    {
+      invalidateKeys: ['publisher-zmanim', `publisher-zman-${zmanKey}`],
+    }
+  );
 }
 
-// Hook: Preview formula (single day)
+/**
+ * Hook: Delete zman (custom only)
+ */
+export const useDeleteZman = () =>
+  useDeleteMutation<void>('/publisher/zmanim', {
+    invalidateKeys: ['publisher-zmanim'],
+  });
+
+/**
+ * Hook: Import zmanim from defaults or another publisher
+ */
+export const useImportZmanim = () =>
+  usePublisherMutation<ImportZmanimResponse, ImportZmanimRequest>('/publisher/zmanim/import', 'POST', {
+    invalidateKeys: ['publisher-zmanim'],
+  });
+
+// =============================================================================
+// Preview/Validation Hooks (Refactored)
+// =============================================================================
+
+/**
+ * Hook: Preview formula (single day)
+ *
+ * Note: This uses the api directly since it's a one-off preview operation,
+ * not a data fetching pattern that needs caching.
+ */
 export function usePreviewFormula() {
-  const { fetchWithAuth } = useAuthenticatedFetch();
+  const api = useApi();
 
   return useMutation({
-    mutationFn: async (params: {
-      formula: string;
-      date: string;
-      location: PreviewLocation;
-    }) => {
-      const response = await fetchWithAuth<PreviewResult>('/api/v1/dsl/preview', {
-        method: 'POST',
+    mutationFn: async (params: { formula: string; date: string; location: PreviewLocation }) => {
+      return api.post<PreviewResult>('/dsl/preview', {
         body: JSON.stringify({
           formula: params.formula,
           date: params.date,
@@ -234,23 +255,19 @@ export function usePreviewFormula() {
           timezone: params.location.timezone,
         }),
       });
-      return response;
     },
   });
 }
 
-// Hook: Preview formula (weekly)
+/**
+ * Hook: Preview formula (weekly)
+ */
 export function usePreviewWeek() {
-  const { fetchWithAuth } = useAuthenticatedFetch();
+  const api = useApi();
 
   return useMutation({
-    mutationFn: async (params: {
-      formula: string;
-      start_date: string;
-      location: PreviewLocation;
-    }) => {
-      const response = await fetchWithAuth<WeeklyPreviewResult>('/api/v1/dsl/preview-week', {
-        method: 'POST',
+    mutationFn: async (params: { formula: string; start_date: string; location: PreviewLocation }) => {
+      return api.post<WeeklyPreviewResult>('/dsl/preview-week', {
         body: JSON.stringify({
           formula: params.formula,
           start_date: params.start_date,
@@ -259,31 +276,36 @@ export function usePreviewWeek() {
           timezone: params.location.timezone,
         }),
       });
-      return response;
     },
   });
 }
 
-// Hook: Validate DSL formula
+/**
+ * Hook: Validate DSL formula
+ */
 export function useValidateFormula() {
-  const { fetchWithAuth } = useAuthenticatedFetch();
+  const api = useApi();
 
   return useMutation({
     mutationFn: async (formula: string) => {
-      const response = await fetchWithAuth<{
+      return api.post<{
         valid: boolean;
         errors?: Array<{ message: string; line?: number; column?: number }>;
         dependencies?: string[];
-      }>('/api/v1/dsl/validate', {
-        method: 'POST',
+      }>('/dsl/validate', {
         body: JSON.stringify({ formula }),
       });
-      return response;
     },
   });
 }
 
-// Helper: Categorize zmanim by category
+// =============================================================================
+// Helper Functions (unchanged)
+// =============================================================================
+
+/**
+ * Categorize zmanim by category
+ */
 export function categorizeZmanim(zmanim: PublisherZman[]) {
   return {
     essential: zmanim.filter((z) => z.category === 'essential'),
@@ -292,7 +314,9 @@ export function categorizeZmanim(zmanim: PublisherZman[]) {
   };
 }
 
-// Helper: Extract dependencies from formula (client-side)
+/**
+ * Extract dependencies from formula (client-side)
+ */
 export function extractDependencies(formula: string): string[] {
   const regex = /@([a-z_][a-z0-9_]*)/g;
   const matches = formula.matchAll(regex);
@@ -303,4 +327,462 @@ export function extractDependencies(formula: string): string[] {
   }
 
   return Array.from(deps);
+}
+
+// =============================================================================
+// Master Zmanim Registry Types & Hooks
+// =============================================================================
+
+export interface MasterZman {
+  id: string;
+  zman_key: string;
+  canonical_hebrew_name: string;
+  canonical_english_name: string;
+  transliteration: string | null;
+  description: string | null;
+  halachic_notes: string | null;
+  halachic_source: string | null;
+  time_category: 'dawn' | 'sunrise' | 'morning' | 'midday' | 'afternoon' | 'sunset' | 'nightfall' | 'midnight';
+  default_formula_dsl: string;
+  is_fundamental: boolean;
+  sort_order: number;
+  tags: ZmanTag[];
+  day_types?: DayType[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DayType {
+  id: string;
+  name: string;
+  display_name_hebrew: string;
+  display_name_english: string;
+  description: string | null;
+  parent_type: string | null;
+  sort_order: number;
+}
+
+export interface ZmanTag {
+  id: string;
+  name: string;
+  display_name_hebrew: string;
+  display_name_english: string;
+  tag_type: 'shita' | 'time_of_day' | 'concept_group';
+  description: string | null;
+  color: string | null;
+}
+
+export interface GroupedMasterZmanim {
+  [timeCategory: string]: MasterZman[];
+}
+
+/**
+ * Hook: Get all master zmanim from registry
+ */
+export const useMasterZmanim = () =>
+  useGlobalQuery<MasterZman[]>('master-zmanim', '/registry/zmanim', {
+    staleTime: 1000 * 60 * 60, // 1 hour - registry is mostly static
+  });
+
+/**
+ * Hook: Get master zmanim grouped by time category
+ * @param dayTypes - Optional day types filter (string or array, e.g., 'weekday' or ['erev_shabbos', 'motzei_shabbos'])
+ */
+export const useMasterZmanimGrouped = (dayTypes?: string | string[]) => {
+  // Convert to comma-separated string for API
+  const dayTypesParam = Array.isArray(dayTypes) ? dayTypes.join(',') : dayTypes;
+
+  return useGlobalQuery<GroupedMasterZmanim>(
+    ['master-zmanim-grouped', dayTypesParam],
+    '/registry/zmanim/grouped',
+    {
+      params: { day_types: dayTypesParam },
+      staleTime: 1000 * 60 * 5, // 5 minutes - shorter for registry updates
+    }
+  );
+};
+
+/**
+ * Hook: Get event zmanim grouped by event_category (candles, havdalah, etc.)
+ * Based on HebCal's approach - event zmanim are grouped by PURPOSE not day type
+ */
+export const useEventZmanimGrouped = () =>
+  useGlobalQuery<GroupedMasterZmanim>(
+    'event-zmanim-grouped',
+    '/registry/zmanim/events',
+    {
+      staleTime: 1000 * 60 * 5, // 5 minutes
+    }
+  );
+
+/**
+ * Hook: Get all tags
+ */
+export const useZmanTags = () =>
+  useGlobalQuery<ZmanTag[]>('zman-tags', '/registry/tags', {
+    staleTime: 1000 * 60 * 60, // 1 hour
+  });
+
+/**
+ * Hook: Get all day types
+ * @deprecated Use useJewishEvents instead for the new event model
+ */
+export const useDayTypes = (parentType?: string) =>
+  useGlobalQuery<DayType[]>(
+    ['day-types', parentType],
+    '/registry/day-types',
+    {
+      params: { parent: parentType },
+      staleTime: 1000 * 60 * 60, // 1 hour
+    }
+  );
+
+// =============================================================================
+// Jewish Events Types & Hooks (New Event Model)
+// =============================================================================
+
+export interface JewishEvent {
+  id: string;
+  code: string;
+  name_hebrew: string;
+  name_english: string;
+  event_type: 'weekly' | 'yom_tov' | 'fast' | 'informational';
+  duration_days_israel: number;
+  duration_days_diaspora: number;
+  fast_start_type: 'dawn' | 'sunset' | null;
+  parent_event_code: string | null;
+  sort_order: number;
+}
+
+export interface EventDayInfo {
+  gregorian_date: string;
+  hebrew_date: {
+    year: number;
+    month: number;
+    day: number;
+    month_name: string;
+    formatted: string;
+    formatted_hebrew: string;
+  };
+  day_of_week: number;
+  is_shabbat: boolean;
+  is_yomtov: boolean;
+  is_fast_day: boolean;
+  is_in_israel: boolean;
+  active_events: ActiveEvent[];
+  erev_events: ActiveEvent[];
+  moetzei_events: ActiveEvent[];
+  special_contexts: string[];
+  holidays: Array<{
+    name: string;
+    name_hebrew: string;
+    category: string;
+    yomtov: boolean;
+  }>;
+}
+
+export interface ActiveEvent {
+  event_code: string;
+  name_hebrew: string;
+  name_english: string;
+  day_number: number;
+  total_days: number;
+  is_final_day: boolean;
+  fast_start_type?: string;
+}
+
+export interface ZmanimContext {
+  show_daily_zmanim: boolean;
+  show_candle_lighting: boolean;
+  show_candle_lighting_sheni: boolean;
+  show_shabbos_yomtov_ends: boolean;
+  show_fast_starts: boolean;
+  fast_start_type: string;
+  show_fast_ends: boolean;
+  show_chametz_times: boolean;
+  display_contexts: string[];
+  active_event_codes: string[];
+}
+
+export interface ZmanDisplayContext {
+  id: string;
+  context_code: string;
+  display_name_hebrew: string;
+  display_name_english: string;
+  sort_order: number;
+}
+
+/**
+ * Hook: Get all Jewish events
+ */
+export const useJewishEvents = (eventType?: string) =>
+  useGlobalQuery<JewishEvent[]>(
+    ['jewish-events', eventType],
+    '/calendar/events',
+    {
+      params: { type: eventType },
+      staleTime: 1000 * 60 * 60, // 1 hour - events don't change
+    }
+  );
+
+/**
+ * Hook: Get event day info for a specific date and location
+ */
+export function useEventDayInfo(params: {
+  date: string;
+  latitude: number;
+  longitude: number;
+  timezone?: string;
+} | null) {
+  return useGlobalQuery<EventDayInfo>(
+    ['event-day-info', params?.date, params?.latitude, params?.longitude],
+    '/calendar/day-info',
+    {
+      params: params ? {
+        date: params.date,
+        latitude: String(params.latitude),
+        longitude: String(params.longitude),
+        timezone: params.timezone,
+      } : undefined,
+      enabled: !!params?.date && !!params?.latitude && !!params?.longitude,
+      staleTime: 1000 * 60 * 5, // 5 minutes
+    }
+  );
+}
+
+/**
+ * Hook: Get zmanim context for a date (determines which zmanim to show)
+ */
+export function useZmanimContext(params: {
+  date: string;
+  latitude: number;
+  longitude: number;
+  timezone?: string;
+} | null) {
+  return useGlobalQuery<ZmanimContext>(
+    ['zmanim-context', params?.date, params?.latitude, params?.longitude],
+    '/calendar/zmanim-context',
+    {
+      params: params ? {
+        date: params.date,
+        latitude: String(params.latitude),
+        longitude: String(params.longitude),
+        timezone: params.timezone,
+      } : undefined,
+      enabled: !!params?.date && !!params?.latitude && !!params?.longitude,
+      staleTime: 1000 * 60 * 5, // 5 minutes
+    }
+  );
+}
+
+/**
+ * Hook: Get event info for a week
+ */
+export function useWeekEventInfo(params: {
+  start_date: string;
+  latitude: number;
+  longitude: number;
+  timezone?: string;
+} | null) {
+  return useGlobalQuery<Record<string, EventDayInfo>>(
+    ['week-event-info', params?.start_date, params?.latitude, params?.longitude],
+    '/calendar/week-events',
+    {
+      params: params ? {
+        start_date: params.start_date,
+        latitude: String(params.latitude),
+        longitude: String(params.longitude),
+        timezone: params.timezone,
+      } : undefined,
+      enabled: !!params?.start_date && !!params?.latitude && !!params?.longitude,
+      staleTime: 1000 * 60 * 5, // 5 minutes
+    }
+  );
+}
+
+/**
+ * Hook: Get zmanim filtered by Jewish event
+ */
+export const useMasterZmanimByEvent = (eventCode: string | null, dayNumber?: number) =>
+  useGlobalQuery<MasterZman[]>(
+    ['master-zmanim-by-event', eventCode, dayNumber],
+    '/registry/zmanim/by-event',
+    {
+      params: {
+        event_code: eventCode || undefined,
+        day_number: dayNumber !== undefined ? String(dayNumber) : undefined,
+      },
+      enabled: !!eventCode,
+      staleTime: 1000 * 60 * 60, // 1 hour
+    }
+  );
+
+/**
+ * Hook: Get display contexts for a zman (context-specific names)
+ */
+export const useZmanDisplayContexts = (zmanKey: string | null) =>
+  useGlobalQuery<ZmanDisplayContext[]>(
+    ['zman-display-contexts', zmanKey],
+    '/registry/display-contexts',
+    {
+      params: { zman_key: zmanKey || undefined },
+      enabled: !!zmanKey,
+      staleTime: 1000 * 60 * 60, // 1 hour
+    }
+  );
+
+/**
+ * Hook: Get applicable events for a specific zman
+ */
+export const useZmanApplicableEvents = (zmanKey: string | null) =>
+  useGlobalQuery<Array<{
+    event: JewishEvent;
+    applies_to_day: number | null;
+    is_default: boolean;
+    notes: string | null;
+  }>>(
+    ['zman-applicable-events', zmanKey],
+    '/registry/zman-events',
+    {
+      params: { zman_key: zmanKey || undefined },
+      enabled: !!zmanKey,
+      staleTime: 1000 * 60 * 60, // 1 hour
+    }
+  );
+
+/**
+ * Hook: Get applicable day types for a specific zman
+ */
+export const useZmanDayTypes = (zmanKey: string | null) =>
+  useGlobalQuery<DayType[]>(
+    ['zman-day-types', zmanKey],
+    `/registry/zmanim/${zmanKey}/day-types`,
+    {
+      enabled: !!zmanKey,
+      staleTime: 1000 * 60 * 60, // 1 hour
+    }
+  );
+
+/**
+ * Hook: Create zman from master registry
+ */
+export interface CreateFromRegistryRequest {
+  master_zman_id: string;
+  formula_dsl?: string;
+}
+
+export const useCreateZmanFromRegistry = () =>
+  usePublisherMutation<PublisherZman, CreateFromRegistryRequest>('/publisher/zmanim', 'POST', {
+    invalidateKeys: ['publisher-zmanim'],
+  });
+
+// =============================================================================
+// Per-Zman Version History Types & Hooks
+// =============================================================================
+
+export interface ZmanVersion {
+  id: string;
+  publisher_zman_id: string;
+  version_number: number;
+  formula_dsl: string;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface ZmanVersionHistoryResponse {
+  versions: ZmanVersion[];
+  current_version: number;
+  total: number;
+}
+
+/**
+ * Hook: Get version history for a specific zman
+ */
+export function useZmanVersionHistory(zmanKey: string | null) {
+  return usePublisherQuery<ZmanVersionHistoryResponse>(
+    ['zman-version-history', zmanKey],
+    `/publisher/zmanim/${zmanKey}/history`,
+    { enabled: !!zmanKey }
+  );
+}
+
+/**
+ * Hook: Rollback zman to a previous version
+ */
+export function useRollbackZmanVersion(zmanKey: string) {
+  const api = useApi();
+  const queryClient = useQueryClient();
+  const { selectedPublisher } = usePublisherContext();
+
+  return useMutation({
+    mutationFn: async (params: { version_number: number }) => {
+      return api.post<PublisherZman>(`/publisher/zmanim/${zmanKey}/rollback`, {
+        body: JSON.stringify(params),
+      });
+    },
+    onSuccess: () => {
+      // Invalidate both the zman and its version history
+      queryClient.invalidateQueries({ queryKey: ['publisher-zmanim'] });
+      queryClient.invalidateQueries({ queryKey: ['publisher-zman', zmanKey] });
+      queryClient.invalidateQueries({ queryKey: ['zman-version-history', zmanKey] });
+    },
+  });
+}
+
+// =============================================================================
+// Soft Delete & Restore Types & Hooks
+// =============================================================================
+
+export interface DeletedZman {
+  id: string;
+  publisher_id: string;
+  zman_key: string;
+  hebrew_name: string;
+  english_name: string;
+  formula_dsl: string;
+  time_category: string;
+  deleted_at: string;
+  deleted_by: string | null;
+  master_zman_id: string | null;
+}
+
+/**
+ * Hook: Get deleted zmanim for restore
+ */
+export const useDeletedZmanim = () =>
+  usePublisherQuery<DeletedZman[]>('deleted-zmanim', '/publisher/zmanim/deleted');
+
+/**
+ * Hook: Restore a soft-deleted zman
+ */
+export function useRestoreZman() {
+  const api = useApi();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (zmanKey: string) => {
+      return api.post<PublisherZman>(`/publisher/zmanim/${zmanKey}/restore`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['publisher-zmanim'] });
+      queryClient.invalidateQueries({ queryKey: ['deleted-zmanim'] });
+    },
+  });
+}
+
+/**
+ * Hook: Permanently delete a soft-deleted zman
+ */
+export function usePermanentDeleteZman() {
+  const api = useApi();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (zmanKey: string) => {
+      return api.delete<void>(`/publisher/zmanim/${zmanKey}/permanent`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['deleted-zmanim'] });
+    },
+  });
 }

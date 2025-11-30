@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { useApi } from '@/lib/api-client';
 
 import { DSLEditor } from '@/components/editor/DSLEditor';
 import { FormulaBuilder } from '@/components/formula-builder/FormulaBuilder';
@@ -81,6 +82,10 @@ export default function ZmanEditorPage() {
   // Dialog state
   const [showAIGenerator, setShowAIGenerator] = useState(false);
   const [showBrowseTemplates, setShowBrowseTemplates] = useState(false);
+  const [generatingExplanation, setGeneratingExplanation] = useState(false);
+
+  // API client
+  const api = useApi();
 
   // Fetch data
   const { data: zman, isLoading: loadingZman } = useZmanDetails(isNewZman ? null : zmanKey);
@@ -177,6 +182,30 @@ export default function ZmanEditorPage() {
       return { valid: false, errors: [{ message: 'Validation failed' }] };
     }
   }, [validateFormula]);
+
+  // Generate AI explanation handler
+  const handleGenerateExplanation = async () => {
+    if (!formula.trim()) {
+      toast.error('Please enter a formula first');
+      return;
+    }
+
+    setGeneratingExplanation(true);
+    try {
+      const response = await api.post<{ explanation: string; language: string; source: string }>(
+        '/ai/explain-formula',
+        { body: JSON.stringify({ formula, language: 'en' }) }
+      );
+      setAiExplanation(response.explanation);
+      setHasChanges(true);
+      toast.success('AI explanation generated');
+    } catch (error) {
+      console.error('Failed to generate explanation:', error);
+      toast.error('Failed to generate AI explanation. The AI service may not be configured.');
+    } finally {
+      setGeneratingExplanation(false);
+    }
+  };
 
   // Save handler
   const handleSave = async () => {
@@ -366,9 +395,18 @@ export default function ZmanEditorPage() {
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-base">AI Explanation</CardTitle>
-                  <Button variant="ghost" size="sm" disabled>
-                    <Sparkles className="h-4 w-4 mr-1" />
-                    Generate
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleGenerateExplanation}
+                    disabled={generatingExplanation || !formula.trim()}
+                  >
+                    {generatingExplanation ? (
+                      <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                    ) : (
+                      <Sparkles className="h-4 w-4 mr-1" />
+                    )}
+                    {generatingExplanation ? 'Generating...' : 'Generate'}
                   </Button>
                 </div>
               </CardHeader>

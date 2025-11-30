@@ -1,10 +1,9 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useAuth } from '@clerk/nextjs';
 import { usePublisherContext } from '@/providers/PublisherContext';
 import { BarChart3, Globe, Calculator, Calendar, MapPin, Loader2 } from 'lucide-react';
-import { API_BASE } from '@/lib/api';
+import { useApi } from '@/lib/api-client';
 
 interface Analytics {
   calculations_total: number;
@@ -14,7 +13,7 @@ interface Analytics {
 }
 
 export default function PublisherAnalyticsPage() {
-  const { getToken } = useAuth();
+  const api = useApi();
   const { selectedPublisher, isLoading: contextLoading } = usePublisherContext();
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -26,28 +25,15 @@ export default function PublisherAnalyticsPage() {
     try {
       setIsLoading(true);
       setError(null);
-      const token = await getToken();
 
-      const response = await fetch(`${API_BASE}/api/v1/publisher/analytics`, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-          'X-Publisher-Id': selectedPublisher.id,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch analytics');
-      }
-
-      const data = await response.json();
-      setAnalytics(data.data || data);
+      const data = await api.get<Analytics>('/publisher/analytics');
+      setAnalytics(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load analytics');
     } finally {
       setIsLoading(false);
     }
-  }, [getToken, selectedPublisher]);
+  }, [api, selectedPublisher]);
 
   useEffect(() => {
     if (selectedPublisher) {

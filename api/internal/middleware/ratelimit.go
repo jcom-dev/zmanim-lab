@@ -80,19 +80,28 @@ func (rl *RateLimiter) Stop() {
 }
 
 // getClientKey returns a unique key for the client
+// SECURITY: For authenticated users, we use the user ID as the key.
+// For anonymous users, we ONLY use RemoteAddr which is set by the
+// trusted RealIP middleware from chi. We do NOT read X-Forwarded-For
+// or X-Real-IP headers directly as they can be spoofed.
 func (rl *RateLimiter) getClientKey(r *http.Request) string {
-	// Check if user is authenticated
+	// Check if user is authenticated - use their user ID
 	if userID := GetUserID(r.Context()); userID != "" {
 		return "user:" + userID
 	}
 
-	// Use IP address for anonymous users
-	ip := r.Header.Get("X-Forwarded-For")
-	if ip == "" {
-		ip = r.Header.Get("X-Real-IP")
-	}
-	if ip == "" {
-		ip = r.RemoteAddr
+	// Use RemoteAddr for anonymous users.
+	// The RealIP middleware must run before this to properly set RemoteAddr
+	// from trusted proxy headers. We do NOT read headers directly here.
+	ip := r.RemoteAddr
+	// RemoteAddr may include port, extract just the IP
+	if colonIdx := len(ip) - 1; colonIdx > 0 {
+		for i := colonIdx; i >= 0; i-- {
+			if ip[i] == ':' {
+				ip = ip[:i]
+				break
+			}
+		}
 	}
 	return "ip:" + ip
 }
