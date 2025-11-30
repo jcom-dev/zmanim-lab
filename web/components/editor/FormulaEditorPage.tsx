@@ -181,7 +181,7 @@ export function FormulaEditorPage({
             {mode === 'guided' ? (
               <FormulaBuilder
                 initialFormula={formula}
-                onSave={setFormula}
+                onChange={setFormula}
               />
             ) : (
               <DSLEditor
