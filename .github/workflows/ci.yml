@@ -85,8 +85,8 @@ jobs:
         run: npx supabase migration up --db-url "$DATABASE_URL"
         working-directory: ${{ github.workspace }}
 
-      - name: Import GeoNames cities data
-        run: go run cmd/import-cities/main.go
+      # Note: Cities are pre-seeded in production database via seed-geo tool
+      # The CI environment uses the existing database state
 
       - name: Generate RAG embeddings
         run: go run cmd/indexer/main.go

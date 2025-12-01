@@ -222,7 +222,7 @@ export default function AdminPublishersPage() {
                       </td>
                       <td className="py-4">
                         <span
-                          className={`inline-block px-3 py-1 rounded-full text-xs font-semibold border ${getStatusBadgeClass(
+                          className={`inline-block px-3 py-1 rounded-full text-xs font-semibold border ${getStatusBadgeClasses(
                             publisher.status
                           )}`}
                         >

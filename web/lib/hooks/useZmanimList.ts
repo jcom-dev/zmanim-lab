@@ -351,6 +351,13 @@ export function extractDependencies(formula: string): string[] {
 // Master Zmanim Registry Types & Hooks
 // =============================================================================
 
+// Note: ZmanTag is defined at the top of this file - this type extends it
+// for the master zman context with additional fields
+export interface MasterZmanTag extends ZmanTag {
+  description: string | null;
+  color: string | null;
+}
+
 export interface MasterZman {
   id: string;
   zman_key: string;
@@ -364,7 +371,7 @@ export interface MasterZman {
   default_formula_dsl: string;
   is_core: boolean;
   sort_order: number;
-  tags: ZmanTag[];
+  tags: MasterZmanTag[];
   day_types?: DayType[];
   created_at: string;
   updated_at: string;
@@ -378,16 +385,6 @@ export interface DayType {
   description: string | null;
   parent_type: string | null;
   sort_order: number;
-}
-
-export interface ZmanTag {
-  id: string;
-  name: string;
-  display_name_hebrew: string;
-  display_name_english: string;
-  tag_type: 'shita' | 'time_of_day' | 'concept_group';
-  description: string | null;
-  color: string | null;
 }
 
 export interface GroupedMasterZmanim {

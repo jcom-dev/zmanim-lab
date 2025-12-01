@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Home, Users, BarChart3, Settings, Sun, Clock, UserCog, Building2 } from 'lucide-react';
 import { useUserRoles } from '@/lib/hooks';
+import { ModeToggle } from '@/components/mode-toggle';
 
 interface AdminLayoutProps {
   children: ReactNode;
@@ -48,8 +49,9 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
               <span className="text-xl font-bold">Admin Portal</span>
             </div>
 
-            {/* Right: Publisher Link (if dual-role) & User Button */}
+            {/* Right: Theme Toggle, Publisher Link (if dual-role) & User Button */}
             <div className="flex items-center gap-4">
+              <ModeToggle />
               {isLoaded && hasPublisherAccess && (
                 <Link
                   href="/publisher"
