@@ -6,31 +6,28 @@
 -- name: GetPublisherDraftAlgorithm :one
 SELECT id, name, COALESCE(description, '') as description,
        COALESCE(configuration::text, '{}')::jsonb as configuration,
-       COALESCE(validation_status, 'draft') as status, is_active,
-       COALESCE(CAST(SPLIT_PART(version, '.', 1) AS INTEGER), 1) as version,
-       published_at, created_at, updated_at
+       status, is_public,
+       created_at, updated_at
 FROM algorithms
-WHERE publisher_id = $1 AND validation_status = 'draft'
+WHERE publisher_id = $1 AND status = 'draft'
 ORDER BY created_at DESC
 LIMIT 1;
 
 -- name: GetPublisherActiveAlgorithm :one
 SELECT id, name, COALESCE(description, '') as description,
        COALESCE(configuration::text, '{}')::jsonb as configuration,
-       COALESCE(validation_status, 'draft') as status, is_active,
-       COALESCE(CAST(SPLIT_PART(version, '.', 1) AS INTEGER), 1) as version,
-       published_at, created_at, updated_at
+       status, is_public,
+       created_at, updated_at
 FROM algorithms
-WHERE publisher_id = $1 AND (is_active = true OR validation_status = 'published')
+WHERE publisher_id = $1 AND status = 'published'
 ORDER BY created_at DESC
 LIMIT 1;
 
 -- name: GetAlgorithmByID :one
 SELECT id, name, COALESCE(description, '') as description,
        COALESCE(configuration::text, '{}')::jsonb as configuration,
-       COALESCE(validation_status, 'draft') as status, is_active,
-       COALESCE(CAST(SPLIT_PART(version, '.', 1) AS INTEGER), 1) as version,
-       published_at, deprecated_at, created_at, updated_at
+       status, is_public,
+       created_at, updated_at
 FROM algorithms
 WHERE id = $1 AND publisher_id = $2;
 
@@ -38,10 +35,9 @@ WHERE id = $1 AND publisher_id = $2;
 
 -- name: CreateAlgorithm :one
 INSERT INTO algorithms (
-    publisher_id, name, description, configuration,
-    version, calculation_type, validation_status, is_active
+    publisher_id, name, description, configuration, status, is_public
 )
-VALUES ($1, $2, $3, $4, '1.0.0', 'custom', 'draft', false)
+VALUES ($1, $2, $3, $4, 'draft', false)
 RETURNING id, created_at, updated_at;
 
 -- name: UpdateAlgorithmDraft :one
@@ -57,28 +53,22 @@ RETURNING id, created_at, updated_at;
 
 -- name: ArchiveActiveAlgorithms :exec
 UPDATE algorithms
-SET validation_status = 'archived', is_active = false, updated_at = NOW()
-WHERE publisher_id = $1 AND is_active = true;
+SET status = 'deprecated', updated_at = NOW()
+WHERE publisher_id = $1 AND status = 'published';
 
 -- name: PublishAlgorithm :one
 UPDATE algorithms
-SET validation_status = 'published',
-    is_active = true,
-    version = $1,
-    published_at = NOW(),
+SET status = 'published',
     updated_at = NOW()
-WHERE id = $2
-RETURNING published_at, updated_at;
+WHERE id = $1
+RETURNING updated_at;
 
 -- Algorithm versions --
 
 -- name: GetAlgorithmVersions :many
 SELECT id, name,
-       COALESCE(CAST(SPLIT_PART(version, '.', 1) AS INTEGER), 1) as ver,
-       COALESCE(validation_status, 'draft') as status,
-       is_active,
-       published_at,
-       deprecated_at,
+       status,
+       is_public,
        created_at
 FROM algorithms
 WHERE publisher_id = $1
@@ -86,8 +76,7 @@ ORDER BY created_at DESC;
 
 -- name: DeprecateAlgorithmVersion :execrows
 UPDATE algorithms
-SET validation_status = 'deprecated',
-    deprecated_at = NOW(),
+SET status = 'deprecated',
     updated_at = NOW()
 WHERE id = $1 AND publisher_id = $2;
 

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -95,6 +96,8 @@ func (h *Handlers) GetPublishers(w http.ResponseWriter, r *http.Request) {
 	page := 1
 	pageSize := 20
 	regionID := r.URL.Query().Get("region_id")
+	searchQuery := r.URL.Query().Get("q")
+	hasAlgorithm := r.URL.Query().Get("has_algorithm") == "true"
 
 	if p := r.URL.Query().Get("page"); p != "" {
 		if parsed, err := parseIntParam(p); err == nil && parsed > 0 {
@@ -108,6 +111,12 @@ func (h *Handlers) GetPublishers(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// If search query is provided, use search logic
+	if searchQuery != "" {
+		h.searchPublishers(w, r, ctx, searchQuery, hasAlgorithm, page, pageSize)
+		return
+	}
+
 	var regionPtr *string
 	if regionID != "" {
 		regionPtr = &regionID
@@ -119,6 +128,89 @@ func (h *Handlers) GetPublishers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	RespondJSON(w, r, http.StatusOK, publishers)
+}
+
+// searchPublishers handles publisher search with optional algorithm filter
+func (h *Handlers) searchPublishers(w http.ResponseWriter, r *http.Request, ctx context.Context, query string, hasAlgorithm bool, page, pageSize int) {
+	offset := (page - 1) * pageSize
+	searchPattern := "%" + query + "%"
+
+	var sqlQuery string
+	var args []interface{}
+
+	if hasAlgorithm {
+		// Search publishers that have at least one published zman
+		sqlQuery = `
+			SELECT DISTINCT
+				p.id, p.name, p.description, p.organization, p.logo_url,
+				(p.status = 'verified' OR p.status = 'active') as is_verified,
+				COUNT(DISTINCT pz.id) as zmanim_count
+			FROM publishers p
+			JOIN publisher_zmanim pz ON pz.publisher_id = p.id
+				AND pz.is_published = true
+				AND pz.is_enabled = true
+				AND pz.deleted_at IS NULL
+			WHERE (p.status = 'verified' OR p.status = 'active')
+			  AND (p.name ILIKE $1 OR p.organization ILIKE $1 OR p.description ILIKE $1)
+			GROUP BY p.id, p.name, p.description, p.organization, p.logo_url, p.status
+			HAVING COUNT(DISTINCT pz.id) > 0
+			ORDER BY p.name
+			LIMIT $2 OFFSET $3
+		`
+		args = []interface{}{searchPattern, pageSize, offset}
+	} else {
+		// Search all active publishers
+		sqlQuery = `
+			SELECT
+				p.id, p.name, p.description, p.organization, p.logo_url,
+				(p.status = 'verified' OR p.status = 'active') as is_verified,
+				0 as zmanim_count
+			FROM publishers p
+			WHERE (p.status = 'verified' OR p.status = 'active')
+			  AND (p.name ILIKE $1 OR p.organization ILIKE $1 OR p.description ILIKE $1)
+			ORDER BY p.name
+			LIMIT $2 OFFSET $3
+		`
+		args = []interface{}{searchPattern, pageSize, offset}
+	}
+
+	rows, err := h.db.Pool.Query(ctx, sqlQuery, args...)
+	if err != nil {
+		log.Printf("ERROR failed to search publishers error=%v", err)
+		RespondInternalError(w, r, "Failed to search publishers")
+		return
+	}
+	defer rows.Close()
+
+	type PublisherSearchResult struct {
+		ID           string  `json:"id"`
+		Name         string  `json:"name"`
+		Description  *string `json:"description,omitempty"`
+		Organization *string `json:"organization,omitempty"`
+		LogoURL      *string `json:"logo_url,omitempty"`
+		IsVerified   bool    `json:"is_verified"`
+		ZmanimCount  int     `json:"zmanim_count"`
+	}
+
+	var publishers []PublisherSearchResult
+	for rows.Next() {
+		var p PublisherSearchResult
+		err := rows.Scan(&p.ID, &p.Name, &p.Description, &p.Organization, &p.LogoURL, &p.IsVerified, &p.ZmanimCount)
+		if err != nil {
+			log.Printf("ERROR failed to scan publisher error=%v", err)
+			RespondInternalError(w, r, "Failed to search publishers")
+			return
+		}
+		publishers = append(publishers, p)
+	}
+
+	if publishers == nil {
+		publishers = []PublisherSearchResult{}
+	}
+
+	// Return array directly - RespondJSON wraps it in { "data": [...], "meta": {...} }
+	// Frontend accesses response.data to get the array
 	RespondJSON(w, r, http.StatusOK, publishers)
 }
 
@@ -706,8 +798,17 @@ func (h *Handlers) GetPublisherAnalytics(w http.ResponseWriter, r *http.Request)
 		SELECT COALESCE(SUM(
 			CASE coverage_level
 				WHEN 'city' THEN 1
-				WHEN 'region' THEN (SELECT COUNT(*) FROM cities c WHERE c.region = pc.region AND c.country_code = pc.country_code)
-				WHEN 'country' THEN (SELECT COUNT(*) FROM cities c WHERE c.country_code = pc.country_code)
+				WHEN 'region' THEN (
+					SELECT COUNT(*) FROM cities c
+					JOIN geo_countries co ON c.country_id = co.id
+					LEFT JOIN geo_regions r ON c.region_id = r.id
+					WHERE co.code = pc.country_code AND r.name = pc.region
+				)
+				WHEN 'country' THEN (
+					SELECT COUNT(*) FROM cities c
+					JOIN geo_countries co ON c.country_id = co.id
+					WHERE co.code = pc.country_code
+				)
 				ELSE 0
 			END
 		), 0)
@@ -807,8 +908,17 @@ func (h *Handlers) GetPublisherDashboardSummary(w http.ResponseWriter, r *http.R
 		SELECT COALESCE(SUM(
 			CASE coverage_level
 				WHEN 'city' THEN 1
-				WHEN 'region' THEN (SELECT COUNT(*) FROM cities c WHERE c.region = pc.region AND c.country_code = pc.country_code)
-				WHEN 'country' THEN (SELECT COUNT(*) FROM cities c WHERE c.country_code = pc.country_code)
+				WHEN 'region' THEN (
+					SELECT COUNT(*) FROM cities c
+					JOIN geo_countries co ON c.country_id = co.id
+					LEFT JOIN geo_regions r ON c.region_id = r.id
+					WHERE co.code = pc.country_code AND r.name = pc.region
+				)
+				WHEN 'country' THEN (
+					SELECT COUNT(*) FROM cities c
+					JOIN geo_countries co ON c.country_id = co.id
+					WHERE co.code = pc.country_code
+				)
 				ELSE 0
 			END
 		), 0)

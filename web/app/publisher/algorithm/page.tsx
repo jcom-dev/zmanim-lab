@@ -23,6 +23,7 @@ import {
   DeletedZman,
 } from '@/lib/hooks/useZmanimList';
 import { MasterZmanPicker } from '@/components/publisher/MasterZmanPicker';
+import { PublisherZmanPicker } from '@/components/publisher/PublisherZmanPicker';
 
 interface OnboardingState {
   completed_at?: string | null;
@@ -45,18 +46,26 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { MapPin, Search, Plus, Download, Filter, AlertTriangle, ChevronLeft, ChevronRight, Calendar, RotateCcw, Trash2, Loader2, CalendarDays, Flame } from 'lucide-react';
+import { MapPin, Search, Plus, Download, Filter, AlertTriangle, ChevronLeft, ChevronRight, Calendar, RotateCcw, Trash2, Loader2, CalendarDays, Flame, Tag, ChevronDown, Library, Copy, Link2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 // Event zman keys - these are shown in Events tab and Weekly Preview
 // Everyday zmanim are shown in Everyday tab and Live Preview
 const EVENT_ZMAN_KEYS = new Set([
   // Candle lighting
   'candle_lighting',
+  'candle_lighting_15',
   'candle_lighting_18',
   'candle_lighting_20',
   'candle_lighting_22',
+  'candle_lighting_30',
   'candle_lighting_40',
   // Havdalah / Shabbos ends
   'shabbos_ends',
@@ -70,6 +79,7 @@ const EVENT_ZMAN_KEYS = new Set([
   // Fast days
   'fast_begins',
   'fast_ends',
+  'fast_ends_20',
   'fast_ends_42',
   'fast_ends_50',
   // Tisha B'Av
@@ -88,6 +98,37 @@ const EVENT_ZMAN_KEYS = new Set([
  */
 function isEventZman(zmanKey: string): boolean {
   return EVENT_ZMAN_KEYS.has(zmanKey);
+}
+
+// Infer tags from the formula DSL for filtering
+type InferredTag = 'GRA' | 'MGA' | '16.1°' | 'Proportional Hours' | 'Solar Angle' | 'Fixed Minutes';
+
+function inferTagsFromFormula(formula: string): InferredTag[] {
+  const tags: InferredTag[] = [];
+
+  // Check for shita
+  if (formula.includes('gra') || formula.includes(', gra)')) {
+    tags.push('GRA');
+  }
+  if (formula.includes('mga') || formula.includes(', mga)')) {
+    tags.push('MGA');
+  }
+  if (formula.includes('alos_16_1')) {
+    tags.push('16.1°');
+  }
+
+  // Check for calculation method
+  if (formula.includes('shaos(')) {
+    tags.push('Proportional Hours');
+  }
+  if (formula.includes('solar(')) {
+    tags.push('Solar Angle');
+  }
+  if (/\d+\s*min/.test(formula)) {
+    tags.push('Fixed Minutes');
+  }
+
+  return tags;
 }
 
 // Hebrew month names mapping
@@ -237,7 +278,7 @@ interface PublisherCoverage {
   country?: string;
 }
 
-type FilterType = 'all' | 'published' | 'draft' | 'essential' | 'optional' | 'deleted';
+type FilterType = 'all' | 'published' | 'draft' | 'essential' | 'optional' | 'hidden' | 'deleted';
 
 export default function AlgorithmEditorPage() {
   const router = useRouter();
@@ -278,11 +319,15 @@ export default function AlgorithmEditorPage() {
   const [showMonthView, setShowMonthView] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [showZmanPicker, setShowZmanPicker] = useState(false);
+  const [showAddZmanModeDialog, setShowAddZmanModeDialog] = useState(false);
+  const [showPublisherZmanPicker, setShowPublisherZmanPicker] = useState(false);
+  const [publisherZmanMode, setPublisherZmanMode] = useState<'copy' | 'link'>('copy');
   const [showRestartConfirm, setShowRestartConfirm] = useState(false);
   const [forceShowWizard, setForceShowWizard] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<FilterType>('all');
   const [viewMode, setViewMode] = useState<'everyday' | 'events'>('everyday');
+  const [tagFilter, setTagFilter] = useState<string>('all');
 
   // Location state - initialized with default, will be updated when publisher loads
   const [previewLocation, setPreviewLocation] = useState<PreviewLocation>(DEFAULT_LOCATION);
@@ -538,12 +583,15 @@ export default function AlgorithmEditorPage() {
   };
 
   // Separate zmanim into everyday and event categories
+  // Use is_event_zman field from API, fall back to hardcoded check for legacy data
   const { everydayZmanim, eventZmanim } = useMemo(() => {
     const everyday: PublisherZman[] = [];
     const events: PublisherZman[] = [];
 
     zmanim.forEach(z => {
-      if (isEventZman(z.zman_key)) {
+      // Prefer is_event_zman from API, fallback to hardcoded EVENT_ZMAN_KEYS
+      const isEvent = z.is_event_zman || isEventZman(z.zman_key);
+      if (isEvent) {
         events.push(z);
       } else {
         everyday.push(z);
@@ -552,6 +600,22 @@ export default function AlgorithmEditorPage() {
 
     return { everydayZmanim: everyday, eventZmanim: events };
   }, [zmanim]);
+
+  // Compute available tags from current view zmanim
+  const availableTags = useMemo(() => {
+    const currentViewZmanim = viewMode === 'everyday' ? everydayZmanim : eventZmanim;
+    const tagSet = new Set<InferredTag>();
+    currentViewZmanim.forEach(z => {
+      const tags = inferTagsFromFormula(z.formula_dsl);
+      tags.forEach(tag => tagSet.add(tag));
+    });
+    return Array.from(tagSet).sort();
+  }, [everydayZmanim, eventZmanim, viewMode]);
+
+  // Reset tag filter when switching view modes (available tags may differ)
+  useEffect(() => {
+    setTagFilter('all');
+  }, [viewMode]);
 
   // Filter zmanim based on viewMode and other filters
   const filteredZmanim = useMemo(() => {
@@ -582,13 +646,24 @@ export default function AlgorithmEditorPage() {
       case 'optional':
         result = result.filter(z => z.category === 'optional');
         break;
+      case 'hidden':
+        result = result.filter(z => !z.is_visible);
+        break;
+    }
+
+    // Apply tag filter
+    if (tagFilter !== 'all') {
+      result = result.filter(z => {
+        const tags = inferTagsFromFormula(z.formula_dsl);
+        return tags.includes(tagFilter as InferredTag);
+      });
     }
 
     // Sort by sort_order only (category is just a visual label, not a grouping)
     result.sort((a, b) => a.sort_order - b.sort_order);
 
     return result;
-  }, [everydayZmanim, eventZmanim, viewMode, searchQuery, filterType]);
+  }, [everydayZmanim, eventZmanim, viewMode, searchQuery, filterType, tagFilter]);
 
   // Navigate to editor
   const handleEditZman = (zmanKey: string) => {
@@ -628,6 +703,7 @@ export default function AlgorithmEditorPage() {
   const currentViewDraftCount = currentViewZmanim.filter(z => !z.is_published).length;
   const currentViewEssentialCount = currentViewZmanim.filter(z => z.category === 'essential').length;
   const currentViewOptionalCount = currentViewZmanim.filter(z => z.category === 'optional').length;
+  const currentViewHiddenCount = currentViewZmanim.filter(z => !z.is_visible).length;
 
   // Show onboarding wizard if:
   // 1. User clicked "Restart Wizard" (forceShowWizard), OR
@@ -686,9 +762,9 @@ export default function AlgorithmEditorPage() {
     <div className="min-h-screen bg-background p-8">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="mb-8 flex justify-between items-start">
+        <div className="flex flex-col md:flex-row justify-between items-start gap-4 mb-8">
           <div>
-            <div className="flex items-center gap-3 mb-2">
+            <div className="flex flex-wrap items-center gap-3 mb-2">
               <h1 className="text-3xl font-bold text-foreground">Algorithm Editor</h1>
               <Badge variant="outline" className="text-sm">
                 {zmanim.length} Zmanim
@@ -699,7 +775,7 @@ export default function AlgorithmEditorPage() {
             </div>
             <p className="text-muted-foreground">Configure your zmanim calculation formulas</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2 w-full md:w-auto">
             <Button
               variant="outline"
               size="sm"
@@ -734,9 +810,9 @@ export default function AlgorithmEditorPage() {
         {/* Location & Date Header */}
         <Card className="mb-6">
           <CardContent className="py-4">
-            <div className="flex items-center justify-between gap-4">
+            <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
               {/* Left: Location */}
-              <div className="flex items-center gap-4">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 w-full lg:w-auto">
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <MapPin className="h-4 w-4" />
                   <span className="text-sm font-medium">Preview Location:</span>
@@ -744,7 +820,7 @@ export default function AlgorithmEditorPage() {
                 <div className="flex items-center gap-2">
                   <span className="text-foreground font-medium">{previewLocation.displayName}</span>
                 </div>
-                <div className="relative w-48">
+                <div className="relative w-full sm:w-48">
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <input
@@ -784,7 +860,7 @@ export default function AlgorithmEditorPage() {
               </div>
 
               {/* Right: Date Pickers */}
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
                 {/* Gregorian Date Picker Group */}
                 <div className="flex items-center gap-1.5 bg-muted/30 rounded-lg px-3 py-1.5 border border-border/50">
                   <span className="text-xs font-medium text-muted-foreground mr-1">Gregorian</span>
@@ -910,7 +986,7 @@ export default function AlgorithmEditorPage() {
             {/* Search, Filter, and Actions Bar */}
             <Card>
               <CardContent className="py-4">
-                <div className="flex gap-3 mb-4">
+                <div className="flex flex-col sm:flex-row gap-3 mb-4">
                   <div className="relative flex-1">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
@@ -920,17 +996,40 @@ export default function AlgorithmEditorPage() {
                       className="pl-10"
                     />
                   </div>
-                  <Button
-                    variant="outline"
-                    onClick={() => setShowImportDialog(true)}
-                    className="flex items-center gap-2"
-                  >
-                    <Download className="h-4 w-4" />
-                    Import
-                  </Button>
+
+                  {/* Tag Filter Dropdown */}
+                  {availableTags.length > 0 && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" className="flex items-center gap-2">
+                          <Tag className="h-4 w-4" />
+                          {tagFilter === 'all' ? 'All Tags' : tagFilter}
+                          <ChevronDown className="h-3 w-3 opacity-50" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          onClick={() => setTagFilter('all')}
+                          className={tagFilter === 'all' ? 'bg-muted' : ''}
+                        >
+                          All Tags
+                        </DropdownMenuItem>
+                        {availableTags.map(tag => (
+                          <DropdownMenuItem
+                            key={tag}
+                            onClick={() => setTagFilter(tag)}
+                            className={tagFilter === tag ? 'bg-muted' : ''}
+                          >
+                            {tag}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
+
                   <Button
                     variant="default"
-                    onClick={() => setShowZmanPicker(true)}
+                    onClick={() => setShowAddZmanModeDialog(true)}
                     className="flex items-center gap-2"
                   >
                     <Plus className="h-4 w-4" />
@@ -940,7 +1039,7 @@ export default function AlgorithmEditorPage() {
 
                 {/* Filter Tabs */}
                 <Tabs value={filterType} onValueChange={(v) => setFilterType(v as FilterType)}>
-                  <TabsList>
+                  <TabsList className="flex-wrap h-auto">
                     <TabsTrigger value="all">
                       All ({currentViewCount})
                     </TabsTrigger>
@@ -956,6 +1055,11 @@ export default function AlgorithmEditorPage() {
                     <TabsTrigger value="optional">
                       Optional ({currentViewOptionalCount})
                     </TabsTrigger>
+                    {currentViewHiddenCount > 0 && (
+                      <TabsTrigger value="hidden" className="text-muted-foreground">
+                        Hidden ({currentViewHiddenCount})
+                      </TabsTrigger>
+                    )}
                     {deletedZmanim.length > 0 && (
                       <TabsTrigger value="deleted" className="text-destructive">
                         Deleted ({deletedZmanim.length})
@@ -982,8 +1086,8 @@ export default function AlgorithmEditorPage() {
                       {filterType === 'deleted'
                         ? `${deletedZmanim.length} deleted zmanim available for restore`
                         : viewMode === 'everyday'
-                          ? `${filteredZmanim.length} daily solar calculation times ${filterType !== 'all' ? '(filtered)' : ''}`
-                          : `${filteredZmanim.length} Shabbos, holiday, and fast day times ${filterType !== 'all' ? '(filtered)' : ''}`}
+                          ? `${filteredZmanim.length} daily solar calculation times ${filterType !== 'all' || tagFilter !== 'all' ? '(filtered)' : ''}`
+                          : `${filteredZmanim.length} Shabbos, holiday, and fast day times ${filterType !== 'all' || tagFilter !== 'all' ? '(filtered)' : ''}`}
                     </CardDescription>
                   </div>
                 </div>
@@ -1128,10 +1232,94 @@ export default function AlgorithmEditorPage() {
           </DialogContent>
         </Dialog>
 
+        {/* Add Zman Mode Selection Dialog */}
+        <Dialog open={showAddZmanModeDialog} onOpenChange={setShowAddZmanModeDialog}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>How do you want to add a zman?</DialogTitle>
+              <DialogDescription>
+                Choose a source for your new zman calculation
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3 py-4">
+              <button
+                className="w-full p-4 rounded-lg border border-border hover:border-primary hover:bg-primary/5 transition-colors text-left group"
+                onClick={() => {
+                  setShowAddZmanModeDialog(false);
+                  setShowZmanPicker(true);
+                }}
+              >
+                <div className="flex items-start gap-4">
+                  <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 group-hover:bg-blue-200 dark:group-hover:bg-blue-900/50 transition-colors">
+                    <Library className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-foreground">From Registry</h4>
+                    <p className="text-sm text-muted-foreground mt-0.5">
+                      Browse the master zmanim catalog with standard definitions
+                    </p>
+                  </div>
+                </div>
+              </button>
+
+              <button
+                className="w-full p-4 rounded-lg border border-border hover:border-primary hover:bg-primary/5 transition-colors text-left group"
+                onClick={() => {
+                  setShowAddZmanModeDialog(false);
+                  setPublisherZmanMode('copy');
+                  setShowPublisherZmanPicker(true);
+                }}
+              >
+                <div className="flex items-start gap-4">
+                  <div className="p-2 rounded-lg bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 group-hover:bg-amber-200 dark:group-hover:bg-amber-900/50 transition-colors">
+                    <Copy className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-foreground">Copy from Publisher</h4>
+                    <p className="text-sm text-muted-foreground mt-0.5">
+                      Get a snapshot copy of another publisher&apos;s formula
+                    </p>
+                  </div>
+                </div>
+              </button>
+
+              <button
+                className="w-full p-4 rounded-lg border border-border hover:border-primary hover:bg-primary/5 transition-colors text-left group"
+                onClick={() => {
+                  setShowAddZmanModeDialog(false);
+                  setPublisherZmanMode('link');
+                  setShowPublisherZmanPicker(true);
+                }}
+              >
+                <div className="flex items-start gap-4">
+                  <div className="p-2 rounded-lg bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 group-hover:bg-green-200 dark:group-hover:bg-green-900/50 transition-colors">
+                    <Link2 className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-foreground">Link to Publisher</h4>
+                    <p className="text-sm text-muted-foreground mt-0.5">
+                      Always use their latest formula (verified publishers only)
+                    </p>
+                  </div>
+                </div>
+              </button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
         {/* Master Zman Picker */}
         <MasterZmanPicker
           open={showZmanPicker}
           onOpenChange={setShowZmanPicker}
+          existingZmanKeys={existingZmanKeys}
+          onSuccess={() => refetch()}
+        />
+
+        {/* Publisher Zman Picker (Copy or Link) */}
+        <PublisherZmanPicker
+          open={showPublisherZmanPicker}
+          onOpenChange={setShowPublisherZmanPicker}
+          mode={publisherZmanMode}
           existingZmanKeys={existingZmanKeys}
           onSuccess={() => refetch()}
         />

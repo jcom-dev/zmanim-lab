@@ -1,14 +1,16 @@
 'use client';
 
-import { ReactNode } from 'react';
+import { ReactNode, useState } from 'react';
 import { PublisherProvider } from '@/providers/PublisherContext';
 import { PublisherSwitcher } from '@/components/publisher/PublisherSwitcher';
 import { ImpersonationBanner } from '@/components/admin/ImpersonationBanner';
+import { ModeToggle } from '@/components/mode-toggle';
 import { UserButton } from '@clerk/nextjs';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useUserRoles } from '@/lib/hooks';
-import { Shield } from 'lucide-react';
+import { Shield, Menu, X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 interface PublisherLayoutProps {
   children: ReactNode;
@@ -17,6 +19,7 @@ interface PublisherLayoutProps {
 export default function PublisherLayout({ children }: PublisherLayoutProps) {
   const pathname = usePathname();
   const { isAdmin, isLoaded } = useUserRoles();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const navItems = [
     { href: '/publisher/dashboard', label: 'Dashboard' },
@@ -35,9 +38,10 @@ export default function PublisherLayout({ children }: PublisherLayoutProps) {
         <ImpersonationBanner />
 
         {/* Header */}
-        <header className="bg-card border-b border-border">
+        <header className="bg-card border-b border-border sticky top-0 z-50">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex justify-between items-center h-16">
+            {/* Desktop Header */}
+            <div className="hidden sm:flex justify-between items-center h-16">
               {/* Left: Logo & Publisher Switcher */}
               <div className="flex items-center gap-6">
                 <Link href="/" className="text-xl font-bold text-foreground hover:text-primary transition-colors">
@@ -47,34 +51,62 @@ export default function PublisherLayout({ children }: PublisherLayoutProps) {
                 <PublisherSwitcher />
               </div>
 
-              {/* Right: Admin Link (if dual-role) & User Button */}
-              <div className="flex items-center gap-4">
+              {/* Right: Theme Toggle, Admin Link & User Button */}
+              <div className="flex items-center gap-3">
+                <ModeToggle />
                 {isLoaded && isAdmin && (
                   <Link
                     href="/admin"
                     className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950 rounded-md hover:bg-purple-100 dark:hover:bg-purple-900 transition-colors"
                   >
                     <Shield className="w-4 h-4" />
-                    Admin Portal
+                    <span className="hidden lg:inline">Admin Portal</span>
                   </Link>
                 )}
                 <UserButton afterSignOutUrl="/" />
               </div>
             </div>
+
+            {/* Mobile Header */}
+            <div className="sm:hidden">
+              {/* Top Row: Logo, Theme, Menu */}
+              <div className="flex justify-between items-center h-14">
+                <Link href="/" className="text-lg font-bold text-foreground hover:text-primary transition-colors">
+                  Zmanim Lab
+                </Link>
+                <div className="flex items-center gap-2">
+                  <ModeToggle />
+                  <UserButton afterSignOutUrl="/" />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                    aria-label="Toggle navigation menu"
+                    aria-expanded={mobileMenuOpen}
+                  >
+                    {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+                  </Button>
+                </div>
+              </div>
+              {/* Bottom Row: Publisher Switcher */}
+              <div className="pb-3">
+                <PublisherSwitcher />
+              </div>
+            </div>
           </div>
         </header>
 
-        {/* Navigation */}
-        <nav className="bg-card/50 border-b border-border">
+        {/* Desktop Navigation */}
+        <nav className="hidden sm:block bg-card/50 border-b border-border">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex space-x-8">
+            <div className="flex space-x-2 sm:space-x-4 lg:space-x-8 overflow-x-auto scrollbar-hide">
               {navItems.map((item) => {
                 const isActive = pathname === item.href;
                 return (
                   <Link
                     key={item.href}
                     href={item.href}
-                    className={`py-3 px-1 border-b-2 text-sm font-medium transition-colors ${
+                    className={`py-3 px-2 sm:px-3 border-b-2 text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
                       isActive
                         ? 'border-primary text-primary'
                         : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted'
@@ -87,6 +119,44 @@ export default function PublisherLayout({ children }: PublisherLayoutProps) {
             </div>
           </div>
         </nav>
+
+        {/* Mobile Navigation */}
+        {mobileMenuOpen && (
+          <nav className="sm:hidden bg-card border-b border-border shadow-lg">
+            <div className="px-4 py-3 space-y-1 max-h-[calc(100vh-8rem)] overflow-y-auto">
+              {navItems.map((item) => {
+                const isActive = pathname === item.href;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={`block px-4 py-3 rounded-lg text-base font-medium transition-colors ${
+                      isActive
+                        ? 'bg-primary/10 text-primary'
+                        : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                    }`}
+                  >
+                    {item.label}
+                  </Link>
+                );
+              })}
+              {isLoaded && isAdmin && (
+                <>
+                  <div className="my-2 border-t border-border"></div>
+                  <Link
+                    href="/admin"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex items-center gap-3 px-4 py-3 rounded-lg text-base font-medium text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-950 transition-colors"
+                  >
+                    <Shield className="w-5 h-5" />
+                    Admin Portal
+                  </Link>
+                </>
+              )}
+            </div>
+          </nav>
+        )}
 
         {/* Main Content */}
         <main>{children}</main>

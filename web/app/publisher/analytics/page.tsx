@@ -69,10 +69,10 @@ export default function PublisherAnalyticsPage() {
   const hasActivity = analytics && (analytics.calculations_total > 0 || analytics.coverage_areas > 0);
 
   return (
-    <div className="p-8">
+    <div className="p-4 md:p-8">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
-        <div className="mb-8">
+        <div className="mb-4 md:mb-8">
           <h1 className="text-3xl font-bold">Analytics</h1>
           <p className="text-muted-foreground mt-1">
             View usage statistics for your zmanim

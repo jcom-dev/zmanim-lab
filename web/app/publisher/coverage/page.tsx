@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { usePublisherContext } from '@/providers/PublisherContext';
-import { MapPin, Globe, Building2, Plus, Trash2, ChevronRight, Loader2 } from 'lucide-react';
+import { MapPin, Globe, Building2, Plus, Trash2, ChevronRight, Loader2, Mountain } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Dialog,
   DialogContent,
@@ -23,11 +24,13 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { useApi } from '@/lib/api-client';
+import { getCoverageBadgeClasses } from '@/lib/wcag-colors';
 
 interface Coverage {
   id: string;
   publisher_id: string;
-  coverage_level: 'country' | 'region' | 'city';
+  coverage_level: 'continent' | 'country' | 'region' | 'city';
+  continent_code: string | null;
   country_code: string | null;
   region: string | null;
   city_id: string | null;
@@ -38,6 +41,12 @@ interface Coverage {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+}
+
+interface Continent {
+  code: string;
+  name: string;
+  city_count: number;
 }
 
 interface Country {
@@ -69,11 +78,14 @@ export default function PublisherCoveragePage() {
 
   // Add dialog state
   const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [continents, setContinents] = useState<Continent[]>([]);
   const [countries, setCountries] = useState<Country[]>([]);
   const [regions, setRegions] = useState<Region[]>([]);
   const [cities, setCities] = useState<City[]>([]);
+  const [selectedContinent, setSelectedContinent] = useState<Continent | null>(null);
   const [selectedCountry, setSelectedCountry] = useState<Country | null>(null);
   const [selectedRegion, setSelectedRegion] = useState<Region | null>(null);
+  const [loadingContinents, setLoadingContinents] = useState(false);
   const [loadingCountries, setLoadingCountries] = useState(false);
   const [loadingRegions, setLoadingRegions] = useState(false);
   const [loadingCities, setLoadingCities] = useState(false);
@@ -101,11 +113,27 @@ export default function PublisherCoveragePage() {
     }
   }, [selectedPublisher, fetchCoverage]);
 
-  const fetchCountries = async () => {
+  const fetchContinents = async () => {
+    try {
+      setLoadingContinents(true);
+
+      const data = await api.get<{ continents: Continent[] }>('/continents', { skipPublisherId: true });
+      setContinents(data.continents || []);
+    } catch (err) {
+      console.error('Failed to fetch continents:', err);
+    } finally {
+      setLoadingContinents(false);
+    }
+  };
+
+  const fetchCountries = async (continentCode: string) => {
     try {
       setLoadingCountries(true);
+      setCountries([]);
+      setRegions([]);
+      setCities([]);
 
-      const data = await api.get<{ countries: Country[] }>('/countries', { skipPublisherId: true });
+      const data = await api.get<{ countries: Country[] }>(`/countries?continent=${continentCode}`, { skipPublisherId: true });
       setCountries(data.countries || []);
     } catch (err) {
       console.error('Failed to fetch countries:', err);
@@ -155,11 +183,21 @@ export default function PublisherCoveragePage() {
 
   const handleOpenAddDialog = () => {
     setAddDialogOpen(true);
+    setSelectedContinent(null);
     setSelectedCountry(null);
     setSelectedRegion(null);
+    setContinents([]);
+    setCountries([]);
     setRegions([]);
     setCities([]);
-    fetchCountries();
+    fetchContinents();
+  };
+
+  const handleSelectContinent = (continent: Continent) => {
+    setSelectedContinent(continent);
+    setSelectedCountry(null);
+    setSelectedRegion(null);
+    fetchCountries(continent.code);
   };
 
   const handleSelectCountry = (country: Country) => {
@@ -175,7 +213,7 @@ export default function PublisherCoveragePage() {
     }
   };
 
-  const handleAddCoverage = async (level: 'country' | 'region' | 'city', cityId?: string) => {
+  const handleAddCoverage = async (level: 'continent' | 'country' | 'region' | 'city', cityId?: string) => {
     if (!selectedPublisher) return;
 
     try {
@@ -183,7 +221,9 @@ export default function PublisherCoveragePage() {
 
       const body: Record<string, unknown> = { coverage_level: level };
 
-      if (level === 'country' && selectedCountry) {
+      if (level === 'continent' && selectedContinent) {
+        body.continent_code = selectedContinent.code;
+      } else if (level === 'country' && selectedCountry) {
         body.country_code = selectedCountry.code;
       } else if (level === 'region' && selectedCountry && selectedRegion) {
         body.country_code = selectedCountry.code;
@@ -231,6 +271,8 @@ export default function PublisherCoveragePage() {
 
   const getLevelIcon = (level: string) => {
     switch (level) {
+      case 'continent':
+        return <Mountain className="w-4 h-4" />;
       case 'country':
         return <Globe className="w-4 h-4" />;
       case 'region':
@@ -243,15 +285,25 @@ export default function PublisherCoveragePage() {
   };
 
   const getLevelBadgeColor = (level: string) => {
-    switch (level) {
-      case 'country':
-        return 'bg-blue-500/20 text-blue-400 border-blue-500/50';
-      case 'region':
-        return 'bg-green-500/20 text-green-400 border-green-500/50';
-      case 'city':
-        return 'bg-purple-500/20 text-purple-400 border-purple-500/50';
-      default:
-        return 'bg-gray-500/20 text-gray-400 border-gray-500/50';
+    return getCoverageBadgeClasses(level);
+  };
+
+  const resetToStep = (step: 'continents' | 'countries' | 'regions') => {
+    if (step === 'continents') {
+      setSelectedContinent(null);
+      setSelectedCountry(null);
+      setSelectedRegion(null);
+      setCountries([]);
+      setRegions([]);
+      setCities([]);
+    } else if (step === 'countries') {
+      setSelectedCountry(null);
+      setSelectedRegion(null);
+      setRegions([]);
+      setCities([]);
+    } else if (step === 'regions') {
+      setSelectedRegion(null);
+      setCities([]);
     }
   };
 
@@ -269,17 +321,17 @@ export default function PublisherCoveragePage() {
   }
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
-        <div className="flex justify-between items-center mb-8">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6 sm:mb-8">
           <div>
-            <h1 className="text-3xl font-bold">Coverage Areas</h1>
-            <p className="text-muted-foreground mt-1">
+            <h1 className="text-2xl sm:text-3xl font-bold">Coverage Areas</h1>
+            <p className="text-sm sm:text-base text-muted-foreground mt-1">
               Define where users can find your zmanim
             </p>
           </div>
-          <Button onClick={handleOpenAddDialog}>
+          <Button onClick={handleOpenAddDialog} className="w-full sm:w-auto">
             <Plus className="w-4 h-4 mr-2" />
             Add Coverage
           </Button>
@@ -293,13 +345,13 @@ export default function PublisherCoveragePage() {
 
         {/* Coverage List */}
         {coverage.length === 0 ? (
-          <div className="bg-card rounded-lg border border-border p-12 text-center">
-            <MapPin className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-            <h3 className="text-lg font-semibold mb-2">No Coverage Areas</h3>
-            <p className="text-muted-foreground mb-4">
+          <div className="bg-card rounded-lg border border-border p-8 sm:p-12 text-center">
+            <MapPin className="w-10 h-10 sm:w-12 sm:h-12 text-muted-foreground mx-auto mb-4" />
+            <h3 className="text-base sm:text-lg font-semibold mb-2">No Coverage Areas</h3>
+            <p className="text-sm sm:text-base text-muted-foreground mb-4">
               Add coverage areas to define where users can find your zmanim.
             </p>
-            <Button onClick={handleOpenAddDialog}>
+            <Button onClick={handleOpenAddDialog} className="w-full sm:w-auto">
               <Plus className="w-4 h-4 mr-2" />
               Add Coverage
             </Button>
@@ -309,31 +361,32 @@ export default function PublisherCoveragePage() {
             {coverage.map((item) => (
               <div
                 key={item.id}
-                className={`bg-card rounded-lg border p-4 flex items-center justify-between ${
+                className={`bg-card rounded-lg border p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 ${
                   item.is_active ? 'border-border' : 'border-border opacity-60'
                 }`}
               >
-                <div className="flex items-center gap-4">
-                  <div className={`p-2 rounded-lg ${getLevelBadgeColor(item.coverage_level)}`}>
+                <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                  <div className={`p-2 rounded-lg flex-shrink-0 ${getLevelBadgeColor(item.coverage_level)}`}>
                     {getLevelIcon(item.coverage_level)}
                   </div>
-                  <div>
-                    <div className="font-medium">{item.display_name || item.city_name || item.country}</div>
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <div className="min-w-0 flex-1">
+                    <div className="font-medium text-sm sm:text-base truncate">{item.display_name || item.city_name || item.country}</div>
+                    <div className="flex items-center gap-2 text-xs sm:text-sm text-muted-foreground flex-wrap">
                       <span className={`px-2 py-0.5 rounded-full border text-xs ${getLevelBadgeColor(item.coverage_level)}`}>
                         {item.coverage_level}
                       </span>
-                      <span>Priority: {item.priority}</span>
-                      {!item.is_active && <span className="text-yellow-600 dark:text-yellow-400">Inactive</span>}
+                      <span className="whitespace-nowrap">Priority: {item.priority}</span>
+                      {!item.is_active && <span className="text-yellow-600 dark:text-yellow-400 whitespace-nowrap">Inactive</span>}
                     </div>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 self-end sm:self-auto">
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={() => handleToggleActive(item)}
+                    className="text-xs sm:text-sm"
                   >
                     {item.is_active ? 'Deactivate' : 'Activate'}
                   </Button>
@@ -343,17 +396,17 @@ export default function PublisherCoveragePage() {
                         <Trash2 className="w-4 h-4" />
                       </Button>
                     </AlertDialogTrigger>
-                    <AlertDialogContent>
+                    <AlertDialogContent className="max-w-[90vw] sm:max-w-lg">
                       <AlertDialogHeader>
                         <AlertDialogTitle>Delete Coverage</AlertDialogTitle>
-                        <AlertDialogDescription>
+                        <AlertDialogDescription className="text-sm">
                           Are you sure you want to remove this coverage area?
                           Users in this area will no longer see your zmanim.
                         </AlertDialogDescription>
                       </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={() => handleDeleteCoverage(item.id)}>
+                      <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+                        <AlertDialogCancel className="w-full sm:w-auto">Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => handleDeleteCoverage(item.id)} className="w-full sm:w-auto">
                           Delete
                         </AlertDialogAction>
                       </AlertDialogFooter>
@@ -367,50 +420,80 @@ export default function PublisherCoveragePage() {
 
         {/* Add Coverage Dialog */}
         <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
-          <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
+          <DialogContent className="max-w-[95vw] sm:max-w-2xl max-h-[90vh] sm:max-h-[80vh] overflow-hidden flex flex-col">
             <DialogHeader>
-              <DialogTitle>Add Coverage Area</DialogTitle>
-              <DialogDescription>
-                Select a country, region, or city to add to your coverage.
+              <DialogTitle className="text-lg sm:text-xl">Add Coverage Area</DialogTitle>
+              <DialogDescription className="text-sm sm:text-base">
+                Select a continent, country, region, or city to add to your coverage.
               </DialogDescription>
             </DialogHeader>
 
-            {/* Breadcrumb */}
-            <div className="flex items-center gap-2 text-sm py-2 border-b border-border">
+            {/* Breadcrumb Navigation */}
+            <div className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm py-2 border-b border-border overflow-x-auto">
               <button
-                onClick={() => {
-                  setSelectedCountry(null);
-                  setSelectedRegion(null);
-                  setRegions([]);
-                  setCities([]);
-                }}
-                className={!selectedCountry ? 'text-blue-600 dark:text-blue-400' : 'text-muted-foreground hover:text-foreground'}
+                onClick={() => resetToStep('continents')}
+                className={`whitespace-nowrap ${!selectedContinent ? 'text-primary font-medium' : 'text-muted-foreground hover:text-foreground'}`}
+                aria-label="Go to continent selection"
               >
-                Countries
+                Continent
               </button>
-              {selectedCountry && (
+              <ChevronRight className="w-3 h-3 sm:w-4 sm:h-4 text-muted-foreground flex-shrink-0" />
+              {selectedContinent ? (
                 <>
-                  <ChevronRight className="w-4 h-4 text-muted-foreground" />
                   <button
-                    onClick={() => {
-                      setSelectedRegion(null);
-                      setCities([]);
-                    }}
-                    className={selectedCountry && !selectedRegion ? 'text-blue-600 dark:text-blue-400' : 'text-muted-foreground hover:text-foreground'}
+                    onClick={() => resetToStep('countries')}
+                    className={`whitespace-nowrap ${selectedContinent && !selectedCountry ? 'text-primary font-medium' : 'text-muted-foreground hover:text-foreground'}`}
+                    aria-label="Go to country selection"
                   >
-                    {selectedCountry.name}
+                    Country
                   </button>
+                  <ChevronRight className="w-3 h-3 sm:w-4 sm:h-4 text-muted-foreground flex-shrink-0" />
+                </>
+              ) : (
+                <>
+                  <span className="text-muted-foreground whitespace-nowrap">Country</span>
+                  <ChevronRight className="w-3 h-3 sm:w-4 sm:h-4 text-muted-foreground flex-shrink-0" />
                 </>
               )}
-              {selectedRegion && (
+              {selectedCountry ? (
                 <>
-                  <ChevronRight className="w-4 h-4 text-muted-foreground" />
-                  <span className="text-blue-600 dark:text-blue-400">{selectedRegion.name}</span>
+                  <button
+                    onClick={() => resetToStep('regions')}
+                    className={`whitespace-nowrap ${selectedCountry && !selectedRegion ? 'text-primary font-medium' : 'text-muted-foreground hover:text-foreground'}`}
+                    aria-label="Go to region selection"
+                  >
+                    Region
+                  </button>
+                  <ChevronRight className="w-3 h-3 sm:w-4 sm:h-4 text-muted-foreground flex-shrink-0" />
                 </>
+              ) : (
+                <>
+                  <span className="text-muted-foreground whitespace-nowrap">Region</span>
+                  <ChevronRight className="w-3 h-3 sm:w-4 sm:h-4 text-muted-foreground flex-shrink-0" />
+                </>
+              )}
+              {selectedRegion ? (
+                <span className="text-primary font-medium whitespace-nowrap">City</span>
+              ) : (
+                <span className="text-muted-foreground whitespace-nowrap">City</span>
               )}
             </div>
 
             {/* Add at current level button */}
+            {selectedContinent && !selectedCountry && (
+              <div className="py-2 border-b border-border">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleAddCoverage('continent')}
+                  disabled={addingCoverage}
+                  className="w-full sm:w-auto text-xs sm:text-sm"
+                >
+                  {addingCoverage ? <Loader2 className="w-3 h-3 sm:w-4 sm:h-4 animate-spin mr-2" /> : <Plus className="w-3 h-3 sm:w-4 sm:h-4 mr-2" />}
+                  <span className="truncate">Add entire {selectedContinent.name}</span>
+                </Button>
+              </div>
+            )}
             {selectedCountry && (
               <div className="py-2 border-b border-border">
                 {!selectedRegion ? (
@@ -419,9 +502,10 @@ export default function PublisherCoveragePage() {
                     size="sm"
                     onClick={() => handleAddCoverage('country')}
                     disabled={addingCoverage}
+                    className="w-full sm:w-auto text-xs sm:text-sm"
                   >
-                    {addingCoverage ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Plus className="w-4 h-4 mr-2" />}
-                    Add entire {selectedCountry.name}
+                    {addingCoverage ? <Loader2 className="w-3 h-3 sm:w-4 sm:h-4 animate-spin mr-2" /> : <Plus className="w-3 h-3 sm:w-4 sm:h-4 mr-2" />}
+                    <span className="truncate">Add entire {selectedCountry.name}</span>
                   </Button>
                 ) : (
                   <Button
@@ -429,38 +513,73 @@ export default function PublisherCoveragePage() {
                     size="sm"
                     onClick={() => handleAddCoverage('region')}
                     disabled={addingCoverage}
+                    className="w-full sm:w-auto text-xs sm:text-sm"
                   >
-                    {addingCoverage ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Plus className="w-4 h-4 mr-2" />}
-                    Add entire {selectedRegion.name}
+                    {addingCoverage ? <Loader2 className="w-3 h-3 sm:w-4 sm:h-4 animate-spin mr-2" /> : <Plus className="w-3 h-3 sm:w-4 sm:h-4 mr-2" />}
+                    <span className="truncate">Add entire {selectedRegion.name}</span>
                   </Button>
                 )}
               </div>
             )}
 
             {/* Selection Area */}
-            <div className="flex-1 overflow-y-auto min-h-[300px]">
-              {/* Country Selection */}
-              {!selectedCountry && (
-                loadingCountries ? (
+            <ScrollArea className="flex-1 min-h-[250px] sm:min-h-[300px]">
+              {/* Continent Selection */}
+              {!selectedContinent && (
+                loadingContinents ? (
                   <div className="flex justify-center py-8">
-                    <Loader2 className="w-6 h-6 text-blue-600 dark:text-blue-400 animate-spin" />
+                    <Loader2 className="w-6 h-6 text-primary animate-spin" />
                   </div>
                 ) : (
-                  <div className="grid gap-2 py-2">
+                  <div className="grid gap-2 py-2 pr-2 sm:pr-4">
+                    {continents.map((continent) => (
+                      <button
+                        key={continent.code}
+                        onClick={() => handleSelectContinent(continent)}
+                        className="flex items-center justify-between p-2 sm:p-3 bg-secondary/50 hover:bg-secondary rounded-lg text-left transition-colors"
+                        aria-label={`Select ${continent.name} continent with ${continent.city_count.toLocaleString()} cities`}
+                      >
+                        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                          <Mountain className="w-4 h-4 sm:w-5 sm:h-5 text-muted-foreground flex-shrink-0" aria-hidden="true" />
+                          <div className="min-w-0">
+                            <div className="font-medium text-sm sm:text-base truncate">{continent.name}</div>
+                            <div className="text-xs sm:text-sm text-muted-foreground">{continent.city_count.toLocaleString()} cities</div>
+                          </div>
+                        </div>
+                        <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 text-muted-foreground flex-shrink-0" aria-hidden="true" />
+                      </button>
+                    ))}
+                  </div>
+                )
+              )}
+
+              {/* Country Selection */}
+              {selectedContinent && !selectedCountry && (
+                loadingCountries ? (
+                  <div className="flex justify-center py-8">
+                    <Loader2 className="w-6 h-6 text-primary animate-spin" />
+                  </div>
+                ) : countries.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    No countries found in this continent.
+                  </div>
+                ) : (
+                  <div className="grid gap-2 py-2 pr-2 sm:pr-4">
                     {countries.map((country) => (
                       <button
                         key={country.code}
                         onClick={() => handleSelectCountry(country)}
-                        className="flex items-center justify-between p-3 bg-secondary/50 hover:bg-secondary rounded-lg text-left transition-colors"
+                        className="flex items-center justify-between p-2 sm:p-3 bg-secondary/50 hover:bg-secondary rounded-lg text-left transition-colors"
+                        aria-label={`Select ${country.name} with ${country.city_count.toLocaleString()} cities`}
                       >
-                        <div className="flex items-center gap-3">
-                          <Globe className="w-5 h-5 text-muted-foreground" />
-                          <div>
-                            <div className="font-medium">{country.name}</div>
-                            <div className="text-sm text-muted-foreground">{country.city_count} cities</div>
+                        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                          <Globe className="w-4 h-4 sm:w-5 sm:h-5 text-muted-foreground flex-shrink-0" aria-hidden="true" />
+                          <div className="min-w-0">
+                            <div className="font-medium text-sm sm:text-base truncate">{country.name}</div>
+                            <div className="text-xs sm:text-sm text-muted-foreground">{country.city_count.toLocaleString()} cities</div>
                           </div>
                         </div>
-                        <ChevronRight className="w-5 h-5 text-muted-foreground" />
+                        <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 text-muted-foreground flex-shrink-0" aria-hidden="true" />
                       </button>
                     ))}
                   </div>
@@ -471,10 +590,10 @@ export default function PublisherCoveragePage() {
               {selectedCountry && !selectedRegion && regions.length > 0 && (
                 loadingRegions ? (
                   <div className="flex justify-center py-8">
-                    <Loader2 className="w-6 h-6 text-blue-600 dark:text-blue-400 animate-spin" />
+                    <Loader2 className="w-6 h-6 text-primary animate-spin" />
                   </div>
                 ) : (
-                  <div className="grid gap-2 py-2">
+                  <div className="grid gap-2 py-2 pr-4">
                     {regions.map((region) => (
                       <button
                         key={region.name}
@@ -486,7 +605,7 @@ export default function PublisherCoveragePage() {
                           <div>
                             <div className="font-medium">{region.name}</div>
                             <div className="text-sm text-muted-foreground">
-                              {region.type && `${region.type} • `}{region.city_count} cities
+                              {region.type && `${region.type} • `}{region.city_count.toLocaleString()} cities
                             </div>
                           </div>
                         </div>
@@ -501,14 +620,14 @@ export default function PublisherCoveragePage() {
               {(selectedRegion || (selectedCountry && regions.length === 0)) && (
                 loadingCities ? (
                   <div className="flex justify-center py-8">
-                    <Loader2 className="w-6 h-6 text-blue-600 dark:text-blue-400 animate-spin" />
+                    <Loader2 className="w-6 h-6 text-primary animate-spin" />
                   </div>
                 ) : cities.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
                     No cities found in this area.
                   </div>
                 ) : (
-                  <div className="grid gap-2 py-2">
+                  <div className="grid gap-2 py-2 pr-4">
                     {cities.map((city) => (
                       <button
                         key={city.id}
@@ -531,7 +650,7 @@ export default function PublisherCoveragePage() {
                   </div>
                 )
               )}
-            </div>
+            </ScrollArea>
           </DialogContent>
         </Dialog>
       </div>

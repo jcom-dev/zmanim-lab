@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { MapPin, ChevronRight, Building2, Globe, Loader2, Mountain } from 'lucide-react';
+import { MapPin, ChevronRight, Building2, Globe, Loader2, Mountain, Search, Navigation } from 'lucide-react';
 import { SignInButton, UserButton, useUser } from '@clerk/nextjs';
 import { RoleNavigation } from '@/components/home/RoleNavigation';
 
@@ -69,6 +69,14 @@ export default function Home() {
   const [loadingCities, setLoadingCities] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
+
+  // Search state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<City[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [showSearchResults, setShowSearchResults] = useState(false);
+  const [isGeolocating, setIsGeolocating] = useState(false);
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Load continents on mount
   useEffect(() => {
@@ -153,6 +161,112 @@ export default function Home() {
       setLoadingRegions(false);
     }
   }, []);
+
+  // City search with debounce
+  const searchCities = useCallback(async (query: string) => {
+    if (query.length < 2) {
+      setSearchResults([]);
+      return;
+    }
+
+    setIsSearching(true);
+    try {
+      const response = await fetch(
+        `${API_BASE}/api/v1/cities?search=${encodeURIComponent(query)}&limit=10`
+      );
+      if (!response.ok) throw new Error('Search failed');
+      const data = await response.json();
+      setSearchResults(data.data?.cities || data.cities || []);
+    } catch (err) {
+      console.error('Search error:', err);
+      setSearchResults([]);
+    } finally {
+      setIsSearching(false);
+    }
+  }, []);
+
+  const handleSearchInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSearchQuery(value);
+    setShowSearchResults(true);
+
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    searchTimeoutRef.current = setTimeout(() => {
+      searchCities(value);
+    }, 300);
+  };
+
+  const handleSearchResultSelect = (city: City) => {
+    setSearchQuery('');
+    setSearchResults([]);
+    setShowSearchResults(false);
+    localStorage.setItem(STORAGE_KEY_CITY, JSON.stringify(city));
+    router.push(`/zmanim/${city.id}`);
+  };
+
+  // Geolocation
+  const handleUseMyLocation = async () => {
+    if (!navigator.geolocation) {
+      setError('Geolocation is not supported by your browser');
+      return;
+    }
+
+    setIsGeolocating(true);
+    setError(null);
+
+    try {
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0,
+        });
+      });
+
+      const { latitude, longitude } = position.coords;
+
+      const response = await fetch(
+        `${API_BASE}/api/v1/cities/nearby?lat=${latitude}&lng=${longitude}`
+      );
+
+      if (!response.ok) throw new Error('Failed to find nearby city');
+
+      const data = await response.json();
+      const nearbyData = data.data || data;
+      const city = nearbyData.city;
+
+      if (city) {
+        localStorage.setItem(STORAGE_KEY_CITY, JSON.stringify(city));
+        router.push(`/zmanim/${city.id}`);
+      } else {
+        setError('No city found near your location');
+      }
+    } catch (err) {
+      console.error('Geolocation error:', err);
+      if (err instanceof GeolocationPositionError) {
+        switch (err.code) {
+          case err.PERMISSION_DENIED:
+            setError('Location permission denied');
+            break;
+          case err.POSITION_UNAVAILABLE:
+            setError('Location unavailable');
+            break;
+          case err.TIMEOUT:
+            setError('Location request timed out');
+            break;
+          default:
+            setError('Unable to get location');
+        }
+      } else {
+        setError('Unable to get your location');
+      }
+    } finally {
+      setIsGeolocating(false);
+    }
+  };
 
   const loadCities = async (countryCode: string, regionName: string | null) => {
     try {
@@ -297,6 +411,75 @@ export default function Home() {
             <p className="text-muted-foreground mt-2">
               Select your location to view prayer times from local authorities
             </p>
+
+            {/* Quick Search & Location */}
+            <div className="mt-8 max-w-xl mx-auto">
+              <div className="flex gap-2">
+                {/* Search Input */}
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={handleSearchInput}
+                    onFocus={() => setShowSearchResults(true)}
+                    onBlur={() => setTimeout(() => setShowSearchResults(false), 200)}
+                    placeholder="Search for a city..."
+                    className="w-full pl-10 pr-4 py-3 rounded-xl border border-border focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all outline-none text-foreground bg-card"
+                  />
+                  {isSearching && (
+                    <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground animate-spin" />
+                  )}
+
+                  {/* Search Results Dropdown */}
+                  {showSearchResults && (searchResults.length > 0 || searchQuery.length >= 2) && (
+                    <div className="absolute z-50 w-full mt-2 py-2 bg-card border border-border rounded-xl shadow-lg max-h-64 overflow-y-auto text-left">
+                      {searchResults.length > 0 ? (
+                        searchResults.map((city) => (
+                          <button
+                            key={city.id}
+                            type="button"
+                            onMouseDown={() => handleSearchResultSelect(city)}
+                            className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted transition-colors text-left"
+                          >
+                            <MapPin className="w-5 h-5 text-muted-foreground flex-shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium text-foreground truncate">{city.name}</div>
+                              <div className="text-sm text-muted-foreground truncate">
+                                {city.region && `${city.region}, `}{city.country}
+                              </div>
+                            </div>
+                          </button>
+                        ))
+                      ) : searchQuery.length >= 2 && !isSearching ? (
+                        <div className="px-4 py-3 text-muted-foreground text-center">No cities found</div>
+                      ) : null}
+                    </div>
+                  )}
+                </div>
+
+                {/* Use My Location Button */}
+                <button
+                  type="button"
+                  onClick={handleUseMyLocation}
+                  disabled={isGeolocating}
+                  className="flex items-center gap-2 px-4 py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl transition-colors whitespace-nowrap"
+                >
+                  {isGeolocating ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <Navigation className="w-5 h-5" />
+                  )}
+                  <span className="hidden sm:inline">
+                    {isGeolocating ? 'Locating...' : 'Use My Location'}
+                  </span>
+                </button>
+              </div>
+
+              <p className="text-xs text-muted-foreground mt-3">
+                Or browse by location below
+              </p>
+            </div>
           </div>
         </div>
       </div>

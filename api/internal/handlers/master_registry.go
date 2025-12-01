@@ -385,7 +385,7 @@ func (h *Handlers) GetMasterZmanimGrouped(w http.ResponseWriter, r *http.Request
 	RespondJSON(w, r, http.StatusOK, result)
 }
 
-// GetEventZmanimGrouped returns event zmanim grouped by event_category
+// GetEventZmanimGrouped returns event zmanim grouped by behavior tags
 // @Summary Get event zmanim grouped by category (candles, havdalah, etc.)
 // @Tags Registry
 // @Produce json
@@ -394,18 +394,38 @@ func (h *Handlers) GetMasterZmanimGrouped(w http.ResponseWriter, r *http.Request
 func (h *Handlers) GetEventZmanimGrouped(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	// Event category order for display
-	categoryOrder := []string{"candles", "havdalah", "yom_kippur", "fast_day", "tisha_bav", "pesach"}
+	// Category order for display - derived from behavior tags
+	categoryOrder := []string{"candles", "havdalah", "fast_day", "tisha_bav", "pesach"}
 
-	// Get all event zmanim (where event_category IS NOT NULL)
+	// Get all event zmanim with their behavior tags
+	// A zman is an "event zman" if it has any behavior tag (is_candle_lighting, is_havdalah, is_fast_start, is_fast_end)
 	rows, err := h.db.Pool.Query(ctx, `
-		SELECT id, zman_key, canonical_hebrew_name, canonical_english_name,
-			transliteration, description, halachic_notes, halachic_source,
-			time_category, default_formula_dsl, is_core, sort_order,
-			event_category, created_at, updated_at
-		FROM master_zmanim_registry
-		WHERE event_category IS NOT NULL
-		ORDER BY event_category, sort_order, canonical_hebrew_name
+		SELECT mz.id, mz.zman_key, mz.canonical_hebrew_name, mz.canonical_english_name,
+			mz.transliteration, mz.description, mz.halachic_notes, mz.halachic_source,
+			mz.time_category, mz.default_formula_dsl, mz.is_core, mz.sort_order,
+			mz.created_at, mz.updated_at,
+			COALESCE(
+				(SELECT json_agg(json_build_object(
+					'id', t.id,
+					'name', t.tag_key,
+					'display_name_hebrew', t.display_name_hebrew,
+					'display_name_english', t.display_name_english,
+					'tag_type', t.tag_type
+				) ORDER BY t.sort_order)
+				FROM master_zman_tags mt
+				JOIN zman_tags t ON mt.tag_id = t.id
+				WHERE mt.master_zman_id = mz.id),
+				'[]'::json
+			) AS tags
+		FROM master_zmanim_registry mz
+		WHERE EXISTS (
+			SELECT 1 FROM master_zman_tags mzt
+			JOIN zman_tags t ON mzt.tag_id = t.id
+			WHERE mzt.master_zman_id = mz.id
+			AND t.tag_type = 'behavior'
+		)
+		AND COALESCE(mz.is_hidden, false) = false
+		ORDER BY mz.sort_order, mz.canonical_hebrew_name
 	`)
 	if err != nil {
 		log.Printf("Error getting event zmanim: %v", err)
@@ -414,21 +434,60 @@ func (h *Handlers) GetEventZmanimGrouped(w http.ResponseWriter, r *http.Request)
 	}
 	defer rows.Close()
 
-	// Group by event_category
+	// Group by behavior tag
 	grouped := make(map[string][]MasterZman)
 	for rows.Next() {
 		var z MasterZman
-		var eventCategory *string
+		var tagsJSON []byte
 		err := rows.Scan(&z.ID, &z.ZmanKey, &z.CanonicalHebrewName, &z.CanonicalEnglishName,
 			&z.Transliteration, &z.Description, &z.HalachicNotes, &z.HalachicSource,
 			&z.TimeCategory, &z.DefaultFormulaDSL, &z.IsCore, &z.SortOrder,
-			&eventCategory, &z.CreatedAt, &z.UpdatedAt)
+			&z.CreatedAt, &z.UpdatedAt, &tagsJSON)
 		if err != nil {
 			log.Printf("Error scanning event zman: %v", err)
 			continue
 		}
-		if eventCategory != nil {
-			grouped[*eventCategory] = append(grouped[*eventCategory], z)
+
+		// Parse tags
+		json.Unmarshal(tagsJSON, &z.Tags)
+
+		// Determine category from behavior tags
+		category := ""
+		for _, tag := range z.Tags {
+			if tag.TagType == "behavior" {
+				switch tag.Name {
+				case "is_candle_lighting":
+					category = "candles"
+				case "is_havdalah":
+					category = "havdalah"
+				case "is_fast_start", "is_fast_end":
+					// Check if it's Tisha B'Av specific
+					for _, t := range z.Tags {
+						if t.Name == "tisha_bav" {
+							category = "tisha_bav"
+							break
+						}
+					}
+					if category == "" {
+						category = "fast_day"
+					}
+				}
+				break
+			}
+		}
+
+		// Check for pesach/chametz times
+		if category == "" {
+			for _, tag := range z.Tags {
+				if tag.Name == "pesach" {
+					category = "pesach"
+					break
+				}
+			}
+		}
+
+		if category != "" {
+			grouped[category] = append(grouped[category], z)
 		}
 	}
 
@@ -1138,7 +1197,7 @@ func (h *Handlers) CreatePublisherZmanFromRegistry(w http.ResponseWriter, r *htt
 			true,
 			false,
 			false,
-			mr.time_category,
+			CASE WHEN mr.is_core THEN 'essential' ELSE 'optional' END,
 			'{}',
 			mr.sort_order,
 			mr.id,
@@ -1603,8 +1662,6 @@ type AdminMasterZman struct {
 	HalachicNotes        *string   `json:"halachic_notes,omitempty"`
 	HalachicSource       *string   `json:"halachic_source,omitempty"`
 	TimeCategory         string    `json:"time_category"`
-	EventCategory        *string   `json:"event_category,omitempty"`
-	DisplayOffset        *string   `json:"display_offset,omitempty"`
 	DefaultFormulaDSL    string    `json:"default_formula_dsl"`
 	IsCore               bool      `json:"is_core"`
 	IsHidden             bool      `json:"is_hidden"`
@@ -1613,24 +1670,25 @@ type AdminMasterZman struct {
 	UpdatedBy            *string   `json:"updated_by,omitempty"`
 	CreatedAt            time.Time `json:"created_at"`
 	UpdatedAt            time.Time `json:"updated_at"`
+	Tags                 []ZmanTag `json:"tags,omitempty"`
 	TagIDs               []string  `json:"tag_ids,omitempty"`
 }
 
 // AdminCreateMasterZmanRequest represents a request to create a master zman
 type AdminCreateMasterZmanRequest struct {
-	ZmanKey              string  `json:"zman_key" validate:"required"`
-	CanonicalHebrewName  string  `json:"canonical_hebrew_name" validate:"required"`
-	CanonicalEnglishName string  `json:"canonical_english_name" validate:"required"`
-	Transliteration      *string `json:"transliteration"`
-	Description          *string `json:"description"`
-	HalachicNotes        *string `json:"halachic_notes"`
-	HalachicSource       *string `json:"halachic_source"`
-	TimeCategory         string  `json:"time_category" validate:"required"`
-	EventCategory        *string `json:"event_category"`
-	DefaultFormulaDSL    string  `json:"default_formula_dsl" validate:"required"`
-	IsCore        bool    `json:"is_core"`
-	IsHidden             bool    `json:"is_hidden"`
-	SortOrder            int     `json:"sort_order"`
+	ZmanKey              string   `json:"zman_key" validate:"required"`
+	CanonicalHebrewName  string   `json:"canonical_hebrew_name" validate:"required"`
+	CanonicalEnglishName string   `json:"canonical_english_name" validate:"required"`
+	Transliteration      *string  `json:"transliteration"`
+	Description          *string  `json:"description"`
+	HalachicNotes        *string  `json:"halachic_notes"`
+	HalachicSource       *string  `json:"halachic_source"`
+	TimeCategory         string   `json:"time_category" validate:"required"`
+	DefaultFormulaDSL    string   `json:"default_formula_dsl" validate:"required"`
+	IsCore               bool     `json:"is_core"`
+	IsHidden             bool     `json:"is_hidden"`
+	SortOrder            int      `json:"sort_order"`
+	TagIDs               []string `json:"tag_ids"`
 }
 
 // AdminUpdateMasterZmanRequest represents a request to update a master zman
@@ -1642,8 +1700,6 @@ type AdminUpdateMasterZmanRequest struct {
 	HalachicNotes        *string  `json:"halachic_notes"`
 	HalachicSource       *string  `json:"halachic_source"`
 	TimeCategory         *string  `json:"time_category"`
-	EventCategory        *string  `json:"event_category"`
-	DisplayOffset        *string  `json:"display_offset"`
 	DefaultFormulaDSL    *string  `json:"default_formula_dsl"`
 	IsCore               *bool    `json:"is_core"`
 	IsHidden             *bool    `json:"is_hidden"`
@@ -1673,7 +1729,7 @@ func (h *Handlers) AdminGetMasterZmanim(w http.ResponseWriter, r *http.Request) 
 		rows, err = h.db.Pool.Query(ctx, `
 			SELECT id, zman_key, canonical_hebrew_name, canonical_english_name,
 				transliteration, description, halachic_notes, halachic_source,
-				time_category, event_category, display_offset, default_formula_dsl, is_core,
+				time_category, default_formula_dsl, is_core,
 				COALESCE(is_hidden, false) as is_hidden, sort_order,
 				created_by, updated_by, created_at, updated_at
 			FROM master_zmanim_registry
@@ -1684,7 +1740,7 @@ func (h *Handlers) AdminGetMasterZmanim(w http.ResponseWriter, r *http.Request) 
 		rows, err = h.db.Pool.Query(ctx, `
 			SELECT id, zman_key, canonical_hebrew_name, canonical_english_name,
 				transliteration, description, halachic_notes, halachic_source,
-				time_category, event_category, display_offset, default_formula_dsl, is_core,
+				time_category, default_formula_dsl, is_core,
 				COALESCE(is_hidden, false) as is_hidden, sort_order,
 				created_by, updated_by, created_at, updated_at
 			FROM master_zmanim_registry
@@ -1704,7 +1760,7 @@ func (h *Handlers) AdminGetMasterZmanim(w http.ResponseWriter, r *http.Request) 
 		var z AdminMasterZman
 		err := rows.Scan(&z.ID, &z.ZmanKey, &z.CanonicalHebrewName, &z.CanonicalEnglishName,
 			&z.Transliteration, &z.Description, &z.HalachicNotes, &z.HalachicSource,
-			&z.TimeCategory, &z.EventCategory, &z.DisplayOffset, &z.DefaultFormulaDSL, &z.IsCore,
+			&z.TimeCategory, &z.DefaultFormulaDSL, &z.IsCore,
 			&z.IsHidden, &z.SortOrder, &z.CreatedBy, &z.UpdatedBy, &z.CreatedAt, &z.UpdatedAt)
 		if err != nil {
 			log.Printf("Error scanning master zman: %v", err)
@@ -1713,7 +1769,7 @@ func (h *Handlers) AdminGetMasterZmanim(w http.ResponseWriter, r *http.Request) 
 		zmanim = append(zmanim, z)
 	}
 
-	// Fetch tag IDs for all zmanim
+	// Fetch tags for all zmanim
 	if len(zmanim) > 0 {
 		zmanIDs := make([]string, len(zmanim))
 		zmanIDMap := make(map[string]int) // map zman ID to index
@@ -1722,21 +1778,32 @@ func (h *Handlers) AdminGetMasterZmanim(w http.ResponseWriter, r *http.Request) 
 			zmanIDMap[z.ID] = i
 		}
 
+		// Get full tag details, not just IDs
 		tagRows, err := h.db.Pool.Query(ctx, `
-			SELECT master_zman_id, tag_id
-			FROM master_zman_tags
-			WHERE master_zman_id = ANY($1)
+			SELECT mzt.master_zman_id, t.id, t.tag_key, t.display_name_hebrew, t.display_name_english,
+				t.tag_type, t.description, t.color, t.sort_order, t.created_at
+			FROM master_zman_tags mzt
+			JOIN zman_tags t ON t.id = mzt.tag_id
+			WHERE mzt.master_zman_id = ANY($1)
+			ORDER BY t.sort_order
 		`, zmanIDs)
 		if err == nil {
 			defer tagRows.Close()
 			for tagRows.Next() {
-				var zmanID, tagID string
-				if err := tagRows.Scan(&zmanID, &tagID); err == nil {
+				var zmanID string
+				var tag ZmanTag
+				if err := tagRows.Scan(&zmanID, &tag.ID, &tag.Name, &tag.DisplayNameHebrew, &tag.DisplayNameEnglish,
+					&tag.TagType, &tag.Description, &tag.Color, &tag.SortOrder, &tag.CreatedAt); err == nil {
 					if idx, ok := zmanIDMap[zmanID]; ok {
+						if zmanim[idx].Tags == nil {
+							zmanim[idx].Tags = []ZmanTag{}
+						}
+						zmanim[idx].Tags = append(zmanim[idx].Tags, tag)
+						// Also populate tag IDs for backward compatibility
 						if zmanim[idx].TagIDs == nil {
 							zmanim[idx].TagIDs = []string{}
 						}
-						zmanim[idx].TagIDs = append(zmanim[idx].TagIDs, tagID)
+						zmanim[idx].TagIDs = append(zmanim[idx].TagIDs, tag.ID)
 					}
 				}
 			}
@@ -1772,14 +1839,14 @@ func (h *Handlers) AdminGetMasterZmanByID(w http.ResponseWriter, r *http.Request
 	err := h.db.Pool.QueryRow(ctx, `
 		SELECT id, zman_key, canonical_hebrew_name, canonical_english_name,
 			transliteration, description, halachic_notes, halachic_source,
-			time_category, event_category, default_formula_dsl, is_core,
+			time_category, default_formula_dsl, is_core,
 			COALESCE(is_hidden, false) as is_hidden, sort_order,
 			created_by, updated_by, created_at, updated_at
 		FROM master_zmanim_registry
 		WHERE id = $1
 	`, id).Scan(&z.ID, &z.ZmanKey, &z.CanonicalHebrewName, &z.CanonicalEnglishName,
 		&z.Transliteration, &z.Description, &z.HalachicNotes, &z.HalachicSource,
-		&z.TimeCategory, &z.EventCategory, &z.DefaultFormulaDSL, &z.IsCore,
+		&z.TimeCategory, &z.DefaultFormulaDSL, &z.IsCore,
 		&z.IsHidden, &z.SortOrder, &z.CreatedBy, &z.UpdatedBy, &z.CreatedAt, &z.UpdatedAt)
 
 	if err == pgx.ErrNoRows {
@@ -1895,20 +1962,20 @@ func (h *Handlers) AdminCreateMasterZman(w http.ResponseWriter, r *http.Request)
 		INSERT INTO master_zmanim_registry (
 			zman_key, canonical_hebrew_name, canonical_english_name,
 			transliteration, description, halachic_notes, halachic_source,
-			time_category, event_category, default_formula_dsl, is_core,
+			time_category, default_formula_dsl, is_core,
 			is_hidden, sort_order, created_by
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 		RETURNING id, zman_key, canonical_hebrew_name, canonical_english_name,
 			transliteration, description, halachic_notes, halachic_source,
-			time_category, event_category, default_formula_dsl, is_core,
+			time_category, default_formula_dsl, is_core,
 			COALESCE(is_hidden, false), sort_order, created_by, updated_by, created_at, updated_at
 	`, req.ZmanKey, req.CanonicalHebrewName, req.CanonicalEnglishName,
 		req.Transliteration, req.Description, req.HalachicNotes, req.HalachicSource,
-		req.TimeCategory, req.EventCategory, req.DefaultFormulaDSL, req.IsCore,
+		req.TimeCategory, req.DefaultFormulaDSL, req.IsCore,
 		req.IsHidden, req.SortOrder, userID).Scan(
 		&result.ID, &result.ZmanKey, &result.CanonicalHebrewName, &result.CanonicalEnglishName,
 		&result.Transliteration, &result.Description, &result.HalachicNotes, &result.HalachicSource,
-		&result.TimeCategory, &result.EventCategory, &result.DefaultFormulaDSL, &result.IsCore,
+		&result.TimeCategory, &result.DefaultFormulaDSL, &result.IsCore,
 		&result.IsHidden, &result.SortOrder, &result.CreatedBy, &result.UpdatedBy, &result.CreatedAt, &result.UpdatedAt)
 
 	if err != nil {
@@ -1919,6 +1986,21 @@ func (h *Handlers) AdminCreateMasterZman(w http.ResponseWriter, r *http.Request)
 		log.Printf("Error creating master zman: %v", err)
 		RespondInternalError(w, r, "Failed to create master zman")
 		return
+	}
+
+	// Add tags if provided
+	if len(req.TagIDs) > 0 {
+		for _, tagID := range req.TagIDs {
+			_, err := h.db.Pool.Exec(ctx, `
+				INSERT INTO master_zman_tags (master_zman_id, tag_id)
+				VALUES ($1, $2)
+				ON CONFLICT DO NOTHING
+			`, result.ID, tagID)
+			if err != nil {
+				log.Printf("Error inserting tag: %v", err)
+			}
+		}
+		result.TagIDs = req.TagIDs
 	}
 
 	RespondJSON(w, r, http.StatusCreated, result)
@@ -1991,16 +2073,6 @@ func (h *Handlers) AdminUpdateMasterZman(w http.ResponseWriter, r *http.Request)
 		args = append(args, *req.TimeCategory)
 		argIdx++
 	}
-	if req.EventCategory != nil {
-		setClauses = append(setClauses, fmt.Sprintf("event_category = $%d", argIdx))
-		args = append(args, *req.EventCategory)
-		argIdx++
-	}
-	if req.DisplayOffset != nil {
-		setClauses = append(setClauses, fmt.Sprintf("display_offset = $%d", argIdx))
-		args = append(args, *req.DisplayOffset)
-		argIdx++
-	}
 	if req.DefaultFormulaDSL != nil {
 		setClauses = append(setClauses, fmt.Sprintf("default_formula_dsl = $%d", argIdx))
 		args = append(args, *req.DefaultFormulaDSL)
@@ -2028,7 +2100,7 @@ func (h *Handlers) AdminUpdateMasterZman(w http.ResponseWriter, r *http.Request)
 		WHERE id = $1
 		RETURNING id, zman_key, canonical_hebrew_name, canonical_english_name,
 			transliteration, description, halachic_notes, halachic_source,
-			time_category, event_category, display_offset, default_formula_dsl, is_core,
+			time_category, default_formula_dsl, is_core,
 			COALESCE(is_hidden, false), sort_order, created_by, updated_by, created_at, updated_at
 	`, strings.Join(setClauses, ", "))
 
@@ -2036,7 +2108,7 @@ func (h *Handlers) AdminUpdateMasterZman(w http.ResponseWriter, r *http.Request)
 	err := h.db.Pool.QueryRow(ctx, query, args...).Scan(
 		&result.ID, &result.ZmanKey, &result.CanonicalHebrewName, &result.CanonicalEnglishName,
 		&result.Transliteration, &result.Description, &result.HalachicNotes, &result.HalachicSource,
-		&result.TimeCategory, &result.EventCategory, &result.DisplayOffset, &result.DefaultFormulaDSL, &result.IsCore,
+		&result.TimeCategory, &result.DefaultFormulaDSL, &result.IsCore,
 		&result.IsHidden, &result.SortOrder, &result.CreatedBy, &result.UpdatedBy, &result.CreatedAt, &result.UpdatedAt)
 
 	if err == pgx.ErrNoRows {
@@ -2142,12 +2214,12 @@ func (h *Handlers) AdminToggleZmanVisibility(w http.ResponseWriter, r *http.Requ
 		WHERE id = $1
 		RETURNING id, zman_key, canonical_hebrew_name, canonical_english_name,
 			transliteration, description, halachic_notes, halachic_source,
-			time_category, event_category, default_formula_dsl, is_core,
+			time_category, default_formula_dsl, is_core,
 			COALESCE(is_hidden, false), sort_order, created_by, updated_by, created_at, updated_at
 	`, id, userID).Scan(
 		&result.ID, &result.ZmanKey, &result.CanonicalHebrewName, &result.CanonicalEnglishName,
 		&result.Transliteration, &result.Description, &result.HalachicNotes, &result.HalachicSource,
-		&result.TimeCategory, &result.EventCategory, &result.DefaultFormulaDSL, &result.IsCore,
+		&result.TimeCategory, &result.DefaultFormulaDSL, &result.IsCore,
 		&result.IsHidden, &result.SortOrder, &result.CreatedBy, &result.UpdatedBy, &result.CreatedAt, &result.UpdatedAt)
 
 	if err == pgx.ErrNoRows {

@@ -23,12 +23,13 @@ interface PublisherProfile {
 export default function PublisherProfilePage() {
   const router = useRouter();
   const api = useApi();
-  const { selectedPublisher } = usePublisherContext();
+  const { selectedPublisher, isLoading: contextLoading, error: contextError } = usePublisherContext();
   const [profile, setProfile] = useState<PublisherProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [loadingTimeout, setLoadingTimeout] = useState(false);
 
   // Form state
   const [name, setName] = useState('');
@@ -65,6 +66,18 @@ export default function PublisherProfilePage() {
       loadProfile();
     }
   }, [selectedPublisher, loadProfile]);
+
+  // Add timeout for context loading
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (contextLoading || !selectedPublisher) {
+        setLoadingTimeout(true);
+        setLoading(false);
+      }
+    }, 10000); // 10 second timeout
+
+    return () => clearTimeout(timer);
+  }, [contextLoading, selectedPublisher]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -112,12 +125,46 @@ export default function PublisherProfilePage() {
     }
   };
 
-  if (loading) {
+  // Show loading only if not timed out
+  if ((contextLoading || loading) && !loadingTimeout) {
     return (
-      <div className="min-h-screen bg-background p-8">
+      <div className="min-h-screen bg-background p-4 md:p-8">
         <div className="max-w-4xl mx-auto">
           <div className="flex justify-center items-center h-64">
-            <div className="text-foreground">Loading profile...</div>
+            <div className="text-center">
+              <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent align-[-0.125em] motion-reduce:animate-[spin_1.5s_linear_infinite]"></div>
+              <p className="mt-4 text-muted-foreground">Loading profile...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error if context failed, timeout occurred, or no publisher selected
+  if (contextError || loadingTimeout || error || !selectedPublisher) {
+    const errorMessage = contextError || error ||
+      (!selectedPublisher ? 'No publisher account found. Please contact support if you believe this is an error.' : 'Request timed out. Please try again.');
+
+    return (
+      <div className="min-h-screen bg-background p-4 md:p-8">
+        <div className="max-w-4xl mx-auto">
+          <div className="bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg p-6">
+            <div className="flex items-start gap-3">
+              <svg className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <div className="flex-1">
+                <p className="font-semibold text-red-800 dark:text-red-200 mb-2">Unable to Load Profile</p>
+                <p className="text-red-700 dark:text-red-300 text-sm mb-4">{errorMessage}</p>
+                <button
+                  onClick={() => window.location.reload()}
+                  className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 text-sm font-medium"
+                >
+                  Reload Page
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -125,7 +172,7 @@ export default function PublisherProfilePage() {
   }
 
   return (
-    <div className="min-h-screen bg-background p-8">
+    <div className="min-h-screen bg-background p-4 md:p-8">
       <div className="max-w-4xl mx-auto">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-foreground mb-2">Publisher Profile</h1>
@@ -273,13 +320,12 @@ export default function PublisherProfilePage() {
               <div className="flex items-center gap-3">
                 <span className="text-sm font-medium">Status:</span>
                 <span
-                  className={`px-3 py-1 rounded-full text-sm font-medium ${
-                    profile.status === 'verified'
+                  className={`px-3 py-1 rounded-full text-sm font-medium ${profile.status === 'verified'
                       ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-300'
                       : profile.status === 'pending'
-                      ? 'bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-300'
-                      : 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-300'
-                  }`}
+                        ? 'bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-300'
+                        : 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-300'
+                    }`}
                 >
                   {profile.status}
                 </span>

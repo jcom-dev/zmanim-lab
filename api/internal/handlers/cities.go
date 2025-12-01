@@ -41,12 +41,15 @@ func (h *Handlers) SearchCities(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Build dynamic query
+	// Build dynamic query with normalized schema JOINs
 	var queryBuilder strings.Builder
 	queryBuilder.WriteString(`
-		SELECT id, name, country, country_code, region,
-		       latitude, longitude, timezone, population, elevation, continent
-		FROM cities
+		SELECT c.id, c.name, co.name as country, co.code as country_code, r.name as region,
+		       c.latitude, c.longitude, c.timezone, c.population, c.elevation, ct.name as continent
+		FROM cities c
+		JOIN geo_countries co ON c.country_id = co.id
+		JOIN geo_continents ct ON co.continent_id = ct.id
+		LEFT JOIN geo_regions r ON c.region_id = r.id
 		WHERE 1=1`)
 
 	args := make([]interface{}, 0)
@@ -54,40 +57,44 @@ func (h *Handlers) SearchCities(w http.ResponseWriter, r *http.Request) {
 
 	// Add country code filter
 	if countryCode != "" {
-		queryBuilder.WriteString(fmt.Sprintf(" AND country_code = $%d", argNum))
+		queryBuilder.WriteString(fmt.Sprintf(" AND co.code = $%d", argNum))
 		args = append(args, countryCode)
 		argNum++
 	}
 
 	// Add region filter
 	if region != "" {
-		queryBuilder.WriteString(fmt.Sprintf(" AND region = $%d", argNum))
+		queryBuilder.WriteString(fmt.Sprintf(" AND r.name = $%d", argNum))
 		args = append(args, region)
 		argNum++
 	}
 
-	// Add search filter
+	// Add search filter (uses pg_trgm for fuzzy matching)
+	// Lower threshold (0.2) allows typos like "lverpool" -> "Liverpool"
 	if search != "" && len(search) >= 2 {
 		queryBuilder.WriteString(fmt.Sprintf(` AND (
-			name_ascii ILIKE $%d || '%%'
-			OR name_ascii ILIKE '%%' || $%d || '%%'
-			OR similarity(name_ascii, $%d) > 0.3
-		)`, argNum, argNum, argNum))
+			c.name_ascii ILIKE $%d || '%%'
+			OR c.name ILIKE $%d || '%%'
+			OR c.name_ascii %% $%d
+			OR c.name %% $%d
+		)`, argNum, argNum, argNum, argNum))
 		args = append(args, search)
 		argNum++
 	}
 
-	// Add ordering
+	// Add ordering - prioritize exact prefix matches, then similarity score, then population
 	if search != "" && len(search) >= 2 {
 		queryBuilder.WriteString(fmt.Sprintf(`
 		ORDER BY
-			CASE WHEN name_ascii ILIKE $%d || '%%' THEN 0 ELSE 1 END,
-			CASE WHEN name_ascii ILIKE $%d THEN 0 ELSE 1 END,
-			population DESC NULLS LAST,
-			name ASC`, len(args), len(args)))
+			CASE WHEN c.name_ascii ILIKE $%d || '%%' THEN 0
+			     WHEN c.name ILIKE $%d || '%%' THEN 1
+			     ELSE 2 END,
+			similarity(c.name_ascii, $%d) DESC,
+			c.population DESC NULLS LAST,
+			c.name ASC`, len(args), len(args), len(args)))
 	} else {
 		queryBuilder.WriteString(`
-		ORDER BY population DESC NULLS LAST, name ASC`)
+		ORDER BY c.population DESC NULLS LAST, c.name ASC`)
 	}
 
 	// Add limit
@@ -164,13 +171,16 @@ func (h *Handlers) GetNearbyCity(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Find nearest city using PostGIS ST_Distance
+	// Find nearest city using PostGIS ST_Distance with normalized JOINs
 	query := `
-		SELECT id, name, country, country_code, region,
-		       latitude, longitude, timezone, population, elevation, continent,
-		       ST_Distance(location, ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography) as distance_meters
-		FROM cities
-		ORDER BY location <-> ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography
+		SELECT c.id, c.name, co.name as country, co.code as country_code, r.name as region,
+		       c.latitude, c.longitude, c.timezone, c.population, c.elevation, ct.name as continent,
+		       ST_Distance(c.location, ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography) as distance_meters
+		FROM cities c
+		JOIN geo_countries co ON c.country_id = co.id
+		JOIN geo_continents ct ON co.continent_id = ct.id
+		LEFT JOIN geo_regions r ON c.region_id = r.id
+		ORDER BY c.location <-> ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography
 		LIMIT 1
 	`
 
@@ -226,10 +236,13 @@ func (h *Handlers) GetCityByID(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query := `
-		SELECT id, name, country, country_code, region,
-		       latitude, longitude, timezone, population, elevation, continent
-		FROM cities
-		WHERE id = $1
+		SELECT c.id, c.name, co.name as country, co.code as country_code, r.name as region,
+		       c.latitude, c.longitude, c.timezone, c.population, c.elevation, ct.name as continent
+		FROM cities c
+		JOIN geo_countries co ON c.country_id = co.id
+		JOIN geo_continents ct ON co.continent_id = ct.id
+		LEFT JOIN geo_regions r ON c.region_id = r.id
+		WHERE c.id = $1
 	`
 
 	var city models.City

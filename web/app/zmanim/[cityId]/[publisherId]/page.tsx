@@ -105,9 +105,19 @@ export default function ZmanimPage() {
       const result = await response.json();
       const zmanimData = result.data || result;
 
+      // Map location response to City interface
+      const location = zmanimData.location;
+      const city: City = location ? {
+        id: location.city_id || cityId,
+        name: location.city_name || 'Unknown',
+        country: location.country || '',
+        region: location.region || null,
+        timezone: location.timezone || 'UTC'
+      } : zmanimData.city;
+
       setData({
         date: zmanimData.date,
-        city: zmanimData.location || zmanimData.city,
+        city: city,
         publisher: zmanimData.publisher,
         zmanim: zmanimData.zmanim || [],
         is_default: isDefault || !zmanimData.publisher,

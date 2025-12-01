@@ -134,8 +134,8 @@ export function MasterZmanPicker({
   const [showCustomizeStep, setShowCustomizeStep] = useState(false);
   const [viewMode, setViewMode] = useState<'everyday' | 'events'>('everyday');
 
-  // Fetch everyday zmanim (weekday = standard daily times)
-  const { data: everydayZmanim, isLoading: loadingEveryday } = useMasterZmanimGrouped('weekday');
+  // Fetch everyday zmanim (all zmanim grouped by time_category)
+  const { data: everydayZmanim, isLoading: loadingEveryday } = useMasterZmanimGrouped();
   // Fetch event zmanim (grouped by event_category: candles, havdalah, etc.)
   const { data: eventZmanim, isLoading: loadingEvents } = useEventZmanimGrouped();
   const createZman = useCreateZmanFromRegistry();

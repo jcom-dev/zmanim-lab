@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -23,25 +24,26 @@ func (h *Handlers) GetPublisherCoverage(w http.ResponseWriter, r *http.Request) 
 	}
 	publisherID := pc.PublisherID
 
-	// Query coverage areas with display names
-	// For country-level coverage, look up the country name from cities table
+	// Query coverage areas with display names using normalized schema
 	query := `
 		SELECT
 			pc.id, pc.publisher_id, pc.coverage_level,
-			pc.country_code, pc.region, pc.city_id,
+			pc.continent_code, pc.country_code, pc.region, pc.city_id,
 			pc.priority, pc.is_active, pc.created_at, pc.updated_at,
 			CASE
-				WHEN pc.coverage_level = 'city' THEN c.name || ', ' || COALESCE(c.region, '') || ', ' || c.country
-				WHEN pc.coverage_level = 'region' THEN pc.region || ', ' || COALESCE(country_lookup.country, pc.country_code)
-				WHEN pc.coverage_level = 'country' THEN COALESCE(country_lookup.country, pc.country_code)
+				WHEN pc.coverage_level = 'continent' THEN COALESCE(ct.name, pc.continent_code)
+				WHEN pc.coverage_level = 'city' THEN c.name || ', ' || COALESCE(r.name, '') || ', ' || co.name
+				WHEN pc.coverage_level = 'region' THEN pc.region || ', ' || COALESCE(country_lookup.name, pc.country_code)
+				WHEN pc.coverage_level = 'country' THEN COALESCE(country_lookup.name, pc.country_code)
 			END as display_name,
 			COALESCE(c.name, '') as city_name,
-			COALESCE(c.country, country_lookup.country, pc.country_code, '') as country
+			COALESCE(co.name, country_lookup.name, pc.country_code, '') as country
 		FROM publisher_coverage pc
 		LEFT JOIN cities c ON pc.city_id = c.id
-		LEFT JOIN LATERAL (
-			SELECT DISTINCT country FROM cities WHERE country_code = pc.country_code LIMIT 1
-		) country_lookup ON true
+		LEFT JOIN geo_countries co ON c.country_id = co.id
+		LEFT JOIN geo_regions r ON c.region_id = r.id
+		LEFT JOIN geo_countries country_lookup ON country_lookup.code = pc.country_code
+		LEFT JOIN geo_continents ct ON ct.name = pc.continent_code
 		WHERE pc.publisher_id = $1
 		ORDER BY pc.priority DESC, pc.created_at DESC
 	`
@@ -58,7 +60,7 @@ func (h *Handlers) GetPublisherCoverage(w http.ResponseWriter, r *http.Request) 
 		var c models.PublisherCoverage
 		err := rows.Scan(
 			&c.ID, &c.PublisherID, &c.CoverageLevel,
-			&c.CountryCode, &c.Region, &c.CityID,
+			&c.ContinentCode, &c.CountryCode, &c.Region, &c.CityID,
 			&c.Priority, &c.IsActive, &c.CreatedAt, &c.UpdatedAt,
 			&c.DisplayName, &c.CityName, &c.Country,
 		)
@@ -97,13 +99,18 @@ func (h *Handlers) CreatePublisherCoverage(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Validate coverage level
-	if req.CoverageLevel != "country" && req.CoverageLevel != "region" && req.CoverageLevel != "city" {
-		RespondBadRequest(w, r, "Invalid coverage_level: must be 'country', 'region', or 'city'")
+	if req.CoverageLevel != "continent" && req.CoverageLevel != "country" && req.CoverageLevel != "region" && req.CoverageLevel != "city" {
+		RespondBadRequest(w, r, "Invalid coverage_level: must be 'continent', 'country', 'region', or 'city'")
 		return
 	}
 
 	// Validate based on coverage level
 	switch req.CoverageLevel {
+	case "continent":
+		if req.ContinentCode == nil || *req.ContinentCode == "" {
+			RespondBadRequest(w, r, "continent_code is required for continent-level coverage")
+			return
+		}
 	case "country":
 		if req.CountryCode == nil || *req.CountryCode == "" {
 			RespondBadRequest(w, r, "country_code is required for country-level coverage")
@@ -141,16 +148,16 @@ func (h *Handlers) CreatePublisherCoverage(w http.ResponseWriter, r *http.Reques
 	// Insert coverage
 	var coverage models.PublisherCoverage
 	query := `
-		INSERT INTO publisher_coverage (publisher_id, coverage_level, country_code, region, city_id, priority)
-		VALUES ($1, $2, $3, $4, $5, $6)
-		RETURNING id, publisher_id, coverage_level, country_code, region, city_id, priority, is_active, created_at, updated_at
+		INSERT INTO publisher_coverage (publisher_id, coverage_level, continent_code, country_code, region, city_id, priority)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		RETURNING id, publisher_id, coverage_level, continent_code, country_code, region, city_id, priority, is_active, created_at, updated_at
 	`
 
 	insertErr := h.db.Pool.QueryRow(ctx, query,
-		publisherID, req.CoverageLevel, req.CountryCode, req.Region, req.CityID, priority,
+		publisherID, req.CoverageLevel, req.ContinentCode, req.CountryCode, req.Region, req.CityID, priority,
 	).Scan(
 		&coverage.ID, &coverage.PublisherID, &coverage.CoverageLevel,
-		&coverage.CountryCode, &coverage.Region, &coverage.CityID,
+		&coverage.ContinentCode, &coverage.CountryCode, &coverage.Region, &coverage.CityID,
 		&coverage.Priority, &coverage.IsActive, &coverage.CreatedAt, &coverage.UpdatedAt,
 	)
 
@@ -164,17 +171,24 @@ func (h *Handlers) CreatePublisherCoverage(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Get display name
-	if req.CoverageLevel == "city" && req.CityID != nil {
+	// Get display name using normalized schema
+	if req.CoverageLevel == "continent" && req.ContinentCode != nil {
+		// Continent display name
+		coverage.DisplayName = *req.ContinentCode
+	} else if req.CoverageLevel == "city" && req.CityID != nil {
 		h.db.Pool.QueryRow(ctx,
-			"SELECT name || ', ' || COALESCE(region, '') || ', ' || country FROM cities WHERE id = $1",
+			`SELECT c.name || ', ' || COALESCE(r.name, '') || ', ' || co.name
+			 FROM cities c
+			 JOIN geo_countries co ON c.country_id = co.id
+			 LEFT JOIN geo_regions r ON c.region_id = r.id
+			 WHERE c.id = $1`,
 			*req.CityID,
 		).Scan(&coverage.DisplayName)
 	} else if req.CoverageLevel == "region" {
-		// Look up country name for region display
+		// Look up country name for region display from geo_countries
 		var countryName string
 		err := h.db.Pool.QueryRow(ctx,
-			"SELECT DISTINCT country FROM cities WHERE country_code = $1 LIMIT 1",
+			"SELECT name FROM geo_countries WHERE code = $1",
 			*req.CountryCode,
 		).Scan(&countryName)
 		if err != nil || countryName == "" {
@@ -182,10 +196,10 @@ func (h *Handlers) CreatePublisherCoverage(w http.ResponseWriter, r *http.Reques
 		}
 		coverage.DisplayName = *req.Region + ", " + countryName
 	} else {
-		// Look up country name for country-level coverage
+		// Look up country name for country-level coverage from geo_countries
 		var countryName string
 		err := h.db.Pool.QueryRow(ctx,
-			"SELECT DISTINCT country FROM cities WHERE country_code = $1 LIMIT 1",
+			"SELECT name FROM geo_countries WHERE code = $1",
 			*req.CountryCode,
 		).Scan(&countryName)
 		if err != nil || countryName == "" {
@@ -361,20 +375,22 @@ func (h *Handlers) GetPublishersForCity(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
-// GetContinents returns list of continents with city counts
+// GetContinents returns list of continents with city counts using normalized schema
 func (h *Handlers) GetContinents(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	query := `
-		SELECT DISTINCT continent, COUNT(*) as city_count
-		FROM cities
-		WHERE continent IS NOT NULL AND continent != ''
-		GROUP BY continent
-		ORDER BY continent
+		SELECT ct.code, ct.name, COUNT(c.id) as city_count
+		FROM geo_continents ct
+		LEFT JOIN geo_countries co ON co.continent_id = ct.id
+		LEFT JOIN cities c ON c.country_id = co.id
+		GROUP BY ct.id, ct.code, ct.name
+		ORDER BY ct.name
 	`
 
 	rows, err := h.db.Pool.Query(ctx, query)
 	if err != nil {
+		log.Printf("Error fetching continents: %v", err)
 		RespondInternalError(w, r, "Failed to fetch continents")
 		return
 	}
@@ -388,14 +404,13 @@ func (h *Handlers) GetContinents(w http.ResponseWriter, r *http.Request) {
 
 	var continents []Continent
 	for rows.Next() {
-		var name string
+		var code, name string
 		var cityCount int
-		if err := rows.Scan(&name, &cityCount); err != nil {
+		if err := rows.Scan(&code, &name, &cityCount); err != nil {
 			continue
 		}
-		// Database stores full continent names, use as both code and name
 		continents = append(continents, Continent{
-			Code:      name, // Use full name as code for filtering
+			Code:      name, // Use full name for filtering (maintains backward compat)
 			Name:      name,
 			CityCount: cityCount,
 		})
@@ -411,7 +426,7 @@ func (h *Handlers) GetContinents(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// GetCountries returns list of unique countries from cities table
+// GetCountries returns list of countries using normalized schema
 func (h *Handlers) GetCountries(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -424,19 +439,22 @@ func (h *Handlers) GetCountries(w http.ResponseWriter, r *http.Request) {
 
 	if continent != "" {
 		query = `
-			SELECT country_code, country, COUNT(*) as city_count
-			FROM cities
-			WHERE continent = $1
-			GROUP BY country_code, country
-			ORDER BY country
+			SELECT co.code, co.name, COUNT(c.id) as city_count
+			FROM geo_countries co
+			JOIN geo_continents ct ON co.continent_id = ct.id
+			LEFT JOIN cities c ON c.country_id = co.id
+			WHERE ct.name = $1
+			GROUP BY co.id, co.code, co.name
+			ORDER BY co.name
 		`
 		rows, err = h.db.Pool.Query(ctx, query, continent)
 	} else {
 		query = `
-			SELECT country_code, country, COUNT(*) as city_count
-			FROM cities
-			GROUP BY country_code, country
-			ORDER BY country
+			SELECT co.code, co.name, COUNT(c.id) as city_count
+			FROM geo_countries co
+			LEFT JOIN cities c ON c.country_id = co.id
+			GROUP BY co.id, co.code, co.name
+			ORDER BY co.name
 		`
 		rows, err = h.db.Pool.Query(ctx, query)
 	}
@@ -472,7 +490,7 @@ func (h *Handlers) GetCountries(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// GetRegions returns regions, optionally filtered by country_code or search
+// GetRegions returns regions using normalized schema, optionally filtered by country_code or search
 func (h *Handlers) GetRegions(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	countryCode := strings.TrimSpace(r.URL.Query().Get("country_code"))
@@ -503,28 +521,31 @@ func (h *Handlers) GetRegions(w http.ResponseWriter, r *http.Request) {
 	var err error
 
 	if search != "" && len(search) >= 2 {
-		// Search across all regions
+		// Search across all regions using normalized schema
 		query := `
-			SELECT region, country_code, country, COUNT(*) as city_count
-			FROM cities
-			WHERE region IS NOT NULL
-			  AND (region ILIKE $1 || '%' OR region ILIKE '%' || $1 || '%')
-			GROUP BY region, country_code, country
+			SELECT r.name, co.code, co.name, COUNT(c.id) as city_count
+			FROM geo_regions r
+			JOIN geo_countries co ON r.country_id = co.id
+			LEFT JOIN cities c ON c.region_id = r.id
+			WHERE r.name ILIKE $1 || '%' OR r.name ILIKE '%' || $1 || '%'
+			GROUP BY r.id, r.name, co.code, co.name
 			ORDER BY
-				CASE WHEN region ILIKE $1 || '%' THEN 0 ELSE 1 END,
+				CASE WHEN r.name ILIKE $1 || '%' THEN 0 ELSE 1 END,
 				city_count DESC,
-				region
+				r.name
 			LIMIT $2
 		`
 		rows, err = h.db.Pool.Query(ctx, query, search, limit)
 	} else {
-		// Filter by country code
+		// Filter by country code using normalized schema
 		query := `
-			SELECT region, country_code, country, COUNT(*) as city_count
-			FROM cities
-			WHERE country_code = $1 AND region IS NOT NULL
-			GROUP BY region, country_code, country
-			ORDER BY region
+			SELECT r.name, co.code, co.name, COUNT(c.id) as city_count
+			FROM geo_regions r
+			JOIN geo_countries co ON r.country_id = co.id
+			LEFT JOIN cities c ON c.region_id = r.id
+			WHERE co.code = $1
+			GROUP BY r.id, r.name, co.code, co.name
+			ORDER BY r.name
 			LIMIT $2
 		`
 		rows, err = h.db.Pool.Query(ctx, query, countryCode, limit)

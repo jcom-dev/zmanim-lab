@@ -48,6 +48,7 @@ type Querier interface {
 	// ============================================
 	CreateZmanRegistryRequest(ctx context.Context, arg CreateZmanRegistryRequestParams) (CreateZmanRegistryRequestRow, error)
 	CreateZmanVersion(ctx context.Context, arg CreateZmanVersionParams) (PublisherZmanVersion, error)
+	DeleteAllCities(ctx context.Context) error
 	DeleteCoverage(ctx context.Context, id string) error
 	DeleteCoverageByPublisher(ctx context.Context, publisherID string) error
 	DeleteInvitation(ctx context.Context, id string) error
@@ -71,7 +72,7 @@ type Querier interface {
 	// ============================================
 	// TAG QUERIES
 	// ============================================
-	GetAllTags(ctx context.Context) ([]ZmanTag, error)
+	GetAllTags(ctx context.Context) ([]GetAllTagsRow, error)
 	GetAstronomicalPrimitiveByName(ctx context.Context, variableName string) (AstronomicalPrimitive, error)
 	GetAstronomicalPrimitivesByCategory(ctx context.Context, category string) ([]AstronomicalPrimitive, error)
 	// Returns primitives with category for grouping in UI
@@ -80,7 +81,11 @@ type Querier interface {
 	GetCitiesForCoverage(ctx context.Context, arg GetCitiesForCoverageParams) ([]GetCitiesForCoverageRow, error)
 	GetCityByID(ctx context.Context, id string) (GetCityByIDRow, error)
 	GetCityByName(ctx context.Context, name string) (GetCityByNameRow, error)
+	GetContinents(ctx context.Context) ([]GetContinentsRow, error)
 	GetCountries(ctx context.Context) ([]GetCountriesRow, error)
+	GetCountriesByContinent(ctx context.Context, name string) ([]GetCountriesByContinentRow, error)
+	// Lookup table queries for seeding
+	GetCountryByCode(ctx context.Context, code string) (GeoCountry, error)
 	GetCoverageCountByPublisher(ctx context.Context, publisherID string) (int64, error)
 	GetDeletedPublisherZmanim(ctx context.Context, publisherID string) ([]GetDeletedPublisherZmanimRow, error)
 	GetInvitationByToken(ctx context.Context, token string) (GetInvitationByTokenRow, error)
@@ -114,20 +119,28 @@ type Querier interface {
 	GetPublisherFullByClerkUserID(ctx context.Context, clerkUserID *string) (GetPublisherFullByClerkUserIDRow, error)
 	// Team Management --
 	GetPublisherOwner(ctx context.Context, id string) (*string, error)
+	// Get a specific zman by ID (for linking validation)
+	GetPublisherZmanByID(ctx context.Context, id string) (GetPublisherZmanByIDRow, error)
 	GetPublisherZmanByKey(ctx context.Context, arg GetPublisherZmanByKeyParams) (GetPublisherZmanByKeyRow, error)
 	GetPublisherZmanWithRegistry(ctx context.Context, arg GetPublisherZmanWithRegistryParams) (GetPublisherZmanWithRegistryRow, error)
 	// Zmanim SQL Queries
 	// SQLc will generate type-safe Go code from these queries
 	// Publisher Zmanim --
 	GetPublisherZmanim(ctx context.Context, publisherID string) ([]GetPublisherZmanimRow, error)
+	// Get published zmanim from a specific publisher for copying/linking
+	GetPublisherZmanimForLinking(ctx context.Context, arg GetPublisherZmanimForLinkingParams) ([]GetPublisherZmanimForLinkingRow, error)
 	// ============================================
 	// PUBLISHER ZMANIM WITH REGISTRY (new model)
 	// ============================================
 	GetPublisherZmanimWithRegistry(ctx context.Context, publisherID string) ([]GetPublisherZmanimWithRegistryRow, error)
-	GetRegionsByCountry(ctx context.Context, countryCode string) ([]*string, error)
-	GetTagByName(ctx context.Context, name string) (ZmanTag, error)
-	GetTagsByType(ctx context.Context, tagType string) ([]ZmanTag, error)
-	GetTagsForMasterZman(ctx context.Context, masterZmanID string) ([]ZmanTag, error)
+	GetRegionByCountryAndCode(ctx context.Context, arg GetRegionByCountryAndCodeParams) (GeoRegion, error)
+	GetRegionsByCountry(ctx context.Context, code string) ([]GetRegionsByCountryRow, error)
+	GetTagByName(ctx context.Context, name string) (GetTagByNameRow, error)
+	GetTagsByType(ctx context.Context, tagType string) ([]GetTagsByTypeRow, error)
+	GetTagsForMasterZman(ctx context.Context, masterZmanID string) ([]GetTagsForMasterZmanRow, error)
+	// Linked Zmanim Support --
+	// Get verified publishers that current publisher can link to (excludes self)
+	GetVerifiedPublishersForLinking(ctx context.Context, id string) ([]GetVerifiedPublishersForLinkingRow, error)
 	GetZmanDefinitionByKey(ctx context.Context, key string) (GetZmanDefinitionByKeyRow, error)
 	// Zman Definitions (Global) --
 	GetZmanDefinitions(ctx context.Context) ([]GetZmanDefinitionsRow, error)
@@ -146,19 +159,23 @@ type Querier interface {
 	// Import from templates to publisher --
 	ImportZmanimFromTemplates(ctx context.Context, publisherID string) ([]ImportZmanimFromTemplatesRow, error)
 	ImportZmanimFromTemplatesByKeys(ctx context.Context, arg ImportZmanimFromTemplatesByKeysParams) ([]ImportZmanimFromTemplatesByKeysRow, error)
+	InsertCountry(ctx context.Context, arg InsertCountryParams) (int16, error)
+	InsertRegion(ctx context.Context, arg InsertRegionParams) (int32, error)
+	ListCitiesByContinent(ctx context.Context, arg ListCitiesByContinentParams) ([]ListCitiesByContinentRow, error)
 	ListCitiesByCountry(ctx context.Context, arg ListCitiesByCountryParams) ([]ListCitiesByCountryRow, error)
 	ListCitiesByRegion(ctx context.Context, arg ListCitiesByRegionParams) ([]ListCitiesByRegionRow, error)
 	ListPublishers(ctx context.Context, arg ListPublishersParams) ([]ListPublishersRow, error)
 	ListPublishersByIDs(ctx context.Context, dollar_1 []string) ([]ListPublishersByIDsRow, error)
 	PermanentDeletePublisherZman(ctx context.Context, arg PermanentDeletePublisherZmanParams) error
-	PublishAlgorithm(ctx context.Context, arg PublishAlgorithmParams) (PublishAlgorithmRow, error)
+	PublishAlgorithm(ctx context.Context, id string) (pgtype.Timestamptz, error)
 	// Bulk publish/unpublish zmanim --
 	PublishAllZmanim(ctx context.Context, publisherID string) error
 	PublishZmanimByKeys(ctx context.Context, arg PublishZmanimByKeysParams) error
 	RestorePublisherZman(ctx context.Context, arg RestorePublisherZmanParams) (RestorePublisherZmanRow, error)
 	RollbackZmanToVersion(ctx context.Context, arg RollbackZmanToVersionParams) (RollbackZmanToVersionRow, error)
-	// Cities SQL Queries
+	// Cities SQL Queries (Normalized Schema)
 	// SQLc will generate type-safe Go code from these queries
+	// Uses JOINs to geo_continents, geo_countries, and geo_regions lookup tables
 	SearchCities(ctx context.Context, arg SearchCitiesParams) ([]SearchCitiesRow, error)
 	SearchMasterZmanim(ctx context.Context, dollar_1 *string) ([]SearchMasterZmanimRow, error)
 	SkipOnboarding(ctx context.Context, publisherID string) (string, error)
@@ -169,6 +186,7 @@ type Querier interface {
 	UnpublishAllZmanim(ctx context.Context, publisherID string) error
 	UnpublishZmanimByKeys(ctx context.Context, arg UnpublishZmanimByKeysParams) error
 	UpdateAlgorithmDraft(ctx context.Context, arg UpdateAlgorithmDraftParams) (UpdateAlgorithmDraftRow, error)
+	UpdateCityFKs(ctx context.Context, arg UpdateCityFKsParams) error
 	UpdateCoverage(ctx context.Context, arg UpdateCoverageParams) (PublisherCoverage, error)
 	UpdateInvitationToken(ctx context.Context, arg UpdateInvitationTokenParams) error
 	UpdateOnboardingState(ctx context.Context, arg UpdateOnboardingStateParams) (PublisherOnboarding, error)

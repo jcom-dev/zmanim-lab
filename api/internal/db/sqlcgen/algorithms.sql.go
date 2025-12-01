@@ -14,8 +14,8 @@ import (
 const archiveActiveAlgorithms = `-- name: ArchiveActiveAlgorithms :exec
 
 UPDATE algorithms
-SET validation_status = 'archived', is_active = false, updated_at = NOW()
-WHERE publisher_id = $1 AND is_active = true
+SET status = 'deprecated', updated_at = NOW()
+WHERE publisher_id = $1 AND status = 'published'
 `
 
 // Publish algorithm --
@@ -42,10 +42,9 @@ func (q *Queries) CompleteOnboarding(ctx context.Context, publisherID string) (s
 const createAlgorithm = `-- name: CreateAlgorithm :one
 
 INSERT INTO algorithms (
-    publisher_id, name, description, configuration,
-    version, calculation_type, validation_status, is_active
+    publisher_id, name, description, configuration, status, is_public
 )
-VALUES ($1, $2, $3, $4, '1.0.0', 'custom', 'draft', false)
+VALUES ($1, $2, $3, $4, 'draft', false)
 RETURNING id, created_at, updated_at
 `
 
@@ -101,8 +100,7 @@ func (q *Queries) CreateOnboardingState(ctx context.Context, publisherID string)
 
 const deprecateAlgorithmVersion = `-- name: DeprecateAlgorithmVersion :execrows
 UPDATE algorithms
-SET validation_status = 'deprecated',
-    deprecated_at = NOW(),
+SET status = 'deprecated',
     updated_at = NOW()
 WHERE id = $1 AND publisher_id = $2
 `
@@ -123,9 +121,8 @@ func (q *Queries) DeprecateAlgorithmVersion(ctx context.Context, arg DeprecateAl
 const getAlgorithmByID = `-- name: GetAlgorithmByID :one
 SELECT id, name, COALESCE(description, '') as description,
        COALESCE(configuration::text, '{}')::jsonb as configuration,
-       COALESCE(validation_status, 'draft') as status, is_active,
-       COALESCE(CAST(SPLIT_PART(version, '.', 1) AS INTEGER), 1) as version,
-       published_at, deprecated_at, created_at, updated_at
+       status, is_public,
+       created_at, updated_at
 FROM algorithms
 WHERE id = $1 AND publisher_id = $2
 `
@@ -140,11 +137,8 @@ type GetAlgorithmByIDRow struct {
 	Name          string             `json:"name"`
 	Description   string             `json:"description"`
 	Configuration []byte             `json:"configuration"`
-	Status        string             `json:"status"`
-	IsActive      *bool              `json:"is_active"`
-	Version       interface{}        `json:"version"`
-	PublishedAt   pgtype.Timestamptz `json:"published_at"`
-	DeprecatedAt  pgtype.Timestamptz `json:"deprecated_at"`
+	Status        *string            `json:"status"`
+	IsPublic      *bool              `json:"is_public"`
 	CreatedAt     pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
 }
@@ -158,10 +152,7 @@ func (q *Queries) GetAlgorithmByID(ctx context.Context, arg GetAlgorithmByIDPara
 		&i.Description,
 		&i.Configuration,
 		&i.Status,
-		&i.IsActive,
-		&i.Version,
-		&i.PublishedAt,
-		&i.DeprecatedAt,
+		&i.IsPublic,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -171,11 +162,8 @@ func (q *Queries) GetAlgorithmByID(ctx context.Context, arg GetAlgorithmByIDPara
 const getAlgorithmVersions = `-- name: GetAlgorithmVersions :many
 
 SELECT id, name,
-       COALESCE(CAST(SPLIT_PART(version, '.', 1) AS INTEGER), 1) as ver,
-       COALESCE(validation_status, 'draft') as status,
-       is_active,
-       published_at,
-       deprecated_at,
+       status,
+       is_public,
        created_at
 FROM algorithms
 WHERE publisher_id = $1
@@ -183,14 +171,11 @@ ORDER BY created_at DESC
 `
 
 type GetAlgorithmVersionsRow struct {
-	ID           string             `json:"id"`
-	Name         string             `json:"name"`
-	Ver          interface{}        `json:"ver"`
-	Status       string             `json:"status"`
-	IsActive     *bool              `json:"is_active"`
-	PublishedAt  pgtype.Timestamptz `json:"published_at"`
-	DeprecatedAt pgtype.Timestamptz `json:"deprecated_at"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	ID        string             `json:"id"`
+	Name      string             `json:"name"`
+	Status    *string            `json:"status"`
+	IsPublic  *bool              `json:"is_public"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
 // Algorithm versions --
@@ -206,11 +191,8 @@ func (q *Queries) GetAlgorithmVersions(ctx context.Context, publisherID string) 
 		if err := rows.Scan(
 			&i.ID,
 			&i.Name,
-			&i.Ver,
 			&i.Status,
-			&i.IsActive,
-			&i.PublishedAt,
-			&i.DeprecatedAt,
+			&i.IsPublic,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -253,11 +235,10 @@ func (q *Queries) GetOnboardingState(ctx context.Context, publisherID string) (P
 const getPublisherActiveAlgorithm = `-- name: GetPublisherActiveAlgorithm :one
 SELECT id, name, COALESCE(description, '') as description,
        COALESCE(configuration::text, '{}')::jsonb as configuration,
-       COALESCE(validation_status, 'draft') as status, is_active,
-       COALESCE(CAST(SPLIT_PART(version, '.', 1) AS INTEGER), 1) as version,
-       published_at, created_at, updated_at
+       status, is_public,
+       created_at, updated_at
 FROM algorithms
-WHERE publisher_id = $1 AND (is_active = true OR validation_status = 'published')
+WHERE publisher_id = $1 AND status = 'published'
 ORDER BY created_at DESC
 LIMIT 1
 `
@@ -267,10 +248,8 @@ type GetPublisherActiveAlgorithmRow struct {
 	Name          string             `json:"name"`
 	Description   string             `json:"description"`
 	Configuration []byte             `json:"configuration"`
-	Status        string             `json:"status"`
-	IsActive      *bool              `json:"is_active"`
-	Version       interface{}        `json:"version"`
-	PublishedAt   pgtype.Timestamptz `json:"published_at"`
+	Status        *string            `json:"status"`
+	IsPublic      *bool              `json:"is_public"`
 	CreatedAt     pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
 }
@@ -284,9 +263,7 @@ func (q *Queries) GetPublisherActiveAlgorithm(ctx context.Context, publisherID s
 		&i.Description,
 		&i.Configuration,
 		&i.Status,
-		&i.IsActive,
-		&i.Version,
-		&i.PublishedAt,
+		&i.IsPublic,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -298,11 +275,10 @@ const getPublisherDraftAlgorithm = `-- name: GetPublisherDraftAlgorithm :one
 
 SELECT id, name, COALESCE(description, '') as description,
        COALESCE(configuration::text, '{}')::jsonb as configuration,
-       COALESCE(validation_status, 'draft') as status, is_active,
-       COALESCE(CAST(SPLIT_PART(version, '.', 1) AS INTEGER), 1) as version,
-       published_at, created_at, updated_at
+       status, is_public,
+       created_at, updated_at
 FROM algorithms
-WHERE publisher_id = $1 AND validation_status = 'draft'
+WHERE publisher_id = $1 AND status = 'draft'
 ORDER BY created_at DESC
 LIMIT 1
 `
@@ -312,10 +288,8 @@ type GetPublisherDraftAlgorithmRow struct {
 	Name          string             `json:"name"`
 	Description   string             `json:"description"`
 	Configuration []byte             `json:"configuration"`
-	Status        string             `json:"status"`
-	IsActive      *bool              `json:"is_active"`
-	Version       interface{}        `json:"version"`
-	PublishedAt   pgtype.Timestamptz `json:"published_at"`
+	Status        *string            `json:"status"`
+	IsPublic      *bool              `json:"is_public"`
 	CreatedAt     pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
 }
@@ -332,9 +306,7 @@ func (q *Queries) GetPublisherDraftAlgorithm(ctx context.Context, publisherID st
 		&i.Description,
 		&i.Configuration,
 		&i.Status,
-		&i.IsActive,
-		&i.Version,
-		&i.PublishedAt,
+		&i.IsPublic,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -343,30 +315,17 @@ func (q *Queries) GetPublisherDraftAlgorithm(ctx context.Context, publisherID st
 
 const publishAlgorithm = `-- name: PublishAlgorithm :one
 UPDATE algorithms
-SET validation_status = 'published',
-    is_active = true,
-    version = $1,
-    published_at = NOW(),
+SET status = 'published',
     updated_at = NOW()
-WHERE id = $2
-RETURNING published_at, updated_at
+WHERE id = $1
+RETURNING updated_at
 `
 
-type PublishAlgorithmParams struct {
-	Version string `json:"version"`
-	ID      string `json:"id"`
-}
-
-type PublishAlgorithmRow struct {
-	PublishedAt pgtype.Timestamptz `json:"published_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
-}
-
-func (q *Queries) PublishAlgorithm(ctx context.Context, arg PublishAlgorithmParams) (PublishAlgorithmRow, error) {
-	row := q.db.QueryRow(ctx, publishAlgorithm, arg.Version, arg.ID)
-	var i PublishAlgorithmRow
-	err := row.Scan(&i.PublishedAt, &i.UpdatedAt)
-	return i, err
+func (q *Queries) PublishAlgorithm(ctx context.Context, id string) (pgtype.Timestamptz, error) {
+	row := q.db.QueryRow(ctx, publishAlgorithm, id)
+	var updated_at pgtype.Timestamptz
+	err := row.Scan(&updated_at)
+	return updated_at, err
 }
 
 const skipOnboarding = `-- name: SkipOnboarding :one

@@ -22,6 +22,12 @@ import {
   History,
   RotateCcw,
   Loader2,
+  Eye,
+  EyeOff,
+  Link2,
+  Copy,
+  Library,
+  AlertTriangle,
 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import {
@@ -214,6 +220,12 @@ export function ZmanCard({ zman, category, onEdit }: ZmanCardProps) {
     });
   };
 
+  const handleToggleVisible = async () => {
+    await updateZman.mutateAsync({
+      is_visible: !zman.is_visible,
+    });
+  };
+
   const handleDelete = async () => {
     await deleteZman.mutateAsync(zman.zman_key);
     setShowDeleteDialog(false);
@@ -246,6 +258,7 @@ export function ZmanCard({ zman, category, onEdit }: ZmanCardProps) {
         className={`
           hover:border-primary/50 transition-colors group
           ${!zman.is_enabled ? 'opacity-60' : ''}
+          ${!zman.is_visible ? 'border-dashed border-muted-foreground/30' : ''}
         `}
       >
         <CardHeader className="pb-3">
@@ -308,6 +321,62 @@ export function ZmanCard({ zman, category, onEdit }: ZmanCardProps) {
                     Draft
                   </Badge>
                 )}
+
+                {/* Hidden Badge - when not visible to public */}
+                {!zman.is_visible && (
+                  <Badge variant="outline" className="text-xs text-muted-foreground border-muted-foreground/50">
+                    <EyeOff className="h-3 w-3 mr-1" />
+                    Hidden
+                  </Badge>
+                )}
+
+                {/* Linked Status Badge - shows if zman is linked to another publisher */}
+                {zman.is_linked && zman.linked_source_publisher_name && (
+                  <Badge
+                    variant="outline"
+                    className={`text-xs ${
+                      zman.linked_source_is_deleted
+                        ? 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/30 dark:text-amber-200 dark:border-amber-700'
+                        : 'bg-green-100 text-green-800 border-green-300 dark:bg-green-900/30 dark:text-green-200 dark:border-green-700'
+                    }`}
+                    title={
+                      zman.linked_source_is_deleted
+                        ? `Linked to ${zman.linked_source_publisher_name} (deleted)`
+                        : `Linked to ${zman.linked_source_publisher_name}`
+                    }
+                  >
+                    {zman.linked_source_is_deleted ? (
+                      <AlertTriangle className="h-3 w-3 mr-1" />
+                    ) : (
+                      <Link2 className="h-3 w-3 mr-1" />
+                    )}
+                    {zman.linked_source_publisher_name}
+                  </Badge>
+                )}
+
+                {/* Source Type Badge - shows how the zman was added */}
+                {zman.source_type && zman.source_type !== 'custom' && !zman.is_linked && (
+                  <Badge
+                    variant="outline"
+                    className={`text-xs ${
+                      zman.source_type === 'registry'
+                        ? 'bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-900/30 dark:text-blue-200 dark:border-blue-700'
+                        : 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/30 dark:text-amber-200 dark:border-amber-700'
+                    }`}
+                  >
+                    {zman.source_type === 'registry' ? (
+                      <>
+                        <Library className="h-3 w-3 mr-1" />
+                        Registry
+                      </>
+                    ) : zman.source_type === 'copied' ? (
+                      <>
+                        <Copy className="h-3 w-3 mr-1" />
+                        Copied
+                      </>
+                    ) : null}
+                  </Badge>
+                )}
               </div>
 
               {/* Event Tags - Show which events this zman applies to */}
@@ -355,6 +424,22 @@ export function ZmanCard({ zman, category, onEdit }: ZmanCardProps) {
                 )}
               </Button>
 
+              {/* Toggle Visibility - hide from public display */}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleToggleVisible}
+                title={zman.is_visible ? 'Hide from public display' : 'Show in public display'}
+                className={`h-8 w-8 ${zman.is_visible ? 'text-foreground' : 'text-muted-foreground'}`}
+                disabled={updateZman.isPending}
+              >
+                {zman.is_visible ? (
+                  <Eye className="h-4 w-4" />
+                ) : (
+                  <EyeOff className="h-4 w-4" />
+                )}
+              </Button>
+
               {/* Version History */}
               <Button
                 variant="ghost"
@@ -385,6 +470,25 @@ export function ZmanCard({ zman, category, onEdit }: ZmanCardProps) {
         <CardContent className="pt-0">
           {/* Formula Display */}
           <HighlightedFormula formula={zman.formula_dsl} />
+
+          {/* Database Tags from Master Zman */}
+          {zman.tags && zman.tags.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5 mt-2">
+              {zman.tags.map((tag) => {
+                const colorClass = tag.tag_type === 'event'
+                  ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200 border-blue-300 dark:border-blue-700'
+                  : tag.tag_type === 'timing'
+                  ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200 border-green-300 dark:border-green-700'
+                  : 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-200 border-purple-300 dark:border-purple-700';
+
+                return (
+                  <Badge key={tag.id} variant="outline" className={`text-xs ${colorClass}`}>
+                    {tag.display_name_english}
+                  </Badge>
+                );
+              })}
+            </div>
+          )}
 
           {/* Inferred Tags from Formula */}
           {(() => {

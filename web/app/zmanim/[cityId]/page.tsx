@@ -19,6 +19,16 @@ interface City {
   display_name: string;
 }
 
+// API response shape from get_publishers_for_city
+interface PublisherApiResponse {
+  publisher_id: string;
+  publisher_name: string;
+  coverage_level: string;
+  priority: number;
+  match_type: string;
+}
+
+// Normalized publisher for UI
 interface Publisher {
   id: string;
   name: string;
@@ -28,6 +38,8 @@ interface Publisher {
   website: string | null;
   priority: number;
   is_verified: boolean;
+  coverage_level?: string;
+  match_type?: string;
 }
 
 interface CityPublishersResponse {
@@ -65,7 +77,27 @@ export default function CityPublishersPage() {
       }
 
       const result = await response.json();
-      setData(result.data || result);
+      const raw = result.data || result;
+
+      // Map API response to normalized Publisher shape
+      const normalizedPublishers: Publisher[] = (raw.publishers || []).map((p: PublisherApiResponse) => ({
+        id: p.publisher_id,
+        name: p.publisher_name,
+        organization: null,
+        description: null,
+        logo_url: null,
+        website: null,
+        priority: p.priority,
+        is_verified: false,
+        coverage_level: p.coverage_level,
+        match_type: p.match_type,
+      }));
+
+      setData({
+        city: raw.city,
+        publishers: normalizedPublishers,
+        has_coverage: raw.has_coverage ?? normalizedPublishers.length > 0,
+      });
     } catch (err) {
       console.error('Failed to load publishers:', err);
       setError(err instanceof Error ? err.message : 'Failed to load publishers');
@@ -185,7 +217,7 @@ export default function CityPublishersPage() {
                 className="w-full flex items-center gap-4 p-6 bg-card border border-border rounded-lg hover:bg-muted hover:border-border transition-colors text-left"
               >
                 {/* Logo */}
-                <div className="relative w-16 h-16 bg-muted rounded-lg flex items-center justify-center flex-shrink-0">
+                <div className="relative w-16 h-16 bg-muted rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden">
                   {publisher.logo_url ? (
                     <Image
                       src={publisher.logo_url}
@@ -195,7 +227,11 @@ export default function CityPublishersPage() {
                       unoptimized
                     />
                   ) : (
-                    <User className="w-8 h-8 text-muted-foreground" />
+                    <div className="w-full h-full bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center rounded-lg">
+                      <span className="text-2xl font-bold text-white">
+                        {publisher.name?.charAt(0)?.toUpperCase() || 'P'}
+                      </span>
+                    </div>
                   )}
                 </div>
 
@@ -220,6 +256,14 @@ export default function CityPublishersPage() {
                   {publisher.description && (
                     <p className="text-sm text-muted-foreground line-clamp-2">
                       {publisher.description}
+                    </p>
+                  )}
+                  {/* Coverage info from API */}
+                  {publisher.match_type && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {publisher.match_type === 'exact_city' && 'Serves this city directly'}
+                      {publisher.match_type === 'region_match' && 'Regional coverage'}
+                      {publisher.match_type === 'country_match' && 'National coverage'}
                     </p>
                   )}
                 </div>

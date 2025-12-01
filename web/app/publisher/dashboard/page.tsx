@@ -36,10 +36,11 @@ interface DashboardSummary {
 
 export default function PublisherDashboardPage() {
   const api = useApi();
-  const { selectedPublisher, isLoading: contextLoading } = usePublisherContext();
+  const { selectedPublisher, isLoading: contextLoading, error: contextError } = usePublisherContext();
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [loadingTimeout, setLoadingTimeout] = useState(false);
 
   const fetchDashboard = useCallback(async () => {
     if (!selectedPublisher) return;
@@ -63,9 +64,22 @@ export default function PublisherDashboardPage() {
     }
   }, [selectedPublisher, fetchDashboard]);
 
-  if (contextLoading || isLoading) {
+  // Add timeout for context loading
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (contextLoading || !selectedPublisher) {
+        setLoadingTimeout(true);
+        setIsLoading(false);
+      }
+    }, 10000); // 10 second timeout
+
+    return () => clearTimeout(timer);
+  }, [contextLoading, selectedPublisher]);
+
+  // Show loading only if not timed out
+  if ((contextLoading || isLoading) && !loadingTimeout) {
     return (
-      <div className="p-8">
+      <div className="p-4 md:p-8">
         <div className="max-w-6xl mx-auto">
           <div className="text-center py-12">
             <Loader2 className="w-8 h-8 text-primary animate-spin mx-auto" />
@@ -76,12 +90,28 @@ export default function PublisherDashboardPage() {
     );
   }
 
-  if (error) {
+  // Show error if context failed or timeout occurred
+  if (contextError || loadingTimeout || error || !selectedPublisher) {
+    const errorMessage = contextError || error ||
+      (!selectedPublisher ? 'No publisher account found. Please contact support if you believe this is an error.' : 'Request timed out. Please try again.');
+
     return (
-      <div className="p-8">
+      <div className="p-4 md:p-8">
         <div className="max-w-6xl mx-auto">
-          <div className="bg-destructive/10 border border-destructive/50 rounded-lg p-4">
-            <p className="text-destructive">{error}</p>
+          <div className="bg-destructive/10 border border-destructive/50 rounded-lg p-6">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="font-semibold text-destructive mb-2">Unable to Load Dashboard</p>
+                <p className="text-destructive/90 text-sm mb-4">{errorMessage}</p>
+                <button
+                  onClick={() => window.location.reload()}
+                  className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 text-sm font-medium"
+                >
+                  Reload Page
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -125,10 +155,10 @@ export default function PublisherDashboardPage() {
   };
 
   return (
-    <div className="p-8">
+    <div className="p-4 md:p-8">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
-        <div className="mb-8">
+        <div className="mb-4 md:mb-8">
           <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
           {selectedPublisher && (
             <p className="text-muted-foreground mt-1">
@@ -160,11 +190,10 @@ export default function PublisherDashboardPage() {
           {/* Zmanim Card */}
           <Link
             href="/publisher/algorithm"
-            className={`bg-card rounded-lg p-6 border transition-colors group ${
-              summary?.algorithm.status === 'draft'
-                ? 'border-yellow-500/50 hover:border-yellow-500'
-                : 'border-border hover:border-primary/50'
-            }`}
+            className={`bg-card rounded-lg p-6 border transition-colors group ${summary?.algorithm.status === 'draft'
+              ? 'border-yellow-500/50 hover:border-yellow-500'
+              : 'border-border hover:border-primary/50'
+              }`}
           >
             <div className="flex items-start justify-between mb-4">
               <Code className="w-8 h-8 text-purple-500" />

@@ -1,12 +1,12 @@
 #!/bin/bash
 # Database migration script
-# Detects Coder environment and uses local database, otherwise uses Supabase
+# Runs PostgreSQL migrations from db/migrations directory
 
 set -e
 
 # Check if we're in Coder environment
 if [[ -d "/home/coder" ]] && [[ -f "/home/coder/workspace/zmanim-lab/api/.env" ]]; then
-    echo "Detected Coder environment - using local PostgreSQL"
+    echo "Running database migrations..."
 
     # Extract database URL from api/.env
     source /home/coder/workspace/zmanim-lab/api/.env
@@ -30,13 +30,13 @@ if [[ -d "/home/coder" ]] && [[ -f "/home/coder/workspace/zmanim-lab/api/.env" ]
         exit 1
     fi
 
-    MIGRATIONS_DIR="/home/coder/workspace/zmanim-lab/supabase/migrations"
+    MIGRATIONS_DIR="/home/coder/workspace/zmanim-lab/db/migrations"
 
-    # Create schema_migrations table if it doesn't exist (compatible with Supabase format)
+    # Create schema_migrations table if it doesn't exist
     PGPASSWORD=$DB_PASS psql -h $DB_HOST -U $DB_USER -d $DB_NAME -c \
         "CREATE TABLE IF NOT EXISTS schema_migrations (version TEXT PRIMARY KEY, applied_at TIMESTAMPTZ DEFAULT NOW());" 2>/dev/null || true
 
-    # Get list of applied migrations (Supabase uses 'version' column)
+    # Get list of applied migrations
     echo "Checking for applied migrations..."
     APPLIED=$(PGPASSWORD=$DB_PASS psql -h $DB_HOST -U $DB_USER -d $DB_NAME -t -c \
         "SELECT version FROM schema_migrations ORDER BY version;" 2>/dev/null || echo "")
@@ -67,18 +67,11 @@ if [[ -d "/home/coder" ]] && [[ -f "/home/coder/workspace/zmanim-lab/api/.env" ]
     echo ""
     echo "Migration complete!"
     echo ""
-    echo "NOTE: To import GeoNames cities data (163k+ cities with elevation/continent), run:"
-    echo "  ./scripts/import-geonames-cities.sh"
+    echo "NOTE: To seed geographic data (cities, countries, regions), run:"
+    echo "  cd api && DATABASE_URL=\$DATABASE_URL go run ./cmd/seed-geo/"
 
 else
-    echo "Not in Coder environment - using Supabase CLI"
-
-    # Use supabase CLI for remote database
-    if ! command -v supabase &> /dev/null; then
-        echo "Installing Supabase CLI..."
-        npm install -g supabase
-    fi
-
-    cd /home/coder/workspace/zmanim-lab
-    npx supabase migration up
+    echo "Error: Not in Coder environment"
+    echo "Please run this script from the Coder workspace"
+    exit 1
 fi

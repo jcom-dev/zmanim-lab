@@ -367,7 +367,7 @@ export default function AdminPublisherDetailPage() {
               }));
               router.push('/publisher/dashboard');
             }}
-            className="bg-yellow-600 hover:bg-yellow-700 dark:bg-yellow-600 dark:hover:bg-yellow-700 text-white"
+            className="bg-yellow-700 hover:bg-yellow-800 dark:bg-yellow-700 dark:hover:bg-yellow-800 text-white"
           >
             <svg className="w-4 h-4 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />

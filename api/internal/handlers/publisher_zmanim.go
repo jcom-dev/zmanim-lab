@@ -36,6 +36,14 @@ type PublisherZman struct {
 	SortOrder        int       `json:"sort_order" db:"sort_order"`
 	CreatedAt        time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt        time.Time `json:"updated_at" db:"updated_at"`
+	Tags             []ZmanTag `json:"tags,omitempty" db:"tags"` // Tags from master zman
+	// Linked zmanim support
+	MasterZmanID              *string `json:"master_zman_id,omitempty" db:"master_zman_id"`
+	LinkedPublisherZmanID     *string `json:"linked_publisher_zman_id,omitempty" db:"linked_publisher_zman_id"`
+	SourceType                *string `json:"source_type,omitempty" db:"source_type"`
+	IsLinked                  bool    `json:"is_linked" db:"is_linked"`
+	LinkedSourcePublisherName *string `json:"linked_source_publisher_name,omitempty" db:"linked_source_publisher_name"`
+	LinkedSourceIsDeleted     bool    `json:"linked_source_is_deleted" db:"linked_source_is_deleted"`
 }
 
 // ZmanimTemplate represents a system-wide default zman template
@@ -117,22 +125,84 @@ func (h *Handlers) GetPublisherZmanim(w http.ResponseWriter, r *http.Request) {
 	// Log the publisher ID being queried
 	log.Printf("INFO fetching zmanim publisher_id=%s", publisherID)
 
-	// Use SQLc generated query
-	sqlcZmanim, err := h.db.Queries.GetPublisherZmanim(ctx, publisherID)
+	// Query with linked zmanim resolution
+	query := `
+		SELECT
+			pz.id, pz.publisher_id, pz.zman_key, pz.hebrew_name, pz.english_name,
+			COALESCE(linked_pz.formula_dsl, pz.formula_dsl) AS formula_dsl,
+			pz.ai_explanation, pz.publisher_comment,
+			pz.is_enabled, pz.is_visible, pz.is_published, pz.is_custom, pz.category,
+			pz.dependencies, pz.sort_order, pz.created_at, pz.updated_at,
+			pz.master_zman_id, pz.linked_publisher_zman_id, pz.source_type,
+			EXISTS (
+				SELECT 1 FROM master_zman_events mze
+				WHERE mze.master_zman_id = pz.master_zman_id
+			) AS is_event_zman,
+			COALESCE(
+				(SELECT json_agg(json_build_object(
+					'id', t.id,
+					'tag_key', t.tag_key,
+					'name', t.name,
+					'display_name_hebrew', t.display_name_hebrew,
+					'display_name_english', t.display_name_english,
+					'tag_type', t.tag_type
+				) ORDER BY t.sort_order)
+				FROM master_zman_tags mzt
+				JOIN zman_tags t ON mzt.tag_id = t.id
+				WHERE mzt.master_zman_id = pz.master_zman_id),
+				'[]'::json
+			) AS tags,
+			CASE WHEN pz.linked_publisher_zman_id IS NOT NULL THEN true ELSE false END AS is_linked,
+			linked_pub.name AS linked_source_publisher_name,
+			CASE WHEN pz.linked_publisher_zman_id IS NOT NULL AND linked_pz.deleted_at IS NOT NULL
+				 THEN true ELSE false END AS linked_source_is_deleted
+		FROM publisher_zmanim pz
+		LEFT JOIN publisher_zmanim linked_pz ON pz.linked_publisher_zman_id = linked_pz.id
+		LEFT JOIN publishers linked_pub ON linked_pz.publisher_id = linked_pub.id
+		WHERE pz.publisher_id = $1
+		  AND pz.deleted_at IS NULL
+		ORDER BY pz.sort_order, pz.hebrew_name
+	`
+
+	rows, err := h.db.Pool.Query(ctx, query, publisherID)
 	if err != nil {
 		log.Printf("ERROR failed to fetch zmanim error=%v publisher_id=%s", err, publisherID)
 		RespondInternalError(w, r, "Failed to fetch zmanim")
 		return
 	}
+	defer rows.Close()
+
+	var zmanim []PublisherZman
+	for rows.Next() {
+		var z PublisherZman
+		var tagsJSON []byte
+		err := rows.Scan(
+			&z.ID, &z.PublisherID, &z.ZmanKey, &z.HebrewName, &z.EnglishName,
+			&z.FormulaDSL, &z.AIExplanation, &z.PublisherComment,
+			&z.IsEnabled, &z.IsVisible, &z.IsPublished, &z.IsCustom, &z.Category,
+			&z.Dependencies, &z.SortOrder, &z.CreatedAt, &z.UpdatedAt,
+			&z.MasterZmanID, &z.LinkedPublisherZmanID, &z.SourceType,
+			&z.IsEventZman, &tagsJSON, &z.IsLinked, &z.LinkedSourcePublisherName, &z.LinkedSourceIsDeleted,
+		)
+		if err != nil {
+			log.Printf("ERROR failed to scan zman error=%v publisher_id=%s", err, publisherID)
+			RespondInternalError(w, r, "Failed to fetch zmanim")
+			return
+		}
+
+		// Parse tags JSON
+		if len(tagsJSON) > 0 {
+			json.Unmarshal(tagsJSON, &z.Tags)
+		}
+		if z.Tags == nil {
+			z.Tags = []ZmanTag{}
+		}
+
+		zmanim = append(zmanim, z)
+	}
 
 	// Log the result count
-	log.Printf("INFO fetched zmanim count=%d publisher_id=%s", len(sqlcZmanim), publisherID)
-
-	// Convert SQLc types to handler types for consistent API response
-	zmanim := make([]PublisherZman, len(sqlcZmanim))
-	for i, z := range sqlcZmanim {
-		zmanim[i] = getPublisherZmanimRowToPublisherZman(z)
-	}
+	log.Printf("INFO fetched zmanim count=%d publisher_id=%s", len(zmanim), publisherID)
 
 	RespondJSON(w, r, http.StatusOK, zmanim)
 }
@@ -789,4 +859,320 @@ func (h *Handlers) BrowsePublicZmanim(w http.ResponseWriter, r *http.Request) {
 	}
 
 	RespondJSON(w, r, http.StatusOK, results)
+}
+
+// VerifiedPublisher represents a verified publisher for linking
+type VerifiedPublisher struct {
+	ID           string  `json:"id"`
+	Name         string  `json:"name"`
+	Organization *string `json:"organization,omitempty"`
+	LogoURL      *string `json:"logo_url,omitempty"`
+	ZmanimCount  int     `json:"zmanim_count"`
+}
+
+// PublisherZmanForLinking represents a zman available for linking/copying
+type PublisherZmanForLinking struct {
+	ID            string  `json:"id"`
+	PublisherID   string  `json:"publisher_id"`
+	PublisherName string  `json:"publisher_name"`
+	ZmanKey       string  `json:"zman_key"`
+	HebrewName    string  `json:"hebrew_name"`
+	EnglishName   string  `json:"english_name"`
+	FormulaDSL    string  `json:"formula_dsl"`
+	Category      string  `json:"category"`
+	SourceType    *string `json:"source_type,omitempty"`
+}
+
+// CreateFromPublisherRequest represents the request for copying/linking from another publisher
+type CreateFromPublisherRequest struct {
+	SourcePublisherZmanID string `json:"source_publisher_zman_id" validate:"required"`
+	Mode                  string `json:"mode" validate:"required"` // "copy" or "link"
+}
+
+// GetVerifiedPublishers returns verified publishers that can be linked to
+// GET /api/v1/publishers/verified
+func (h *Handlers) GetVerifiedPublishers(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// Use PublisherResolver to get publisher context (to exclude self)
+	pc := h.publisherResolver.MustResolve(w, r)
+	if pc == nil {
+		return // Response already sent
+	}
+	publisherID := pc.PublisherID
+
+	query := `
+		SELECT
+			p.id, p.name, p.organization, p.logo_url,
+			COUNT(pz.id) AS zmanim_count
+		FROM publishers p
+		JOIN publisher_zmanim pz ON pz.publisher_id = p.id
+			AND pz.is_published = true
+			AND pz.is_enabled = true
+			AND pz.deleted_at IS NULL
+		WHERE p.is_verified = true
+		  AND p.status = 'active'
+		  AND p.id != $1
+		GROUP BY p.id, p.name, p.organization, p.logo_url
+		HAVING COUNT(pz.id) > 0
+		ORDER BY p.name
+	`
+
+	rows, err := h.db.Pool.Query(ctx, query, publisherID)
+	if err != nil {
+		log.Printf("ERROR failed to fetch verified publishers error=%v", err)
+		RespondInternalError(w, r, "Failed to fetch publishers")
+		return
+	}
+	defer rows.Close()
+
+	var publishers []VerifiedPublisher
+	for rows.Next() {
+		var p VerifiedPublisher
+		err := rows.Scan(&p.ID, &p.Name, &p.Organization, &p.LogoURL, &p.ZmanimCount)
+		if err != nil {
+			log.Printf("ERROR failed to scan publisher error=%v", err)
+			RespondInternalError(w, r, "Failed to fetch publishers")
+			return
+		}
+		publishers = append(publishers, p)
+	}
+
+	RespondJSON(w, r, http.StatusOK, publishers)
+}
+
+// GetPublisherZmanimForLinking returns zmanim from a publisher available for linking
+// GET /api/v1/publishers/{publisherId}/zmanim
+func (h *Handlers) GetPublisherZmanimForLinking(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// Use PublisherResolver to get current publisher context
+	pc := h.publisherResolver.MustResolve(w, r)
+	if pc == nil {
+		return // Response already sent
+	}
+	currentPublisherID := pc.PublisherID
+
+	// Get target publisher ID from URL
+	sourcePublisherID := chi.URLParam(r, "publisherId")
+	if sourcePublisherID == "" {
+		RespondBadRequest(w, r, "Publisher ID is required")
+		return
+	}
+
+	// Verify source publisher is verified
+	var isVerified bool
+	err := h.db.Pool.QueryRow(ctx,
+		"SELECT is_verified FROM publishers WHERE id = $1 AND status = 'active'",
+		sourcePublisherID,
+	).Scan(&isVerified)
+	if err == pgx.ErrNoRows {
+		RespondNotFound(w, r, "Publisher not found")
+		return
+	}
+	if err != nil {
+		RespondInternalError(w, r, "Failed to verify publisher")
+		return
+	}
+	if !isVerified {
+		RespondForbidden(w, r, "Publisher is not verified for linking")
+		return
+	}
+
+	query := `
+		SELECT
+			pz.id, pz.publisher_id, pz.zman_key, pz.hebrew_name, pz.english_name,
+			pz.formula_dsl, pz.category, pz.source_type,
+			p.name AS publisher_name
+		FROM publisher_zmanim pz
+		JOIN publishers p ON p.id = pz.publisher_id
+		WHERE pz.publisher_id = $1
+		  AND pz.is_published = true
+		  AND pz.is_enabled = true
+		  AND pz.deleted_at IS NULL
+		  AND pz.zman_key NOT IN (
+			  SELECT zman_key FROM publisher_zmanim WHERE publisher_id = $2 AND deleted_at IS NULL
+		  )
+		ORDER BY pz.sort_order, pz.hebrew_name
+	`
+
+	rows, err := h.db.Pool.Query(ctx, query, sourcePublisherID, currentPublisherID)
+	if err != nil {
+		log.Printf("ERROR failed to fetch zmanim for linking error=%v", err)
+		RespondInternalError(w, r, "Failed to fetch zmanim")
+		return
+	}
+	defer rows.Close()
+
+	var zmanim []PublisherZmanForLinking
+	for rows.Next() {
+		var z PublisherZmanForLinking
+		err := rows.Scan(&z.ID, &z.PublisherID, &z.ZmanKey, &z.HebrewName, &z.EnglishName,
+			&z.FormulaDSL, &z.Category, &z.SourceType, &z.PublisherName)
+		if err != nil {
+			log.Printf("ERROR failed to scan zman error=%v", err)
+			RespondInternalError(w, r, "Failed to fetch zmanim")
+			return
+		}
+		zmanim = append(zmanim, z)
+	}
+
+	RespondJSON(w, r, http.StatusOK, zmanim)
+}
+
+// CreateZmanFromPublisher creates a zman by copying or linking from another publisher
+// POST /api/v1/publisher/zmanim/from-publisher
+func (h *Handlers) CreateZmanFromPublisher(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// Use PublisherResolver to get publisher context
+	pc := h.publisherResolver.MustResolve(w, r)
+	if pc == nil {
+		return // Response already sent
+	}
+	publisherID := pc.PublisherID
+
+	var req CreateFromPublisherRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		RespondBadRequest(w, r, "Invalid request body")
+		return
+	}
+
+	// Validate mode
+	if req.Mode != "copy" && req.Mode != "link" {
+		RespondBadRequest(w, r, "Mode must be 'copy' or 'link'")
+		return
+	}
+
+	// Fetch source zman
+	var sourceZman struct {
+		ID            string
+		PublisherID   string
+		ZmanKey       string
+		HebrewName    string
+		EnglishName   string
+		FormulaDSL    string
+		Category      string
+		Dependencies  []string
+		SortOrder     int32
+		MasterZmanID  *string
+		IsVerified    bool
+	}
+
+	err := h.db.Pool.QueryRow(ctx, `
+		SELECT
+			pz.id, pz.publisher_id, pz.zman_key, pz.hebrew_name, pz.english_name,
+			pz.formula_dsl, pz.category, pz.dependencies, pz.sort_order, pz.master_zman_id,
+			p.is_verified
+		FROM publisher_zmanim pz
+		JOIN publishers p ON p.id = pz.publisher_id
+		WHERE pz.id = $1
+		  AND pz.is_published = true
+		  AND pz.is_enabled = true
+		  AND pz.deleted_at IS NULL
+	`, req.SourcePublisherZmanID).Scan(
+		&sourceZman.ID, &sourceZman.PublisherID, &sourceZman.ZmanKey, &sourceZman.HebrewName,
+		&sourceZman.EnglishName, &sourceZman.FormulaDSL, &sourceZman.Category,
+		&sourceZman.Dependencies, &sourceZman.SortOrder, &sourceZman.MasterZmanID, &sourceZman.IsVerified,
+	)
+
+	if err == pgx.ErrNoRows {
+		RespondNotFound(w, r, "Source zman not found or not available")
+		return
+	}
+	if err != nil {
+		log.Printf("ERROR failed to fetch source zman error=%v", err)
+		RespondInternalError(w, r, "Failed to fetch source zman")
+		return
+	}
+
+	// For linking, verify source publisher is verified
+	if req.Mode == "link" && !sourceZman.IsVerified {
+		RespondForbidden(w, r, "Can only link to zmanim from verified publishers")
+		return
+	}
+
+	// Check if zman_key already exists for this publisher
+	var exists bool
+	err = h.db.Pool.QueryRow(ctx,
+		"SELECT EXISTS(SELECT 1 FROM publisher_zmanim WHERE publisher_id = $1 AND zman_key = $2 AND deleted_at IS NULL)",
+		publisherID, sourceZman.ZmanKey,
+	).Scan(&exists)
+	if err != nil {
+		RespondInternalError(w, r, "Failed to check existing zman")
+		return
+	}
+	if exists {
+		RespondBadRequest(w, r, fmt.Sprintf("Zman with key '%s' already exists", sourceZman.ZmanKey))
+		return
+	}
+
+	newID := uuid.New().String()
+	var sourceType string
+	var linkedID *string
+	var formulaDSL string
+
+	if req.Mode == "copy" {
+		sourceType = "copied"
+		linkedID = nil
+		formulaDSL = sourceZman.FormulaDSL
+	} else {
+		sourceType = "linked"
+		linkedID = &sourceZman.ID
+		formulaDSL = "" // For linked zmanim, formula is resolved at query time
+	}
+
+	// Insert the new zman
+	query := `
+		INSERT INTO publisher_zmanim (
+			id, publisher_id, zman_key, hebrew_name, english_name,
+			formula_dsl, is_enabled, is_visible, is_published, is_custom, category,
+			dependencies, sort_order, master_zman_id, linked_publisher_zman_id, source_type
+		) VALUES (
+			$1, $2, $3, $4, $5, $6, true, true, false, false, $7, $8, $9, $10, $11, $12
+		)
+		RETURNING id, created_at, updated_at
+	`
+
+	var createdAt, updatedAt time.Time
+	err = h.db.Pool.QueryRow(ctx, query,
+		newID, publisherID, sourceZman.ZmanKey, sourceZman.HebrewName, sourceZman.EnglishName,
+		formulaDSL, sourceZman.Category, sourceZman.Dependencies, sourceZman.SortOrder,
+		sourceZman.MasterZmanID, linkedID, sourceType,
+	).Scan(&newID, &createdAt, &updatedAt)
+
+	if err != nil {
+		if strings.Contains(err.Error(), "duplicate key") {
+			RespondBadRequest(w, r, fmt.Sprintf("Zman with key '%s' already exists", sourceZman.ZmanKey))
+			return
+		}
+		log.Printf("ERROR failed to create zman from publisher error=%v", err)
+		RespondInternalError(w, r, "Failed to create zman")
+		return
+	}
+
+	// Return the created zman
+	result := PublisherZman{
+		ID:                    newID,
+		PublisherID:           publisherID,
+		ZmanKey:               sourceZman.ZmanKey,
+		HebrewName:            sourceZman.HebrewName,
+		EnglishName:           sourceZman.EnglishName,
+		FormulaDSL:            sourceZman.FormulaDSL, // Return the resolved formula
+		IsEnabled:             true,
+		IsVisible:             true,
+		IsPublished:           false,
+		IsCustom:              false,
+		Category:              sourceZman.Category,
+		Dependencies:          sourceZman.Dependencies,
+		SortOrder:             int(sourceZman.SortOrder),
+		CreatedAt:             createdAt,
+		UpdatedAt:             updatedAt,
+		MasterZmanID:          sourceZman.MasterZmanID,
+		LinkedPublisherZmanID: linkedID,
+		SourceType:            &sourceType,
+		IsLinked:              req.Mode == "link",
+	}
+
+	RespondJSON(w, r, http.StatusCreated, result)
 }

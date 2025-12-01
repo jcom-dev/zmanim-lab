@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { useApi } from '@/lib/api-client';
 
 // Example prompts for common zmanim calculations
 const EXAMPLE_PROMPTS = [
@@ -26,6 +27,7 @@ interface GenerationResult {
 }
 
 export function AIGeneratePanel({ onAccept, onEdit, className = '' }: AIGeneratePanelProps) {
+  const api = useApi();
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<GenerationResult | null>(null);
@@ -39,19 +41,12 @@ export function AIGeneratePanel({ onAccept, onEdit, className = '' }: AIGenerate
     setResult(null);
 
     try {
-      const response = await fetch('/api/v1/ai/generate-formula', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      // api-client auto-unwraps the 'data' field from API response
+      const result = await api.post<GenerationResult>('/ai/generate-formula', {
         body: JSON.stringify({ description }),
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || data.error || 'Failed to generate formula');
-      }
-
-      setResult(data);
+      setResult(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {

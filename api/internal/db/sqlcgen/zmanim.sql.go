@@ -8,6 +8,8 @@ package sqlcgen
 import (
 	"context"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const browsePublicZmanim = `-- name: BrowsePublicZmanim :many
@@ -91,52 +93,59 @@ INSERT INTO publisher_zmanim (
     id, publisher_id, zman_key, hebrew_name, english_name,
     formula_dsl, ai_explanation, publisher_comment,
     is_enabled, is_visible, is_published, is_custom, category,
-    dependencies, sort_order
+    dependencies, sort_order, master_zman_id, linked_publisher_zman_id, source_type
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18
 )
 RETURNING id, publisher_id, zman_key, hebrew_name, english_name,
     formula_dsl, ai_explanation, publisher_comment,
     is_enabled, is_visible, is_published, is_custom, category,
-    dependencies, sort_order, created_at, updated_at
+    dependencies, sort_order, master_zman_id, linked_publisher_zman_id, source_type,
+    created_at, updated_at
 `
 
 type CreatePublisherZmanParams struct {
-	ID               string   `json:"id"`
-	PublisherID      string   `json:"publisher_id"`
-	ZmanKey          string   `json:"zman_key"`
-	HebrewName       string   `json:"hebrew_name"`
-	EnglishName      string   `json:"english_name"`
-	FormulaDsl       string   `json:"formula_dsl"`
-	AiExplanation    *string  `json:"ai_explanation"`
-	PublisherComment *string  `json:"publisher_comment"`
-	IsEnabled        bool     `json:"is_enabled"`
-	IsVisible        bool     `json:"is_visible"`
-	IsPublished      bool     `json:"is_published"`
-	IsCustom         bool     `json:"is_custom"`
-	Category         string   `json:"category"`
-	Dependencies     []string `json:"dependencies"`
-	SortOrder        int32    `json:"sort_order"`
+	ID                    string      `json:"id"`
+	PublisherID           string      `json:"publisher_id"`
+	ZmanKey               string      `json:"zman_key"`
+	HebrewName            string      `json:"hebrew_name"`
+	EnglishName           string      `json:"english_name"`
+	FormulaDsl            string      `json:"formula_dsl"`
+	AiExplanation         *string     `json:"ai_explanation"`
+	PublisherComment      *string     `json:"publisher_comment"`
+	IsEnabled             bool        `json:"is_enabled"`
+	IsVisible             bool        `json:"is_visible"`
+	IsPublished           bool        `json:"is_published"`
+	IsCustom              bool        `json:"is_custom"`
+	Category              string      `json:"category"`
+	Dependencies          []string    `json:"dependencies"`
+	SortOrder             int32       `json:"sort_order"`
+	MasterZmanID          pgtype.UUID `json:"master_zman_id"`
+	LinkedPublisherZmanID pgtype.UUID `json:"linked_publisher_zman_id"`
+	SourceType            *string     `json:"source_type"`
 }
 
 type CreatePublisherZmanRow struct {
-	ID               string    `json:"id"`
-	PublisherID      string    `json:"publisher_id"`
-	ZmanKey          string    `json:"zman_key"`
-	HebrewName       string    `json:"hebrew_name"`
-	EnglishName      string    `json:"english_name"`
-	FormulaDsl       string    `json:"formula_dsl"`
-	AiExplanation    *string   `json:"ai_explanation"`
-	PublisherComment *string   `json:"publisher_comment"`
-	IsEnabled        bool      `json:"is_enabled"`
-	IsVisible        bool      `json:"is_visible"`
-	IsPublished      bool      `json:"is_published"`
-	IsCustom         bool      `json:"is_custom"`
-	Category         string    `json:"category"`
-	Dependencies     []string  `json:"dependencies"`
-	SortOrder        int32     `json:"sort_order"`
-	CreatedAt        time.Time `json:"created_at"`
-	UpdatedAt        time.Time `json:"updated_at"`
+	ID                    string      `json:"id"`
+	PublisherID           string      `json:"publisher_id"`
+	ZmanKey               string      `json:"zman_key"`
+	HebrewName            string      `json:"hebrew_name"`
+	EnglishName           string      `json:"english_name"`
+	FormulaDsl            string      `json:"formula_dsl"`
+	AiExplanation         *string     `json:"ai_explanation"`
+	PublisherComment      *string     `json:"publisher_comment"`
+	IsEnabled             bool        `json:"is_enabled"`
+	IsVisible             bool        `json:"is_visible"`
+	IsPublished           bool        `json:"is_published"`
+	IsCustom              bool        `json:"is_custom"`
+	Category              string      `json:"category"`
+	Dependencies          []string    `json:"dependencies"`
+	SortOrder             int32       `json:"sort_order"`
+	MasterZmanID          pgtype.UUID `json:"master_zman_id"`
+	LinkedPublisherZmanID pgtype.UUID `json:"linked_publisher_zman_id"`
+	SourceType            *string     `json:"source_type"`
+	CreatedAt             time.Time   `json:"created_at"`
+	UpdatedAt             time.Time   `json:"updated_at"`
 }
 
 func (q *Queries) CreatePublisherZman(ctx context.Context, arg CreatePublisherZmanParams) (CreatePublisherZmanRow, error) {
@@ -156,6 +165,9 @@ func (q *Queries) CreatePublisherZman(ctx context.Context, arg CreatePublisherZm
 		arg.Category,
 		arg.Dependencies,
 		arg.SortOrder,
+		arg.MasterZmanID,
+		arg.LinkedPublisherZmanID,
+		arg.SourceType,
 	)
 	var i CreatePublisherZmanRow
 	err := row.Scan(
@@ -174,6 +186,9 @@ func (q *Queries) CreatePublisherZman(ctx context.Context, arg CreatePublisherZm
 		&i.Category,
 		&i.Dependencies,
 		&i.SortOrder,
+		&i.MasterZmanID,
+		&i.LinkedPublisherZmanID,
+		&i.SourceType,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -196,6 +211,78 @@ func (q *Queries) DeletePublisherZman(ctx context.Context, arg DeletePublisherZm
 	var id string
 	err := row.Scan(&id)
 	return id, err
+}
+
+const getPublisherZmanByID = `-- name: GetPublisherZmanByID :one
+SELECT
+    pz.id, pz.publisher_id, pz.zman_key, pz.hebrew_name, pz.english_name,
+    pz.formula_dsl, pz.ai_explanation, pz.publisher_comment,
+    pz.is_enabled, pz.is_visible, pz.is_published, pz.is_custom, pz.category,
+    pz.dependencies, pz.sort_order, pz.master_zman_id, pz.linked_publisher_zman_id,
+    pz.source_type, pz.deleted_at, pz.created_at, pz.updated_at,
+    p.name AS publisher_name,
+    p.is_verified AS publisher_is_verified
+FROM publisher_zmanim pz
+JOIN publishers p ON p.id = pz.publisher_id
+WHERE pz.id = $1
+`
+
+type GetPublisherZmanByIDRow struct {
+	ID                    string             `json:"id"`
+	PublisherID           string             `json:"publisher_id"`
+	ZmanKey               string             `json:"zman_key"`
+	HebrewName            string             `json:"hebrew_name"`
+	EnglishName           string             `json:"english_name"`
+	FormulaDsl            string             `json:"formula_dsl"`
+	AiExplanation         *string            `json:"ai_explanation"`
+	PublisherComment      *string            `json:"publisher_comment"`
+	IsEnabled             bool               `json:"is_enabled"`
+	IsVisible             bool               `json:"is_visible"`
+	IsPublished           bool               `json:"is_published"`
+	IsCustom              bool               `json:"is_custom"`
+	Category              string             `json:"category"`
+	Dependencies          []string           `json:"dependencies"`
+	SortOrder             int32              `json:"sort_order"`
+	MasterZmanID          pgtype.UUID        `json:"master_zman_id"`
+	LinkedPublisherZmanID pgtype.UUID        `json:"linked_publisher_zman_id"`
+	SourceType            *string            `json:"source_type"`
+	DeletedAt             pgtype.Timestamptz `json:"deleted_at"`
+	CreatedAt             time.Time          `json:"created_at"`
+	UpdatedAt             time.Time          `json:"updated_at"`
+	PublisherName         string             `json:"publisher_name"`
+	PublisherIsVerified   bool               `json:"publisher_is_verified"`
+}
+
+// Get a specific zman by ID (for linking validation)
+func (q *Queries) GetPublisherZmanByID(ctx context.Context, id string) (GetPublisherZmanByIDRow, error) {
+	row := q.db.QueryRow(ctx, getPublisherZmanByID, id)
+	var i GetPublisherZmanByIDRow
+	err := row.Scan(
+		&i.ID,
+		&i.PublisherID,
+		&i.ZmanKey,
+		&i.HebrewName,
+		&i.EnglishName,
+		&i.FormulaDsl,
+		&i.AiExplanation,
+		&i.PublisherComment,
+		&i.IsEnabled,
+		&i.IsVisible,
+		&i.IsPublished,
+		&i.IsCustom,
+		&i.Category,
+		&i.Dependencies,
+		&i.SortOrder,
+		&i.MasterZmanID,
+		&i.LinkedPublisherZmanID,
+		&i.SourceType,
+		&i.DeletedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.PublisherName,
+		&i.PublisherIsVerified,
+	)
+	return i, err
 }
 
 const getPublisherZmanByKey = `-- name: GetPublisherZmanByKey :one
@@ -263,39 +350,55 @@ const getPublisherZmanim = `-- name: GetPublisherZmanim :many
 
 SELECT
     pz.id, pz.publisher_id, pz.zman_key, pz.hebrew_name, pz.english_name,
-    pz.formula_dsl, pz.ai_explanation, pz.publisher_comment,
+    -- Resolve formula from linked source if applicable
+    COALESCE(linked_pz.formula_dsl, pz.formula_dsl) AS formula_dsl,
+    pz.ai_explanation, pz.publisher_comment,
     pz.is_enabled, pz.is_visible, pz.is_published, pz.is_custom, pz.category,
     pz.dependencies, pz.sort_order, pz.created_at, pz.updated_at,
+    pz.master_zman_id, pz.linked_publisher_zman_id, pz.source_type,
     -- Check if this zman is linked to any events (daily zmanim have no event links)
     EXISTS (
         SELECT 1 FROM master_zman_events mze
         WHERE mze.master_zman_id = pz.master_zman_id
-    ) AS is_event_zman
+    ) AS is_event_zman,
+    -- Linked source info
+    CASE WHEN pz.linked_publisher_zman_id IS NOT NULL THEN true ELSE false END AS is_linked,
+    linked_pub.name AS linked_source_publisher_name,
+    CASE WHEN pz.linked_publisher_zman_id IS NOT NULL AND linked_pz.deleted_at IS NOT NULL
+         THEN true ELSE false END AS linked_source_is_deleted
 FROM publisher_zmanim pz
+LEFT JOIN publisher_zmanim linked_pz ON pz.linked_publisher_zman_id = linked_pz.id
+LEFT JOIN publishers linked_pub ON linked_pz.publisher_id = linked_pub.id
 WHERE pz.publisher_id = $1
   AND pz.deleted_at IS NULL
 ORDER BY pz.sort_order, pz.hebrew_name
 `
 
 type GetPublisherZmanimRow struct {
-	ID               string    `json:"id"`
-	PublisherID      string    `json:"publisher_id"`
-	ZmanKey          string    `json:"zman_key"`
-	HebrewName       string    `json:"hebrew_name"`
-	EnglishName      string    `json:"english_name"`
-	FormulaDsl       string    `json:"formula_dsl"`
-	AiExplanation    *string   `json:"ai_explanation"`
-	PublisherComment *string   `json:"publisher_comment"`
-	IsEnabled        bool      `json:"is_enabled"`
-	IsVisible        bool      `json:"is_visible"`
-	IsPublished      bool      `json:"is_published"`
-	IsCustom         bool      `json:"is_custom"`
-	Category         string    `json:"category"`
-	Dependencies     []string  `json:"dependencies"`
-	SortOrder        int32     `json:"sort_order"`
-	CreatedAt        time.Time `json:"created_at"`
-	UpdatedAt        time.Time `json:"updated_at"`
-	IsEventZman      bool      `json:"is_event_zman"`
+	ID                        string      `json:"id"`
+	PublisherID               string      `json:"publisher_id"`
+	ZmanKey                   string      `json:"zman_key"`
+	HebrewName                string      `json:"hebrew_name"`
+	EnglishName               string      `json:"english_name"`
+	FormulaDsl                string      `json:"formula_dsl"`
+	AiExplanation             *string     `json:"ai_explanation"`
+	PublisherComment          *string     `json:"publisher_comment"`
+	IsEnabled                 bool        `json:"is_enabled"`
+	IsVisible                 bool        `json:"is_visible"`
+	IsPublished               bool        `json:"is_published"`
+	IsCustom                  bool        `json:"is_custom"`
+	Category                  string      `json:"category"`
+	Dependencies              []string    `json:"dependencies"`
+	SortOrder                 int32       `json:"sort_order"`
+	CreatedAt                 time.Time   `json:"created_at"`
+	UpdatedAt                 time.Time   `json:"updated_at"`
+	MasterZmanID              pgtype.UUID `json:"master_zman_id"`
+	LinkedPublisherZmanID     pgtype.UUID `json:"linked_publisher_zman_id"`
+	SourceType                *string     `json:"source_type"`
+	IsEventZman               bool        `json:"is_event_zman"`
+	IsLinked                  bool        `json:"is_linked"`
+	LinkedSourcePublisherName *string     `json:"linked_source_publisher_name"`
+	LinkedSourceIsDeleted     bool        `json:"linked_source_is_deleted"`
 }
 
 // Zmanim SQL Queries
@@ -328,7 +431,132 @@ func (q *Queries) GetPublisherZmanim(ctx context.Context, publisherID string) ([
 			&i.SortOrder,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.MasterZmanID,
+			&i.LinkedPublisherZmanID,
+			&i.SourceType,
 			&i.IsEventZman,
+			&i.IsLinked,
+			&i.LinkedSourcePublisherName,
+			&i.LinkedSourceIsDeleted,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getPublisherZmanimForLinking = `-- name: GetPublisherZmanimForLinking :many
+SELECT
+    pz.id, pz.publisher_id, pz.zman_key, pz.hebrew_name, pz.english_name,
+    pz.formula_dsl, pz.category, pz.source_type,
+    p.name AS publisher_name
+FROM publisher_zmanim pz
+JOIN publishers p ON p.id = pz.publisher_id
+WHERE pz.publisher_id = $1
+  AND pz.is_published = true
+  AND pz.is_enabled = true
+  AND pz.deleted_at IS NULL
+  AND ($2::text IS NULL OR pz.zman_key NOT IN (
+      SELECT zman_key FROM publisher_zmanim WHERE publisher_id = $2 AND deleted_at IS NULL
+  ))
+ORDER BY pz.sort_order, pz.hebrew_name
+`
+
+type GetPublisherZmanimForLinkingParams struct {
+	PublisherID string `json:"publisher_id"`
+	Column2     string `json:"column_2"`
+}
+
+type GetPublisherZmanimForLinkingRow struct {
+	ID            string  `json:"id"`
+	PublisherID   string  `json:"publisher_id"`
+	ZmanKey       string  `json:"zman_key"`
+	HebrewName    string  `json:"hebrew_name"`
+	EnglishName   string  `json:"english_name"`
+	FormulaDsl    string  `json:"formula_dsl"`
+	Category      string  `json:"category"`
+	SourceType    *string `json:"source_type"`
+	PublisherName string  `json:"publisher_name"`
+}
+
+// Get published zmanim from a specific publisher for copying/linking
+func (q *Queries) GetPublisherZmanimForLinking(ctx context.Context, arg GetPublisherZmanimForLinkingParams) ([]GetPublisherZmanimForLinkingRow, error) {
+	rows, err := q.db.Query(ctx, getPublisherZmanimForLinking, arg.PublisherID, arg.Column2)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetPublisherZmanimForLinkingRow{}
+	for rows.Next() {
+		var i GetPublisherZmanimForLinkingRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.PublisherID,
+			&i.ZmanKey,
+			&i.HebrewName,
+			&i.EnglishName,
+			&i.FormulaDsl,
+			&i.Category,
+			&i.SourceType,
+			&i.PublisherName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getVerifiedPublishersForLinking = `-- name: GetVerifiedPublishersForLinking :many
+
+SELECT
+    p.id, p.name, p.organization, p.logo_url,
+    COUNT(pz.id) AS zmanim_count
+FROM publishers p
+JOIN publisher_zmanim pz ON pz.publisher_id = p.id
+    AND pz.is_published = true
+    AND pz.is_enabled = true
+    AND pz.deleted_at IS NULL
+WHERE p.is_verified = true
+  AND p.status = 'active'
+  AND p.id != $1  -- Exclude self
+GROUP BY p.id, p.name, p.organization, p.logo_url
+HAVING COUNT(pz.id) > 0
+ORDER BY p.name
+`
+
+type GetVerifiedPublishersForLinkingRow struct {
+	ID           string  `json:"id"`
+	Name         string  `json:"name"`
+	Organization *string `json:"organization"`
+	LogoUrl      *string `json:"logo_url"`
+	ZmanimCount  int64   `json:"zmanim_count"`
+}
+
+// Linked Zmanim Support --
+// Get verified publishers that current publisher can link to (excludes self)
+func (q *Queries) GetVerifiedPublishersForLinking(ctx context.Context, id string) ([]GetVerifiedPublishersForLinkingRow, error) {
+	rows, err := q.db.Query(ctx, getVerifiedPublishersForLinking, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetVerifiedPublishersForLinkingRow{}
+	for rows.Next() {
+		var i GetVerifiedPublishersForLinkingRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Organization,
+			&i.LogoUrl,
+			&i.ZmanimCount,
 		); err != nil {
 			return nil, err
 		}

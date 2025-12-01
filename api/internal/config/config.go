@@ -26,10 +26,7 @@ type ServerConfig struct {
 
 // DatabaseConfig holds database connection configuration
 type DatabaseConfig struct {
-	URL              string
-	SupabaseURL      string
-	SupabaseAnonKey  string
-	SupabaseServiceKey string
+	URL string
 }
 
 // JWTConfig holds JWT configuration
@@ -61,10 +58,7 @@ func Load() (*Config, error) {
 			Environment: getEnv("ENVIRONMENT", "development"),
 		},
 		Database: DatabaseConfig{
-			URL:              getEnv("DATABASE_URL", ""),
-			SupabaseURL:      getEnv("SUPABASE_URL", ""),
-			SupabaseAnonKey:  getEnv("SUPABASE_ANON_KEY", ""),
-			SupabaseServiceKey: getEnv("SUPABASE_SERVICE_KEY", ""),
+			URL: getEnv("DATABASE_URL", ""),
 		},
 		JWT: JWTConfig{
 			Secret:  getEnv("JWT_SECRET", ""),
@@ -101,7 +95,6 @@ func (c *Config) Validate() error {
 	if c.Database.URL == "" {
 		return fmt.Errorf("DATABASE_URL is required")
 	}
-	// Supabase config is optional - local postgres can be used instead
 	if c.JWT.Secret == "" && c.Server.Environment == "production" {
 		return fmt.Errorf("JWT_SECRET is required in production")
 	}

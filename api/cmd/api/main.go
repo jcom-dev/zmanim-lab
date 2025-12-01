@@ -245,6 +245,13 @@ func main() {
 			r.Post("/algorithms/{id}/fork", h.ForkAlgorithm)
 		})
 
+		// Verified publishers for linking (requires publisher auth)
+		r.Group(func(r chi.Router) {
+			r.Use(authMiddleware.RequireRole("publisher"))
+			r.Get("/publishers/verified", h.GetVerifiedPublishers)
+			r.Get("/publishers/{publisherId}/zmanim", h.GetPublisherZmanimForLinking)
+		})
+
 		// Publisher protected routes
 		r.Route("/publisher", func(r chi.Router) {
 			r.Use(authMiddleware.RequireRole("publisher"))
@@ -264,6 +271,7 @@ func main() {
 			r.Get("/zmanim", h.GetPublisherZmanim)
 			r.Post("/zmanim", h.CreatePublisherZmanFromRegistry) // Updated: create from registry
 			r.Post("/zmanim/import", h.ImportZmanim)
+			r.Post("/zmanim/from-publisher", h.CreateZmanFromPublisher) // Copy or link from another publisher
 			r.Get("/zmanim/{zmanKey}", h.GetPublisherZman)
 			r.Put("/zmanim/{zmanKey}", h.UpdatePublisherZman)
 			r.Delete("/zmanim/{zmanKey}", h.SoftDeletePublisherZman) // Updated: soft delete

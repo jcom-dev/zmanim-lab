@@ -39,10 +39,11 @@ import {
 
 interface ZmanTag {
   id: string;
+  tag_key: string;
   name: string;
   display_name_hebrew: string;
   display_name_english: string;
-  tag_type: string;
+  tag_type: 'event' | 'timing' | 'behavior';
   color?: string;
 }
 
@@ -66,8 +67,6 @@ interface MasterZman {
   halachic_notes?: string;
   halachic_source?: string;
   time_category: string;
-  event_category?: string;
-  display_offset?: string; // day_before, day_of, day_after
   default_formula_dsl: string;
   is_core: boolean;
   is_hidden: boolean;
@@ -76,7 +75,6 @@ interface MasterZman {
   updated_at: string;
   tags?: ZmanTag[];
   tag_ids?: string[]; // IDs of associated tags
-  day_types?: string[]; // Day type names this zman applies to
 }
 
 interface TimeCategory {
@@ -95,23 +93,12 @@ const TIME_CATEGORIES: TimeCategory[] = [
   { key: 'midnight', display_name: 'Midnight' },
 ];
 
-// Event categories for what occasion/event a zman applies to
-const EVENT_CATEGORIES = [
-  { key: 'none', display_name: 'None (Daily)' },
-  { key: 'erev_shabbos', display_name: 'Erev Shabbos' },
-  { key: 'motzei_shabbos', display_name: 'Motzei Shabbos' },
-  { key: 'erev_yom_tov', display_name: 'Erev Yom Tov' },
-  { key: 'motzei_yom_tov', display_name: 'Motzei Yom Tov' },
-  { key: 'taanis', display_name: 'Fast Day' },
-  { key: 'erev_pesach', display_name: 'Erev Pesach' },
-];
-
-// Display offset - when to show this zman relative to the event
-const DISPLAY_OFFSETS = [
-  { key: 'day_of', display_name: 'Day Of (Default)' },
-  { key: 'day_before', display_name: 'Day Before' },
-  { key: 'day_after', display_name: 'Day After' },
-];
+// Tag type colors for display
+const TAG_TYPE_COLORS: Record<string, string> = {
+  event: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200',
+  timing: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200',
+  behavior: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-200',
+};
 
 const categoryColors: Record<string, string> = {
   dawn: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-200',
@@ -218,8 +205,6 @@ export default function AdminRegistryPage() {
     halachic_notes: '',
     halachic_source: '',
     time_category: 'sunrise',
-    event_category: '',
-    display_offset: 'day_of',
     default_formula_dsl: '',
     is_core: false,
     is_hidden: false,
@@ -295,14 +280,15 @@ export default function AdminRegistryPage() {
       if (shitaFilter === 'no_shita' && inferredTags.shita) return false;
     }
 
-    // Event filter (inferred from key or event_category)
+    // Event filter (based on tags)
     if (eventFilter !== 'all') {
-      const inferredEvent = inferEventFromKey(z.zman_key);
-      const hasEvent = z.event_category || inferredEvent;
-      if (eventFilter === 'shabbos' && !z.zman_key.includes('shabbos') && !z.zman_key.includes('candle')) return false;
-      if (eventFilter === 'fast' && !z.zman_key.includes('fast') && !z.zman_key.includes('taanis')) return false;
-      if (eventFilter === 'pesach' && !z.zman_key.includes('chametz') && !z.zman_key.includes('pesach')) return false;
-      if (eventFilter === 'daily' && hasEvent) return false;
+      const hasBehaviorTag = z.tags?.some(t => t.tag_type === 'behavior');
+      const hasEventTag = (tagKey: string) => z.tags?.some(t => t.tag_key === tagKey || t.name === tagKey);
+
+      if (eventFilter === 'shabbos' && !hasEventTag('shabbos')) return false;
+      if (eventFilter === 'fast' && !hasEventTag('fast_day') && !hasEventTag('tisha_bav')) return false;
+      if (eventFilter === 'pesach' && !hasEventTag('pesach')) return false;
+      if (eventFilter === 'daily' && hasBehaviorTag) return false;
     }
 
     // Core filter
@@ -323,8 +309,6 @@ export default function AdminRegistryPage() {
       halachic_notes: '',
       halachic_source: '',
       time_category: 'sunrise',
-      event_category: '',
-      display_offset: 'day_of',
       default_formula_dsl: '',
       is_core: false,
       is_hidden: false,
@@ -350,8 +334,6 @@ export default function AdminRegistryPage() {
       halachic_notes: zman.halachic_notes || '',
       halachic_source: zman.halachic_source || '',
       time_category: zman.time_category,
-      event_category: zman.event_category || '',
-      display_offset: zman.display_offset || 'day_of',
       default_formula_dsl: zman.default_formula_dsl,
       is_core: zman.is_core,
       is_hidden: zman.is_hidden,
@@ -372,8 +354,6 @@ export default function AdminRegistryPage() {
         halachic_notes: formData.halachic_notes || null,
         halachic_source: formData.halachic_source || null,
         time_category: formData.time_category,
-        event_category: formData.event_category || null,
-        display_offset: formData.display_offset || 'day_of',
         default_formula_dsl: formData.default_formula_dsl,
         is_core: formData.is_core,
         is_hidden: formData.is_hidden,
@@ -441,14 +421,14 @@ export default function AdminRegistryPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Zmanim Registry</h1>
-          <p className="text-muted-foreground mt-1">
+          <h1 className="text-2xl md:text-3xl font-bold text-foreground">Zmanim Registry</h1>
+          <p className="text-sm md:text-base text-muted-foreground mt-1">
             Manage the master zmanim registry. Publishers select zmanim from this canonical list.
           </p>
         </div>
-        <Button onClick={openCreateDialog}>
+        <Button onClick={openCreateDialog} className="w-full md:w-auto">
           <Plus className="w-4 h-4 mr-2" />
           Add Zman
         </Button>
@@ -471,9 +451,10 @@ export default function AdminRegistryPage() {
       {/* Filters */}
       <Card>
         <CardContent className="pt-6">
-          <div className="flex flex-wrap items-center gap-4">
-            <div className="flex items-center gap-2 flex-1 min-w-[200px]">
-              <Search className="w-4 h-4 text-muted-foreground" />
+          <div className="flex flex-col gap-4">
+            {/* Search */}
+            <div className="flex items-center gap-2 w-full">
+              <Search className="w-4 h-4 text-muted-foreground flex-shrink-0" />
               <Input
                 placeholder="Search zmanim, formulas..."
                 value={searchTerm}
@@ -481,70 +462,74 @@ export default function AdminRegistryPage() {
                 className="flex-1"
               />
             </div>
-            <div className="flex items-center gap-2">
-              <Label className="text-sm text-muted-foreground whitespace-nowrap">Time:</Label>
-              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                <SelectTrigger className="w-[130px]">
-                  <SelectValue placeholder="All" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Times</SelectItem>
-                  {TIME_CATEGORIES.map((cat) => (
-                    <SelectItem key={cat.key} value={cat.key}>
-                      {cat.display_name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex items-center gap-2">
-              <Label className="text-sm text-muted-foreground whitespace-nowrap">Shita:</Label>
-              <Select value={shitaFilter} onValueChange={setShitaFilter}>
-                <SelectTrigger className="w-[110px]">
-                  <SelectValue placeholder="All" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All</SelectItem>
-                  <SelectItem value="gra">GRA</SelectItem>
-                  <SelectItem value="mga">MGA</SelectItem>
-                  <SelectItem value="no_shita">None</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex items-center gap-2">
-              <Label className="text-sm text-muted-foreground whitespace-nowrap">Event:</Label>
-              <Select value={eventFilter} onValueChange={setEventFilter}>
-                <SelectTrigger className="w-[130px]">
-                  <SelectValue placeholder="All" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Events</SelectItem>
-                  <SelectItem value="daily">Daily Only</SelectItem>
-                  <SelectItem value="shabbos">Shabbos</SelectItem>
-                  <SelectItem value="fast">Fast Days</SelectItem>
-                  <SelectItem value="pesach">Pesach</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex items-center gap-2">
-              <Switch
-                id="show-core"
-                checked={showCoreOnly}
-                onCheckedChange={setShowCoreOnly}
-              />
-              <Label htmlFor="show-core" className="text-sm text-muted-foreground whitespace-nowrap">
-                Core
-              </Label>
-            </div>
-            <div className="flex items-center gap-2">
-              <Switch
-                id="show-hidden"
-                checked={showHidden}
-                onCheckedChange={setShowHidden}
-              />
-              <Label htmlFor="show-hidden" className="text-sm text-muted-foreground whitespace-nowrap">
-                Show hidden
-              </Label>
+
+            {/* Filters Row */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:flex xl:flex-wrap gap-4">
+              <div className="flex items-center gap-2">
+                <Label className="text-sm text-muted-foreground whitespace-nowrap">Time:</Label>
+                <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                  <SelectTrigger className="w-full sm:w-[130px]">
+                    <SelectValue placeholder="All" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Times</SelectItem>
+                    {TIME_CATEGORIES.map((cat) => (
+                      <SelectItem key={cat.key} value={cat.key}>
+                        {cat.display_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-2">
+                <Label className="text-sm text-muted-foreground whitespace-nowrap">Shita:</Label>
+                <Select value={shitaFilter} onValueChange={setShitaFilter}>
+                  <SelectTrigger className="w-full sm:w-[110px]">
+                    <SelectValue placeholder="All" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    <SelectItem value="gra">GRA</SelectItem>
+                    <SelectItem value="mga">MGA</SelectItem>
+                    <SelectItem value="no_shita">None</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-2">
+                <Label className="text-sm text-muted-foreground whitespace-nowrap">Event:</Label>
+                <Select value={eventFilter} onValueChange={setEventFilter}>
+                  <SelectTrigger className="w-full sm:w-[130px]">
+                    <SelectValue placeholder="All" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Events</SelectItem>
+                    <SelectItem value="daily">Daily Only</SelectItem>
+                    <SelectItem value="shabbos">Shabbos</SelectItem>
+                    <SelectItem value="fast">Fast Days</SelectItem>
+                    <SelectItem value="pesach">Pesach</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch
+                  id="show-core"
+                  checked={showCoreOnly}
+                  onCheckedChange={setShowCoreOnly}
+                />
+                <Label htmlFor="show-core" className="text-sm text-muted-foreground whitespace-nowrap">
+                  Core
+                </Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch
+                  id="show-hidden"
+                  checked={showHidden}
+                  onCheckedChange={setShowHidden}
+                />
+                <Label htmlFor="show-hidden" className="text-sm text-muted-foreground whitespace-nowrap">
+                  Show hidden
+                </Label>
+              </div>
             </div>
           </div>
         </CardContent>
@@ -662,10 +647,19 @@ export default function AdminRegistryPage() {
                               {inferredTags.relative}
                             </span>
                           )}
-                          {/* Event/Day type (inferred or explicit) */}
-                          {(inferredEvent || zman.event_category) && (
-                            <span className="px-2 py-0.5 bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-200 rounded text-xs font-medium">
-                              {zman.event_category || inferredEvent}
+                          {/* Display tags from database */}
+                          {zman.tags?.slice(0, 4).map((tag) => (
+                            <span
+                              key={tag.id}
+                              className={`px-2 py-0.5 rounded text-xs ${TAG_TYPE_COLORS[tag.tag_type] || 'bg-muted text-foreground'}`}
+                              title={`${tag.tag_type}: ${tag.display_name_english}`}
+                            >
+                              {tag.display_name_english}
+                            </span>
+                          ))}
+                          {(zman.tags?.length || 0) > 4 && (
+                            <span className="px-2 py-0.5 bg-muted text-muted-foreground rounded text-xs">
+                              +{(zman.tags?.length || 0) - 4} more
                             </span>
                           )}
                           {/* Status tags */}
@@ -783,55 +777,117 @@ export default function AdminRegistryPage() {
               </div>
             </div>
 
+            {/* Tags Section - Show selected tags with remove option */}
             <div className="space-y-2">
-              <Label htmlFor="event_category">Event Category</Label>
-              <Select
-                value={formData.event_category || 'none'}
-                onValueChange={(v) =>
-                  setFormData({ ...formData, event_category: v === 'none' ? '' : v })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select event..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {EVENT_CATEGORIES.map((cat) => (
-                    <SelectItem key={cat.key} value={cat.key}>
-                      {cat.display_name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                When this zman applies (e.g., only on Erev Shabbos for candle lighting)
-              </p>
-            </div>
-
-            {formData.event_category && formData.event_category !== 'none' && (
-              <div className="space-y-2">
-                <Label htmlFor="display_offset">Display Offset</Label>
+              <div className="flex items-center justify-between">
+                <Label>Tags</Label>
                 <Select
-                  value={formData.display_offset || 'day_of'}
-                  onValueChange={(v) =>
-                    setFormData({ ...formData, display_offset: v })
-                  }
+                  value=""
+                  onValueChange={(tagId) => {
+                    if (tagId && !formData.tag_ids.includes(tagId)) {
+                      setFormData({
+                        ...formData,
+                        tag_ids: [...formData.tag_ids, tagId]
+                      });
+                    }
+                  }}
                 >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select offset..." />
+                  <SelectTrigger className="w-[140px] h-8">
+                    <SelectValue placeholder="+ Add Tag" />
                   </SelectTrigger>
                   <SelectContent>
-                    {DISPLAY_OFFSETS.map((offset) => (
-                      <SelectItem key={offset.key} value={offset.key}>
-                        {offset.display_name}
-                      </SelectItem>
-                    ))}
+                    {/* Event Tags */}
+                    {allTags.filter(t => t.tag_type === 'event').length > 0 && (
+                      <>
+                        <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Event</div>
+                        {allTags.filter(t => t.tag_type === 'event').map((tag) => {
+                          const isSelected = formData.tag_ids.includes(tag.id);
+                          return (
+                            <SelectItem key={tag.id} value={tag.id} disabled={isSelected}>
+                              <div className="flex items-center gap-2">
+                                {tag.display_name_english}
+                                {isSelected && <span className="text-xs text-muted-foreground">✓</span>}
+                              </div>
+                            </SelectItem>
+                          );
+                        })}
+                      </>
+                    )}
+                    {/* Timing Tags */}
+                    {allTags.filter(t => t.tag_type === 'timing').length > 0 && (
+                      <>
+                        <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Timing</div>
+                        {allTags.filter(t => t.tag_type === 'timing').map((tag) => {
+                          const isSelected = formData.tag_ids.includes(tag.id);
+                          return (
+                            <SelectItem key={tag.id} value={tag.id} disabled={isSelected}>
+                              <div className="flex items-center gap-2">
+                                {tag.display_name_english}
+                                {isSelected && <span className="text-xs text-muted-foreground">✓</span>}
+                              </div>
+                            </SelectItem>
+                          );
+                        })}
+                      </>
+                    )}
+                    {/* Behavior Tags */}
+                    {allTags.filter(t => t.tag_type === 'behavior').length > 0 && (
+                      <>
+                        <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Behavior</div>
+                        {allTags.filter(t => t.tag_type === 'behavior').map((tag) => {
+                          const isSelected = formData.tag_ids.includes(tag.id);
+                          return (
+                            <SelectItem key={tag.id} value={tag.id} disabled={isSelected}>
+                              <div className="flex items-center gap-2">
+                                {tag.display_name_english}
+                                {isSelected && <span className="text-xs text-muted-foreground">✓</span>}
+                              </div>
+                            </SelectItem>
+                          );
+                        })}
+                      </>
+                    )}
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-muted-foreground">
-                  When to show this zman relative to the event (e.g., candle lighting shows day before)
-                </p>
               </div>
-            )}
+              <p className="text-xs text-muted-foreground">
+                Select tags to categorize when/how this zman applies
+              </p>
+              <div className="flex flex-wrap gap-2 min-h-[36px] p-2 border rounded-md">
+                {formData.tag_ids.length === 0 ? (
+                  <span className="text-sm text-muted-foreground">No tags selected</span>
+                ) : (
+                  formData.tag_ids.map((tagId) => {
+                    const tag = allTags.find(t => t.id === tagId);
+                    if (!tag) return null;
+
+                    const colorClass = tag.tag_type === 'event'
+                      ? 'bg-blue-500 hover:bg-blue-600'
+                      : tag.tag_type === 'timing'
+                      ? 'bg-green-500 hover:bg-green-600'
+                      : 'bg-purple-500 hover:bg-purple-600';
+
+                    return (
+                      <button
+                        key={tag.id}
+                        type="button"
+                        onClick={() => {
+                          setFormData({
+                            ...formData,
+                            tag_ids: formData.tag_ids.filter(id => id !== tag.id)
+                          });
+                        }}
+                        className={`px-3 py-1 rounded-md text-sm text-white ${colorClass} transition-colors flex items-center gap-1.5`}
+                        title="Click to remove"
+                      >
+                        {tag.display_name_english}
+                        <span className="text-xs opacity-70">×</span>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -946,49 +1002,6 @@ export default function AdminRegistryPage() {
                 />
               </div>
             </div>
-
-            {/* Tags Section */}
-            {allTags.length > 0 && (
-              <div className="space-y-2">
-                <Label>Tags</Label>
-                <div className="border rounded-md p-3 max-h-[150px] overflow-y-auto">
-                  <div className="flex flex-wrap gap-2">
-                    {allTags.map((tag) => (
-                      <label
-                        key={tag.id}
-                        className="flex items-center gap-2 cursor-pointer"
-                      >
-                        <Checkbox
-                          checked={formData.tag_ids.includes(tag.id)}
-                          onCheckedChange={(checked) => {
-                            if (checked) {
-                              setFormData({
-                                ...formData,
-                                tag_ids: [...formData.tag_ids, tag.id],
-                              });
-                            } else {
-                              setFormData({
-                                ...formData,
-                                tag_ids: formData.tag_ids.filter((id) => id !== tag.id),
-                              });
-                            }
-                          }}
-                        />
-                        <Badge
-                          variant="outline"
-                          style={{ borderColor: tag.color, color: tag.color }}
-                        >
-                          {tag.display_name_english}
-                        </Badge>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Select tags to categorize this zman (shita, method, etc.)
-                </p>
-              </div>
-            )}
 
             <div className="flex items-center gap-6">
               <div className="flex items-center gap-2">

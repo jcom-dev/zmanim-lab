@@ -71,7 +71,8 @@ export function TemplateSelectionStep({ state, onUpdate, onNext, onBack }: Templ
       const response = await fetch(`${apiBase}/api/v1/publishers?q=${encodeURIComponent(query)}&has_algorithm=true`);
       if (response.ok) {
         const data = await response.json();
-        setPublishers(data.data || data.publishers || []);
+        // Standard API response: { data: [...], meta: {...} }
+        setPublishers(data.data || []);
       }
     } catch (err) {
       console.error('Failed to search publishers:', err);

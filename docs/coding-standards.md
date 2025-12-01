@@ -1205,15 +1205,12 @@ POST   /api/v1/publishers/{id}/invite  # Action endpoint
 | `Content-Type` | Yes (POST/PUT) | `application/json` |
 | `X-Publisher-Id` | Sometimes | Publisher context for multi-tenant |
 
-### Response Format
+### Response Format - CRITICAL CONSISTENCY RULE
 
-**Success:**
+**ALL API responses are wrapped by `RespondJSON()` with this structure:**
 ```json
 {
-  "data": {
-    "id": "uuid",
-    "name": "Publisher Name"
-  },
+  "data": <your_data>,
   "meta": {
     "timestamp": "2025-11-27T10:30:00Z",
     "request_id": "uuid"
@@ -1221,7 +1218,65 @@ POST   /api/v1/publishers/{id}/invite  # Action endpoint
 }
 ```
 
-**Error:**
+**RULE: Pass data directly to RespondJSON - NEVER double-wrap**
+
+```go
+// CORRECT - Return array/object directly (gets wrapped automatically)
+RespondJSON(w, r, http.StatusOK, publishers)
+// Result: { "data": [...], "meta": {...} }
+
+RespondJSON(w, r, http.StatusOK, publisher)
+// Result: { "data": { "id": "...", "name": "..." }, "meta": {...} }
+
+// FORBIDDEN - Double-wrapping creates inconsistent response format
+RespondJSON(w, r, http.StatusOK, map[string]interface{}{
+    "publishers": publishers,  // BAD: Creates { "data": { "publishers": [...] }, "meta": {...} }
+})
+
+// FORBIDDEN - Frontend code trying to handle multiple formats
+data.data?.publishers || data.publishers || data.data || []  // MESSY - indicates backend inconsistency
+```
+
+**Frontend Access Pattern:**
+
+When using raw `fetch()`:
+```tsx
+const response = await fetch(url);
+const json = await response.json();
+const items = json.data;  // Always access .data
+```
+
+When using `useApi()` hook (recommended):
+```tsx
+const api = useApi();
+const items = await api.get('/publishers');  // Already unwrapped - returns data directly
+```
+
+**Success Response Examples:**
+
+List endpoint:
+```json
+{
+  "data": [
+    { "id": "uuid-1", "name": "Publisher 1" },
+    { "id": "uuid-2", "name": "Publisher 2" }
+  ],
+  "meta": { "timestamp": "...", "request_id": "..." }
+}
+```
+
+Single resource endpoint:
+```json
+{
+  "data": {
+    "id": "uuid",
+    "name": "Publisher Name"
+  },
+  "meta": { "timestamp": "...", "request_id": "..." }
+}
+```
+
+**Error Response:**
 ```json
 {
   "error": {

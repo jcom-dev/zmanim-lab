@@ -416,6 +416,7 @@ function normalizeEndpoint(endpoint: string): string {
       '/zmanim',
       '/registry',
       '/cities',
+      '/continents',
       '/countries',
       '/regions',
       '/algorithms',

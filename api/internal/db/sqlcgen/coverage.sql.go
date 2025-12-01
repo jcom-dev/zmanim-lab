@@ -78,8 +78,17 @@ const getCitiesCoveredCount = `-- name: GetCitiesCoveredCount :one
 SELECT COALESCE(SUM(
     CASE coverage_level
         WHEN 'city' THEN 1
-        WHEN 'region' THEN (SELECT COUNT(*) FROM cities c WHERE c.region = pc.region AND c.country_code = pc.country_code)
-        WHEN 'country' THEN (SELECT COUNT(*) FROM cities c WHERE c.country_code = pc.country_code)
+        WHEN 'region' THEN (
+            SELECT COUNT(*) FROM cities c
+            JOIN geo_countries co ON c.country_id = co.id
+            LEFT JOIN geo_regions r ON c.region_id = r.id
+            WHERE co.code = pc.country_code AND r.name = pc.region
+        )
+        WHEN 'country' THEN (
+            SELECT COUNT(*) FROM cities c
+            JOIN geo_countries co ON c.country_id = co.id
+            WHERE co.code = pc.country_code
+        )
         ELSE 0
     END
 ), 0)::int

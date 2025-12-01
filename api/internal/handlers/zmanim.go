@@ -29,12 +29,13 @@ type ZmanimWithFormulaResponse struct {
 
 // ZmanimLocationInfo contains location details for the response
 type ZmanimLocationInfo struct {
-	CityID    string  `json:"city_id,omitempty"`
-	CityName  string  `json:"city_name,omitempty"`
-	Country   string  `json:"country,omitempty"`
-	Latitude  float64 `json:"latitude"`
-	Longitude float64 `json:"longitude"`
-	Timezone  string  `json:"timezone"`
+	CityID    string   `json:"city_id,omitempty"`
+	CityName  string   `json:"city_name,omitempty"`
+	Country   string   `json:"country,omitempty"`
+	Region    *string  `json:"region"`
+	Latitude  float64  `json:"latitude"`
+	Longitude float64  `json:"longitude"`
+	Timezone  string   `json:"timezone"`
 }
 
 // ZmanWithFormula represents a single zman with formula details
@@ -106,15 +107,18 @@ func (h *Handlers) GetZmanimForCity(w http.ResponseWriter, r *http.Request) {
 
 	// Get city details
 	var cityName, country, timezone string
+	var region *string
 	var latitude, longitude float64
 
 	cityQuery := `
-		SELECT name, country, timezone, latitude, longitude
-		FROM cities
-		WHERE id = $1
+		SELECT c.name, co.name as country, r.name as region, c.timezone, c.latitude, c.longitude
+		FROM cities c
+		JOIN geo_countries co ON c.country_id = co.id
+		LEFT JOIN geo_regions r ON c.region_id = r.id
+		WHERE c.id = $1
 	`
 	err = h.db.Pool.QueryRow(ctx, cityQuery, cityID).Scan(
-		&cityName, &country, &timezone, &latitude, &longitude,
+		&cityName, &country, &region, &timezone, &latitude, &longitude,
 	)
 	if err != nil {
 		RespondNotFound(w, r, "City not found")
@@ -166,6 +170,7 @@ func (h *Handlers) GetZmanimForCity(w http.ResponseWriter, r *http.Request) {
 			CityID:    cityID,
 			CityName:  cityName,
 			Country:   country,
+			Region:    region,
 			Latitude:  latitude,
 			Longitude: longitude,
 			Timezone:  timezone,

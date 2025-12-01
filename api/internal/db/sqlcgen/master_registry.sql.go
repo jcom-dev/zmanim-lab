@@ -392,18 +392,30 @@ FROM zman_tags
 ORDER BY tag_type, sort_order, name
 `
 
+type GetAllTagsRow struct {
+	ID                 string    `json:"id"`
+	Name               string    `json:"name"`
+	DisplayNameHebrew  string    `json:"display_name_hebrew"`
+	DisplayNameEnglish string    `json:"display_name_english"`
+	TagType            string    `json:"tag_type"`
+	Description        *string   `json:"description"`
+	Color              *string   `json:"color"`
+	SortOrder          *int32    `json:"sort_order"`
+	CreatedAt          time.Time `json:"created_at"`
+}
+
 // ============================================
 // TAG QUERIES
 // ============================================
-func (q *Queries) GetAllTags(ctx context.Context) ([]ZmanTag, error) {
+func (q *Queries) GetAllTags(ctx context.Context) ([]GetAllTagsRow, error) {
 	rows, err := q.db.Query(ctx, getAllTags)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ZmanTag{}
+	items := []GetAllTagsRow{}
 	for rows.Next() {
-		var i ZmanTag
+		var i GetAllTagsRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Name,
@@ -1130,9 +1142,21 @@ FROM zman_tags
 WHERE name = $1
 `
 
-func (q *Queries) GetTagByName(ctx context.Context, name string) (ZmanTag, error) {
+type GetTagByNameRow struct {
+	ID                 string    `json:"id"`
+	Name               string    `json:"name"`
+	DisplayNameHebrew  string    `json:"display_name_hebrew"`
+	DisplayNameEnglish string    `json:"display_name_english"`
+	TagType            string    `json:"tag_type"`
+	Description        *string   `json:"description"`
+	Color              *string   `json:"color"`
+	SortOrder          *int32    `json:"sort_order"`
+	CreatedAt          time.Time `json:"created_at"`
+}
+
+func (q *Queries) GetTagByName(ctx context.Context, name string) (GetTagByNameRow, error) {
 	row := q.db.QueryRow(ctx, getTagByName, name)
-	var i ZmanTag
+	var i GetTagByNameRow
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
@@ -1156,15 +1180,27 @@ WHERE tag_type = $1
 ORDER BY sort_order, name
 `
 
-func (q *Queries) GetTagsByType(ctx context.Context, tagType string) ([]ZmanTag, error) {
+type GetTagsByTypeRow struct {
+	ID                 string    `json:"id"`
+	Name               string    `json:"name"`
+	DisplayNameHebrew  string    `json:"display_name_hebrew"`
+	DisplayNameEnglish string    `json:"display_name_english"`
+	TagType            string    `json:"tag_type"`
+	Description        *string   `json:"description"`
+	Color              *string   `json:"color"`
+	SortOrder          *int32    `json:"sort_order"`
+	CreatedAt          time.Time `json:"created_at"`
+}
+
+func (q *Queries) GetTagsByType(ctx context.Context, tagType string) ([]GetTagsByTypeRow, error) {
 	rows, err := q.db.Query(ctx, getTagsByType, tagType)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ZmanTag{}
+	items := []GetTagsByTypeRow{}
 	for rows.Next() {
-		var i ZmanTag
+		var i GetTagsByTypeRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Name,
@@ -1196,15 +1232,27 @@ WHERE mzt.master_zman_id = $1
 ORDER BY t.tag_type, t.sort_order
 `
 
-func (q *Queries) GetTagsForMasterZman(ctx context.Context, masterZmanID string) ([]ZmanTag, error) {
+type GetTagsForMasterZmanRow struct {
+	ID                 string    `json:"id"`
+	Name               string    `json:"name"`
+	DisplayNameHebrew  string    `json:"display_name_hebrew"`
+	DisplayNameEnglish string    `json:"display_name_english"`
+	TagType            string    `json:"tag_type"`
+	Description        *string   `json:"description"`
+	Color              *string   `json:"color"`
+	SortOrder          *int32    `json:"sort_order"`
+	CreatedAt          time.Time `json:"created_at"`
+}
+
+func (q *Queries) GetTagsForMasterZman(ctx context.Context, masterZmanID string) ([]GetTagsForMasterZmanRow, error) {
 	rows, err := q.db.Query(ctx, getTagsForMasterZman, masterZmanID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ZmanTag{}
+	items := []GetTagsForMasterZmanRow{}
 	for rows.Next() {
-		var i ZmanTag
+		var i GetTagsForMasterZmanRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Name,

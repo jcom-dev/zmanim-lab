@@ -194,11 +194,12 @@ type HealthResponse struct {
 	Version  string `json:"version"`
 }
 
-// PublisherCoverage represents a publisher's coverage area at country, region, or city level
+// PublisherCoverage represents a publisher's coverage area at continent, country, region, or city level
 type PublisherCoverage struct {
 	ID            string    `json:"id"`
 	PublisherID   string    `json:"publisher_id"`
-	CoverageLevel string    `json:"coverage_level"` // country, region, city
+	CoverageLevel string    `json:"coverage_level"` // continent, country, region, city
+	ContinentCode *string   `json:"continent_code,omitempty"`
 	CountryCode   *string   `json:"country_code,omitempty"`
 	Region        *string   `json:"region,omitempty"`
 	CityID        *string   `json:"city_id,omitempty"`
@@ -214,11 +215,12 @@ type PublisherCoverage struct {
 
 // PublisherCoverageCreateRequest represents a request to create coverage
 type PublisherCoverageCreateRequest struct {
-	CoverageLevel string  `json:"coverage_level"` // country, region, city
-	CountryCode   *string `json:"country_code,omitempty"`
-	Region        *string `json:"region,omitempty"`
-	CityID        *string `json:"city_id,omitempty"`
-	Priority      *int    `json:"priority,omitempty"`
+	CoverageLevel  string  `json:"coverage_level"` // continent, country, region, city
+	ContinentCode  *string `json:"continent_code,omitempty"`
+	CountryCode    *string `json:"country_code,omitempty"`
+	Region         *string `json:"region,omitempty"`
+	CityID         *string `json:"city_id,omitempty"`
+	Priority       *int    `json:"priority,omitempty"`
 }
 
 // PublisherCoverageUpdateRequest represents a request to update coverage

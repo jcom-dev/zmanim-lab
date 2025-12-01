@@ -27,6 +27,15 @@ import { usePublisherContext } from '@/providers/PublisherContext';
 // Types (unchanged from original)
 // =============================================================================
 
+export interface ZmanTag {
+  id: string;
+  tag_key: string;
+  name: string;
+  display_name_hebrew: string;
+  display_name_english: string;
+  tag_type: 'event' | 'timing' | 'behavior';
+}
+
 export interface PublisherZman {
   id: string;
   publisher_id: string;
@@ -46,6 +55,14 @@ export interface PublisherZman {
   sort_order: number;
   created_at: string;
   updated_at: string;
+  tags?: ZmanTag[]; // Tags from master zman
+  // Linked zmanim fields
+  master_zman_id?: string | null;
+  linked_publisher_zman_id?: string | null;
+  source_type?: 'registry' | 'copied' | 'linked' | 'custom' | null;
+  is_linked: boolean;
+  linked_source_publisher_name?: string | null;
+  linked_source_is_deleted: boolean;
 }
 
 export interface ZmanimTemplate {
@@ -829,5 +846,69 @@ export const useAstronomicalPrimitivesGrouped = () =>
     '/registry/primitives/grouped',
     {
       staleTime: 1000 * 60 * 60, // 1 hour - primitives are static
+    }
+  );
+
+// =============================================================================
+// Linked Zmanim Types & Hooks
+// =============================================================================
+
+export interface VerifiedPublisher {
+  id: string;
+  name: string;
+  display_name: string;
+  description: string | null;
+  zmanim_count: number;
+}
+
+export interface PublisherZmanForLinking {
+  id: string;
+  zman_key: string;
+  hebrew_name: string;
+  english_name: string;
+  formula_dsl: string;
+  category: string;
+  sort_order: number;
+}
+
+export interface CreateFromPublisherRequest {
+  source_publisher_zman_id: string;
+  mode: 'copy' | 'link';
+}
+
+/**
+ * Hook: Get verified publishers for linking
+ */
+export const useVerifiedPublishers = () =>
+  usePublisherQuery<VerifiedPublisher[]>(
+    'verified-publishers',
+    '/publishers/verified',
+    {
+      staleTime: 1000 * 60 * 5, // 5 minutes
+    }
+  );
+
+/**
+ * Hook: Get zmanim from a specific publisher for linking
+ */
+export const usePublisherZmanimForLinking = (publisherId: string | null) =>
+  usePublisherQuery<PublisherZmanForLinking[]>(
+    ['publisher-zmanim-for-linking', publisherId],
+    `/publishers/${publisherId}/zmanim`,
+    {
+      enabled: !!publisherId,
+      staleTime: 1000 * 60 * 5, // 5 minutes
+    }
+  );
+
+/**
+ * Hook: Create zman from another publisher (copy or link)
+ */
+export const useCreateZmanFromPublisher = () =>
+  usePublisherMutation<PublisherZman, CreateFromPublisherRequest>(
+    '/publisher/zmanim/from-publisher',
+    'POST',
+    {
+      invalidateKeys: ['publisher-zmanim'],
     }
   );

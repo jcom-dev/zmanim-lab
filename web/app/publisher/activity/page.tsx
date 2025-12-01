@@ -98,10 +98,10 @@ export default function PublisherActivityPage() {
   }
 
   return (
-    <div className="p-8">
+    <div className="p-4 md:p-8">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
-        <div className="mb-8">
+        <div className="mb-4 md:mb-8">
           <h1 className="text-3xl font-bold">Activity Log</h1>
           <p className="text-muted-foreground mt-1">
             Track changes made to your publisher account

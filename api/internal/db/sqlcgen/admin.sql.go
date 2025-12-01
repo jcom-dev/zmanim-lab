@@ -26,7 +26,7 @@ func (q *Queries) AcceptInvitation(ctx context.Context, id string) error {
 const adminCountAlgorithms = `-- name: AdminCountAlgorithms :one
 SELECT COUNT(*)
 FROM algorithms
-WHERE ($1::text IS NULL OR validation_status = $1)
+WHERE ($1::text IS NULL OR status = $1)
 `
 
 func (q *Queries) AdminCountAlgorithms(ctx context.Context, dollar_1 string) (int64, error) {
@@ -69,7 +69,7 @@ type AdminGetPublisherRow struct {
 	ID           string             `json:"id"`
 	ClerkUserID  *string            `json:"clerk_user_id"`
 	Name         string             `json:"name"`
-	Organization string             `json:"organization"`
+	Organization *string            `json:"organization"`
 	Email        string             `json:"email"`
 	Description  *string            `json:"description"`
 	Bio          *string            `json:"bio"`
@@ -106,7 +106,7 @@ SELECT
     (SELECT COUNT(*) FROM publishers) as total_publishers,
     (SELECT COUNT(*) FROM publishers WHERE status = 'active') as active_publishers,
     (SELECT COUNT(*) FROM publishers WHERE status = 'pending') as pending_publishers,
-    (SELECT COUNT(*) FROM algorithms WHERE is_active = true) as published_algorithms,
+    (SELECT COUNT(*) FROM algorithms WHERE status = 'published') as published_algorithms,
     (SELECT COUNT(*) FROM cities) as total_cities,
     (SELECT COUNT(*) FROM publisher_coverage WHERE is_active = true) as active_coverage_areas
 `
@@ -138,12 +138,12 @@ func (q *Queries) AdminGetStatistics(ctx context.Context) (AdminGetStatisticsRow
 const adminListAlgorithms = `-- name: AdminListAlgorithms :many
 
 SELECT
-    a.id, a.publisher_id, a.name, a.validation_status, a.is_active,
-    a.created_at, a.updated_at, a.published_at,
+    a.id, a.publisher_id, a.name, a.status, a.is_public,
+    a.created_at, a.updated_at,
     p.name as publisher_name
 FROM algorithms a
 JOIN publishers p ON a.publisher_id = p.id
-WHERE ($1::text IS NULL OR a.validation_status = $1)
+WHERE ($1::text IS NULL OR a.status = $1)
 ORDER BY a.updated_at DESC
 LIMIT $2 OFFSET $3
 `
@@ -155,15 +155,14 @@ type AdminListAlgorithmsParams struct {
 }
 
 type AdminListAlgorithmsRow struct {
-	ID               string             `json:"id"`
-	PublisherID      string             `json:"publisher_id"`
-	Name             string             `json:"name"`
-	ValidationStatus *string            `json:"validation_status"`
-	IsActive         *bool              `json:"is_active"`
-	CreatedAt        pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
-	PublishedAt      pgtype.Timestamptz `json:"published_at"`
-	PublisherName    string             `json:"publisher_name"`
+	ID            string             `json:"id"`
+	PublisherID   string             `json:"publisher_id"`
+	Name          string             `json:"name"`
+	Status        *string            `json:"status"`
+	IsPublic      *bool              `json:"is_public"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+	PublisherName string             `json:"publisher_name"`
 }
 
 // Admin Algorithm Management --
@@ -180,11 +179,10 @@ func (q *Queries) AdminListAlgorithms(ctx context.Context, arg AdminListAlgorith
 			&i.ID,
 			&i.PublisherID,
 			&i.Name,
-			&i.ValidationStatus,
-			&i.IsActive,
+			&i.Status,
+			&i.IsPublic,
 			&i.CreatedAt,
 			&i.UpdatedAt,
-			&i.PublishedAt,
 			&i.PublisherName,
 		); err != nil {
 			return nil, err
@@ -217,7 +215,7 @@ type AdminListPublishersRow struct {
 	ID           string             `json:"id"`
 	ClerkUserID  *string            `json:"clerk_user_id"`
 	Name         string             `json:"name"`
-	Organization string             `json:"organization"`
+	Organization *string            `json:"organization"`
 	Email        string             `json:"email"`
 	Status       string             `json:"status"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`

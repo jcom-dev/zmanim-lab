@@ -8,6 +8,7 @@ import { PendingRequests } from '@/components/admin/PendingRequests';
 import Link from 'next/link';
 
 import { API_BASE } from '@/lib/api';
+import { getStatusBadgeClasses } from '@/lib/badge-colors';
 
 interface Publisher {
   id: string;
@@ -84,19 +85,6 @@ export default function AdminPublishersPage() {
     }
   };
 
-  const getStatusBadgeClass = (status: string) => {
-    switch (status) {
-      case 'verified':
-        return 'bg-green-100 text-green-800 border-green-300';
-      case 'pending':
-      case 'pending_verification':
-        return 'bg-yellow-100 text-yellow-800 border-yellow-300';
-      case 'suspended':
-        return 'bg-red-100 text-red-800 border-red-300';
-      default:
-        return 'bg-muted text-muted-foreground border-border';
-    }
-  };
 
   const filteredPublishers = publishers.filter((publisher) => {
     const matchesSearch =
@@ -123,12 +111,12 @@ export default function AdminPublishersPage() {
   if (error) {
     return (
       <div className="container mx-auto py-8">
-        <Card className="border-red-300 bg-red-50">
+        <Card className="border-red-300 bg-red-50 dark:border-red-700 dark:bg-red-950">
           <CardHeader>
-            <CardTitle className="text-red-800">Error</CardTitle>
+            <CardTitle className="text-red-800 dark:text-red-200">Error</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-red-700">{error}</p>
+            <p className="text-red-700 dark:text-red-300">{error}</p>
             <Button onClick={fetchPublishers} className="mt-4" variant="outline">
               Retry
             </Button>
@@ -140,13 +128,13 @@ export default function AdminPublishersPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold">Publisher Management</h1>
-          <p className="text-muted-foreground mt-1">Manage publisher accounts and permissions</p>
+          <h1 className="text-2xl md:text-3xl font-bold">Publisher Management</h1>
+          <p className="text-sm md:text-base text-muted-foreground mt-1">Manage publisher accounts and permissions</p>
         </div>
-        <Link href="/admin/publishers/new">
-          <Button>Create New Publisher</Button>
+        <Link href="/admin/publishers/new" className="w-full md:w-auto">
+          <Button className="w-full md:w-auto">Create New Publisher</Button>
         </Link>
       </div>
 
@@ -218,9 +206,17 @@ export default function AdminPublishersPage() {
                           {publisher.name}
                         </Link>
                       </td>
-                      <td className="py-4">{publisher.organization}</td>
                       <td className="py-4">
-                        <a href={`mailto:${publisher.email}`} className="text-blue-600 hover:underline">
+                        <div className="max-w-[150px] md:max-w-none truncate">
+                          {publisher.organization}
+                        </div>
+                      </td>
+                      <td className="py-4">
+                        <a
+                          href={`mailto:${publisher.email}`}
+                          className="text-blue-600 hover:underline block max-w-[150px] md:max-w-[250px] truncate"
+                          title={publisher.email}
+                        >
                           {publisher.email}
                         </a>
                       </td>

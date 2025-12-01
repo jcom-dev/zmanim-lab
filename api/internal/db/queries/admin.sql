@@ -37,7 +37,7 @@ SELECT
     (SELECT COUNT(*) FROM publishers) as total_publishers,
     (SELECT COUNT(*) FROM publishers WHERE status = 'active') as active_publishers,
     (SELECT COUNT(*) FROM publishers WHERE status = 'pending') as pending_publishers,
-    (SELECT COUNT(*) FROM algorithms WHERE is_active = true) as published_algorithms,
+    (SELECT COUNT(*) FROM algorithms WHERE status = 'published') as published_algorithms,
     (SELECT COUNT(*) FROM cities) as total_cities,
     (SELECT COUNT(*) FROM publisher_coverage WHERE is_active = true) as active_coverage_areas;
 
@@ -45,19 +45,19 @@ SELECT
 
 -- name: AdminListAlgorithms :many
 SELECT
-    a.id, a.publisher_id, a.name, a.validation_status, a.is_active,
-    a.created_at, a.updated_at, a.published_at,
+    a.id, a.publisher_id, a.name, a.status, a.is_public,
+    a.created_at, a.updated_at,
     p.name as publisher_name
 FROM algorithms a
 JOIN publishers p ON a.publisher_id = p.id
-WHERE ($1::text IS NULL OR a.validation_status = $1)
+WHERE ($1::text IS NULL OR a.status = $1)
 ORDER BY a.updated_at DESC
 LIMIT $2 OFFSET $3;
 
 -- name: AdminCountAlgorithms :one
 SELECT COUNT(*)
 FROM algorithms
-WHERE ($1::text IS NULL OR validation_status = $1);
+WHERE ($1::text IS NULL OR status = $1);
 
 -- Publisher Invitations --
 

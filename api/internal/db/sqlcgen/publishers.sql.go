@@ -33,7 +33,7 @@ RETURNING id, clerk_user_id, name, organization, email, description, bio,
 
 type CreatePublisherParams struct {
 	Name         string  `json:"name"`
-	Organization string  `json:"organization"`
+	Organization *string `json:"organization"`
 	Email        string  `json:"email"`
 	Status       string  `json:"status"`
 	ClerkUserID  *string `json:"clerk_user_id"`
@@ -43,7 +43,7 @@ type CreatePublisherRow struct {
 	ID           string             `json:"id"`
 	ClerkUserID  *string            `json:"clerk_user_id"`
 	Name         string             `json:"name"`
-	Organization string             `json:"organization"`
+	Organization *string            `json:"organization"`
 	Email        string             `json:"email"`
 	Description  *string            `json:"description"`
 	Bio          *string            `json:"bio"`
@@ -121,10 +121,10 @@ WHERE id = $1
 `
 
 type GetPublisherBasicRow struct {
-	ID           string `json:"id"`
-	Name         string `json:"name"`
-	Organization string `json:"organization"`
-	Status       string `json:"status"`
+	ID           string  `json:"id"`
+	Name         string  `json:"name"`
+	Organization *string `json:"organization"`
+	Status       string  `json:"status"`
 }
 
 func (q *Queries) GetPublisherBasic(ctx context.Context, id string) (GetPublisherBasicRow, error) {
@@ -146,10 +146,10 @@ WHERE clerk_user_id = $1
 `
 
 type GetPublisherBasicByClerkUserIDRow struct {
-	ID           string `json:"id"`
-	Name         string `json:"name"`
-	Organization string `json:"organization"`
-	Status       string `json:"status"`
+	ID           string  `json:"id"`
+	Name         string  `json:"name"`
+	Organization *string `json:"organization"`
+	Status       string  `json:"status"`
 }
 
 func (q *Queries) GetPublisherBasicByClerkUserID(ctx context.Context, clerkUserID *string) (GetPublisherBasicByClerkUserIDRow, error) {
@@ -189,7 +189,7 @@ type GetPublisherByIDRow struct {
 	ID           string             `json:"id"`
 	ClerkUserID  *string            `json:"clerk_user_id"`
 	Name         string             `json:"name"`
-	Organization string             `json:"organization"`
+	Organization *string            `json:"organization"`
 	Email        string             `json:"email"`
 	Description  *string            `json:"description"`
 	Bio          *string            `json:"bio"`
@@ -246,10 +246,10 @@ WHERE p.id = $1
 `
 
 type GetPublisherDashboardSummaryRow struct {
-	Name         string `json:"name"`
-	Organization string `json:"organization"`
-	IsVerified   bool   `json:"is_verified"`
-	Status       string `json:"status"`
+	Name         string  `json:"name"`
+	Organization *string `json:"organization"`
+	IsVerified   bool    `json:"is_verified"`
+	Status       string  `json:"status"`
 }
 
 func (q *Queries) GetPublisherDashboardSummary(ctx context.Context, id string) (GetPublisherDashboardSummaryRow, error) {
@@ -275,7 +275,7 @@ type GetPublisherFullByClerkUserIDRow struct {
 	ID           string             `json:"id"`
 	ClerkUserID  *string            `json:"clerk_user_id"`
 	Name         string             `json:"name"`
-	Organization string             `json:"organization"`
+	Organization *string            `json:"organization"`
 	Email        string             `json:"email"`
 	Description  *string            `json:"description"`
 	Bio          *string            `json:"bio"`
@@ -323,7 +323,7 @@ type ListPublishersParams struct {
 type ListPublishersRow struct {
 	ID           string             `json:"id"`
 	Name         string             `json:"name"`
-	Organization string             `json:"organization"`
+	Organization *string            `json:"organization"`
 	Status       string             `json:"status"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 }
@@ -362,10 +362,10 @@ ORDER BY name
 `
 
 type ListPublishersByIDsRow struct {
-	ID           string `json:"id"`
-	Name         string `json:"name"`
-	Organization string `json:"organization"`
-	Status       string `json:"status"`
+	ID           string  `json:"id"`
+	Name         string  `json:"name"`
+	Organization *string `json:"organization"`
+	Status       string  `json:"status"`
 }
 
 func (q *Queries) ListPublishersByIDs(ctx context.Context, dollar_1 []string) ([]ListPublishersByIDsRow, error) {
@@ -443,7 +443,7 @@ type UpdatePublisherProfileRow struct {
 	ID           string             `json:"id"`
 	ClerkUserID  *string            `json:"clerk_user_id"`
 	Name         string             `json:"name"`
-	Organization string             `json:"organization"`
+	Organization *string            `json:"organization"`
 	Email        string             `json:"email"`
 	Description  *string            `json:"description"`
 	Bio          *string            `json:"bio"`
@@ -507,7 +507,7 @@ type UpdatePublisherProfileByClerkUserIDRow struct {
 	ID           string             `json:"id"`
 	ClerkUserID  *string            `json:"clerk_user_id"`
 	Name         string             `json:"name"`
-	Organization string             `json:"organization"`
+	Organization *string            `json:"organization"`
 	Email        string             `json:"email"`
 	Description  *string            `json:"description"`
 	Bio          *string            `json:"bio"`
@@ -562,7 +562,7 @@ type UpdatePublisherStatusRow struct {
 	ID           string             `json:"id"`
 	ClerkUserID  *string            `json:"clerk_user_id"`
 	Name         string             `json:"name"`
-	Organization string             `json:"organization"`
+	Organization *string            `json:"organization"`
 	Email        string             `json:"email"`
 	Description  *string            `json:"description"`
 	Bio          *string            `json:"bio"`
