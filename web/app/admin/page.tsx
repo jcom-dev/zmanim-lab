@@ -40,21 +40,21 @@ export default function AdminPage() {
         </p>
       </div>
 
-      {/* Quick Actions Banner */}
-      <Card className="border-yellow-500/50 bg-yellow-500/10">
+      {/* Info Banner - WCAG AA compliant colors */}
+      <Card className="border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950">
         <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-yellow-500">
+          <CardTitle className="flex items-center gap-2 text-blue-700 dark:text-blue-300">
             <FileCheck className="w-5 h-5" />
-            Pending Publisher Requests
+            Publisher Requests
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-muted-foreground">
-            Go to{' '}
-            <Link href="/admin/publishers" className="text-primary underline hover:no-underline">
+          <p className="text-blue-600 dark:text-blue-400">
+            Visit{' '}
+            <Link href="/admin/publishers" className="font-medium underline hover:no-underline">
               Publisher Management
             </Link>{' '}
-            to review and approve new publisher applications.
+            to review and manage publisher applications.
           </p>
         </CardContent>
       </Card>

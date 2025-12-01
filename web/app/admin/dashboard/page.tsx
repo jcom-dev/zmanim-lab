@@ -121,9 +121,9 @@ export default function AdminDashboardPage() {
       </div>
 
       {error && (
-        <Card className="border-yellow-500/50 bg-yellow-500/10">
+        <Card className="border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950">
           <CardContent className="pt-4">
-            <p className="text-yellow-500 text-sm">
+            <p className="text-amber-700 dark:text-amber-300 text-sm">
               Could not refresh statistics. Showing last successful data.
             </p>
           </CardContent>
