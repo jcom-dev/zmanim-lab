@@ -914,6 +914,10 @@ See detailed specifications:
 **I want** the database schema extended for publisher zman aliases and enhanced zman requests,
 **So that** we have the data layer for all Epic 5 features.
 
+**Standards Reference:** See `docs/coding-standards.md` sections:
+- "Database Migrations" (migration file naming, idempotent SQL)
+- "Development Workflow > Service Restart" (always use `./restart.sh`)
+
 **Acceptance Criteria:**
 
 **Given** the migration is applied
@@ -964,6 +968,11 @@ See detailed specifications:
 **As a** non-technical publisher,
 **I want** error messages that explain what's wrong in plain language,
 **So that** I can fix formula errors without understanding programming jargon.
+
+**Standards Reference:** See `docs/coding-standards.md` sections:
+- "Frontend Standards > Component Structure"
+- "Error Handling Standards > Frontend Error Handling"
+- "Development Workflow > Service Restart" (always use `./restart.sh`)
 
 **Acceptance Criteria:**
 
@@ -1017,6 +1026,11 @@ See detailed specifications:
 **I want** helpful hints that appear exactly where my cursor is,
 **So that** I know what values to type without looking at documentation.
 
+**Standards Reference:** See `docs/coding-standards.md` sections:
+- "Frontend Standards > Component Structure"
+- "Frontend Standards > Unified API Client" (if fetching tooltip data)
+- "Development Workflow > Service Restart" (always use `./restart.sh`)
+
 **Acceptance Criteria:**
 
 **Given** my cursor is inside `solar(` after the opening parenthesis
@@ -1069,6 +1083,10 @@ See detailed specifications:
 **I want** function templates to show real examples instead of abstract placeholders,
 **So that** I can immediately understand the correct format.
 
+**Standards Reference:** See `docs/coding-standards.md` sections:
+- "Frontend Standards > Component Structure"
+- "Development Workflow > Service Restart" (always use `./restart.sh`)
+
 **Acceptance Criteria:**
 
 **Given** I click "solar()" in the reference panel
@@ -1107,6 +1125,12 @@ See detailed specifications:
 **As a** publisher,
 **I want** to create custom names for zmanim in my algorithm,
 **So that** my community sees familiar terminology while the system maintains canonical references.
+
+**Standards Reference:** See `docs/coding-standards.md` sections:
+- "Backend Standards > Handler Structure" (6-step pattern)
+- "Backend Standards > Response Format" (use RespondJSON correctly)
+- "Error Handling Standards > Backend Error Handling"
+- "Development Workflow > Service Restart" (always use `./restart.sh`)
 
 **Acceptance Criteria:**
 
@@ -1157,6 +1181,11 @@ See detailed specifications:
 **I want** to rename zmanim in the Advanced DSL editor,
 **So that** I can customize display names while seeing the original canonical name.
 
+**Standards Reference:** See `docs/coding-standards.md` sections:
+- "Frontend Standards > Unified API Client" (use useApi hook)
+- "Frontend Standards > Component Structure"
+- "Development Workflow > Service Restart" (always use `./restart.sh`)
+
 **Acceptance Criteria:**
 
 **Given** I am editing a zman in Advanced DSL mode
@@ -1197,6 +1226,12 @@ See detailed specifications:
 **As a** publisher,
 **I want** to submit a request for a new zman to be added to the master registry,
 **So that** I can use zmanim not currently in the system.
+
+**Standards Reference:** See `docs/coding-standards.md` sections:
+- "Backend Standards > Handler Structure" (6-step pattern)
+- "Backend Standards > Response Format" (use RespondJSON correctly)
+- "Error Handling Standards > Backend Error Handling"
+- "Development Workflow > Service Restart" (always use `./restart.sh`)
 
 **Acceptance Criteria:**
 
@@ -1252,6 +1287,11 @@ See detailed specifications:
 **As a** publisher,
 **I want** a guided form to request new zmanim,
 **So that** I can submit complete requests with proper tags and optional formulas.
+
+**Standards Reference:** See `docs/coding-standards.md` sections:
+- "Frontend Standards > Unified API Client" (use useApi hook)
+- "Frontend Standards > Component Structure"
+- "Development Workflow > Service Restart" (always use `./restart.sh`)
 
 **Acceptance Criteria:**
 
@@ -1310,6 +1350,12 @@ See detailed specifications:
 **As an** admin,
 **I want** a page to review and manage zman requests,
 **So that** I can approve or reject publisher submissions.
+
+**Standards Reference:** See `docs/coding-standards.md` sections:
+- "Frontend Standards > Unified API Client" (use useApi hook)
+- "Frontend Standards > Component Structure"
+- "Backend Standards > Handler Structure" (6-step pattern)
+- "Development Workflow > Service Restart" (always use `./restart.sh`)
 
 **Acceptance Criteria:**
 
@@ -1375,6 +1421,10 @@ See detailed specifications:
 **I want** the reference panel to highlight where I am in my formula,
 **So that** I always know what documentation is relevant.
 
+**Standards Reference:** See `docs/coding-standards.md` sections:
+- "Frontend Standards > Component Structure"
+- "Development Workflow > Service Restart" (always use `./restart.sh`)
+
 **Acceptance Criteria:**
 
 **Given** my cursor is inside `solar(16.1, before_sunrise)`
@@ -1415,6 +1465,12 @@ See detailed specifications:
 **As a** publisher,
 **I want** a proper logo upload experience with cropping and sizing tools,
 **So that** my logo looks professional and consistent across the platform.
+
+**Standards Reference:** See `docs/coding-standards.md` sections:
+- "Frontend Standards > Unified API Client" (use useApi hook for uploads)
+- "Frontend Standards > Component Structure"
+- "Backend Standards > Handler Structure" (for upload endpoint)
+- "Development Workflow > Service Restart" (always use `./restart.sh`)
 
 **Acceptance Criteria:**
 
@@ -1475,110 +1531,547 @@ See detailed specifications:
 
 ---
 
-### Story 5.11: Codebase Standards Enforcement & Technical Debt Reduction
+### Story 5.11: Frontend API Client Migration (useApi Hook)
 
 **As a** developer,
-**I want** the codebase to consistently follow established coding standards,
-**So that** the code is maintainable, debuggable, and new features don't introduce technical debt.
+**I want** all frontend API calls to use the unified `useApi()` hook,
+**So that** authentication headers and response handling are consistent across the application.
+
+**Standards Reference:** See `docs/coding-standards.md` sections:
+- "Frontend Standards > Unified API Client"
+- "Technical Debt Audit > Current Violation Counts"
+- "Enforcement Mechanisms"
 
 **Risk Assessment:**
-- **Severity:** 🔴 HIGH - Technical debt compounds with every new feature
-- **Current Violations:** 225+ identified patterns violating standards
-- **Impact:** Auth inconsistencies, flaky tests, poor debugging, CI slowdowns
+- **Severity:** 🔴 CRITICAL - Auth inconsistencies cause 401 errors and poor UX
+- **Current Violations:** 73 raw `fetch()` calls in .tsx files
+- **Impact:** Missing auth tokens, inconsistent error handling, duplicated code
 
 **Acceptance Criteria:**
 
 **Given** the codebase has 73 raw `fetch()` calls in .tsx files
-**When** Story 5.11 Phase 1 is complete
+**When** Story 5.11 is complete
 **Then** all `fetch()` calls use `useApi()` hook instead
 **And** running `grep -r "await fetch(" web/app web/components --include="*.tsx"` returns 0 results
 
-**Given** the codebase has ~100 `log.Printf/fmt.Printf` calls in handlers/services
-**When** Story 5.11 Phase 1 is complete
-**Then** all logging uses `slog` with structured context
-**And** running `grep -rE "log.Printf|fmt.Printf" api/internal/handlers api/internal/services --include="*.go"` returns 0 results
+**Given** a component makes an authenticated API request
+**When** using the `useApi()` hook
+**Then** the Authorization header is automatically included
+**And** the X-Publisher-Id header is included for publisher routes
+**And** response data is automatically unwrapped from `{data: ..., meta: ...}` format
 
-**Given** the test suite has 52 `waitForTimeout` hard waits
-**When** Story 5.11 Phase 1 is complete
-**Then** all waits use deterministic strategies (waitForResponse, waitForSelector, waitForLoadState)
-**And** running `grep -r "waitForTimeout" tests/e2e --include="*.ts"` returns 0 results
-
-**Given** only 6/29 test files have parallel mode configured
-**When** Story 5.11 Phase 2 is complete
-**Then** all spec files include `test.describe.configure({ mode: 'parallel' })`
-
-**Given** ~80 handlers double-wrap API responses
-**When** Story 5.11 Phase 2 is complete
-**Then** handlers pass data directly to `RespondJSON()` (not wrapped in `map[string]interface{}`)
-
-**Given** no pre-commit hooks exist for standards enforcement
-**When** Story 5.11 Phase 3 is complete
-**Then** husky pre-commit hooks block commits with violations
-**And** CI pipeline includes standards check step
+**Given** a component makes a public API request
+**When** using `api.public.get()` or similar
+**Then** no authentication headers are included
+**And** the request succeeds without Clerk token
 
 **Prerequisites:** None (can run in parallel with other Epic 5 stories)
 
 **Technical Notes:**
 
-**Phase 1 - Critical Violations (8 points):**
+**Files to Update (73 instances):**
+```bash
+# Run to get full list:
+grep -r "await fetch(" web/app web/components --include="*.tsx"
+```
 
-1. **Frontend: Migrate raw fetch() to useApi() (73 files)**
-   - Files to update: See grep output in coding-standards.md
-   - Pattern: Replace `await fetch(\`${API_BASE}...)` with `await api.get/post/put/delete(...)`
-   - Import: `import { useApi } from '@/lib/api-client';`
-   - Note: The hook handles auth headers and response unwrapping
+**Migration Pattern:**
+```tsx
+// BEFORE (violation):
+const API_BASE = process.env.NEXT_PUBLIC_API_URL;
+const response = await fetch(`${API_BASE}/api/v1/publisher/profile`, {
+  headers: {
+    'Authorization': `Bearer ${token}`,
+    'X-Publisher-Id': publisherId,
+    'Content-Type': 'application/json'
+  }
+});
+const json = await response.json();
+const data = json.data;
 
-2. **Backend: Replace log.Printf with slog (handlers/services)**
-   - Files: `api/internal/handlers/*.go`, `api/internal/services/*.go`
-   - Pattern: Replace `log.Printf("msg: %v", err)` with `slog.Error("msg", "error", err, "context_key", contextValue)`
-   - Exempt: `api/cmd/*` (CLI tools can use log.Printf)
+// AFTER (compliant):
+import { useApi } from '@/lib/api-client';
 
-3. **Tests: Replace waitForTimeout with deterministic waits (52 instances)**
-   - Pattern: Replace `await page.waitForTimeout(1000)` with:
-     - `await page.waitForLoadState('networkidle')` - wait for network
-     - `await page.waitForResponse(/api\/endpoint/)` - wait for specific API
-     - `await expect(page.getByText('...')).toBeVisible()` - wait for element
-   - Reference: `tests/e2e/utils/wait-helpers.ts` has utility functions
+const api = useApi();
+const data = await api.get('/publisher/profile');
+// Auth headers and response unwrapping handled automatically
+```
 
-**Phase 2 - High Priority (5 points):**
+**Request Types:**
+- `api.get('/endpoint')` - Authenticated with publisher ID
+- `api.post('/endpoint', { body: JSON.stringify(data) })` - POST with auth
+- `api.public.get('/endpoint')` - No authentication
+- `api.admin.get('/endpoint')` - Auth but no publisher ID
 
-4. **Tests: Add parallel mode to all spec files (23 files)**
-   - Add to top of each describe block: `test.describe.configure({ mode: 'parallel' });`
-   - Files missing: See glob output in audit
+**Validation Command:**
+```bash
+grep -r "await fetch(" web/app web/components --include="*.tsx" | wc -l  # Should be 0
+```
 
-5. **Backend: Fix double-wrapped responses (~80 handlers)**
-   - Pattern: Change `RespondJSON(w, r, status, map[string]interface{}{"key": data})`
-   - To: `RespondJSON(w, r, status, data)`
-   - The `RespondJSON` helper already wraps in `{data: ..., meta: ...}`
+**Story Points:** 5
 
-**Phase 3 - Enforcement (3 points):**
+**FRs:** FR114 (Standards enforcement - useApi)
 
-6. **Add pre-commit hooks**
-   - Install husky: `cd web && npm install husky --save-dev`
-   - Create `.husky/pre-commit` with standards checks
-   - See pattern in coding-standards.md
+---
 
-7. **Add CI check**
-   - Add GitHub Actions step for standards validation
-   - Block PRs that introduce new violations
+### Story 5.12: Backend Structured Logging Migration (slog)
+
+**As a** developer,
+**I want** all backend logging to use structured `slog` with context,
+**So that** logs are searchable, debuggable, and provide meaningful context for incident response.
+
+**Standards Reference:** See `docs/coding-standards.md` sections:
+- "Backend Standards > Error Handling"
+- "Technical Debt Audit > Current Violation Counts"
+- "Exemptions" (api/cmd/ is exempt)
+
+**Risk Assessment:**
+- **Severity:** 🟠 HIGH - Unstructured logs slow incident response
+- **Current Violations:** ~100 `log.Printf/fmt.Printf` calls in handlers/services
+- **Impact:** Missing context in logs, difficult debugging, inconsistent log format
+
+**Acceptance Criteria:**
+
+**Given** the codebase has ~100 `log.Printf/fmt.Printf` calls in handlers/services
+**When** Story 5.12 is complete
+**Then** all logging uses `slog` with structured context
+**And** running `grep -rE "log.Printf|fmt.Printf" api/internal/handlers api/internal/services --include="*.go"` returns 0 results
+
+**Given** an error occurs in a handler
+**When** the error is logged
+**Then** the log includes: error message, error object, publisher_id, user_id, and operation context
+**And** the log level is appropriate (Error for errors, Info for operations, Debug for verbose)
+
+**Given** CLI tools in `api/cmd/`
+**When** they use `log.Printf` or `fmt.Printf`
+**Then** this is acceptable (exempt from standards)
+
+**Prerequisites:** None (can run in parallel with other Epic 5 stories)
+
+**Technical Notes:**
+
+**Files to Update:**
+```bash
+# Run to get full list (handlers and services only):
+grep -rE "log\.Printf|fmt\.Printf|fmt\.Println" api/internal/handlers api/internal/services --include="*.go"
+```
+
+**Migration Pattern:**
+```go
+// BEFORE (violation):
+log.Printf("ERROR [GetPublisherProfile] Query failed: %v (publisherID=%s)", err, publisherID)
+
+// AFTER (compliant):
+slog.Error("query failed",
+    "error", err,
+    "publisher_id", publisherID,
+    "user_id", userID,
+    "operation", "GetPublisherProfile",
+)
+```
+
+**Log Levels:**
+- `slog.Error()` - Errors that need attention
+- `slog.Warn()` - Potential issues, degraded functionality
+- `slog.Info()` - Important operations (user actions, state changes)
+- `slog.Debug()` - Verbose debugging (disabled in production)
+
+**Context Fields to Include:**
+- `error` - The error object (for Error/Warn)
+- `publisher_id` - Publisher context
+- `user_id` - User context (from Clerk)
+- `operation` - Handler/function name
+- `request_id` - From middleware if available
+
+**Validation Command:**
+```bash
+grep -rE "log\.Printf|fmt\.Printf|fmt\.Println" api/internal/handlers api/internal/services --include="*.go" | wc -l  # Should be 0
+```
+
+**Story Points:** 3
+
+**FRs:** FR114 (Standards enforcement - slog)
+
+---
+
+### Story 5.13: E2E Test Deterministic Waits Migration
+
+**As a** developer,
+**I want** all E2E tests to use deterministic wait strategies,
+**So that** tests are reliable, fast, and don't flake in CI.
+
+**Standards Reference:** See `docs/coding-standards.md` sections:
+- "Testing Standards > E2E Test Pattern"
+- "Technical Debt Audit > Current Violation Counts"
+- See also `.bmad/bmm/testarch/knowledge/test-quality.md` for detailed patterns
+
+**Risk Assessment:**
+- **Severity:** 🟠 HIGH - Flaky tests erode developer confidence and slow CI
+- **Current Violations:** 52 `waitForTimeout` hard waits
+- **Impact:** Non-deterministic tests, slow CI, false failures
+
+**Acceptance Criteria:**
+
+**Given** the test suite has 52 `waitForTimeout` hard waits
+**When** Story 5.13 is complete
+**Then** all waits use deterministic strategies
+**And** running `grep -r "waitForTimeout" tests/e2e --include="*.ts"` returns 0 results
+
+**Given** a test needs to wait for an API response
+**When** the test uses `page.waitForResponse()`
+**Then** the test waits only until the response arrives (not arbitrary time)
+
+**Given** a test needs to wait for UI to update
+**When** the test uses `expect().toBeVisible()` or `waitForSelector()`
+**Then** the test waits only until the element appears (not arbitrary time)
+
+**Prerequisites:** None (can run in parallel with other Epic 5 stories)
+
+**Technical Notes:**
+
+**Files to Update (52 instances):**
+```bash
+# Run to get full list:
+grep -r "waitForTimeout" tests/e2e --include="*.ts"
+```
+
+**Migration Patterns:**
+
+```typescript
+// BEFORE (violation):
+await page.waitForTimeout(1000);
+
+// AFTER - Option 1: Wait for network idle
+await page.waitForLoadState('networkidle');
+
+// AFTER - Option 2: Wait for specific API response
+await page.waitForResponse(resp =>
+  resp.url().includes('/api/v1/publisher') && resp.status() === 200
+);
+
+// AFTER - Option 3: Wait for element visibility
+await expect(page.getByText('Dashboard')).toBeVisible();
+
+// AFTER - Option 4: Wait for element state
+await page.getByRole('button', { name: 'Save' }).waitFor({ state: 'visible' });
+```
+
+**Utility Functions Available:**
+See `tests/e2e/utils/wait-helpers.ts` for existing helpers.
+
+**Decision Guide:**
+| Scenario | Use This |
+|----------|----------|
+| After navigation | `waitForLoadState('networkidle')` |
+| After form submit | `waitForResponse(/api\/endpoint/)` |
+| After click/action | `expect(element).toBeVisible()` |
+| After state change | `waitFor({ state: 'visible' })` |
+
+**Validation Command:**
+```bash
+grep -r "waitForTimeout" tests/e2e --include="*.ts" | wc -l  # Should be 0
+```
+
+**Story Points:** 5
+
+**FRs:** FR115 (Technical debt reduction - deterministic waits)
+
+---
+
+### Story 5.14: E2E Test Parallel Mode Configuration
+
+**As a** developer,
+**I want** all E2E test files to have parallel mode configured,
+**So that** tests run faster in CI and are guaranteed to be isolated.
+
+**Standards Reference:** See `docs/coding-standards.md` sections:
+- "Testing Standards > E2E Test Pattern"
+- "Technical Debt Audit > Current Violation Counts"
+
+**Risk Assessment:**
+- **Severity:** 🟡 MEDIUM - Slower CI and potential state pollution
+- **Current Violations:** 23/29 test files missing parallel mode
+- **Impact:** Slower CI pipeline, tests may have hidden dependencies
+
+**Acceptance Criteria:**
+
+**Given** only 6/29 test files have parallel mode configured
+**When** Story 5.14 is complete
+**Then** all spec files include `test.describe.configure({ mode: 'parallel' })`
+**And** all tests pass when run with `--workers=4`
+
+**Given** a test file has parallel mode enabled
+**When** tests in that file run
+**Then** each test is isolated and doesn't depend on other tests' state
+**And** tests can run in any order
+
+**Prerequisites:** Story 5.13 (deterministic waits must be fixed first to ensure parallel safety)
+
+**Technical Notes:**
+
+**Files Missing Parallel Mode (23 files):**
+```bash
+# Files that HAVE parallel mode (6):
+tests/e2e/publisher/coverage.spec.ts
+tests/e2e/publisher/team.spec.ts
+tests/e2e/public/public-pages.spec.ts
+tests/e2e/publisher/algorithm-editor.spec.ts
+tests/e2e/publisher/onboarding.spec.ts
+tests/e2e/auth/authentication.spec.ts
+
+# All other spec files need parallel mode added
+```
+
+**Migration Pattern:**
+```typescript
+// Add at the top of each describe block:
+import { test, expect } from '@playwright/test';
+
+test.describe('Feature Name', () => {
+  test.describe.configure({ mode: 'parallel' });  // ADD THIS LINE
+
+  test('should do something', async ({ page }) => {
+    // ...
+  });
+});
+```
+
+**Parallel Safety Checklist:**
+- [ ] Tests don't share mutable state
+- [ ] Tests use unique data (faker or unique IDs)
+- [ ] Tests clean up after themselves
+- [ ] Tests don't depend on execution order
 
 **Validation Commands:**
 ```bash
-# After Phase 1:
-grep -r "await fetch(" web/app web/components --include="*.tsx" | wc -l  # Should be 0
-grep -rE "log.Printf|fmt.Printf" api/internal/handlers api/internal/services --include="*.go" | wc -l  # Should be 0
-grep -r "waitForTimeout" tests/e2e --include="*.ts" | wc -l  # Should be 0
+# Verify all spec files have parallel mode
+for f in tests/e2e/**/*.spec.ts; do
+  grep -q "mode: 'parallel'" "$f" || echo "Missing: $f"
+done
 
-# After Phase 2:
-# Check each spec file has parallel mode
-# Check handlers don't double-wrap responses
-
-# After Phase 3:
-# Verify pre-commit hooks run on commit
-# Verify CI blocks violating PRs
+# Run tests in parallel to verify
+npx playwright test --workers=4
 ```
 
-**FRs:** FR114 (Standards enforcement), FR115 (Technical debt reduction), FR116 (CI quality gates)
+**Story Points:** 2
+
+**FRs:** FR115 (Technical debt reduction - parallel tests)
+
+---
+
+### Story 5.15: Backend API Response Standardization
+
+**As a** developer,
+**I want** all API handlers to use consistent response formatting,
+**So that** frontend can rely on predictable response structures.
+
+**Standards Reference:** See `docs/coding-standards.md` sections:
+- "Backend Standards > Handler Structure"
+- "Backend Standards > Response Format"
+- "Technical Debt Audit > Current Violation Counts"
+
+**Risk Assessment:**
+- **Severity:** 🟡 MEDIUM - Inconsistent API contracts cause frontend bugs
+- **Current Violations:** ~80 handlers double-wrap responses
+- **Impact:** Frontend must handle both `data.publishers` and `data.data.publishers`
+
+**Acceptance Criteria:**
+
+**Given** ~80 handlers double-wrap API responses
+**When** Story 5.15 is complete
+**Then** handlers pass data directly to `RespondJSON()`
+**And** frontend receives consistent `{data: ..., meta: ...}` structure
+
+**Given** a handler returns a list of items
+**When** `RespondJSON()` is called
+**Then** the response is `{data: [...items], meta: {...}}`
+**And** NOT `{data: {items: [...items]}, meta: {...}}`
+
+**Given** frontend code expects `response.data.publishers`
+**When** the API returns publishers
+**Then** the data is at `response.publishers` (after useApi unwrapping)
+**And** NOT at `response.data.publishers`
+
+**Prerequisites:** Story 5.11 (frontend must use useApi which handles unwrapping)
+
+**Technical Notes:**
+
+**Files to Update (~80 instances):**
+```bash
+# Run to find double-wrapped responses:
+grep -r "RespondJSON.*map\[string\]interface{}" api/internal/handlers --include="*.go"
+```
+
+**Migration Pattern:**
+```go
+// BEFORE (double-wrapped):
+RespondJSON(w, r, http.StatusOK, map[string]interface{}{
+    "publishers": publishers,
+    "total":      len(publishers),
+})
+
+// AFTER (correct):
+type PublishersResponse struct {
+    Publishers []Publisher `json:"publishers"`
+    Total      int         `json:"total"`
+}
+RespondJSON(w, r, http.StatusOK, PublishersResponse{
+    Publishers: publishers,
+    Total:      len(publishers),
+})
+
+// Or for simple cases:
+RespondJSON(w, r, http.StatusOK, publishers)
+```
+
+**Response Structure After Fix:**
+```json
+{
+  "data": {
+    "publishers": [...],
+    "total": 10
+  },
+  "meta": {
+    "timestamp": "2025-12-02T10:30:00Z",
+    "request_id": "uuid"
+  }
+}
+```
+
+**Frontend After useApi Unwrapping:**
+```typescript
+const result = await api.get('/publishers');
+// result = { publishers: [...], total: 10 }
+// NOT: result = { data: { publishers: [...] } }
+```
+
+**Validation:**
+- Run frontend and verify no `data.data` access patterns needed
+- Check network tab for consistent response structures
+
+**Story Points:** 3
+
+**FRs:** FR115 (Technical debt reduction - API consistency)
+
+---
+
+### Story 5.16: CI/CD Quality Gates and Pre-commit Hooks
+
+**As a** developer,
+**I want** automated enforcement of coding standards,
+**So that** violations are caught before they enter the codebase.
+
+**Standards Reference:** See `docs/coding-standards.md` sections:
+- "Enforcement Mechanisms"
+- "Pre-commit Hooks (Recommended)"
+- "CI Linting (Required for PRs)"
+
+**Risk Assessment:**
+- **Severity:** 🟡 MEDIUM - Without enforcement, standards drift over time
+- **Current State:** No pre-commit hooks, no CI standards check
+- **Impact:** Technical debt accumulates silently
+
+**Acceptance Criteria:**
+
+**Given** no pre-commit hooks exist for standards enforcement
+**When** Story 5.16 is complete
+**Then** husky pre-commit hooks block commits with violations
+
+**Given** a developer commits code with raw `fetch()` calls
+**When** the pre-commit hook runs
+**Then** the commit is blocked with a clear error message
+**And** the developer is directed to use `useApi()` instead
+
+**Given** a PR is opened with coding standard violations
+**When** CI runs
+**Then** the standards check step fails
+**And** the PR cannot be merged until violations are fixed
+
+**Prerequisites:** Stories 5.11-5.15 (existing violations must be fixed first)
+
+**Technical Notes:**
+
+**Pre-commit Hook Setup:**
+```bash
+# Install husky
+cd web && npm install husky --save-dev
+npx husky init
+
+# Create pre-commit hook
+cat > .husky/pre-commit << 'EOF'
+#!/bin/sh
+
+echo "🔍 Checking coding standards..."
+
+# Block raw fetch in components
+if grep -rq "await fetch(" web/app web/components --include="*.tsx" 2>/dev/null; then
+  echo "❌ ERROR: Raw fetch() found in components."
+  echo "   Use useApi() hook instead. See docs/coding-standards.md"
+  exit 1
+fi
+
+# Block log.Printf in handlers (allow cmd/)
+if grep -rEq "log\.Printf|fmt\.Printf" api/internal/handlers api/internal/services --include="*.go" 2>/dev/null; then
+  echo "❌ ERROR: log.Printf found in handlers/services."
+  echo "   Use slog instead. See docs/coding-standards.md"
+  exit 1
+fi
+
+# Block waitForTimeout in tests
+if grep -rq "waitForTimeout" tests/e2e --include="*.ts" 2>/dev/null; then
+  echo "❌ ERROR: waitForTimeout found in tests."
+  echo "   Use deterministic waits. See docs/coding-standards.md"
+  exit 1
+fi
+
+echo "✅ Coding standards check passed"
+EOF
+chmod +x .husky/pre-commit
+```
+
+**CI GitHub Action Step:**
+```yaml
+# Add to .github/workflows/ci.yml
+- name: Coding Standards Check
+  run: |
+    echo "🔍 Checking coding standards..."
+
+    FETCH_COUNT=$(grep -r "await fetch(" web/app web/components --include="*.tsx" 2>/dev/null | wc -l)
+    if [ "$FETCH_COUNT" -gt 0 ]; then
+      echo "::error::Found $FETCH_COUNT raw fetch() calls. Use useApi() hook."
+      exit 1
+    fi
+
+    LOG_COUNT=$(grep -rE "log\.Printf|fmt\.Printf" api/internal/handlers api/internal/services --include="*.go" 2>/dev/null | wc -l)
+    if [ "$LOG_COUNT" -gt 0 ]; then
+      echo "::error::Found $LOG_COUNT log.Printf calls. Use slog instead."
+      exit 1
+    fi
+
+    WAIT_COUNT=$(grep -r "waitForTimeout" tests/e2e --include="*.ts" 2>/dev/null | wc -l)
+    if [ "$WAIT_COUNT" -gt 0 ]; then
+      echo "::error::Found $WAIT_COUNT waitForTimeout calls. Use deterministic waits."
+      exit 1
+    fi
+
+    echo "✅ All standards checks passed"
+```
+
+**Validation:**
+```bash
+# Test pre-commit hook
+echo "await fetch(" > test.tsx
+git add test.tsx
+git commit -m "test"  # Should fail
+rm test.tsx
+
+# Test CI locally
+act -j lint  # If using act for local CI testing
+```
+
+**Story Points:** 2
+
+**FRs:** FR116 (CI quality gates and pre-commit hooks)
 
 ---
 
@@ -1604,9 +2097,12 @@ grep -r "waitForTimeout" tests/e2e --include="*.ts" | wc -l  # Should be 0
 | FR111 | Logo image editor with crop/zoom | 5.10 |
 | FR112 | Generate logo from initials | 5.10 |
 | FR113 | Publisher name (not personal name) enforcement | 5.10 |
-| FR114 | Standards enforcement (useApi, slog, deterministic waits) | 5.11 |
-| FR115 | Technical debt reduction (225+ violations) | 5.11 |
-| FR116 | CI quality gates and pre-commit hooks | 5.11 |
+| FR114 | Frontend useApi() hook migration | 5.11 |
+| FR115 | Backend slog structured logging | 5.12 |
+| FR116 | E2E deterministic waits | 5.13 |
+| FR117 | E2E parallel mode configuration | 5.14 |
+| FR118 | Backend API response standardization | 5.15 |
+| FR119 | CI quality gates and pre-commit hooks | 5.16 |
 
 ---
 
@@ -1624,7 +2120,15 @@ grep -r "waitForTimeout" tests/e2e --include="*.ts" | wc -l  # Should be 0
  │    └── 5.7 Request UI
  │         └── 5.8 Admin Review Page
  ├── 5.10 Publisher Logo Editor (parallel track)
- └── 5.11 Standards Enforcement (parallel track - no dependencies)
+ │
+ └── Technical Debt Track (parallel - no feature dependencies)
+      ├── 5.11 Frontend useApi Migration (73 violations)
+      ├── 5.12 Backend slog Migration (~100 violations)
+      ├── 5.13 E2E Deterministic Waits (52 violations)
+      │    └── 5.14 E2E Parallel Mode (depends on 5.13)
+      ├── 5.15 API Response Standardization (~80 violations)
+      │    └── (depends on 5.11 for frontend compatibility)
+      └── 5.16 CI Quality Gates (depends on 5.11-5.15)
 ```
 
 ---
@@ -1632,9 +2136,24 @@ grep -r "waitForTimeout" tests/e2e --include="*.ts" | wc -l  # Should be 0
 ## Epic 5 Summary
 
 **Epic 5: DSL Editor Experience & Zman Management**
-- **Stories:** 12
-- **FRs Covered:** FR96-FR116 (21 FRs)
-- **Sequence:** Schema → Error Messages → Tooltips → Placeholders → Aliases → Requests → Admin → Logo Editor + Standards (parallel)
+- **Stories:** 17 (5.0-5.16)
+- **FRs Covered:** FR96-FR119 (24 FRs)
+- **Story Points:** 45 total
+  - Feature Track: 25 points (5.0-5.10)
+  - Technical Debt Track: 20 points (5.11-5.16)
+- **Sequence:** Schema → Error Messages → Tooltips → Placeholders → Aliases → Requests → Admin → Logo Editor
+- **Parallel Track:** Technical Debt (5.11-5.16) can run alongside feature work
+
+**Technical Debt Stories (NEW):**
+
+| Story | Focus | Violations | Points | Standards Reference |
+|-------|-------|------------|--------|---------------------|
+| 5.11 | Frontend useApi() | 73 | 5 | Frontend Standards |
+| 5.12 | Backend slog | ~100 | 3 | Backend Standards |
+| 5.13 | E2E Deterministic Waits | 52 | 5 | Testing Standards |
+| 5.14 | E2E Parallel Mode | 23 files | 2 | Testing Standards |
+| 5.15 | API Response Format | ~80 | 3 | Backend Standards |
+| 5.16 | CI Quality Gates | - | 2 | Enforcement Mechanisms |
 
 **After Epic 5 Completion:**
 - Non-technical publishers can write formulas with zero confusion (< 30 seconds to valid formula)
@@ -1644,11 +2163,19 @@ grep -r "waitForTimeout" tests/e2e --include="*.ts" | wc -l  # Should be 0
 - The platform becomes community-driven with publisher contributions
 - All publishers have professional logos (mandatory with crop/zoom editor or initials generator)
 - Publisher names are organization names, not personal names
-- **Codebase follows established standards** (0 violations, enforced via pre-commit hooks and CI)
-- **Technical debt reduced** (225+ violations remediated)
+- **Codebase follows established standards** (0 violations across all categories)
+- **All API calls use unified useApi() hook** (consistent auth and response handling)
+- **All logging uses structured slog** (searchable, contextual logs)
 - **Test suite is deterministic** (no hard waits, all tests parallel-safe)
+- **CI enforces standards** (pre-commit hooks and pipeline checks block violations)
+
+**Standards Reference:**
+All technical debt stories reference `docs/coding-standards.md` for:
+- Specific violation patterns and migration examples
+- Validation commands to verify compliance
+- Exemptions (api/cmd/ for logging, sqlcgen/ for generated code)
 
 ---
 
 _Generated by BMAD Epic Workflow v1.0_
-_Last Updated: 2025-12-02 (Test Architect Compliance Audit)_
+_Last Updated: 2025-12-02 (Test Architect - Technical Debt Stories Added)_

@@ -5,6 +5,21 @@
 **Priority:** P1
 **Story Points:** 8
 **Dependencies:** Story 5.1 (Human-Friendly Error Messages)
+**FRs:** FR97 (Contextual tooltips in DSL editor)
+
+---
+
+## Standards Reference
+
+See `docs/coding-standards.md` sections:
+- "Frontend Standards > Component Structure" (hook ordering, state management)
+- "Frontend Standards > Styling with Tailwind" (use design tokens)
+- "Development Workflow > Service Restart" (always use `./restart.sh`)
+
+**Edge Cases to Handle:**
+- Nested parentheses: `solar(midpoint(a, b), before_sunrise)` - detect innermost context
+- Viewport boundaries: tooltip should flip above/below based on available space
+- Performance: debounce cursor updates to prevent lag on fast typing
 
 ---
 
@@ -220,11 +235,14 @@ const cursorListener = EditorView.updateListener.of((update) => {
 ## DoD Gate
 
 **This story is NOT ready for review until:**
-- [ ] All tooltip contexts implemented
-- [ ] Keyboard navigation functional
+- [ ] All tooltip contexts implemented (solar, proportional_hours, empty_editor)
+- [ ] Keyboard navigation functional (Arrow keys, Enter, Escape)
 - [ ] Mobile tested and working
-- [ ] Accessibility attributes in place
+- [ ] Accessibility attributes in place (ARIA roles, live regions)
 - [ ] Integration with CodeMirror complete
+- [ ] Performance tested (no visible lag on cursor movement)
+- [ ] Nested parentheses edge cases handled correctly
+- [ ] Tooltip positioning handles viewport boundaries
 
 ---
 

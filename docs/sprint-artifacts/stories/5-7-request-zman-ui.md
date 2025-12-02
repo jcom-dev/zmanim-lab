@@ -5,6 +5,26 @@
 **Priority:** P1
 **Story Points:** 8
 **Dependencies:** Story 5.6 (Request New Zman API)
+**FRs:** FR109, FR110 (Request new zman UI)
+
+---
+
+## Standards Reference
+
+See `docs/coding-standards.md` sections:
+- "Frontend Standards > Component Structure" (hook ordering, state management)
+- "Frontend Standards > Unified API Client" (use `useApi()` hook)
+- "Frontend Standards > Styling with Tailwind" (use design tokens)
+- "Development Workflow > Service Restart" (always use `./restart.sh`)
+
+**UX Considerations:**
+- Step 3 (Formula) is optional - make this VERY clear with "Skip this step" button prominently visible
+- Consider swapping Step 3 and Step 4 order so Review is always last
+- Form validation should debounce (300ms) to prevent lag during fast typing
+
+**Form State:**
+- Consider using `react-hook-form` with `zod` for validation instead of manual state management
+- This provides better error handling and validation UX
 
 ---
 
@@ -311,10 +331,12 @@ export function TagSelector({
 **This story is NOT ready for review until:**
 - [ ] All 4 steps implemented and navigable
 - [ ] Tag selector with new tag dialog working
-- [ ] Formula step with optional validation
+- [ ] Formula step clearly marked as optional with "Skip" button
 - [ ] Successful submission creates request
 - [ ] Requests list page shows submitted requests
 - [ ] Mobile responsive
+- [ ] Form state persisted when navigating between steps
+- [ ] Uses `useApi()` hook (not raw fetch)
 
 ---
 

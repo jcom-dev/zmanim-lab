@@ -5,6 +5,16 @@
 **Priority:** P1
 **Story Points:** 3
 **Dependencies:** None (first story of Epic 5)
+**FRs:** Infrastructure for FR96-FR113 (enables all Epic 5 features)
+
+---
+
+## Standards Reference
+
+See `docs/coding-standards.md` sections:
+- "Database Migrations" (migration file naming, idempotent SQL)
+- "Backend Standards > SQLc Integration" (query definitions, code generation)
+- "Development Workflow > Service Restart" (always use `./restart.sh` after migrations)
 
 ---
 
@@ -12,7 +22,7 @@
 
 As a **developer**,
 I want **the database schema extended for publisher zman aliases and enhanced zman requests**,
-So that **we have the data layer for all Epic 5 features**.
+So that **publishers can customize zman names and the platform can process zman requests systematically**.
 
 ---
 
@@ -185,9 +195,9 @@ ORDER BY pz.sort_order;
 
 - [ ] Task 3: Create SQLc Queries
   - [ ] 3.1 Create `api/internal/db/queries/aliases.sql`
-  - [ ] 3.2 Add request-related queries to existing files
-  - [ ] 3.3 Run `sqlc generate` to create Go code
-  - [ ] 3.4 Verify generated code compiles
+  - [ ] 3.2 Create `api/internal/db/queries/zman_requests.sql` with request operations
+  - [ ] 3.3 Run `cd api && sqlc generate` to create Go code
+  - [ ] 3.4 Verify generated code compiles with `go build ./...`
 
 - [ ] Task 4: Verification
   - [ ] 4.1 Run `go build ./...` to ensure no compilation errors
@@ -199,11 +209,13 @@ ORDER BY pz.sort_order;
 ## DoD Gate
 
 **This story is NOT ready for review until:**
-- [ ] Both migrations applied successfully
-- [ ] All constraints and indexes verified
-- [ ] SQLc code generated and compiling
-- [ ] Go build passes with no errors
-- [ ] Changes documented
+- [ ] Both migrations applied successfully via `./restart.sh`
+- [ ] All constraints and indexes verified with psql
+- [ ] SQLc code generated and compiling (`cd api && sqlc generate`)
+- [ ] Go build passes with no errors (`cd api && go build ./...`)
+- [ ] Verify existing `zman_registry_requests` table structure before ALTER
+- [ ] Changes documented in architecture docs
+- [ ] Services restarted with `./restart.sh` and verified working
 
 ---
 

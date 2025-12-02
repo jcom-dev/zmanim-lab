@@ -1474,6 +1474,156 @@ DATABASE_URL=postgresql://zmanim:password@postgres:5432/zmanim
 
 ---
 
+## Development Workflow
+
+### Service Restart - ALWAYS USE restart.sh
+
+**REQUIRED:** When restarting services (API, Web), ALWAYS use the restart script:
+
+```bash
+./restart.sh
+```
+
+**Why this matters:**
+- Ensures migrations run before services start
+- Properly kills stray processes on ports 8080 and 3001
+- Manages tmux session correctly
+- Provides consistent startup sequence
+
+**FORBIDDEN patterns:**
+```bash
+# DON'T do this manually:
+cd api && go run ./cmd/api          # Missing migrations, orphan processes
+cd web && npm run dev               # Port conflicts, no coordination
+pkill -f "go run" && go run ...     # Race conditions, missed cleanup
+```
+
+**What restart.sh does:**
+1. Kills existing tmux session `zmanim`
+2. Kills any stray Go API or Next.js processes
+3. Force-kills processes on ports 8080 and 3001 if still occupied
+4. Runs database migrations via `./scripts/migrate.sh`
+5. Starts services in tmux via `.coder/start-services.sh`
+
+**After restart, access services:**
+```bash
+# View service logs
+tmux attach -t zmanim
+# Ctrl+B then 0 -> API logs
+# Ctrl+B then 1 -> Web logs
+# Ctrl+B then D -> Detach
+
+# Quick log check
+tail -f logs/api.log
+```
+
+**Service URLs:**
+| Service | Port | URL |
+|---------|------|-----|
+| Web App | 3001 | http://localhost:3001 |
+| Go API  | 8080 | http://localhost:8080 |
+
+### Redis Cache Management
+
+The Zmanim Lab uses Redis for caching calculation results (24-hour TTL). When making changes that affect cached data, you need to clear the cache.
+
+**Clearing Zmanim Cache:**
+```bash
+# Clear all zmanim cache entries
+redis-cli -h redis KEYS "zmanim:*" | xargs -r redis-cli -h redis DEL
+
+# Clear cache for a specific publisher
+redis-cli -h redis KEYS "zmanim:PUBLISHER_ID:*" | xargs -r redis-cli -h redis DEL
+
+# Clear cache for a specific city
+redis-cli -h redis KEYS "zmanim:*:CITY_ID:*" | xargs -r redis-cli -h redis DEL
+
+# Clear algorithm cache (when algorithm JSON structure changes)
+redis-cli -h redis KEYS "algorithm:*" | xargs -r redis-cli -h redis DEL
+
+# Clear all cache (nuclear option)
+redis-cli -h redis FLUSHDB
+```
+
+**When to Clear Cache:**
+| Scenario | Cache to Clear |
+|----------|----------------|
+| API response format changes | `zmanim:*` |
+| Publisher algorithm updated | `zmanim:PUBLISHER_ID:*` |
+| New zmanim added to calculations | `zmanim:*` |
+| Testing calculation changes | `zmanim:*` |
+| Algorithm configuration schema changes | `algorithm:*` |
+
+**Programmatic Cache Invalidation (in code):**
+```go
+// In handlers, use the cache methods
+if h.cache != nil {
+    // Invalidate specific publisher's zmanim
+    h.cache.InvalidateZmanim(ctx, publisherID)
+
+    // Invalidate algorithm cache
+    h.cache.InvalidateAlgorithm(ctx, publisherID)
+}
+```
+
+**Debug: Check Cache Contents:**
+```bash
+# List all cached keys
+redis-cli -h redis KEYS "*"
+
+# Count zmanim cache entries
+redis-cli -h redis KEYS "zmanim:*" | wc -l
+
+# View a specific cached entry
+redis-cli -h redis GET "zmanim:PUBLISHER_ID:CITY_ID:2025-12-05"
+
+# Check TTL of a cached entry
+redis-cli -h redis TTL "zmanim:PUBLISHER_ID:CITY_ID:2025-12-05"
+```
+
+### Code Changes Workflow
+
+After making code changes, follow this workflow:
+
+**Backend changes (Go):**
+```bash
+# 1. Build to check for compile errors
+cd api && go build ./...
+
+# 2. Run tests
+go test ./...
+
+# 3. Restart services
+cd .. && ./restart.sh
+```
+
+**Frontend changes (Next.js):**
+```bash
+# 1. Type check
+cd web && npm run type-check
+
+# 2. Lint
+npm run lint
+
+# 3. Services auto-reload (hot reload), but if issues:
+cd .. && ./restart.sh
+```
+
+**Schema changes (Database):**
+```bash
+# 1. Create migration in db/migrations/
+# 2. Run migration
+./scripts/migrate.sh
+
+# 3. Regenerate SQLc
+cd api && sqlc generate
+
+# 4. Rebuild and restart
+go build ./... && cd .. && ./restart.sh
+```
+
+---
+
 ## Error Handling Standards
 
 ### Backend Error Handling

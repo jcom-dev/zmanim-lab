@@ -5,6 +5,24 @@
 **Priority:** P2
 **Story Points:** 5
 **Dependencies:** Story 5.3 (Smart Placeholders)
+**FRs:** FR99 (Reference panel contextual enhancements)
+
+---
+
+## Standards Reference
+
+See `docs/coding-standards.md` sections:
+- "Frontend Standards > Component Structure" (hook ordering, state management)
+- "Frontend Standards > Styling with Tailwind" (use design tokens)
+- "Development Workflow > Service Restart" (always use `./restart.sh`)
+
+**Scroll Behavior Note:**
+- `scrollIntoView({ behavior: 'smooth' })` may conflict with user manual scrolling
+- Use `requestAnimationFrame` or debounce to prevent scroll fights
+- Consider only auto-scrolling when element is completely out of view
+
+**State Management:**
+- Context helper functions (`getHighlightedFunction`, `getHighlightedParam`) should be in the same file or co-located with `dsl-context-helper.ts`
 
 ---
 
@@ -274,7 +292,8 @@ function getHighlightedParam(context: DSLContext | undefined): number | null {
 - [ ] "YOU ARE HERE" badge shows on current parameter
 - [ ] Quick insert chips appear for highlighted parameter
 - [ ] Chip insertion replaces value at cursor
-- [ ] Auto-scroll to highlighted function
+- [ ] Auto-scroll to highlighted function (only when out of view)
+- [ ] Scroll behavior doesn't fight with user manual scrolling
 
 ---
 

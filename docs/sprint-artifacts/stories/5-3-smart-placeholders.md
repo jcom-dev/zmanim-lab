@@ -5,6 +5,21 @@
 **Priority:** P2
 **Story Points:** 5
 **Dependencies:** Story 5.2 (Contextual Tooltips)
+**FRs:** FR98 (Smart placeholders with real examples)
+
+---
+
+## Standards Reference
+
+See `docs/coding-standards.md` sections:
+- "Frontend Standards > Component Structure" (hook ordering, state management)
+- "Frontend Standards > Styling with Tailwind" (use design tokens)
+- "Development Workflow > Service Restart" (always use `./restart.sh`)
+
+**Accessibility Note:**
+- Tab-to-next behavior must NOT break standard accessibility (Tab for focus navigation)
+- Use Escape key to exit snippet mode and restore standard Tab behavior
+- Consider using Ctrl+Tab or a different key combination for snippet navigation
 
 ---
 
@@ -215,10 +230,12 @@ export function QuickInsertChip({ value, label, description, onClick }: QuickIns
 ## DoD Gate
 
 **This story is NOT ready for review until:**
-- [ ] All functions insert real examples
+- [ ] All functions insert real examples (not abstract placeholders)
 - [ ] Tab navigation works between parameters
+- [ ] Escape key exits snippet mode and restores standard Tab behavior
 - [ ] Quick insert chips functional
 - [ ] Contextual tooltips appear on tab advance
+- [ ] Accessibility tested (Tab behavior doesn't break form navigation)
 - [ ] Mobile tested
 
 ---

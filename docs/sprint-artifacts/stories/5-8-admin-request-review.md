@@ -5,6 +5,25 @@
 **Priority:** P1
 **Story Points:** 8
 **Dependencies:** Story 5.6 (Request New Zman API)
+**FRs:** FR111, FR112, FR113 (Admin zman request review)
+
+---
+
+## Standards Reference
+
+See `docs/coding-standards.md` sections:
+- "Backend Standards > Handler Pattern (6 Steps)" (follow exactly)
+- "Backend Standards > Error Handling" (log errors, user-friendly messages)
+- "Frontend Standards > Unified API Client" (use `useAdminApi()` hook for admin pages)
+- "Development Workflow > Service Restart" (always use `./restart.sh`)
+
+**Data Integrity:**
+- Add UNIQUE constraint on `master_zmanim_registry.zman_key` to prevent duplicate zman_keys on approval
+- Validate zman_key format (lowercase, underscores, alphanumeric only)
+
+**Transaction Safety:**
+- The approval handler MUST use a database transaction for all operations
+- If any step fails (registry entry, tags, auto-add), rollback entire transaction
 
 ---
 
@@ -408,10 +427,13 @@ export function ZmanRequestReview({ request, onApprove, onReject }: ZmanRequestR
 **This story is NOT ready for review until:**
 - [ ] Admin API endpoints working
 - [ ] Requests table with filtering
-- [ ] Approve dialog with all fields
+- [ ] Approve dialog with all fields (zman_key validated for uniqueness)
 - [ ] Reject dialog with reason
 - [ ] Emails sent on approve/reject
 - [ ] Auto-add to publisher working
+- [ ] Duplicate zman_key detection and error handling
+- [ ] All approval operations in a single transaction
+- [ ] Uses `useAdminApi()` hook (not raw fetch)
 
 ---
 

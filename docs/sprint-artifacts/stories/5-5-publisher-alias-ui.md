@@ -5,6 +5,21 @@
 **Priority:** P2
 **Story Points:** 5
 **Dependencies:** Story 5.4 (Publisher Zman Alias API)
+**FRs:** FR106 (Publisher zman alias UI)
+
+---
+
+## Standards Reference
+
+See `docs/coding-standards.md` sections:
+- "Frontend Standards > Component Structure" (hook ordering, state management)
+- "Frontend Standards > Unified API Client" (use `useApi()` hook)
+- "Frontend Standards > Styling with Tailwind" (use design tokens)
+- "Development Workflow > Service Restart" (always use `./restart.sh`)
+
+**Reusable Component Note:**
+- Consider creating a reusable `HebrewEnglishNameEditor` component for the Hebrew/English/Transliteration triplet
+- This pattern is reused in: ZmanAliasEditor (this story), ZmanRequestForm (Story 5.7)
 
 ---
 
@@ -261,6 +276,8 @@ export function ZmanCard({ zman }: ZmanCardProps) {
 - [ ] Zman cards show custom names correctly
 - [ ] RTL Hebrew input works
 - [ ] Save/remove functionality tested
+- [ ] Uses `useApi()` hook (not raw fetch)
+- [ ] Uses `usePublisherQuery` factory hook for data fetching
 
 ---
 

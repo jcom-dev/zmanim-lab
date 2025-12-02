@@ -137,6 +137,12 @@ func (c *Cache) InvalidateZmanimForCity(ctx context.Context, publisherID, cityID
 	return c.deleteByPattern(ctx, pattern)
 }
 
+// FlushAllZmanim removes all cached zmanim calculations
+func (c *Cache) FlushAllZmanim(ctx context.Context) error {
+	pattern := "zmanim:*"
+	return c.deleteByPattern(ctx, pattern)
+}
+
 // GetAlgorithm retrieves cached algorithm configuration
 func (c *Cache) GetAlgorithm(ctx context.Context, publisherID string) ([]byte, error) {
 	key := algorithmKey(publisherID)

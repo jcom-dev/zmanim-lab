@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/jcom-dev/zmanim-lab/internal/algorithm"
+	"github.com/jcom-dev/zmanim-lab/internal/astro"
+	"github.com/jcom-dev/zmanim-lab/internal/calendar"
 	"github.com/jcom-dev/zmanim-lab/internal/middleware"
 	"github.com/jcom-dev/zmanim-lab/internal/models"
 )
@@ -213,6 +215,59 @@ func (h *Handlers) GetZmanimForCity(w http.ResponseWriter, r *http.Request) {
 				DisplayName: zman.Formula.DisplayName,
 				Parameters:  zman.Formula.Parameters,
 				Explanation: zman.Formula.Explanation,
+			},
+		})
+	}
+
+	// Add event-based zmanim (candle lighting, havdalah)
+	calService := calendar.NewCalendarService()
+	isIsrael := calendar.IsLocationInIsrael(latitude, longitude)
+	zmanimContext := calService.GetZmanimContext(date.In(loc), calendar.Location{
+		Latitude:  latitude,
+		Longitude: longitude,
+		Timezone:  timezone,
+		IsIsrael:  isIsrael,
+	})
+
+	// Get sunset time from executor
+	sunTimes := executor.GetSunTimes()
+
+	// Add candle lighting if needed (Friday or erev Yom Tov)
+	if zmanimContext.ShowCandleLighting {
+		// Default: 18 minutes before sunset
+		candleLightingTime := astro.SubtractMinutes(sunTimes.Sunset, 18)
+		response.Zmanim = append(response.Zmanim, ZmanWithFormula{
+			Name: "Candle Lighting",
+			Key:  "candle_lighting",
+			Time: astro.FormatTime(candleLightingTime),
+			Formula: FormulaDetails{
+				Method:      "fixed_minutes",
+				DisplayName: "18 minutes before sunset",
+				Parameters: map[string]interface{}{
+					"minutes": -18,
+					"from":    "sunset",
+				},
+				Explanation: "Traditional candle lighting time, 18 minutes before sunset",
+			},
+		})
+	}
+
+	// Add havdalah if needed (Motzei Shabbat or Motzei Yom Tov)
+	if zmanimContext.ShowShabbosYomTovEnds {
+		// Default: 42 minutes after sunset (8.5° below horizon approximation)
+		havdalahTime := astro.AddMinutes(sunTimes.Sunset, 42)
+		response.Zmanim = append(response.Zmanim, ZmanWithFormula{
+			Name: "Havdalah",
+			Key:  "havdalah",
+			Time: astro.FormatTime(havdalahTime),
+			Formula: FormulaDetails{
+				Method:      "fixed_minutes",
+				DisplayName: "42 minutes after sunset",
+				Parameters: map[string]interface{}{
+					"minutes": 42,
+					"from":    "sunset",
+				},
+				Explanation: "Traditional havdalah time, approximately 42 minutes after sunset",
 			},
 		})
 	}

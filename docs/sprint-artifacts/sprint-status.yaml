@@ -81,28 +81,53 @@ development_status:
   3-4-refactor-to-standards: done  # Apply standards, cleanup - COMPLETED 2025-11-27
   epic-3-retrospective: optional
 
-  # Epic 4: Intuitive Zmanim Algorithm Editor with AI-Powered DSL (14 stories) - CURRENT SPRINT
+  # Epic 4: Intuitive Zmanim Algorithm Editor with AI-Powered DSL (14 stories) - COMPLETED 2025-12-02
   # Focus: Apple-quality UX, DSL for calculations, AI formula generation, Hebrew calendar
   # Epic defined: docs/epic-4-algorithm-editor-ux.md
   # Tech spec: docs/sprint-artifacts/tech-spec-epic-4.md
+  epic-4: done
+  4-0-postgres-pgvector-image: done  # Infrastructure: PostgreSQL 17 + PostGIS + pgvector
+  4-1-zmanim-dsl-design: done        # DSL spec APPROVED by code-review 2025-11-28
+  4-2-zmanim-dsl-parser: done        # Executor, API endpoints, tests
+  4-3-bilingual-naming: done         # Mandatory Hebrew + English names
+  4-4-guided-formula-builder: done   # shadcn/ui visual formula construction
+  4-5-halachic-documentation: done   # Comments field with Hebrew/Markdown
+  4-6-advanced-mode-editor: done     # CodeMirror 6 with DSL support
+  4-7-ai-context-system-rag: done    # pgvector-based retrieval for AI
+  4-8-ai-formula-service: done       # Claude API for NL→formula
+  4-9-ai-explanation-generator: done # Human-readable formula explanations
+  4-10-weekly-preview-hebrew: done   # hebcal-go, 44 Jewish events, bilingual dates
+  4-11-publisher-onboarding: done    # First-time setup wizard
+  4-12-algorithm-collaboration: done # Copy/fork from other publishers
+  4-13-formula-version-history: done # Visual diff and rollback
+  epic-4-retrospective: optional
+
+  # Epic 5: DSL Editor Experience & Zman Management (17 stories) - CURRENT SPRINT
+  # Focus: Hand-holding DSL editor UX, publisher zman aliases, new zman requests, technical debt
+  # Epic defined: docs/epics.md (Epic 5 section)
+  # FRs: FR96-FR119
   #
-  # Epic 4 DoD Policy (Simplified Gates):
+  # Epic 5 DoD Policy:
   #   - Only run NEW tests created for the story (not full regression suite)
   #   - If API/web not working: run ./restart.sh from project root
-  #   - If still broken: troubleshoot via tmux (tmux attach -t zmanim)
   #   - Full E2E regression only required at epic completion, not per-story
-  epic-4: contexted  # Tech spec created 2025-11-27
-  4-0-postgres-pgvector-image: done  # Infrastructure: PostgreSQL 17 + PostGIS + pgvector - COMPLETED 2025-11-27
-  4-1-zmanim-dsl-design: done                  # DSL spec APPROVED by code-review 2025-11-28
-  4-2-zmanim-dsl-parser: dev-complete         # Executor, API endpoints, tests - ready for code review
-  4-3-bilingual-naming: ready-for-dev         # Mandatory Hebrew + English names
-  4-4-guided-formula-builder: ready-for-dev   # shadcn/ui visual formula construction
-  4-5-halachic-documentation: ready-for-dev   # Comments field with Hebrew/Markdown
-  4-6-advanced-mode-editor: ready-for-dev     # CodeMirror 6 with DSL support
-  4-7-ai-context-system-rag: ready-for-dev    # pgvector-based retrieval for AI
-  4-8-ai-formula-service: ready-for-dev       # Claude API for NL→formula
-  4-9-ai-explanation-generator: ready-for-dev # Human-readable formula explanations
-  4-10-weekly-preview-hebrew: ready-for-dev   # hebcal-go, 44 Jewish events, bilingual dates
-  4-11-publisher-onboarding: ready-for-dev    # First-time setup wizard
-  4-12-algorithm-collaboration: ready-for-dev # Copy/fork from other publishers
-  4-13-formula-version-history: ready-for-dev # Visual diff and rollback
+  epic-5: contexted
+  # Stories 5.0-5.10: Feature stories - READY FOR DEV with context files (2025-12-02)
+  5-0-database-schema-aliases: ready-for-dev        # Schema for publisher aliases & zman requests
+  5-1-human-friendly-errors: ready-for-dev          # Plain language validation error messages
+  5-2-contextual-tooltips: ready-for-dev            # Cursor-position-aware hints in DSL editor
+  5-3-smart-placeholders: ready-for-dev             # Real examples instead of abstract placeholders
+  5-4-publisher-alias-api: ready-for-dev            # API for publisher zman custom naming
+  5-5-publisher-alias-ui: ready-for-dev             # UI for renaming zmanim in Advanced mode
+  5-6-request-zman-api: ready-for-dev               # API for requesting new zmanim + email
+  5-7-request-zman-ui: ready-for-dev                # Multi-step form for new zman requests
+  5-8-admin-zman-review: ready-for-dev              # Admin page for reviewing zman requests
+  5-9-reference-panel-enhancements: ready-for-dev   # Contextual highlighting in reference panel
+  5-10-publisher-logo-editor: ready-for-dev         # Mandatory logo with crop/zoom editor
+  # Stories 5.11-5.16: Technical debt stories - READY FOR DEV with context files (2025-12-02)
+  5-11-frontend-useapi-migration: ready-for-dev     # Migrate 73 raw fetch() to useApi hook
+  5-12-backend-slog-migration: ready-for-dev        # Migrate ~100 log.Printf to slog
+  5-13-e2e-deterministic-waits: ready-for-dev       # Replace 52 waitForTimeout with proper waits
+  5-14-e2e-parallel-mode: ready-for-dev             # Add parallel mode to 23 test files
+  5-15-api-response-standardization: ready-for-dev  # Fix ~80 double-wrapped API responses
+  5-16-ci-quality-gates: ready-for-dev              # Pre-commit hooks and CI standards checks

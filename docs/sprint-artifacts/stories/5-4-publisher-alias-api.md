@@ -5,6 +5,21 @@
 **Priority:** P2
 **Story Points:** 5
 **Dependencies:** Story 5.0 (Database Schema)
+**FRs:** FR104, FR105 (Publisher zman alias management)
+
+---
+
+## Standards Reference
+
+See `docs/coding-standards.md` sections:
+- "Backend Standards > Handler Pattern (6 Steps)" (follow exactly)
+- "Backend Standards > Error Handling" (log errors, user-friendly messages)
+- "Backend Standards > SQLc Integration" (query definitions)
+- "Development Workflow > Service Restart" (always use `./restart.sh`)
+
+**Error Handling Note:**
+- When publisher tries to create alias for zman NOT in their list, return 404 with message: "Zman not found in your published zmanim"
+- GET endpoint should return 200 with `null` data if no alias exists (not 404) - more RESTful
 
 ---
 
@@ -258,10 +273,13 @@ ORDER BY pz.sort_order;
 
 **This story is NOT ready for review until:**
 - [ ] All 4 endpoints implemented and tested
-- [ ] SQLc queries generated and working
+- [ ] SQLc queries generated and working (`cd api && sqlc generate`)
 - [ ] Auth validated (only own aliases)
 - [ ] Response includes both custom and canonical names
-- [ ] Routes registered
+- [ ] Routes registered in `api/cmd/api/main.go`
+- [ ] Error handling for "zman not in publisher's list" scenario
+- [ ] Services restarted with `./restart.sh` and verified working
+- [ ] E2E test for alias CRUD operations
 
 ---
 

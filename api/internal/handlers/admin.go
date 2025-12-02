@@ -1085,6 +1085,33 @@ func (h *Handlers) AdminUpdateConfig(w http.ResponseWriter, r *http.Request) {
 	RespondJSON(w, r, http.StatusOK, result)
 }
 
+// AdminFlushZmanimCache clears all cached zmanim calculations
+// DELETE /api/admin/cache/zmanim
+func (h *Handlers) AdminFlushZmanimCache(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	if h.cache == nil {
+		RespondJSON(w, r, http.StatusOK, map[string]interface{}{
+			"message": "Cache not configured",
+			"flushed": false,
+		})
+		return
+	}
+
+	if err := h.cache.FlushAllZmanim(ctx); err != nil {
+		slog.Error("failed to flush zmanim cache", "error", err)
+		RespondInternalError(w, r, "Failed to flush cache")
+		return
+	}
+
+	slog.Info("zmanim cache flushed by admin")
+
+	RespondJSON(w, r, http.StatusOK, map[string]interface{}{
+		"message": "Zmanim cache flushed successfully",
+		"flushed": true,
+	})
+}
+
 // Helper types and functions
 
 type statusUpdateResult struct {

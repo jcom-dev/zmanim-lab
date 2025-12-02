@@ -5,6 +5,26 @@
 **Priority:** P1
 **Story Points:** 8
 **Dependencies:** Story 5.0 (Database Schema)
+**FRs:** FR107, FR108 (Request new zman API and notifications)
+
+---
+
+## Standards Reference
+
+See `docs/coding-standards.md` sections:
+- "Backend Standards > Handler Pattern (6 Steps)" (follow exactly)
+- "Backend Standards > Error Handling" (log errors, user-friendly messages)
+- "Backend Standards > SQLc Integration" (query definitions)
+- "Development Workflow > Service Restart" (always use `./restart.sh`)
+
+**Configuration Note:**
+- Admin email address should be configurable via environment variable: `ADMIN_NOTIFICATION_EMAIL`
+- Add to `api/internal/config/config.go` struct
+- Default to a no-reply address for development
+
+**Response Enhancement:**
+- Store `validation_error` message when formula validation fails (not just true/false)
+- This helps admin understand what needs to be fixed
 
 ---
 
@@ -288,9 +308,11 @@ func (s *EmailService) SendAdminNewZmanRequest(to, publisherName, zmanName, revi
 - [ ] Create request endpoint working
 - [ ] List requests endpoint working
 - [ ] Tag support (existing + new) implemented
-- [ ] Formula validation integrated
-- [ ] Email notifications sent
+- [ ] Formula validation integrated (store error message, not just boolean)
+- [ ] Email notifications sent (verify with Resend test mode or logs)
 - [ ] Minimum mandatory fields enforced
+- [ ] Admin email configured via `ADMIN_NOTIFICATION_EMAIL` env var
+- [ ] Services restarted with `./restart.sh` and verified working
 
 ---
 

@@ -5,6 +5,31 @@
 **Priority:** P2
 **Story Points:** 8
 **Dependencies:** None (can be done in parallel with other Epic 5 stories)
+**FRs:** FR100, FR101, FR102, FR103 (Publisher logo and profile enhancements)
+
+---
+
+## Standards Reference
+
+See `docs/coding-standards.md` sections:
+- "Frontend Standards > Component Structure" (hook ordering, state management)
+- "Frontend Standards > Unified API Client" (use `useApi()` hook)
+- "Frontend Standards > Styling with Tailwind" (use design tokens)
+- "Development Workflow > Service Restart" (always use `./restart.sh`)
+
+**Image Handling:**
+- `react-easy-crop` handles EXIF orientation but verify on mobile uploads
+- Output format should be PNG for transparency support (initials may need transparent bg in future)
+- Supabase Storage bucket must be configured with public access for logos
+
+**Personal Name Detection:**
+- The regex patterns will have false positives (e.g., "Young Israel of X" triggers "Israel" as name)
+- Use a more sophisticated approach: check for common organization words (Congregation, Shul, Center, etc.)
+- Warning should be non-blocking and dismissable
+
+**Migration Consideration:**
+- Existing publishers without logos need a grace period or prompt on next login
+- Don't break existing publisher functionality
 
 ---
 
@@ -361,12 +386,14 @@ export function getNameWarning(name: string): string | null {
 ## DoD Gate
 
 **This story is NOT ready for review until:**
-- [ ] Logo is mandatory with validation
-- [ ] Image editor with crop/zoom works
+- [ ] Logo is mandatory with validation (for NEW publishers)
+- [ ] Existing publishers without logo prompted but not blocked
+- [ ] Image editor with crop/zoom works (including EXIF orientation)
 - [ ] Initials generator works
-- [ ] Personal name warning shows
-- [ ] "Publisher Name" terminology consistent
-- [ ] Images stored in Supabase Storage
+- [ ] Personal name warning shows (non-blocking, dismissable)
+- [ ] "Publisher Name" terminology consistent across UI
+- [ ] Images stored in Supabase Storage (bucket configured with public access)
+- [ ] Mobile upload tested
 
 ---
 

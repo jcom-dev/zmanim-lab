@@ -5,6 +5,19 @@
 **Priority:** P1
 **Story Points:** 5
 **Dependencies:** Story 5.0 (Database Schema)
+**FRs:** FR96 (Human-friendly error messages in DSL editor)
+
+---
+
+## Standards Reference
+
+See `docs/coding-standards.md` sections:
+- "Frontend Standards > Component Structure" (hook ordering, state management)
+- "Frontend Standards > Styling with Tailwind" (use design tokens)
+- "Development Workflow > Service Restart" (always use `./restart.sh`)
+
+**Related Backend Code:**
+- `api/internal/dsl/validator.go` - Source of error messages to humanize
 
 ---
 
@@ -213,7 +226,8 @@ export function HumanErrorDisplay({ error, onInsertExample, onNavigateToReferenc
   - [ ] 1.1 Create `web/lib/error-humanizer.ts`
   - [ ] 1.2 Implement ERROR_PATTERNS array with all mappings
   - [ ] 1.3 Implement helper functions (getExampleForFunction, findSimilarPrimitives)
-  - [ ] 1.4 Add Levenshtein distance for fuzzy matching
+  - [ ] 1.4 Install `fastest-levenshtein` for fuzzy matching: `npm install fastest-levenshtein`
+  - [ ] 1.5 Add unit tests for error pattern matching
 
 - [ ] Task 2: Create HumanErrorDisplay Component
   - [ ] 2.1 Create `web/components/editor/HumanErrorDisplay.tsx`
@@ -242,11 +256,14 @@ export function HumanErrorDisplay({ error, onInsertExample, onNavigateToReferenc
 ## DoD Gate
 
 **This story is NOT ready for review until:**
-- [ ] All error patterns from UX spec implemented
+- [ ] All error patterns from UX spec implemented (see Reference table below)
 - [ ] HumanErrorDisplay component styled and functional
 - [ ] Integration with CodeMirrorDSLEditor complete
+- [ ] Error patterns cover ALL common validation errors from `api/internal/dsl/validator.go`
+- [ ] Fuzzy matching tested with common typos (e.g., "sunris", "solr")
 - [ ] Manual testing with common error scenarios
 - [ ] Mobile responsive
+- [ ] i18n-ready structure (error strings externalized for future localization)
 
 ---
 

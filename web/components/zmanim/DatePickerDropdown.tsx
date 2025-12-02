@@ -105,7 +105,7 @@ export function DatePickerDropdown({
               </span>
               <span className="text-stone-300 dark:text-zinc-600">•</span>
               <span className="text-sm text-stone-500 dark:text-zinc-400">
-                {selectedDate.toFormat('MMM d')}
+                {selectedDate.toFormat('MMM d, yyyy')}
               </span>
             </div>
           ) : (

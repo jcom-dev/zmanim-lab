@@ -355,6 +355,9 @@ func main() {
 			r.Get("/config", h.AdminGetConfig)
 			r.Put("/config", h.AdminUpdateConfig)
 
+			// Cache management
+			r.Delete("/cache/zmanim", h.AdminFlushZmanimCache)
+
 			// AI management (Story 4-7, 4-8)
 			r.Get("/ai/stats", h.GetAIIndexStats)
 			r.Post("/ai/reindex", h.TriggerReindex)
