@@ -65,7 +65,7 @@ func (h *Handlers) AdminListPublishers(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	query := `
-		SELECT id, clerk_user_id, name, organization, email, website,
+		SELECT id, clerk_user_id, name, email, website,
 		       logo_url, bio, status, created_at, updated_at
 		FROM publishers
 		ORDER BY created_at DESC
@@ -81,11 +81,11 @@ func (h *Handlers) AdminListPublishers(w http.ResponseWriter, r *http.Request) {
 
 	publishers := make([]map[string]interface{}, 0)
 	for rows.Next() {
-		var id, name, organization, email, status string
+		var id, name, email, status string
 		var clerkUserID, website, logoURL, bio *string
 		var createdAt, updatedAt time.Time
 
-		err := rows.Scan(&id, &clerkUserID, &name, &organization, &email,
+		err := rows.Scan(&id, &clerkUserID, &name, &email,
 			&website, &logoURL, &bio, &status, &createdAt, &updatedAt)
 		if err != nil {
 			slog.Error("failed to scan publisher row", "error", err)
@@ -93,13 +93,12 @@ func (h *Handlers) AdminListPublishers(w http.ResponseWriter, r *http.Request) {
 		}
 
 		publisher := map[string]interface{}{
-			"id":           id,
-			"name":         name,
-			"organization": organization,
-			"email":        email,
-			"status":       status,
-			"created_at":   createdAt,
-			"updated_at":   updatedAt,
+			"id":         id,
+			"name":       name,
+			"email":      email,
+			"status":     status,
+			"created_at": createdAt,
+			"updated_at": updatedAt,
 		}
 
 		if clerkUserID != nil {
@@ -131,11 +130,10 @@ func (h *Handlers) AdminCreatePublisher(w http.ResponseWriter, r *http.Request) 
 	ctx := r.Context()
 
 	var req struct {
-		Name         string  `json:"name"`
-		Organization string  `json:"organization"`
-		Email        *string `json:"email"`   // Optional contact email for the publisher
-		Website      *string `json:"website"`
-		Bio          *string `json:"bio"`
+		Name    string  `json:"name"`
+		Email   *string `json:"email"`   // Optional contact email for the publisher
+		Website *string `json:"website"`
+		Bio     *string `json:"bio"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -148,30 +146,27 @@ func (h *Handlers) AdminCreatePublisher(w http.ResponseWriter, r *http.Request) 
 	if req.Name == "" {
 		validationErrors["name"] = "Name is required"
 	}
-	if req.Organization == "" {
-		validationErrors["organization"] = "Organization is required"
-	}
 	if len(validationErrors) > 0 {
 		RespondValidationError(w, r, "Invalid request parameters", validationErrors)
 		return
 	}
 
-	// Generate slug from organization name
-	slug := generateSlug(req.Organization)
+	// Generate slug from publisher name
+	slug := generateSlug(req.Name)
 
 	// Insert new publisher as active (admin-created publishers are auto-approved)
 	query := `
-		INSERT INTO publishers (name, organization, slug, email, website, description, status)
-		VALUES ($1, $2, $3, $4, $5, $6, 'active')
-		RETURNING id, name, organization, slug, email, website, description, status, created_at, updated_at
+		INSERT INTO publishers (name, slug, email, website, description, status)
+		VALUES ($1, $2, $3, $4, $5, 'active')
+		RETURNING id, name, slug, email, website, description, status, created_at, updated_at
 	`
 
-	var id, name, organization, resSlug, status string
+	var id, name, resSlug, status string
 	var email, website, description *string
 	var createdAt, updatedAt time.Time
 
-	err := h.db.Pool.QueryRow(ctx, query, req.Name, req.Organization, slug, req.Email,
-		req.Website, req.Bio).Scan(&id, &name, &organization, &resSlug, &email, &website,
+	err := h.db.Pool.QueryRow(ctx, query, req.Name, slug, req.Email,
+		req.Website, req.Bio).Scan(&id, &name, &resSlug, &email, &website,
 		&description, &status, &createdAt, &updatedAt)
 
 	if err != nil {
@@ -179,7 +174,7 @@ func (h *Handlers) AdminCreatePublisher(w http.ResponseWriter, r *http.Request) 
 
 		// Check for unique constraint violation
 		if strings.Contains(err.Error(), "duplicate key") || strings.Contains(err.Error(), "unique constraint") {
-			RespondConflict(w, r, "Publisher with this organization already exists")
+			RespondConflict(w, r, "Publisher with this name already exists")
 			return
 		}
 		RespondInternalError(w, r, "Failed to create publisher")
@@ -187,13 +182,12 @@ func (h *Handlers) AdminCreatePublisher(w http.ResponseWriter, r *http.Request) 
 	}
 
 	publisher := map[string]interface{}{
-		"id":           id,
-		"name":         name,
-		"organization": organization,
-		"slug":         resSlug,
-		"status":       status,
-		"created_at":   createdAt,
-		"updated_at":   updatedAt,
+		"id":         id,
+		"name":       name,
+		"slug":       resSlug,
+		"status":     status,
+		"created_at": createdAt,
+		"updated_at": updatedAt,
 	}
 
 	if email != nil {
@@ -206,7 +200,7 @@ func (h *Handlers) AdminCreatePublisher(w http.ResponseWriter, r *http.Request) 
 		publisher["bio"] = *description
 	}
 
-	slog.Info("publisher created", "id", id, "organization", organization, "status", status)
+	slog.Info("publisher created", "id", id, "name", name, "status", status)
 
 	// Get publisher email for invite
 	publisherEmail := ""
@@ -650,11 +644,10 @@ func (h *Handlers) AdminUpdatePublisher(w http.ResponseWriter, r *http.Request) 
 	}
 
 	var req struct {
-		Name         *string `json:"name"`
-		Organization *string `json:"organization"`
-		Email        *string `json:"email"`
-		Website      *string `json:"website"`
-		Bio          *string `json:"bio"`
+		Name    *string `json:"name"`
+		Email   *string `json:"email"`
+		Website *string `json:"website"`
+		Bio     *string `json:"bio"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -674,14 +667,9 @@ func (h *Handlers) AdminUpdatePublisher(w http.ResponseWriter, r *http.Request) 
 		query += fmt.Sprintf(", name = $%d", argIndex)
 		args = append(args, *req.Name)
 		argIndex++
-	}
-	if req.Organization != nil {
-		query += fmt.Sprintf(", organization = $%d", argIndex)
-		args = append(args, *req.Organization)
-		argIndex++
-		// Also update slug
+		// Also update slug when name changes
 		query += fmt.Sprintf(", slug = $%d", argIndex)
-		args = append(args, generateSlug(*req.Organization))
+		args = append(args, generateSlug(*req.Name))
 		argIndex++
 	}
 	if req.Email != nil {
@@ -702,16 +690,16 @@ func (h *Handlers) AdminUpdatePublisher(w http.ResponseWriter, r *http.Request) 
 
 	query += fmt.Sprintf(`
 		WHERE id = $%d
-		RETURNING id, name, organization, slug, email, website, description, status, created_at, updated_at
+		RETURNING id, name, slug, email, website, description, status, created_at, updated_at
 	`, argIndex)
 	args = append(args, id)
 
-	var resID, name, organization, slug, status string
+	var resID, name, slug, status string
 	var email, website, description *string
 	var createdAt, updatedAt time.Time
 
 	err := h.db.Pool.QueryRow(ctx, query, args...).Scan(
-		&resID, &name, &organization, &slug, &email, &website,
+		&resID, &name, &slug, &email, &website,
 		&description, &status, &createdAt, &updatedAt)
 
 	if err != nil {
@@ -725,13 +713,12 @@ func (h *Handlers) AdminUpdatePublisher(w http.ResponseWriter, r *http.Request) 
 	}
 
 	publisher := map[string]interface{}{
-		"id":           resID,
-		"name":         name,
-		"organization": organization,
-		"slug":         slug,
-		"status":       status,
-		"created_at":   createdAt,
-		"updated_at":   updatedAt,
+		"id":         resID,
+		"name":       name,
+		"slug":       slug,
+		"status":     status,
+		"created_at": createdAt,
+		"updated_at": updatedAt,
 	}
 
 	if email != nil {
@@ -1125,14 +1112,14 @@ func (h *Handlers) updatePublisherStatus(ctx context.Context, id, status string)
 		UPDATE publishers
 		SET status = $1, updated_at = NOW()
 		WHERE id = $2
-		RETURNING id, name, organization, email, status, created_at, updated_at
+		RETURNING id, name, email, status, created_at, updated_at
 	`
 
-	var resID, name, organization, email, resStatus string
+	var resID, name, email, resStatus string
 	var createdAt, updatedAt time.Time
 
 	err := h.db.Pool.QueryRow(ctx, query, status, id).Scan(
-		&resID, &name, &organization, &email, &resStatus, &createdAt, &updatedAt)
+		&resID, &name, &email, &resStatus, &createdAt, &updatedAt)
 
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -1143,13 +1130,12 @@ func (h *Handlers) updatePublisherStatus(ctx context.Context, id, status string)
 	}
 
 	publisher := map[string]interface{}{
-		"id":           resID,
-		"name":         name,
-		"organization": organization,
-		"email":        email,
-		"status":       resStatus,
-		"created_at":   createdAt,
-		"updated_at":   updatedAt,
+		"id":         resID,
+		"name":       name,
+		"email":      email,
+		"status":     resStatus,
+		"created_at": createdAt,
+		"updated_at": updatedAt,
 	}
 
 	return statusUpdateResult{publisher: publisher}

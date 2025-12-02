@@ -182,9 +182,6 @@ async function globalSetup(config: FullConfig) {
 
   const optionalVars = [
     'DATABASE_URL',
-    'SUPABASE_URL',
-    'NEXT_PUBLIC_SUPABASE_URL',
-    'SUPABASE_SERVICE_KEY',
   ];
 
   const missing: string[] = [];

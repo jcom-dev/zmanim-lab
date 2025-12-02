@@ -269,7 +269,7 @@ else
 fi
 
 # Step 10: Install useful development utilities
-print_status "Installing development utilities (jq, tree, htop, ncdu, vim)..."
+print_status "Installing development utilities (jq, tree, htop, ncdu, vim, lsof, etc.)..."
 sudo apt-get update -qq && sudo apt-get install -y \
     jq \
     tree \
@@ -277,6 +277,12 @@ sudo apt-get update -qq && sudo apt-get install -y \
     ncdu \
     vim \
     iproute2 \
+    iputils-ping \
+    lsof \
+    net-tools \
+    procps \
+    psmisc \
+    strace \
     > /dev/null 2>&1
 print_success "Development utilities installed"
 

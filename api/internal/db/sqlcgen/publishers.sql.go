@@ -25,39 +25,37 @@ func (q *Queries) CountPublishers(ctx context.Context, dollar_1 string) (int64, 
 }
 
 const createPublisher = `-- name: CreatePublisher :one
-INSERT INTO publishers (name, organization, email, status, clerk_user_id)
-VALUES ($1, $2, $3, $4, $5)
-RETURNING id, clerk_user_id, name, organization, email, description, bio,
-          website, logo_url, status, created_at, updated_at
+INSERT INTO publishers (name, email, status, clerk_user_id)
+VALUES ($1, $2, $3, $4)
+RETURNING id, clerk_user_id, name, email, description, bio,
+          website, logo_url, logo_data, status, created_at, updated_at
 `
 
 type CreatePublisherParams struct {
-	Name         string  `json:"name"`
-	Organization *string `json:"organization"`
-	Email        string  `json:"email"`
-	Status       string  `json:"status"`
-	ClerkUserID  *string `json:"clerk_user_id"`
+	Name        string  `json:"name"`
+	Email       string  `json:"email"`
+	Status      string  `json:"status"`
+	ClerkUserID *string `json:"clerk_user_id"`
 }
 
 type CreatePublisherRow struct {
-	ID           string             `json:"id"`
-	ClerkUserID  *string            `json:"clerk_user_id"`
-	Name         string             `json:"name"`
-	Organization *string            `json:"organization"`
-	Email        string             `json:"email"`
-	Description  *string            `json:"description"`
-	Bio          *string            `json:"bio"`
-	Website      *string            `json:"website"`
-	LogoUrl      *string            `json:"logo_url"`
-	Status       string             `json:"status"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+	ID          string             `json:"id"`
+	ClerkUserID *string            `json:"clerk_user_id"`
+	Name        string             `json:"name"`
+	Email       string             `json:"email"`
+	Description *string            `json:"description"`
+	Bio         *string            `json:"bio"`
+	Website     *string            `json:"website"`
+	LogoUrl     *string            `json:"logo_url"`
+	LogoData    *string            `json:"logo_data"`
+	Status      string             `json:"status"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
 
 func (q *Queries) CreatePublisher(ctx context.Context, arg CreatePublisherParams) (CreatePublisherRow, error) {
 	row := q.db.QueryRow(ctx, createPublisher,
 		arg.Name,
-		arg.Organization,
 		arg.Email,
 		arg.Status,
 		arg.ClerkUserID,
@@ -67,12 +65,12 @@ func (q *Queries) CreatePublisher(ctx context.Context, arg CreatePublisherParams
 		&i.ID,
 		&i.ClerkUserID,
 		&i.Name,
-		&i.Organization,
 		&i.Email,
 		&i.Description,
 		&i.Bio,
 		&i.Website,
 		&i.LogoUrl,
+		&i.LogoData,
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -115,52 +113,40 @@ func (q *Queries) GetPublisherAlgorithmSummary(ctx context.Context, publisherID 
 }
 
 const getPublisherBasic = `-- name: GetPublisherBasic :one
-SELECT id, name, organization, status
+SELECT id, name, status
 FROM publishers
 WHERE id = $1
 `
 
 type GetPublisherBasicRow struct {
-	ID           string  `json:"id"`
-	Name         string  `json:"name"`
-	Organization *string `json:"organization"`
-	Status       string  `json:"status"`
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Status string `json:"status"`
 }
 
 func (q *Queries) GetPublisherBasic(ctx context.Context, id string) (GetPublisherBasicRow, error) {
 	row := q.db.QueryRow(ctx, getPublisherBasic, id)
 	var i GetPublisherBasicRow
-	err := row.Scan(
-		&i.ID,
-		&i.Name,
-		&i.Organization,
-		&i.Status,
-	)
+	err := row.Scan(&i.ID, &i.Name, &i.Status)
 	return i, err
 }
 
 const getPublisherBasicByClerkUserID = `-- name: GetPublisherBasicByClerkUserID :one
-SELECT id, name, organization, status
+SELECT id, name, status
 FROM publishers
 WHERE clerk_user_id = $1
 `
 
 type GetPublisherBasicByClerkUserIDRow struct {
-	ID           string  `json:"id"`
-	Name         string  `json:"name"`
-	Organization *string `json:"organization"`
-	Status       string  `json:"status"`
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Status string `json:"status"`
 }
 
 func (q *Queries) GetPublisherBasicByClerkUserID(ctx context.Context, clerkUserID *string) (GetPublisherBasicByClerkUserIDRow, error) {
 	row := q.db.QueryRow(ctx, getPublisherBasicByClerkUserID, clerkUserID)
 	var i GetPublisherBasicByClerkUserIDRow
-	err := row.Scan(
-		&i.ID,
-		&i.Name,
-		&i.Organization,
-		&i.Status,
-	)
+	err := row.Scan(&i.ID, &i.Name, &i.Status)
 	return i, err
 }
 
@@ -179,25 +165,25 @@ func (q *Queries) GetPublisherByClerkUserID(ctx context.Context, clerkUserID *st
 
 const getPublisherByID = `-- name: GetPublisherByID :one
 
-SELECT id, clerk_user_id, name, organization, email, description, bio,
-       website, logo_url, status, created_at, updated_at
+SELECT id, clerk_user_id, name, email, description, bio,
+       website, logo_url, logo_data, status, created_at, updated_at
 FROM publishers
 WHERE id = $1
 `
 
 type GetPublisherByIDRow struct {
-	ID           string             `json:"id"`
-	ClerkUserID  *string            `json:"clerk_user_id"`
-	Name         string             `json:"name"`
-	Organization *string            `json:"organization"`
-	Email        string             `json:"email"`
-	Description  *string            `json:"description"`
-	Bio          *string            `json:"bio"`
-	Website      *string            `json:"website"`
-	LogoUrl      *string            `json:"logo_url"`
-	Status       string             `json:"status"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+	ID          string             `json:"id"`
+	ClerkUserID *string            `json:"clerk_user_id"`
+	Name        string             `json:"name"`
+	Email       string             `json:"email"`
+	Description *string            `json:"description"`
+	Bio         *string            `json:"bio"`
+	Website     *string            `json:"website"`
+	LogoUrl     *string            `json:"logo_url"`
+	LogoData    *string            `json:"logo_data"`
+	Status      string             `json:"status"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
 
 // Publishers SQL Queries
@@ -209,12 +195,12 @@ func (q *Queries) GetPublisherByID(ctx context.Context, id string) (GetPublisher
 		&i.ID,
 		&i.ClerkUserID,
 		&i.Name,
-		&i.Organization,
 		&i.Email,
 		&i.Description,
 		&i.Bio,
 		&i.Website,
 		&i.LogoUrl,
+		&i.LogoData,
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -238,7 +224,6 @@ func (q *Queries) GetPublisherCoverageCount(ctx context.Context, publisherID str
 const getPublisherDashboardSummary = `-- name: GetPublisherDashboardSummary :one
 SELECT
     p.name,
-    p.organization,
     p.status = 'verified' as is_verified,
     p.status
 FROM publishers p
@@ -246,44 +231,38 @@ WHERE p.id = $1
 `
 
 type GetPublisherDashboardSummaryRow struct {
-	Name         string  `json:"name"`
-	Organization *string `json:"organization"`
-	IsVerified   bool    `json:"is_verified"`
-	Status       string  `json:"status"`
+	Name       string `json:"name"`
+	IsVerified bool   `json:"is_verified"`
+	Status     string `json:"status"`
 }
 
 func (q *Queries) GetPublisherDashboardSummary(ctx context.Context, id string) (GetPublisherDashboardSummaryRow, error) {
 	row := q.db.QueryRow(ctx, getPublisherDashboardSummary, id)
 	var i GetPublisherDashboardSummaryRow
-	err := row.Scan(
-		&i.Name,
-		&i.Organization,
-		&i.IsVerified,
-		&i.Status,
-	)
+	err := row.Scan(&i.Name, &i.IsVerified, &i.Status)
 	return i, err
 }
 
 const getPublisherFullByClerkUserID = `-- name: GetPublisherFullByClerkUserID :one
-SELECT id, clerk_user_id, name, organization, email, description, bio,
-       website, logo_url, status, created_at, updated_at
+SELECT id, clerk_user_id, name, email, description, bio,
+       website, logo_url, logo_data, status, created_at, updated_at
 FROM publishers
 WHERE clerk_user_id = $1
 `
 
 type GetPublisherFullByClerkUserIDRow struct {
-	ID           string             `json:"id"`
-	ClerkUserID  *string            `json:"clerk_user_id"`
-	Name         string             `json:"name"`
-	Organization *string            `json:"organization"`
-	Email        string             `json:"email"`
-	Description  *string            `json:"description"`
-	Bio          *string            `json:"bio"`
-	Website      *string            `json:"website"`
-	LogoUrl      *string            `json:"logo_url"`
-	Status       string             `json:"status"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+	ID          string             `json:"id"`
+	ClerkUserID *string            `json:"clerk_user_id"`
+	Name        string             `json:"name"`
+	Email       string             `json:"email"`
+	Description *string            `json:"description"`
+	Bio         *string            `json:"bio"`
+	Website     *string            `json:"website"`
+	LogoUrl     *string            `json:"logo_url"`
+	LogoData    *string            `json:"logo_data"`
+	Status      string             `json:"status"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
 
 func (q *Queries) GetPublisherFullByClerkUserID(ctx context.Context, clerkUserID *string) (GetPublisherFullByClerkUserIDRow, error) {
@@ -293,12 +272,12 @@ func (q *Queries) GetPublisherFullByClerkUserID(ctx context.Context, clerkUserID
 		&i.ID,
 		&i.ClerkUserID,
 		&i.Name,
-		&i.Organization,
 		&i.Email,
 		&i.Description,
 		&i.Bio,
 		&i.Website,
 		&i.LogoUrl,
+		&i.LogoData,
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -307,7 +286,7 @@ func (q *Queries) GetPublisherFullByClerkUserID(ctx context.Context, clerkUserID
 }
 
 const listPublishers = `-- name: ListPublishers :many
-SELECT id, name, organization, status, created_at
+SELECT id, name, status, created_at
 FROM publishers
 WHERE ($1::text IS NULL OR region_id = $1)
 ORDER BY name
@@ -321,11 +300,10 @@ type ListPublishersParams struct {
 }
 
 type ListPublishersRow struct {
-	ID           string             `json:"id"`
-	Name         string             `json:"name"`
-	Organization *string            `json:"organization"`
-	Status       string             `json:"status"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	ID        string             `json:"id"`
+	Name      string             `json:"name"`
+	Status    string             `json:"status"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
 func (q *Queries) ListPublishers(ctx context.Context, arg ListPublishersParams) ([]ListPublishersRow, error) {
@@ -340,7 +318,6 @@ func (q *Queries) ListPublishers(ctx context.Context, arg ListPublishersParams) 
 		if err := rows.Scan(
 			&i.ID,
 			&i.Name,
-			&i.Organization,
 			&i.Status,
 			&i.CreatedAt,
 		); err != nil {
@@ -355,17 +332,16 @@ func (q *Queries) ListPublishers(ctx context.Context, arg ListPublishersParams) 
 }
 
 const listPublishersByIDs = `-- name: ListPublishersByIDs :many
-SELECT id, name, organization, status
+SELECT id, name, status
 FROM publishers
 WHERE id = ANY($1::text[])
 ORDER BY name
 `
 
 type ListPublishersByIDsRow struct {
-	ID           string  `json:"id"`
-	Name         string  `json:"name"`
-	Organization *string `json:"organization"`
-	Status       string  `json:"status"`
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Status string `json:"status"`
 }
 
 func (q *Queries) ListPublishersByIDs(ctx context.Context, dollar_1 []string) ([]ListPublishersByIDsRow, error) {
@@ -377,12 +353,7 @@ func (q *Queries) ListPublishersByIDs(ctx context.Context, dollar_1 []string) ([
 	items := []ListPublishersByIDsRow{}
 	for rows.Next() {
 		var i ListPublishersByIDsRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.Name,
-			&i.Organization,
-			&i.Status,
-		); err != nil {
+		if err := rows.Scan(&i.ID, &i.Name, &i.Status); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -395,70 +366,67 @@ func (q *Queries) ListPublishersByIDs(ctx context.Context, dollar_1 []string) ([
 
 const updatePublisherLogo = `-- name: UpdatePublisherLogo :one
 UPDATE publishers
-SET logo_url = $2, updated_at = NOW()
+SET logo_data = $2, updated_at = NOW()
 WHERE id = $1
-RETURNING id, logo_url
+RETURNING id, logo_data
 `
 
 type UpdatePublisherLogoParams struct {
-	ID      string  `json:"id"`
-	LogoUrl *string `json:"logo_url"`
+	ID       string  `json:"id"`
+	LogoData *string `json:"logo_data"`
 }
 
 type UpdatePublisherLogoRow struct {
-	ID      string  `json:"id"`
-	LogoUrl *string `json:"logo_url"`
+	ID       string  `json:"id"`
+	LogoData *string `json:"logo_data"`
 }
 
 func (q *Queries) UpdatePublisherLogo(ctx context.Context, arg UpdatePublisherLogoParams) (UpdatePublisherLogoRow, error) {
-	row := q.db.QueryRow(ctx, updatePublisherLogo, arg.ID, arg.LogoUrl)
+	row := q.db.QueryRow(ctx, updatePublisherLogo, arg.ID, arg.LogoData)
 	var i UpdatePublisherLogoRow
-	err := row.Scan(&i.ID, &i.LogoUrl)
+	err := row.Scan(&i.ID, &i.LogoData)
 	return i, err
 }
 
 const updatePublisherProfile = `-- name: UpdatePublisherProfile :one
 UPDATE publishers
 SET name = COALESCE($2, name),
-    organization = COALESCE($3, organization),
-    email = COALESCE($4, email),
-    website = COALESCE($5, website),
-    bio = COALESCE($6, bio),
+    email = COALESCE($3, email),
+    website = COALESCE($4, website),
+    bio = COALESCE($5, bio),
     updated_at = NOW()
 WHERE id = $1
-RETURNING id, clerk_user_id, name, organization, email, description, bio,
-          website, logo_url, status, created_at, updated_at
+RETURNING id, clerk_user_id, name, email, description, bio,
+          website, logo_url, logo_data, status, created_at, updated_at
 `
 
 type UpdatePublisherProfileParams struct {
-	ID           string  `json:"id"`
-	Name         *string `json:"name"`
-	Organization *string `json:"organization"`
-	Email        *string `json:"email"`
-	Website      *string `json:"website"`
-	Bio          *string `json:"bio"`
+	ID      string  `json:"id"`
+	Name    *string `json:"name"`
+	Email   *string `json:"email"`
+	Website *string `json:"website"`
+	Bio     *string `json:"bio"`
 }
 
 type UpdatePublisherProfileRow struct {
-	ID           string             `json:"id"`
-	ClerkUserID  *string            `json:"clerk_user_id"`
-	Name         string             `json:"name"`
-	Organization *string            `json:"organization"`
-	Email        string             `json:"email"`
-	Description  *string            `json:"description"`
-	Bio          *string            `json:"bio"`
-	Website      *string            `json:"website"`
-	LogoUrl      *string            `json:"logo_url"`
-	Status       string             `json:"status"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+	ID          string             `json:"id"`
+	ClerkUserID *string            `json:"clerk_user_id"`
+	Name        string             `json:"name"`
+	Email       string             `json:"email"`
+	Description *string            `json:"description"`
+	Bio         *string            `json:"bio"`
+	Website     *string            `json:"website"`
+	LogoUrl     *string            `json:"logo_url"`
+	LogoData    *string            `json:"logo_data"`
+	Status      string             `json:"status"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
 
 func (q *Queries) UpdatePublisherProfile(ctx context.Context, arg UpdatePublisherProfileParams) (UpdatePublisherProfileRow, error) {
 	row := q.db.QueryRow(ctx, updatePublisherProfile,
 		arg.ID,
 		arg.Name,
-		arg.Organization,
 		arg.Email,
 		arg.Website,
 		arg.Bio,
@@ -468,12 +436,12 @@ func (q *Queries) UpdatePublisherProfile(ctx context.Context, arg UpdatePublishe
 		&i.ID,
 		&i.ClerkUserID,
 		&i.Name,
-		&i.Organization,
 		&i.Email,
 		&i.Description,
 		&i.Bio,
 		&i.Website,
 		&i.LogoUrl,
+		&i.LogoData,
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -484,45 +452,42 @@ func (q *Queries) UpdatePublisherProfile(ctx context.Context, arg UpdatePublishe
 const updatePublisherProfileByClerkUserID = `-- name: UpdatePublisherProfileByClerkUserID :one
 UPDATE publishers
 SET name = COALESCE($2, name),
-    organization = COALESCE($3, organization),
-    email = COALESCE($4, email),
-    website = COALESCE($5, website),
-    bio = COALESCE($6, bio),
+    email = COALESCE($3, email),
+    website = COALESCE($4, website),
+    bio = COALESCE($5, bio),
     updated_at = NOW()
 WHERE clerk_user_id = $1
-RETURNING id, clerk_user_id, name, organization, email, description, bio,
-          website, logo_url, status, created_at, updated_at
+RETURNING id, clerk_user_id, name, email, description, bio,
+          website, logo_url, logo_data, status, created_at, updated_at
 `
 
 type UpdatePublisherProfileByClerkUserIDParams struct {
-	ClerkUserID  *string `json:"clerk_user_id"`
-	Name         *string `json:"name"`
-	Organization *string `json:"organization"`
-	Email        *string `json:"email"`
-	Website      *string `json:"website"`
-	Bio          *string `json:"bio"`
+	ClerkUserID *string `json:"clerk_user_id"`
+	Name        *string `json:"name"`
+	Email       *string `json:"email"`
+	Website     *string `json:"website"`
+	Bio         *string `json:"bio"`
 }
 
 type UpdatePublisherProfileByClerkUserIDRow struct {
-	ID           string             `json:"id"`
-	ClerkUserID  *string            `json:"clerk_user_id"`
-	Name         string             `json:"name"`
-	Organization *string            `json:"organization"`
-	Email        string             `json:"email"`
-	Description  *string            `json:"description"`
-	Bio          *string            `json:"bio"`
-	Website      *string            `json:"website"`
-	LogoUrl      *string            `json:"logo_url"`
-	Status       string             `json:"status"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+	ID          string             `json:"id"`
+	ClerkUserID *string            `json:"clerk_user_id"`
+	Name        string             `json:"name"`
+	Email       string             `json:"email"`
+	Description *string            `json:"description"`
+	Bio         *string            `json:"bio"`
+	Website     *string            `json:"website"`
+	LogoUrl     *string            `json:"logo_url"`
+	LogoData    *string            `json:"logo_data"`
+	Status      string             `json:"status"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
 
 func (q *Queries) UpdatePublisherProfileByClerkUserID(ctx context.Context, arg UpdatePublisherProfileByClerkUserIDParams) (UpdatePublisherProfileByClerkUserIDRow, error) {
 	row := q.db.QueryRow(ctx, updatePublisherProfileByClerkUserID,
 		arg.ClerkUserID,
 		arg.Name,
-		arg.Organization,
 		arg.Email,
 		arg.Website,
 		arg.Bio,
@@ -532,12 +497,12 @@ func (q *Queries) UpdatePublisherProfileByClerkUserID(ctx context.Context, arg U
 		&i.ID,
 		&i.ClerkUserID,
 		&i.Name,
-		&i.Organization,
 		&i.Email,
 		&i.Description,
 		&i.Bio,
 		&i.Website,
 		&i.LogoUrl,
+		&i.LogoData,
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -549,8 +514,8 @@ const updatePublisherStatus = `-- name: UpdatePublisherStatus :one
 UPDATE publishers
 SET status = $2, updated_at = NOW()
 WHERE id = $1
-RETURNING id, clerk_user_id, name, organization, email, description, bio,
-          website, logo_url, status, created_at, updated_at
+RETURNING id, clerk_user_id, name, email, description, bio,
+          website, logo_url, logo_data, status, created_at, updated_at
 `
 
 type UpdatePublisherStatusParams struct {
@@ -559,18 +524,18 @@ type UpdatePublisherStatusParams struct {
 }
 
 type UpdatePublisherStatusRow struct {
-	ID           string             `json:"id"`
-	ClerkUserID  *string            `json:"clerk_user_id"`
-	Name         string             `json:"name"`
-	Organization *string            `json:"organization"`
-	Email        string             `json:"email"`
-	Description  *string            `json:"description"`
-	Bio          *string            `json:"bio"`
-	Website      *string            `json:"website"`
-	LogoUrl      *string            `json:"logo_url"`
-	Status       string             `json:"status"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+	ID          string             `json:"id"`
+	ClerkUserID *string            `json:"clerk_user_id"`
+	Name        string             `json:"name"`
+	Email       string             `json:"email"`
+	Description *string            `json:"description"`
+	Bio         *string            `json:"bio"`
+	Website     *string            `json:"website"`
+	LogoUrl     *string            `json:"logo_url"`
+	LogoData    *string            `json:"logo_data"`
+	Status      string             `json:"status"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
 
 func (q *Queries) UpdatePublisherStatus(ctx context.Context, arg UpdatePublisherStatusParams) (UpdatePublisherStatusRow, error) {
@@ -580,12 +545,12 @@ func (q *Queries) UpdatePublisherStatus(ctx context.Context, arg UpdatePublisher
 		&i.ID,
 		&i.ClerkUserID,
 		&i.Name,
-		&i.Organization,
 		&i.Email,
 		&i.Description,
 		&i.Bio,
 		&i.Website,
 		&i.LogoUrl,
+		&i.LogoData,
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,

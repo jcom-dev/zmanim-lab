@@ -30,7 +30,7 @@ The core mission is democratizing zmanim publishing: any qualified halachic auth
 **Domain:** Religious/Community Technology
 **Complexity:** Low (no regulatory requirements)
 
-This is a brownfield project transforming an existing POC into a production-ready MVP. The technical foundation exists (Go backend, Next.js frontend, Supabase database with PostGIS) but requires:
+This is a brownfield project transforming an existing POC into a production-ready MVP. The technical foundation exists (Go backend, Next.js frontend, PostgreSQL database with PostGIS) but requires:
 - End-to-end functionality completion
 - Clerk authentication integration
 - Comprehensive testing
@@ -103,7 +103,7 @@ A rabbi in Brooklyn can log into the admin portal, configure their preferred Alo
 **Technical Foundation:**
 - Working Go backend with all API endpoints
 - Responsive Next.js frontend
-- Supabase database with PostGIS queries
+- PostgreSQL database with PostGIS queries
 - 24-hour calculation caching
 - Comprehensive test suite
 
@@ -367,7 +367,7 @@ Login → Dashboard → Edit Algorithm → Select Zman → Choose Method → Set
 **Existing Technology Decisions (Must Use):**
 - Backend: Go with Chi router
 - Frontend: Next.js with React
-- Database: Supabase (PostgreSQL + PostGIS)
+- Database: PostgreSQL (PostgreSQL + PostGIS)
 - Authentication: Clerk
 - Backend Hosting: Fly.io
 - Frontend Hosting: Vercel

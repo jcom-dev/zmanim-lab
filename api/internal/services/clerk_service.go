@@ -116,6 +116,21 @@ func (s *ClerkService) UpdateUserMetadata(ctx context.Context, clerkUserID strin
 	return nil
 }
 
+// UpdateUserName updates a user's first name in Clerk
+func (s *ClerkService) UpdateUserName(ctx context.Context, clerkUserID string, name string) error {
+	params := &clerkUser.UpdateParams{
+		FirstName: clerk.String(name),
+	}
+
+	_, err := clerkUser.Update(ctx, clerkUserID, params)
+	if err != nil {
+		return fmt.Errorf("failed to update user name: %w", err)
+	}
+
+	slog.Info("clerk user name updated", "user_id", clerkUserID, "name", name)
+	return nil
+}
+
 // DeleteUser deletes a Clerk user
 func (s *ClerkService) DeleteUser(ctx context.Context, clerkUserID string) error {
 	_, err := clerkUser.Delete(ctx, clerkUserID)

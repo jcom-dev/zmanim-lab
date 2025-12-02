@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PublisherZman } from '@/lib/hooks/useZmanimList';
 import { useApi } from '@/lib/api-client';
+import { FlaskConical } from 'lucide-react';
 
 export interface PreviewLocation {
   latitude: number;
@@ -18,6 +19,7 @@ interface PreviewResult {
   hebrew_name: string;
   time: string | null;
   error?: string;
+  is_beta?: boolean;
 }
 
 interface AlgorithmPreviewProps {
@@ -25,9 +27,10 @@ interface AlgorithmPreviewProps {
   location: PreviewLocation;
   selectedDate: Date;
   displayLanguage?: 'hebrew' | 'english' | 'both';
+  hasCoverage?: boolean;
 }
 
-export function AlgorithmPreview({ zmanim, location, selectedDate, displayLanguage = 'both' }: AlgorithmPreviewProps) {
+export function AlgorithmPreview({ zmanim, location, selectedDate, displayLanguage = 'both', hasCoverage = true }: AlgorithmPreviewProps) {
   const api = useApi();
   const [preview, setPreview] = useState<PreviewResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -69,6 +72,7 @@ export function AlgorithmPreview({ zmanim, location, selectedDate, displayLangua
             english_name: zman.english_name,
             hebrew_name: zman.hebrew_name,
             time: result.result || result.time || null,
+            is_beta: zman.is_beta,
           };
         })
       );
@@ -83,6 +87,7 @@ export function AlgorithmPreview({ zmanim, location, selectedDate, displayLangua
             hebrew_name: enabledZmanim[index].hebrew_name,
             time: null,
             error: result.reason?.message || 'Error',
+            is_beta: enabledZmanim[index].is_beta,
           };
         }
       });
@@ -120,27 +125,35 @@ export function AlgorithmPreview({ zmanim, location, selectedDate, displayLangua
   return (
     <Card data-testid="algorithm-preview">
       <CardHeader className="pb-2">
-        <div className="flex items-center justify-between gap-4">
-          <CardTitle className="text-base shrink-0">Live Preview</CardTitle>
-          <div className="text-sm text-muted-foreground text-right truncate min-w-0">
-            {location.displayName}
-          </div>
-        </div>
+        <CardTitle className="text-base">Live Preview</CardTitle>
       </CardHeader>
       <CardContent>
-        {loading && (
+        {!hasCoverage && (
+          <div className="text-center py-6 text-muted-foreground">
+            <div className="text-amber-500 mb-2">
+              <svg className="w-8 h-8 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </div>
+            <p className="text-sm font-medium">No Coverage Areas</p>
+            <p className="text-xs mt-1">Add coverage to see live preview</p>
+          </div>
+        )}
+
+        {hasCoverage && loading && (
           <div className="text-center py-4 text-muted-foreground">
             Calculating...
           </div>
         )}
 
-        {error && (
+        {hasCoverage && error && (
           <div className="text-center py-4 text-destructive">
             {error}
           </div>
         )}
 
-        {!loading && !error && preview.length === 0 && (
+        {hasCoverage && !loading && !error && preview.length === 0 && (
           <div className="text-center py-4 text-muted-foreground">
             {zmanim.length === 0
               ? 'No zmanim configured yet'
@@ -148,7 +161,7 @@ export function AlgorithmPreview({ zmanim, location, selectedDate, displayLangua
           </div>
         )}
 
-        {!loading && !error && preview.length > 0 && (
+        {hasCoverage && !loading && !error && preview.length > 0 && (
           <table className="w-full">
             <tbody>
               {preview.map((item) => (
@@ -158,7 +171,12 @@ export function AlgorithmPreview({ zmanim, location, selectedDate, displayLangua
                   data-testid={`preview-${item.key}`}
                 >
                   <td className={`py-2 pr-4 font-medium text-foreground text-sm ${displayLanguage === 'hebrew' ? 'font-hebrew text-right' : ''}`}>
-                    {displayLanguage === 'hebrew' ? item.hebrew_name : item.english_name}
+                    <span className="flex items-center gap-1.5">
+                      <span className="truncate max-w-[180px]" title={displayLanguage === 'hebrew' ? item.hebrew_name : item.english_name}>
+                        {displayLanguage === 'hebrew' ? item.hebrew_name : item.english_name}
+                      </span>
+                      {item.is_beta && <FlaskConical className="h-3 w-3 text-amber-500 shrink-0" />}
+                    </span>
                   </td>
                   <td className="py-2 text-right whitespace-nowrap">
                     {item.error ? (

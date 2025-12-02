@@ -1,5 +1,5 @@
 'use client';
-import { API_BASE } from '@/lib/api';
+import { useApi } from '@/lib/api-client';
 
 import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
@@ -48,6 +48,7 @@ interface CitySelectorProps {
 
 
 export default function CitySelector({ onSelect, onCancel }: CitySelectorProps) {
+  const api = useApi();
   const [level, setLevel] = useState<CoverageLevel>('country');
   const [countries, setCountries] = useState<Country[]>([]);
   const [regions, setRegions] = useState<Region[]>([]);
@@ -65,53 +66,33 @@ export default function CitySelector({ onSelect, onCancel }: CitySelectorProps) 
   const [isLoadingCities, setIsLoadingCities] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch countries on mount
-  useEffect(() => {
-    fetchCountries();
-  }, []);
-
-  // Fetch regions when country changes
-  useEffect(() => {
-    if (selectedCountry && (level === 'region' || level === 'city')) {
-      fetchRegions(selectedCountry.code);
-    } else {
-      setRegions([]);
-    }
-    setSelectedRegion(null);
-    setCities([]);
-  }, [selectedCountry, level]);
-
-  const fetchCountries = async () => {
+  const fetchCountries = useCallback(async () => {
     setIsLoadingCountries(true);
     setError(null);
     try {
-      const response = await fetch(`${API_BASE}/api/v1/countries`);
-      if (!response.ok) throw new Error('Failed to fetch countries');
-      const data = await response.json();
-      setCountries(data.data?.countries || data.countries || []);
+      const data = await api.public.get<{ countries: Country[] }>('/countries');
+      setCountries(data?.countries || []);
     } catch (err) {
       console.error('Failed to fetch countries:', err);
       setError('Failed to load countries');
     } finally {
       setIsLoadingCountries(false);
     }
-  };
+  }, [api]);
 
-  const fetchRegions = async (countryCode: string) => {
+  const fetchRegions = useCallback(async (countryCode: string) => {
     setIsLoadingRegions(true);
     setError(null);
     try {
-      const response = await fetch(`${API_BASE}/api/v1/regions?country_code=${countryCode}`);
-      if (!response.ok) throw new Error('Failed to fetch regions');
-      const data = await response.json();
-      setRegions(data.data?.regions || data.regions || []);
+      const data = await api.public.get<{ regions: Region[] }>(`/regions?country_code=${countryCode}`);
+      setRegions(data?.regions || []);
     } catch (err) {
       console.error('Failed to fetch regions:', err);
       setError('Failed to load regions');
     } finally {
       setIsLoadingRegions(false);
     }
-  };
+  }, [api]);
 
   const searchCities = useCallback(async (query: string) => {
     if (query.length < 2) {
@@ -121,12 +102,8 @@ export default function CitySelector({ onSelect, onCancel }: CitySelectorProps) 
 
     setIsLoadingCities(true);
     try {
-      // Filter by country if selected
-      const url = `${API_BASE}/api/v1/cities?search=${encodeURIComponent(query)}&limit=20`;
-      const response = await fetch(url);
-      if (!response.ok) throw new Error('Failed to search cities');
-      const data = await response.json();
-      let fetchedCities = data.data?.cities || data.cities || [];
+      const data = await api.public.get<{ cities: City[] }>(`/cities?search=${encodeURIComponent(query)}&limit=20`);
+      let fetchedCities = data?.cities || [];
 
       // Client-side filter by country/region if selected
       if (selectedCountry) {
@@ -142,7 +119,23 @@ export default function CitySelector({ onSelect, onCancel }: CitySelectorProps) 
     } finally {
       setIsLoadingCities(false);
     }
-  }, [selectedCountry, selectedRegion]);
+  }, [api, selectedCountry, selectedRegion]);
+
+  // Fetch countries on mount
+  useEffect(() => {
+    fetchCountries();
+  }, [fetchCountries]);
+
+  // Fetch regions when country changes
+  useEffect(() => {
+    if (selectedCountry && (level === 'region' || level === 'city')) {
+      fetchRegions(selectedCountry.code);
+    } else {
+      setRegions([]);
+    }
+    setSelectedRegion(null);
+    setCities([]);
+  }, [selectedCountry, level, fetchRegions]);
 
   // Debounced city search
   useEffect(() => {

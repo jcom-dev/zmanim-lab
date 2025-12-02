@@ -30,6 +30,10 @@ type Querier interface {
 	// Admin Publisher Management --
 	AdminListPublishers(ctx context.Context, arg AdminListPublishersParams) ([]AdminListPublishersRow, error)
 	AdminUpdatePublisherStatus(ctx context.Context, arg AdminUpdatePublisherStatusParams) (AdminUpdatePublisherStatusRow, error)
+	// Approve a new tag request - creates the tag and updates the request
+	// Step 1: Create the new tag in zman_tags table
+	// This query only creates the tag, the caller must update the request separately
+	ApproveTagRequest(ctx context.Context, arg ApproveTagRequestParams) (ApproveTagRequestRow, error)
 	// Approve a zman request
 	ApproveZmanRequest(ctx context.Context, arg ApproveZmanRequestParams) (ApproveZmanRequestRow, error)
 	// Publish algorithm --
@@ -49,6 +53,9 @@ type Querier interface {
 	CreatePublisher(ctx context.Context, arg CreatePublisherParams) (CreatePublisherRow, error)
 	CreatePublisherZman(ctx context.Context, arg CreatePublisherZmanParams) (CreatePublisherZmanRow, error)
 	CreatePublisherZmanFromRegistry(ctx context.Context, arg CreatePublisherZmanFromRegistryParams) (CreatePublisherZmanFromRegistryRow, error)
+	// Create a publisher_zman entry from an approved zman request
+	// This is used when auto_add_on_approval is true
+	CreatePublisherZmanFromRequest(ctx context.Context, id string) (CreatePublisherZmanFromRequestRow, error)
 	// ============================================
 	// ZMAN REGISTRY REQUESTS
 	// ============================================
@@ -174,6 +181,8 @@ type Querier interface {
 	GetZmanRegistryRequests(ctx context.Context, status *string) ([]GetZmanRegistryRequestsRow, error)
 	// Get a specific zman request by ID
 	GetZmanRequest(ctx context.Context, id string) (GetZmanRequestRow, error)
+	// Get a specific tag request by ID
+	GetZmanRequestTag(ctx context.Context, id string) (ZmanRequestTag, error)
 	// Get all tags (existing and requested) for a zman request
 	GetZmanRequestTags(ctx context.Context, requestID string) ([]GetZmanRequestTagsRow, error)
 	GetZmanVersion(ctx context.Context, arg GetZmanVersionParams) (PublisherZmanVersion, error)
@@ -193,6 +202,8 @@ type Querier interface {
 	ImportZmanimFromTemplatesByKeys(ctx context.Context, arg ImportZmanimFromTemplatesByKeysParams) ([]ImportZmanimFromTemplatesByKeysRow, error)
 	InsertCountry(ctx context.Context, arg InsertCountryParams) (int16, error)
 	InsertRegion(ctx context.Context, arg InsertRegionParams) (int32, error)
+	// Update the tag request to link the newly created tag
+	LinkTagToRequest(ctx context.Context, arg LinkTagToRequestParams) error
 	ListCitiesByContinent(ctx context.Context, arg ListCitiesByContinentParams) ([]ListCitiesByContinentRow, error)
 	ListCitiesByCountry(ctx context.Context, arg ListCitiesByCountryParams) ([]ListCitiesByCountryRow, error)
 	ListCitiesByRegion(ctx context.Context, arg ListCitiesByRegionParams) ([]ListCitiesByRegionRow, error)
@@ -203,6 +214,8 @@ type Querier interface {
 	// Bulk publish/unpublish zmanim --
 	PublishAllZmanim(ctx context.Context, publisherID string) error
 	PublishZmanimByKeys(ctx context.Context, arg PublishZmanimByKeysParams) error
+	// Reject a new tag request by deleting it from zman_request_tags
+	RejectTagRequest(ctx context.Context, id string) error
 	// Reject a zman request
 	RejectZmanRequest(ctx context.Context, arg RejectZmanRequestParams) (RejectZmanRequestRow, error)
 	RestorePublisherZman(ctx context.Context, arg RestorePublisherZmanParams) (RestorePublisherZmanRow, error)

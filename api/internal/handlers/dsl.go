@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -172,6 +173,14 @@ func (h *Handlers) PreviewDSLFormula(w http.ResponseWriter, r *http.Request) {
 	// Execute the formula with breakdown
 	result, breakdown, err := dsl.ExecuteFormulaWithBreakdown(req.Formula, execCtx)
 	if err != nil {
+		// Log the error for debugging
+		slog.Warn("DSL preview failed",
+			"error", err.Error(),
+			"formula", req.Formula,
+			"date", req.Date,
+			"lat", latitude,
+			"lon", longitude,
+		)
 		// Check if it's a validation error
 		if errList, ok := err.(*dsl.ErrorList); ok {
 			RespondValidationError(w, r, "Formula execution failed", errList.ToValidationErrors())

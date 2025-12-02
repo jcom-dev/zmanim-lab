@@ -11,7 +11,6 @@ import { STATUS_TOOLTIPS, ALGORITHM_TOOLTIPS, ADMIN_TOOLTIPS } from '@/lib/toolt
 interface DashboardSummary {
   profile: {
     name: string;
-    organization: string;
     is_verified: boolean;
     status: string;
   };
@@ -184,7 +183,7 @@ export default function PublisherDashboardPage() {
           <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
           {selectedPublisher && (
             <p className="text-muted-foreground mt-1">
-              Managing: {selectedPublisher.name} ({selectedPublisher.organization})
+              Managing: {selectedPublisher.name}
             </p>
           )}
         </div>
@@ -204,7 +203,6 @@ export default function PublisherDashboardPage() {
             {summary && (
               <>
                 <p className="text-foreground">{summary.profile.name}</p>
-                <p className="text-muted-foreground text-sm">{summary.profile.organization}</p>
               </>
             )}
           </Link>

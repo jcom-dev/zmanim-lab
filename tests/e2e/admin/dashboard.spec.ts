@@ -10,6 +10,9 @@
 import { test, expect } from '@playwright/test';
 import { loginAsAdmin, BASE_URL } from '../utils';
 
+// Enable parallel mode for faster test execution
+test.describe.configure({ mode: 'parallel' });
+
 test.describe('Admin Dashboard', () => {
   test.beforeEach(async ({ page }) => {
     await loginAsAdmin(page);
@@ -43,11 +46,9 @@ test.describe('Admin Dashboard', () => {
     await page.goto(`${BASE_URL}/admin/dashboard`);
     await page.waitForLoadState('networkidle');
 
-    // Wait for stats to load
-    await page.waitForTimeout(1000);
-
     // Should see stat cards (use first() for multiple matches)
-    await expect(page.getByText('Total Publishers').first()).toBeVisible();
+    // Wait for actual content instead of hard timeout
+    await expect(page.getByText('Total Publishers').first()).toBeVisible({ timeout: 10000 });
     await expect(page.getByText('Verified').first()).toBeVisible();
     await expect(page.getByText('Pending').first()).toBeVisible();
   });
@@ -75,12 +76,9 @@ test.describe('Admin Dashboard', () => {
 
     await refreshButton.click();
 
-    // Button should show loading state or stats should update
-    // Wait for refresh to complete
-    await page.waitForTimeout(1000);
-
-    // Stats should still be visible after refresh
-    await expect(page.getByText('Total Publishers').first()).toBeVisible();
+    // Wait for stats to reload by checking content is visible
+    // This replaces the hard timeout with a deterministic wait
+    await expect(page.getByText('Total Publishers').first()).toBeVisible({ timeout: 10000 });
   });
 
   test('admin portal shows pending requests banner', async ({ page }) => {

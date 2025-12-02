@@ -20,7 +20,6 @@ import (
 type PublisherRequest struct {
 	ID              string     `json:"id"`
 	Name            string     `json:"name"`
-	Organization    string     `json:"organization"`
 	Email           string     `json:"email"`
 	Website         *string    `json:"website,omitempty"`
 	Description     string     `json:"description"`
@@ -37,11 +36,10 @@ func (h *Handlers) SubmitPublisherRequest(w http.ResponseWriter, r *http.Request
 	ctx := r.Context()
 
 	var req struct {
-		Name         string  `json:"name"`
-		Organization string  `json:"organization"`
-		Email        string  `json:"email"`
-		Website      *string `json:"website"`
-		Description  string  `json:"description"`
+		Name        string  `json:"name"`
+		Email       string  `json:"email"`
+		Website     *string `json:"website"`
+		Description string  `json:"description"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -53,9 +51,6 @@ func (h *Handlers) SubmitPublisherRequest(w http.ResponseWriter, r *http.Request
 	validationErrors := make(map[string]string)
 	if strings.TrimSpace(req.Name) == "" {
 		validationErrors["name"] = "Name is required"
-	}
-	if strings.TrimSpace(req.Organization) == "" {
-		validationErrors["organization"] = "Organization is required"
 	}
 	if strings.TrimSpace(req.Email) == "" {
 		validationErrors["email"] = "Email is required"
@@ -89,8 +84,8 @@ func (h *Handlers) SubmitPublisherRequest(w http.ResponseWriter, r *http.Request
 
 	// Insert the request
 	query := `
-		INSERT INTO publisher_requests (name, organization, email, website, description, status)
-		VALUES ($1, $2, $3, $4, $5, 'pending')
+		INSERT INTO publisher_requests (name, email, website, description, status)
+		VALUES ($1, $2, $3, $4, 'pending')
 		RETURNING id, created_at
 	`
 
@@ -98,7 +93,6 @@ func (h *Handlers) SubmitPublisherRequest(w http.ResponseWriter, r *http.Request
 	var createdAt time.Time
 	err = h.db.Pool.QueryRow(ctx, query,
 		strings.TrimSpace(req.Name),
-		strings.TrimSpace(req.Organization),
 		strings.ToLower(strings.TrimSpace(req.Email)),
 		req.Website,
 		strings.TrimSpace(req.Description),
@@ -113,14 +107,14 @@ func (h *Handlers) SubmitPublisherRequest(w http.ResponseWriter, r *http.Request
 	slog.Info("publisher request submitted",
 		"id", id,
 		"email", req.Email,
-		"organization", req.Organization)
+		"name", req.Name)
 
 	// Send confirmation email to applicant (non-blocking)
 	if h.emailService != nil {
 		go h.emailService.SendPublisherRequestReceived(
 			req.Email,
 			strings.TrimSpace(req.Name),
-			strings.TrimSpace(req.Organization),
+			strings.TrimSpace(req.Name), // Publisher name IS the organization
 		)
 
 		// Send notification to admin (if ADMIN_EMAIL is configured)
@@ -134,7 +128,7 @@ func (h *Handlers) SubmitPublisherRequest(w http.ResponseWriter, r *http.Request
 			go h.emailService.SendAdminNewPublisherRequest(
 				adminEmail,
 				strings.TrimSpace(req.Name),
-				strings.TrimSpace(req.Organization),
+				strings.TrimSpace(req.Name), // Publisher name IS the organization
 				req.Email,
 				strings.TrimSpace(req.Description),
 				adminURL,
@@ -160,7 +154,7 @@ func (h *Handlers) AdminGetPublisherRequests(w http.ResponseWriter, r *http.Requ
 	}
 
 	query := `
-		SELECT id, name, organization, email, website, description, status,
+		SELECT id, name, email, website, description, status,
 		       rejection_reason, reviewed_by, reviewed_at, created_at
 		FROM publisher_requests
 		WHERE status = $1
@@ -179,7 +173,7 @@ func (h *Handlers) AdminGetPublisherRequests(w http.ResponseWriter, r *http.Requ
 	for rows.Next() {
 		var req PublisherRequest
 		err := rows.Scan(
-			&req.ID, &req.Name, &req.Organization, &req.Email, &req.Website,
+			&req.ID, &req.Name, &req.Email, &req.Website,
 			&req.Description, &req.Status, &req.RejectionReason, &req.ReviewedBy,
 			&req.ReviewedAt, &req.CreatedAt,
 		)
@@ -224,9 +218,9 @@ func (h *Handlers) AdminApprovePublisherRequest(w http.ResponseWriter, r *http.R
 	// Get the request details
 	var req PublisherRequest
 	err := h.db.Pool.QueryRow(ctx, `
-		SELECT id, name, organization, email, website, description, status
+		SELECT id, name, email, website, description, status
 		FROM publisher_requests WHERE id = $1
-	`, requestID).Scan(&req.ID, &req.Name, &req.Organization, &req.Email,
+	`, requestID).Scan(&req.ID, &req.Name, &req.Email,
 		&req.Website, &req.Description, &req.Status)
 
 	if err != nil {
@@ -254,13 +248,13 @@ func (h *Handlers) AdminApprovePublisherRequest(w http.ResponseWriter, r *http.R
 	defer tx.Rollback(ctx)
 
 	// Create the publisher
-	slug := generateSlug(req.Organization)
+	slug := generateSlug(req.Name) // Publisher name IS the organization
 	var publisherID string
 	err = tx.QueryRow(ctx, `
-		INSERT INTO publishers (name, organization, slug, email, description, status)
-		VALUES ($1, $2, $3, $4, $5, 'pending_verification')
+		INSERT INTO publishers (name, slug, email, description, status)
+		VALUES ($1, $2, $3, $4, 'pending_verification')
 		RETURNING id
-	`, req.Name, req.Organization, slug, req.Email, req.Description).Scan(&publisherID)
+	`, req.Name, slug, req.Email, req.Description).Scan(&publisherID)
 
 	if err != nil {
 		slog.Error("failed to create publisher", "error", err)
@@ -332,9 +326,9 @@ func (h *Handlers) AdminRejectPublisherRequest(w http.ResponseWriter, r *http.Re
 	// Get the request details first
 	var req PublisherRequest
 	err := h.db.Pool.QueryRow(ctx, `
-		SELECT id, name, organization, email, status
+		SELECT id, name, email, status
 		FROM publisher_requests WHERE id = $1
-	`, requestID).Scan(&req.ID, &req.Name, &req.Organization, &req.Email, &req.Status)
+	`, requestID).Scan(&req.ID, &req.Name, &req.Email, &req.Status)
 
 	if err != nil {
 		if err == pgx.ErrNoRows {

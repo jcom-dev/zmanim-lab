@@ -1,12 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useAuth } from '@clerk/nextjs';
+import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import Link from 'next/link';
 
-import { API_BASE } from '@/lib/api';
+import { useApi } from '@/lib/api-client';
 import { InfoTooltip } from '@/components/shared/InfoTooltip';
 import { ADMIN_TOOLTIPS } from '@/lib/tooltip-content';
 
@@ -25,42 +24,30 @@ interface AdminStats {
 }
 
 export default function AdminDashboardPage() {
-  const { getToken } = useAuth();
+  const api = useApi();
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
 
-  const fetchStats = async () => {
+  const fetchStats = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
 
-      const token = await getToken();
-      const response = await fetch(`${API_BASE}/api/v1/admin/stats`, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch statistics');
-      }
-
-      const data = await response.json();
-      setStats(data.data);
+      const data = await api.admin.get<AdminStats>('/admin/stats');
+      setStats(data);
       setLastRefreshed(new Date());
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setLoading(false);
     }
-  };
+  }, [api]);
 
   useEffect(() => {
     fetchStats();
-  }, [getToken]);
+  }, [fetchStats]);
 
   const StatCard = ({
     title,

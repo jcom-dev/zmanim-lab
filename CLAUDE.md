@@ -178,7 +178,7 @@ zmanim-lab/
 ├── tests/                  # E2E tests (Playwright)
 │   ├── e2e/               # Test specs
 │   └── utils/             # Test helpers and fixtures
-├── supabase/
+├── db/
 │   └── migrations/        # Database schema migrations
 ├── docs/                   # Architecture and API documentation
 └── scripts/               # Development scripts

@@ -7,22 +7,23 @@ import (
 )
 
 // Publisher represents a zmanim calculation publisher
+// Note: Publisher name IS the organization - no separate organization field
 type Publisher struct {
-	ID              string             `json:"id"`
-	ClerkUserID     *string            `json:"clerk_user_id,omitempty"`
-	Name            string             `json:"name"`
-	Organization    *string            `json:"organization,omitempty"`
-	Email           string             `json:"email"`
-	Description     string             `json:"description"`
-	Bio             *string            `json:"bio,omitempty"`
-	Website         *string            `json:"website,omitempty"`
-	ContactEmail    string             `json:"contact_email"`
-	LogoURL         *string            `json:"logo_url,omitempty"`
-	Status          string             `json:"status"`
-	IsVerified      bool               `json:"is_verified"`
-	SubscriberCount int                `json:"subscriber_count"`
-	CreatedAt       time.Time          `json:"created_at"`
-	UpdatedAt       time.Time          `json:"updated_at"`
+	ID              string    `json:"id"`
+	ClerkUserID     *string   `json:"clerk_user_id,omitempty"`
+	Name            string    `json:"name"` // Publisher name is the organization name
+	Email           string    `json:"email"`
+	Description     string    `json:"description"`
+	Bio             *string   `json:"bio,omitempty"`
+	Website         *string   `json:"website,omitempty"`
+	ContactEmail    string    `json:"contact_email"`
+	LogoURL         *string   `json:"logo_url,omitempty"`
+	LogoData        *string   `json:"logo_data,omitempty"` // Base64 encoded logo image
+	Status          string    `json:"status"`
+	IsVerified      bool      `json:"is_verified"`
+	SubscriberCount int       `json:"subscriber_count"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
 }
 
 // Algorithm represents a calculation algorithm
@@ -173,11 +174,10 @@ type PublisherListResponse struct {
 
 // PublisherProfileUpdateRequest represents a request to update publisher profile
 type PublisherProfileUpdateRequest struct {
-	Name         *string `json:"name,omitempty"`
-	Organization *string `json:"organization,omitempty"`
-	Email        *string `json:"email,omitempty"`
-	Website      *string `json:"website,omitempty"`
-	Bio          *string `json:"bio,omitempty"`
+	Name    *string `json:"name,omitempty"` // Publisher name is the organization name
+	Email   *string `json:"email,omitempty"`
+	Website *string `json:"website,omitempty"`
+	Bio     *string `json:"bio,omitempty"`
 }
 
 // ErrorResponse represents an API error response

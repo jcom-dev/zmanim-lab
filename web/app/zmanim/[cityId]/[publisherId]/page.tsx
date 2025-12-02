@@ -1,19 +1,20 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import {
   MapPin, ChevronLeft, ChevronRight,
   Loader2, AlertCircle, ArrowLeft, Info, Search, X, Sun, Moon, Sunset, Clock,
-  Flame, Star, Calendar
+  Flame, Star, Calendar, FlaskConical
 } from 'lucide-react';
 import Link from 'next/link';
 import { DateTime } from 'luxon';
 import { FormulaPanel, type Zman } from '@/components/zmanim/FormulaPanel';
 import { DatePickerDropdown } from '@/components/zmanim/DatePickerDropdown';
-import { API_BASE } from '@/lib/api';
+import { useApi } from '@/lib/api-client';
 import { formatTimeShort } from '@/lib/utils';
+import { ModeToggle } from '@/components/mode-toggle';
 
 interface City {
   id: string;
@@ -35,7 +36,6 @@ interface SearchCity {
 interface Publisher {
   id: string;
   name: string;
-  organization: string | null;
   logo_url: string | null;
 }
 
@@ -199,6 +199,7 @@ export default function ZmanimPage() {
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const api = useApi();
 
   const cityId = params.cityId as string;
   const publisherId = params.publisherId as string;
@@ -245,46 +246,40 @@ export default function ZmanimPage() {
     tzeis_72: 'צאת (72 דקות)',
   };
 
-  useEffect(() => {
-    if (cityId) {
-      loadZmanim();
-    }
-  }, [cityId, publisherId, selectedDate]);
-
-  const loadZmanim = async () => {
+  const loadZmanim = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
 
-      let url = `${API_BASE}/api/v1/zmanim?cityId=${cityId}&date=${selectedDate.toISODate()}`;
+      let url = `/zmanim?cityId=${cityId}&date=${selectedDate.toISODate()}`;
       if (!isDefault) {
         url += `&publisherId=${publisherId}`;
       }
 
-      const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error('Failed to load zmanim');
-      }
-
-      const result = await response.json();
-      const zmanimData = result.data || result;
+      const zmanimData = await api.public.get<{
+        date: string;
+        location?: { city_id: string; city_name: string; country: string; region: string | null; timezone: string };
+        city?: City;
+        publisher?: Publisher;
+        zmanim: Zman[];
+      }>(url);
 
       // Map location response to City interface
-      const location = zmanimData.location;
+      const location = zmanimData?.location;
       const city: City = location ? {
         id: location.city_id || cityId,
         name: location.city_name || 'Unknown',
         country: location.country || '',
         region: location.region || null,
         timezone: location.timezone || 'UTC'
-      } : zmanimData.city;
+      } : zmanimData?.city as City;
 
       setData({
-        date: zmanimData.date,
+        date: zmanimData?.date || '',
         city: city,
-        publisher: zmanimData.publisher,
-        zmanim: zmanimData.zmanim || [],
-        is_default: isDefault || !zmanimData.publisher,
+        publisher: zmanimData?.publisher,
+        zmanim: zmanimData?.zmanim || [],
+        is_default: isDefault || !zmanimData?.publisher,
       });
     } catch (err) {
       console.error('Failed to load zmanim:', err);
@@ -292,7 +287,13 @@ export default function ZmanimPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [api, cityId, publisherId, isDefault, selectedDate]);
+
+  useEffect(() => {
+    if (cityId) {
+      loadZmanim();
+    }
+  }, [cityId, loadZmanim]);
 
   const handlePrevDay = () => {
     const newDate = selectedDate.minus({ days: 1 });
@@ -313,7 +314,7 @@ export default function ZmanimPage() {
   };
 
   // Search for cities
-  const searchCities = async (query: string) => {
+  const searchCities = useCallback(async (query: string) => {
     if (query.length < 2) {
       setSearchResults([]);
       return;
@@ -321,18 +322,14 @@ export default function ZmanimPage() {
 
     setSearching(true);
     try {
-      const response = await fetch(`${API_BASE}/api/v1/cities?search=${encodeURIComponent(query)}&limit=10`);
-      if (response.ok) {
-        const result = await response.json();
-        const cities = result.data?.cities || result.cities || [];
-        setSearchResults(cities);
-      }
+      const result = await api.public.get<{ cities: SearchCity[] }>(`/cities?search=${encodeURIComponent(query)}&limit=10`);
+      setSearchResults(result?.cities || []);
     } catch (err) {
       console.error('Failed to search cities:', err);
     } finally {
       setSearching(false);
     }
-  };
+  }, [api]);
 
   // Debounced search
   useEffect(() => {
@@ -436,13 +433,16 @@ export default function ZmanimPage() {
                   </div>
                 </div>
 
-                {/* Language toggle */}
-                <button
-                  onClick={() => setShowHebrew(!showHebrew)}
-                  className="px-4 py-2 text-xs md:text-sm font-medium bg-white/20 hover:bg-white/30 rounded-lg transition-all hover:scale-105 active:scale-95 backdrop-blur-sm border border-white/20 flex-shrink-0"
-                >
-                  {showHebrew ? 'English' : 'עברית'}
-                </button>
+                {/* Language toggle + Theme toggle */}
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <button
+                    onClick={() => setShowHebrew(!showHebrew)}
+                    className="px-4 py-2 text-xs md:text-sm font-medium bg-white/20 hover:bg-white/30 rounded-lg transition-all hover:scale-105 active:scale-95 backdrop-blur-sm border border-white/20"
+                  >
+                    {showHebrew ? 'English' : 'עברית'}
+                  </button>
+                  <ModeToggle />
+                </div>
               </div>
             </div>
 
@@ -539,6 +539,12 @@ export default function ZmanimPage() {
                                 <span className={`text-foreground font-medium text-base md:text-lg ${showHebrew ? 'font-hebrew' : ''} truncate`}>
                                   {displayName}
                                 </span>
+                                {zman.is_beta && (
+                                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200 border border-amber-300 dark:border-amber-700 flex-shrink-0">
+                                    <FlaskConical className="h-3 w-3" />
+                                    Beta
+                                  </span>
+                                )}
                                 <button
                                   onClick={() => {
                                     setSelectedZman(zmanWithName);

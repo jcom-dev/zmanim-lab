@@ -16,6 +16,9 @@ import {
   BASE_URL,
 } from '../utils';
 
+// Enable parallel mode for faster test execution
+test.describe.configure({ mode: 'parallel' });
+
 test.describe('Unauthorized Access - Admin Routes', () => {
   test('unauthenticated user cannot access /admin', async ({ page }) => {
     await page.context().clearCookies();
@@ -23,7 +26,15 @@ test.describe('Unauthorized Access - Admin Routes', () => {
     await page.goto(`${BASE_URL}/admin`);
     await page.waitForLoadState('networkidle');
 
-    await page.waitForTimeout(1000);
+    // Wait for redirect to complete by checking URL change
+    await page.waitForFunction(
+      (baseUrl) => {
+        const url = window.location.href;
+        return url.includes('sign-in') || !url.includes('/admin');
+      },
+      BASE_URL,
+      { timeout: 10000 }
+    ).catch(() => {});
 
     // Should be redirected to sign-in or see unauthorized
     const url = page.url();
@@ -38,7 +49,8 @@ test.describe('Unauthorized Access - Admin Routes', () => {
     await page.goto(`${BASE_URL}/admin/publishers`);
     await page.waitForLoadState('networkidle');
 
-    await page.waitForTimeout(1000);
+    // Wait for redirect
+    await page.waitForURL(/sign-in|(?!.*\/admin)/, { timeout: 10000 }).catch(() => {});
 
     const url = page.url();
     expect(url.includes('sign-in') || !url.includes('/admin')).toBe(true);
@@ -50,7 +62,8 @@ test.describe('Unauthorized Access - Admin Routes', () => {
     await page.goto(`${BASE_URL}/admin/dashboard`);
     await page.waitForLoadState('networkidle');
 
-    await page.waitForTimeout(1000);
+    // Wait for redirect
+    await page.waitForURL(/sign-in|(?!.*\/admin)/, { timeout: 10000 }).catch(() => {});
 
     const url = page.url();
     expect(url.includes('sign-in') || !url.includes('/admin')).toBe(true);
@@ -62,7 +75,8 @@ test.describe('Unauthorized Access - Admin Routes', () => {
     await page.goto(`${BASE_URL}/admin`);
     await page.waitForLoadState('networkidle');
 
-    await page.waitForTimeout(1000);
+    // Wait for content to load
+    await expect(page.locator('body')).not.toBeEmpty({ timeout: 10000 });
 
     // Should see unauthorized or be redirected
     const pageContent = await page.textContent('body');
@@ -85,7 +99,8 @@ test.describe('Unauthorized Access - Publisher Routes', () => {
     await page.goto(`${BASE_URL}/publisher/dashboard`);
     await page.waitForLoadState('networkidle');
 
-    await page.waitForTimeout(1000);
+    // Wait for redirect
+    await page.waitForURL(/sign-in|(?!.*\/publisher)/, { timeout: 10000 }).catch(() => {});
 
     const url = page.url();
     expect(url.includes('sign-in') || !url.includes('/publisher')).toBe(true);
@@ -97,7 +112,8 @@ test.describe('Unauthorized Access - Publisher Routes', () => {
     await page.goto(`${BASE_URL}/publisher/profile`);
     await page.waitForLoadState('networkidle');
 
-    await page.waitForTimeout(1000);
+    // Wait for redirect
+    await page.waitForURL(/sign-in|(?!.*\/publisher)/, { timeout: 10000 }).catch(() => {});
 
     const url = page.url();
     expect(url.includes('sign-in') || !url.includes('/publisher')).toBe(true);
@@ -109,7 +125,8 @@ test.describe('Unauthorized Access - Publisher Routes', () => {
     await page.goto(`${BASE_URL}/publisher/algorithm`);
     await page.waitForLoadState('networkidle');
 
-    await page.waitForTimeout(1000);
+    // Wait for redirect
+    await page.waitForURL(/sign-in|(?!.*\/publisher)/, { timeout: 10000 }).catch(() => {});
 
     const url = page.url();
     expect(url.includes('sign-in') || !url.includes('/publisher')).toBe(true);
@@ -121,7 +138,8 @@ test.describe('Unauthorized Access - Publisher Routes', () => {
     await page.goto(`${BASE_URL}/publisher/coverage`);
     await page.waitForLoadState('networkidle');
 
-    await page.waitForTimeout(1000);
+    // Wait for redirect
+    await page.waitForURL(/sign-in|(?!.*\/publisher)/, { timeout: 10000 }).catch(() => {});
 
     const url = page.url();
     expect(url.includes('sign-in') || !url.includes('/publisher')).toBe(true);

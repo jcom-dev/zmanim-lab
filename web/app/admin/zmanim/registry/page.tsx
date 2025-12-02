@@ -5,17 +5,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Badge } from '@/components/ui/badge';
 import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from '@/components/ui/dialog';
 import {
   Select,
@@ -36,26 +33,7 @@ import {
   Loader2,
   AlertTriangle,
 } from 'lucide-react';
-
-interface ZmanTag {
-  id: string;
-  tag_key: string;
-  name: string;
-  display_name_hebrew: string;
-  display_name_english: string;
-  tag_type: 'event' | 'timing' | 'behavior';
-  color?: string;
-}
-
-interface DayType {
-  id: string;
-  name: string;
-  display_name_hebrew: string;
-  display_name_english: string;
-  description?: string;
-  parent_type?: string;
-  sort_order: number;
-}
+import { ZmanRegistryForm, ZmanFormData, ZmanTag } from '@/components/admin/ZmanRegistryForm';
 
 interface MasterZman {
   id: string;
@@ -177,8 +155,6 @@ function inferEventFromKey(key: string): string | null {
 export default function AdminRegistryPage() {
   const api = useAdminApi();
   const [zmanim, setZmanim] = useState<MasterZman[]>([]);
-  const [allTags, setAllTags] = useState<ZmanTag[]>([]);
-  const [allDayTypes, setAllDayTypes] = useState<DayType[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -194,23 +170,6 @@ export default function AdminRegistryPage() {
   const [editingZman, setEditingZman] = useState<MasterZman | null>(null);
   const [deletingZman, setDeletingZman] = useState<MasterZman | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-
-  // Form state
-  const [formData, setFormData] = useState({
-    zman_key: '',
-    canonical_hebrew_name: '',
-    canonical_english_name: '',
-    transliteration: '',
-    description: '',
-    halachic_notes: '',
-    halachic_source: '',
-    time_category: 'sunrise',
-    default_formula_dsl: '',
-    is_core: false,
-    is_hidden: false,
-    sort_order: 0,
-    tag_ids: [] as string[],
-  });
 
   const fetchZmanim = useCallback(async () => {
     try {
@@ -229,29 +188,9 @@ export default function AdminRegistryPage() {
     }
   }, [api, showHidden, categoryFilter]);
 
-  const fetchTags = useCallback(async () => {
-    try {
-      const data = await api.get<ZmanTag[]>('/admin/registry/tags');
-      setAllTags(data || []);
-    } catch (err) {
-      console.error('Failed to fetch tags:', err);
-    }
-  }, [api]);
-
-  const fetchDayTypes = useCallback(async () => {
-    try {
-      const data = await api.get<DayType[]>('/admin/registry/day-types');
-      setAllDayTypes(data || []);
-    } catch (err) {
-      console.error('Failed to fetch day types:', err);
-    }
-  }, [api]);
-
   useEffect(() => {
     fetchZmanim();
-    fetchTags();
-    fetchDayTypes();
-  }, [fetchZmanim, fetchTags, fetchDayTypes]);
+  }, [fetchZmanim]);
 
   const filteredZmanim = zmanim.filter((z) => {
     // Search filter
@@ -299,86 +238,45 @@ export default function AdminRegistryPage() {
     return true;
   });
 
-  const resetForm = () => {
-    setFormData({
-      zman_key: '',
-      canonical_hebrew_name: '',
-      canonical_english_name: '',
-      transliteration: '',
-      description: '',
-      halachic_notes: '',
-      halachic_source: '',
-      time_category: 'sunrise',
-      default_formula_dsl: '',
-      is_core: false,
-      is_hidden: false,
-      sort_order: 0,
-      tag_ids: [],
-    });
-  };
-
   const openCreateDialog = () => {
-    resetForm();
     setEditingZman(null);
     setIsDialogOpen(true);
   };
 
   const openEditDialog = (zman: MasterZman) => {
     setEditingZman(zman);
-    setFormData({
-      zman_key: zman.zman_key,
-      canonical_hebrew_name: zman.canonical_hebrew_name,
-      canonical_english_name: zman.canonical_english_name,
-      transliteration: zman.transliteration || '',
-      description: zman.description || '',
-      halachic_notes: zman.halachic_notes || '',
-      halachic_source: zman.halachic_source || '',
-      time_category: zman.time_category,
-      default_formula_dsl: zman.default_formula_dsl,
-      is_core: zman.is_core,
-      is_hidden: zman.is_hidden,
-      sort_order: zman.sort_order,
-      tag_ids: zman.tag_ids || (zman.tags?.map(t => t.id) || []),
-    });
     setIsDialogOpen(true);
   };
 
-  const handleSave = async () => {
-    try {
-      setIsSaving(true);
-      const payload = {
-        canonical_hebrew_name: formData.canonical_hebrew_name,
-        canonical_english_name: formData.canonical_english_name,
-        transliteration: formData.transliteration || null,
-        description: formData.description || null,
-        halachic_notes: formData.halachic_notes || null,
-        halachic_source: formData.halachic_source || null,
-        time_category: formData.time_category,
-        default_formula_dsl: formData.default_formula_dsl,
-        is_core: formData.is_core,
-        is_hidden: formData.is_hidden,
-        sort_order: formData.sort_order,
-        tag_ids: formData.tag_ids,
-      };
+  const handleSave = async (data: ZmanFormData) => {
+    const payload = {
+      canonical_hebrew_name: data.canonical_hebrew_name,
+      canonical_english_name: data.canonical_english_name,
+      transliteration: data.transliteration || null,
+      description: data.description || null,
+      halachic_notes: data.halachic_notes || null,
+      halachic_source: data.halachic_source || null,
+      time_category: data.time_category,
+      default_formula_dsl: data.default_formula_dsl,
+      is_core: data.is_core,
+      is_hidden: data.is_hidden,
+      sort_order: data.sort_order,
+      tag_ids: data.tag_ids,
+    };
 
-      if (editingZman) {
-        // Update
-        await api.put(`/admin/registry/zmanim/${editingZman.id}`, {
-          body: JSON.stringify(payload),
-        });
-      } else {
-        // Create - include zman_key
-        await api.post('/admin/registry/zmanim', {
-          body: JSON.stringify({ ...payload, zman_key: formData.zman_key }),
-        });
-      }
-      setIsDialogOpen(false);
-      fetchZmanim();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save zman');
-    } finally {
-      setIsSaving(false);
+    if (editingZman) {
+      // Update
+      await api.put(`/admin/registry/zmanim/${editingZman.id}`, {
+        body: JSON.stringify(payload),
+      });
+    } else {
+      // Create - include zman_key
+      await api.post('/admin/registry/zmanim', {
+        body: JSON.stringify({ ...payload, zman_key: data.zman_key }),
+      });
     }
+    setIsDialogOpen(false);
+    fetchZmanim();
   };
 
   const handleDelete = async () => {
@@ -735,311 +633,26 @@ export default function AdminRegistryPage() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="zman_key">Zman Key *</Label>
-                <Input
-                  id="zman_key"
-                  value={formData.zman_key}
-                  onChange={(e) =>
-                    setFormData({ ...formData, zman_key: e.target.value })
-                  }
-                  placeholder="e.g., candle_lighting_18"
-                  disabled={!!editingZman}
-                  className="font-mono"
-                />
-                {formData.zman_key && (
-                  <p className="text-xs text-muted-foreground">
-                    DSL Reference: <code className="px-1 bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200 rounded">@{formData.zman_key}</code>
-                  </p>
-                )}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="time_category">Time Category *</Label>
-                <Select
-                  value={formData.time_category}
-                  onValueChange={(v) =>
-                    setFormData({ ...formData, time_category: v })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {TIME_CATEGORIES.map((cat) => (
-                      <SelectItem key={cat.key} value={cat.key}>
-                        {cat.display_name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {/* Tags Section - Show selected tags with remove option */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label>Tags</Label>
-                <Select
-                  value=""
-                  onValueChange={(tagId) => {
-                    if (tagId && !formData.tag_ids.includes(tagId)) {
-                      setFormData({
-                        ...formData,
-                        tag_ids: [...formData.tag_ids, tagId]
-                      });
-                    }
-                  }}
-                >
-                  <SelectTrigger className="w-[140px] h-8">
-                    <SelectValue placeholder="+ Add Tag" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {/* Event Tags */}
-                    {allTags.filter(t => t.tag_type === 'event').length > 0 && (
-                      <>
-                        <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Event</div>
-                        {allTags.filter(t => t.tag_type === 'event').map((tag) => {
-                          const isSelected = formData.tag_ids.includes(tag.id);
-                          return (
-                            <SelectItem key={tag.id} value={tag.id} disabled={isSelected}>
-                              <div className="flex items-center gap-2">
-                                {tag.display_name_english}
-                                {isSelected && <span className="text-xs text-muted-foreground">✓</span>}
-                              </div>
-                            </SelectItem>
-                          );
-                        })}
-                      </>
-                    )}
-                    {/* Timing Tags */}
-                    {allTags.filter(t => t.tag_type === 'timing').length > 0 && (
-                      <>
-                        <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Timing</div>
-                        {allTags.filter(t => t.tag_type === 'timing').map((tag) => {
-                          const isSelected = formData.tag_ids.includes(tag.id);
-                          return (
-                            <SelectItem key={tag.id} value={tag.id} disabled={isSelected}>
-                              <div className="flex items-center gap-2">
-                                {tag.display_name_english}
-                                {isSelected && <span className="text-xs text-muted-foreground">✓</span>}
-                              </div>
-                            </SelectItem>
-                          );
-                        })}
-                      </>
-                    )}
-                    {/* Behavior Tags */}
-                    {allTags.filter(t => t.tag_type === 'behavior').length > 0 && (
-                      <>
-                        <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Behavior</div>
-                        {allTags.filter(t => t.tag_type === 'behavior').map((tag) => {
-                          const isSelected = formData.tag_ids.includes(tag.id);
-                          return (
-                            <SelectItem key={tag.id} value={tag.id} disabled={isSelected}>
-                              <div className="flex items-center gap-2">
-                                {tag.display_name_english}
-                                {isSelected && <span className="text-xs text-muted-foreground">✓</span>}
-                              </div>
-                            </SelectItem>
-                          );
-                        })}
-                      </>
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Select tags to categorize when/how this zman applies
-              </p>
-              <div className="flex flex-wrap gap-2 min-h-[36px] p-2 border rounded-md">
-                {formData.tag_ids.length === 0 ? (
-                  <span className="text-sm text-muted-foreground">No tags selected</span>
-                ) : (
-                  formData.tag_ids.map((tagId) => {
-                    const tag = allTags.find(t => t.id === tagId);
-                    if (!tag) return null;
-
-                    const colorClass = tag.tag_type === 'event'
-                      ? 'bg-blue-500 hover:bg-blue-600'
-                      : tag.tag_type === 'timing'
-                      ? 'bg-green-500 hover:bg-green-600'
-                      : 'bg-purple-500 hover:bg-purple-600';
-
-                    return (
-                      <button
-                        key={tag.id}
-                        type="button"
-                        onClick={() => {
-                          setFormData({
-                            ...formData,
-                            tag_ids: formData.tag_ids.filter(id => id !== tag.id)
-                          });
-                        }}
-                        className={`px-3 py-1 rounded-md text-sm text-white ${colorClass} transition-colors flex items-center gap-1.5`}
-                        title="Click to remove"
-                      >
-                        {tag.display_name_english}
-                        <span className="text-xs opacity-70">×</span>
-                      </button>
-                    );
-                  })
-                )}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="canonical_hebrew_name">Hebrew Name *</Label>
-                <Input
-                  id="canonical_hebrew_name"
-                  value={formData.canonical_hebrew_name}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      canonical_hebrew_name: e.target.value,
-                    })
-                  }
-                  placeholder="עלות השחר"
-                  dir="rtl"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="canonical_english_name">English Name *</Label>
-                <Input
-                  id="canonical_english_name"
-                  value={formData.canonical_english_name}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      canonical_english_name: e.target.value,
-                    })
-                  }
-                  placeholder="Dawn"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="transliteration">Transliteration</Label>
-              <Input
-                id="transliteration"
-                value={formData.transliteration}
-                onChange={(e) =>
-                  setFormData({ ...formData, transliteration: e.target.value })
-                }
-                placeholder="Alos HaShachar"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="default_formula_dsl">Default Formula (DSL) *</Label>
-              <Input
-                id="default_formula_dsl"
-                value={formData.default_formula_dsl}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    default_formula_dsl: e.target.value,
-                  })
-                }
-                placeholder="sunrise - 72m"
-                className="font-mono"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="description">Description</Label>
-              <Textarea
-                id="description"
-                value={formData.description}
-                onChange={(e) =>
-                  setFormData({ ...formData, description: e.target.value })
-                }
-                placeholder="Brief description of this zman..."
-                rows={2}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="halachic_notes">Halachic Notes</Label>
-              <Textarea
-                id="halachic_notes"
-                value={formData.halachic_notes}
-                onChange={(e) =>
-                  setFormData({ ...formData, halachic_notes: e.target.value })
-                }
-                placeholder="Relevant halachic information..."
-                rows={2}
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="halachic_source">Halachic Source</Label>
-                <Input
-                  id="halachic_source"
-                  value={formData.halachic_source}
-                  onChange={(e) =>
-                    setFormData({ ...formData, halachic_source: e.target.value })
-                  }
-                  placeholder="e.g., Shulchan Aruch 89:1"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="sort_order">Sort Order</Label>
-                <Input
-                  id="sort_order"
-                  type="number"
-                  value={formData.sort_order}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      sort_order: parseInt(e.target.value) || 0,
-                    })
-                  }
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center gap-6">
-              <div className="flex items-center gap-2">
-                <Switch
-                  id="is_core"
-                  checked={formData.is_core}
-                  onCheckedChange={(v) =>
-                    setFormData({ ...formData, is_core: v })
-                  }
-                />
-                <Label htmlFor="is_core">Core Zman</Label>
-              </div>
-              <div className="flex items-center gap-2">
-                <Switch
-                  id="is_hidden"
-                  checked={formData.is_hidden}
-                  onCheckedChange={(v) =>
-                    setFormData({ ...formData, is_hidden: v })
-                  }
-                />
-                <Label htmlFor="is_hidden">Hidden</Label>
-              </div>
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setIsDialogOpen(false)}
-              disabled={isSaving}
-            >
-              Cancel
-            </Button>
-            <Button onClick={handleSave} disabled={isSaving}>
-              {isSaving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              {editingZman ? 'Update' : 'Create'}
-            </Button>
-          </DialogFooter>
+          <ZmanRegistryForm
+            mode={editingZman ? 'edit' : 'create'}
+            initialData={editingZman ? {
+              zman_key: editingZman.zman_key,
+              canonical_hebrew_name: editingZman.canonical_hebrew_name,
+              canonical_english_name: editingZman.canonical_english_name,
+              transliteration: editingZman.transliteration || '',
+              description: editingZman.description || '',
+              halachic_notes: editingZman.halachic_notes || '',
+              halachic_source: editingZman.halachic_source || '',
+              time_category: editingZman.time_category,
+              default_formula_dsl: editingZman.default_formula_dsl,
+              is_core: editingZman.is_core,
+              is_hidden: editingZman.is_hidden,
+              sort_order: editingZman.sort_order,
+              tag_ids: editingZman.tag_ids || (editingZman.tags?.map(t => t.id) || []),
+            } : undefined}
+            onSave={handleSave}
+            onCancel={() => setIsDialogOpen(false)}
+          />
         </DialogContent>
       </Dialog>
 

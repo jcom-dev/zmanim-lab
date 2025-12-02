@@ -4,11 +4,10 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import Link from 'next/link';
-import { API_BASE } from '@/lib/api';
+import { useApi } from '@/lib/api-client';
 
 interface FormData {
   name: string;
-  organization: string;
   email: string;
   website: string;
   description: string;
@@ -16,15 +15,14 @@ interface FormData {
 
 interface FormErrors {
   name?: string;
-  organization?: string;
   email?: string;
   description?: string;
 }
 
 export default function BecomePublisherPage() {
+  const api = useApi();
   const [formData, setFormData] = useState<FormData>({
     name: '',
-    organization: '',
     email: '',
     website: '',
     description: '',
@@ -38,10 +36,7 @@ export default function BecomePublisherPage() {
     const newErrors: FormErrors = {};
 
     if (!formData.name.trim()) {
-      newErrors.name = 'Name is required';
-    }
-    if (!formData.organization.trim()) {
-      newErrors.organization = 'Organization is required';
+      newErrors.name = 'Publisher name is required';
     }
     if (!formData.email.trim()) {
       newErrors.email = 'Email is required';
@@ -68,41 +63,22 @@ export default function BecomePublisherPage() {
     setIsSubmitting(true);
 
     try {
-      const response = await fetch(`${API_BASE}/api/v1/publisher-requests`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+      await api.public.post('/publisher-requests', {
         body: JSON.stringify({
           name: formData.name.trim(),
-          organization: formData.organization.trim(),
           email: formData.email.trim().toLowerCase(),
           website: formData.website.trim() || null,
           description: formData.description.trim(),
         }),
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        if (response.status === 409) {
-          setSubmitError(data.message || 'A request for this email is already pending or has been processed.');
-        } else if (data.details) {
-          // Server validation errors
-          const serverErrors: FormErrors = {};
-          Object.entries(data.details).forEach(([key, value]) => {
-            serverErrors[key as keyof FormErrors] = value as string;
-          });
-          setErrors(serverErrors);
-        } else {
-          setSubmitError(data.message || 'Failed to submit request. Please try again.');
-        }
-        return;
-      }
-
       setSubmitted(true);
-    } catch {
-      setSubmitError('Network error. Please check your connection and try again.');
+    } catch (err) {
+      if (err instanceof Error) {
+        setSubmitError(err.message || 'Failed to submit request. Please try again.');
+      } else {
+        setSubmitError('Network error. Please check your connection and try again.');
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -190,10 +166,10 @@ export default function BecomePublisherPage() {
                 </div>
               )}
 
-              {/* Name */}
+              {/* Publisher Name */}
               <div>
                 <label htmlFor="name" className="block text-sm font-medium mb-1">
-                  Your Name <span className="text-red-500">*</span>
+                  Publisher / Organization Name <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -204,28 +180,12 @@ export default function BecomePublisherPage() {
                   className={`w-full px-4 py-2 border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary ${
                     errors.name ? 'border-red-500' : 'border-border'
                   }`}
-                  placeholder="Rabbi Abraham Cohen"
-                />
-                {errors.name && <p className="mt-1 text-sm text-red-500">{errors.name}</p>}
-              </div>
-
-              {/* Organization */}
-              <div>
-                <label htmlFor="organization" className="block text-sm font-medium mb-1">
-                  Organization <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  id="organization"
-                  name="organization"
-                  value={formData.organization}
-                  onChange={handleChange}
-                  className={`w-full px-4 py-2 border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary ${
-                    errors.organization ? 'border-red-500' : 'border-border'
-                  }`}
                   placeholder="Congregation Beth Israel"
                 />
-                {errors.organization && <p className="mt-1 text-sm text-red-500">{errors.organization}</p>}
+                {errors.name && <p className="mt-1 text-sm text-red-500">{errors.name}</p>}
+                <p className="mt-1 text-sm text-muted-foreground">
+                  This will be the name displayed to users
+                </p>
               </div>
 
               {/* Email */}

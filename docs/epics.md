@@ -77,7 +77,7 @@ Single epic delivering complete Zmanim Lab MVP - a multi-publisher platform for 
 **Then** the web frontend (port 3000) and API backend (port 8080) are running
 
 **Given** the development environment is running
-**When** I access Supabase
+**When** I access the database
 **Then** I can connect to the database with proper credentials
 
 **Given** I want to run E2E tests
@@ -97,13 +97,13 @@ Single epic delivering complete Zmanim Lab MVP - a multi-publisher platform for 
   - Go 1.21+ installation
   - Node.js 20 LTS
   - npm 10+
-  - Supabase CLI
+  - PostgreSQL client
   - Playwright browsers
 - Update `start-services.sh` for zmanim-lab ports:
   - Web: 3000
   - API: 8080
 - Configure environment variables:
-  - `DATABASE_URL` (Supabase)
+  - `DATABASE_URL` (PostgreSQL)
   - `UPSTASH_REDIS_REST_URL`
   - `UPSTASH_REDIS_REST_TOKEN`
   - `CLERK_SECRET_KEY`
@@ -261,7 +261,7 @@ Single epic delivering complete Zmanim Lab MVP - a multi-publisher platform for 
 - Implement `api/internal/handlers/publishers.go`:
   - `GET /api/publisher/profile` - get own profile
   - `PUT /api/publisher/profile` - update profile
-- Store logo in Supabase Storage or external CDN
+- Store logo in Object Storage or external CDN
 - Profile fields: name, organization, email, website, bio, logo_url
 
 **FRs:** FR3
@@ -309,7 +309,7 @@ Single epic delivering complete Zmanim Lab MVP - a multi-publisher platform for 
   ```
 - `region_type` values: 'state', 'county', 'province', 'district', 'prefecture', etc.
 - Seed database with global cities (use GeoNames or similar dataset)
-- Create `scripts/seed-cities.sql` or use Supabase seed
+- Create `scripts/seed-cities.sql` or use database seed
 
 **FRs:** FR21, FR22
 
@@ -896,8 +896,8 @@ See detailed specifications:
 ## Epic 5: DSL Editor Experience & Zman Management
 
 **Status:** CURRENT SPRINT
-**Stories:** 11 (5.0 - 5.10)
-**FRs:** FR96-FR113 (Editor Experience & Zman Management)
+**Stories:** 18 (5.0 - 5.17)
+**FRs:** FR96-FR120 (Editor Experience & Zman Management)
 
 **Goal:** Deliver a "hand-holding" DSL editor experience for non-technical users, plus publisher zman customization and new zman request workflow.
 
@@ -2103,6 +2103,127 @@ act -j lint  # If using act for local CI testing
 | FR117 | E2E parallel mode configuration | 5.14 |
 | FR118 | Backend API response standardization | 5.15 |
 | FR119 | CI quality gates and pre-commit hooks | 5.16 |
+| FR120 | Remove organization field, mandatory logo with AI generation | 5.17 |
+| FR121 | Publisher owns copy of description, transliteration, formula with diff/revert | 5.18 |
+| FR122 | Linked zmanim non-editable (edit button disabled) | 5.18 |
+| FR123 | Unified zman review form (same as Add to Registry) | 5.19 |
+| FR124 | Tag approval pipeline before zman approval | 5.19 |
+| FR125 | Email notifications on request approval/rejection | 5.19 |
+
+---
+
+### Story 5.17: Publisher Schema Refactor - Remove Organization, Mandatory Logo with AI Generation
+
+**As a** platform user,
+**I want** publisher profiles to be simplified (publisher IS the organization) with mandatory logos that can be AI-generated,
+**So that** the data model is cleaner and all publishers have professional visual identity.
+
+**Acceptance Criteria:**
+
+**Given** the publishers table has an organization column
+**When** Story 5.17 is complete
+**Then** the organization column is removed from publishers and publisher_requests tables
+
+**Given** a publisher is creating or editing their profile
+**When** they submit the form without a logo
+**Then** validation fails and they must provide a logo
+
+**Given** a publisher doesn't have a logo image
+**When** they click "Generate Logo"
+**Then** a professional logo is generated from their publisher name initials
+**And** they can customize the background color
+
+**Given** frontend forms show organization field
+**When** Story 5.17 is complete
+**Then** organization field is removed from all publisher forms and displays
+
+**Prerequisites:** None (can run in parallel with other Epic 5 stories)
+
+**Technical Notes:**
+- Create migration `00000000000026_remove_organization_mandatory_logo.sql`
+- Update all SQLc queries and regenerate
+- Create `web/components/publisher/LogoGenerator.tsx` with canvas-based initials logo
+- Update all publisher-related frontend pages and components
+- Add backend validation for required logo_url
+
+**FRs:** FR120
+
+---
+
+### Story 5.18: Publisher Zman Field Ownership - Description, Transliteration, Formula Diff/Revert
+
+**As a** publisher,
+**I want** my own editable copy of description, transliteration, and formula when I add a zman from the registry, with clear indication when my values differ from the source and easy one-click revert,
+**So that** I can customize these fields for my community while maintaining visibility into registry changes.
+
+**Acceptance Criteria:**
+
+**Given** a publisher adds a zman from the registry
+**When** the zman is created
+**Then** description, transliteration, and formula are copied as the publisher's own values
+**And** the original registry values are tracked for comparison
+
+**Given** a publisher edits their copy of these fields
+**When** the value differs from the registry
+**Then** an amber "Modified" indicator appears
+**And** a revert button allows one-click restoration to registry value
+
+**Given** a zman is linked to another publisher (`source_type = 'linked'`)
+**When** the publisher views the zman
+**Then** the edit button is disabled with tooltip "Linked zmanim cannot be edited"
+**And** the edit page shows all fields as read-only (except toggles)
+
+**Prerequisites:** 5.0 (Database Schema)
+
+**Technical Notes:**
+- Extend pattern from `BilingualInput` (already handles names)
+- Add `transliteration` and `description` columns to `publisher_zmanim`
+- Return `source_*` fields from SQLc queries
+- Create `DescriptionInput` and `FormulaSourceIndicator` components
+- Disable edit button in `ZmanCard` for linked zmanim
+
+**FRs:** FR121, FR122
+
+---
+
+### Story 5.19: Zman Request Review Workflow - Unified Edit/Review with Tag Approval Pipeline
+
+**As an** admin,
+**I want** to review zman requests using the same form as "Add to Registry" with approve/reject buttons, process new tag requests before the zman can be approved, and automatically email publishers about outcomes,
+**So that** I can efficiently review requests with full editing capability, ensure tag quality, and keep publishers informed.
+
+**Acceptance Criteria:**
+
+**Given** an admin opens a zman request for review
+**When** the review dialog opens
+**Then** the same form as "Add to Registry" is shown with the request data pre-filled
+**And** Approve/Reject buttons replace the Save button
+
+**Given** a zman request includes new tag requests
+**When** the admin views the request
+**Then** pending tag requests are shown above the form
+**And** the Approve button is disabled until all tags are approved/rejected
+
+**Given** an admin approves a tag request
+**When** they click Approve on a tag
+**Then** the tag is created in the registry
+**And** the tag is automatically linked to the zman request
+
+**Given** an admin approves a zman request
+**When** approval completes
+**Then** the zman is added to the master registry
+**And** an approval email is sent to the publisher
+**And** if auto_add_on_approval is true, the zman is added to the publisher's list
+
+**Prerequisites:** 5.8 (Admin Review Page)
+
+**Technical Notes:**
+- Extract form from registry page into `ZmanRegistryForm` component
+- Add mode prop: 'create' | 'edit' | 'review'
+- New endpoints: `/admin/zman-requests/:id/tags/:tagId/approve|reject`
+- Use existing email service or create transactional email helper
+
+**FRs:** FR123, FR124, FR125
 
 ---
 
@@ -2119,7 +2240,10 @@ act -j lint  # If using act for local CI testing
  ├── 5.6 Request API & Email
  │    └── 5.7 Request UI
  │         └── 5.8 Admin Review Page
+ │              └── 5.19 Zman Request Review Workflow (unified form, tag pipeline, email)
  ├── 5.10 Publisher Logo Editor (parallel track)
+ ├── 5.17 Publisher Schema Refactor (parallel track - remove org, mandatory logo, AI generation)
+ ├── 5.18 Publisher Zman Field Ownership (parallel track - extends edit page with diff/revert)
  │
  └── Technical Debt Track (parallel - no feature dependencies)
       ├── 5.11 Frontend useApi Migration (73 violations)
@@ -2136,12 +2260,12 @@ act -j lint  # If using act for local CI testing
 ## Epic 5 Summary
 
 **Epic 5: DSL Editor Experience & Zman Management**
-- **Stories:** 17 (5.0-5.16)
-- **FRs Covered:** FR96-FR119 (24 FRs)
-- **Story Points:** 45 total
-  - Feature Track: 25 points (5.0-5.10)
+- **Stories:** 20 (5.0-5.19)
+- **FRs Covered:** FR96-FR125 (30 FRs)
+- **Story Points:** 71 total
+  - Feature Track: 51 points (5.0-5.10, 5.17-5.19)
   - Technical Debt Track: 20 points (5.11-5.16)
-- **Sequence:** Schema → Error Messages → Tooltips → Placeholders → Aliases → Requests → Admin → Logo Editor
+- **Sequence:** Schema → Error Messages → Tooltips → Placeholders → Aliases → Requests → Admin → Logo Editor → Schema Refactor
 - **Parallel Track:** Technical Debt (5.11-5.16) can run alongside feature work
 
 **Technical Debt Stories (NEW):**
@@ -2154,15 +2278,23 @@ act -j lint  # If using act for local CI testing
 | 5.14 | E2E Parallel Mode | 23 files | 2 | Testing Standards |
 | 5.15 | API Response Format | ~80 | 3 | Backend Standards |
 | 5.16 | CI Quality Gates | - | 2 | Enforcement Mechanisms |
+| 5.17 | Publisher Schema Refactor | Remove org, mandatory logo | 5 | Data Model |
+| 5.18 | Publisher Zman Field Ownership | Desc, transliteration, formula diff/revert | 8 | Edit UX |
+| 5.19 | Zman Request Review Workflow | Unified form, tag pipeline, email | 13 | Admin UX |
 
 **After Epic 5 Completion:**
 - Non-technical publishers can write formulas with zero confusion (< 30 seconds to valid formula)
-- Publishers can customize zman names while preserving canonical references
+- Publishers can customize zman names, descriptions, transliterations, and formulas with registry sync
+- Publishers see clear "Different from Registry" indicators with one-click sync buttons
 - Publishers can request new zmanim with guided tag selection
-- Admins can efficiently review and approve zman requests
+- Admins can efficiently review and approve zman requests with full editing capability
+- Tag requests are approved before zman requests (quality gate)
+- Publishers receive email notifications on approval/rejection
 - The platform becomes community-driven with publisher contributions
 - All publishers have professional logos (mandatory with crop/zoom editor or initials generator)
 - Publisher names are organization names, not personal names
+- **Publisher = Organization** (organization field removed, cleaner data model)
+- **All publishers have logos** (mandatory with AI initials generator)
 - **Codebase follows established standards** (0 violations across all categories)
 - **All API calls use unified useApi() hook** (consistent auth and response handling)
 - **All logging uses structured slog** (searchable, contextual logs)

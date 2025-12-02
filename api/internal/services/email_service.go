@@ -36,6 +36,8 @@ const (
 	TemplateUserAddedToAdmin         EmailTemplate = "user-added-admin"
 	TemplateUserAddedToPublisher     EmailTemplate = "user-added-publisher"
 	TemplatePasswordResetRequest     EmailTemplate = "password-reset-request"
+	TemplateZmanRequestApproved      EmailTemplate = "zman-request-approved"
+	TemplateZmanRequestRejected      EmailTemplate = "zman-request-rejected"
 )
 
 // SendEmailRequest represents the Resend API request
@@ -250,6 +252,40 @@ func (s *EmailService) SendPasswordResetRequest(to, userName, resetURL, expiresI
 
 	html := s.renderTemplate(TemplatePasswordResetRequest, data)
 	return s.send(to, subject, html, []EmailTag{{Name: "template", Value: string(TemplatePasswordResetRequest)}})
+}
+
+// SendZmanRequestApproved sends an approval notification for a zman request
+func (s *EmailService) SendZmanRequestApproved(to, publisherName, zmanHebrewName, zmanEnglishName, zmanKey, reviewerNotes string) error {
+	subject := fmt.Sprintf("Your Zman Request Has Been Approved - %s", zmanEnglishName)
+
+	data := map[string]string{
+		"publisher_name":    publisherName,
+		"zman_hebrew_name":  zmanHebrewName,
+		"zman_english_name": zmanEnglishName,
+		"zman_key":          zmanKey,
+		"reviewer_notes":    reviewerNotes,
+		"web_url":           s.webURL,
+	}
+
+	html := s.renderTemplate(TemplateZmanRequestApproved, data)
+	return s.send(to, subject, html, []EmailTag{{Name: "template", Value: string(TemplateZmanRequestApproved)}})
+}
+
+// SendZmanRequestRejected sends a rejection notification for a zman request
+func (s *EmailService) SendZmanRequestRejected(to, publisherName, zmanHebrewName, zmanEnglishName, zmanKey, reviewerNotes string) error {
+	subject := fmt.Sprintf("Your Zman Request Update - %s", zmanEnglishName)
+
+	data := map[string]string{
+		"publisher_name":    publisherName,
+		"zman_hebrew_name":  zmanHebrewName,
+		"zman_english_name": zmanEnglishName,
+		"zman_key":          zmanKey,
+		"reviewer_notes":    reviewerNotes,
+		"web_url":           s.webURL,
+	}
+
+	html := s.renderTemplate(TemplateZmanRequestRejected, data)
+	return s.send(to, subject, html, []EmailTag{{Name: "template", Value: string(TemplateZmanRequestRejected)}})
 }
 
 // send executes the email send via Resend API
@@ -677,6 +713,100 @@ func (s *EmailService) renderTemplate(templateType EmailTemplate, data map[strin
         <p style="color: #e53e3e; font-size: 14px;">This link will expire in {{.expires_in}}.</p>
         <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;">
         <p style="color: #718096; font-size: 12px;">If you did not expect this password reset, please contact support.</p>
+    </div>
+</body>
+</html>`,
+
+		TemplateZmanRequestApproved: `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zman Request Approved</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+    <div style="background: linear-gradient(135deg, #059669 0%, #047857 100%); padding: 30px; border-radius: 10px 10px 0 0;">
+        <h1 style="color: white; margin: 0; font-size: 24px;">Zmanim Lab</h1>
+    </div>
+    <div style="background: #ffffff; padding: 30px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 10px 10px;">
+        <h2 style="color: #059669; margin-top: 0;">Your Zman Request Has Been Approved!</h2>
+        <p>Great news! Your request to add a new zman to the registry has been approved.</p>
+        <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 20px; margin: 20px 0;">
+            <table style="width: 100%; border-collapse: collapse;">
+                <tr>
+                    <td style="padding: 8px 0; color: #6b7280; width: 140px;">Hebrew Name:</td>
+                    <td style="padding: 8px 0; font-weight: 600;" dir="rtl">{{.zman_hebrew_name}}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px 0; color: #6b7280;">English Name:</td>
+                    <td style="padding: 8px 0; font-weight: 600;">{{.zman_english_name}}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px 0; color: #6b7280;">Zman Key:</td>
+                    <td style="padding: 8px 0; font-family: monospace; background: #f3f4f6; padding: 4px 8px; border-radius: 4px;">{{.zman_key}}</td>
+                </tr>
+            </table>
+        </div>
+        {{if .reviewer_notes}}
+        <div style="background: #f7fafc; border-left: 4px solid #059669; padding: 15px; margin: 20px 0;">
+            <p style="margin: 0 0 5px 0; color: #4a5568; font-weight: 600;">Reviewer Notes:</p>
+            <p style="margin: 0; color: #4a5568;">{{.reviewer_notes}}</p>
+        </div>
+        {{end}}
+        <p>The new zman is now available in the registry. You can use it in your formulas with the DSL reference: <code style="background: #f3f4f6; padding: 2px 6px; border-radius: 4px;">@{{.zman_key}}</code></p>
+        <div style="text-align: center; margin: 30px 0;">
+            <a href="{{.web_url}}/publisher/algorithm" style="background: #059669; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 600;">Go to Algorithm Editor</a>
+        </div>
+        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;">
+        <p style="color: #718096; font-size: 12px;">Thank you for contributing to the Zmanim Lab registry!</p>
+    </div>
+</body>
+</html>`,
+
+		TemplateZmanRequestRejected: `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zman Request Update</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+    <div style="background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 100%); padding: 30px; border-radius: 10px 10px 0 0;">
+        <h1 style="color: white; margin: 0; font-size: 24px;">Zmanim Lab</h1>
+    </div>
+    <div style="background: #ffffff; padding: 30px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 10px 10px;">
+        <h2 style="color: #1e3a5f; margin-top: 0;">Zman Request Update</h2>
+        <p>Thank you for your request to add a new zman to the registry. After review, we were unable to approve it at this time.</p>
+        <div style="background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; margin: 20px 0;">
+            <table style="width: 100%; border-collapse: collapse;">
+                <tr>
+                    <td style="padding: 8px 0; color: #6b7280; width: 140px;">Hebrew Name:</td>
+                    <td style="padding: 8px 0; font-weight: 600;" dir="rtl">{{.zman_hebrew_name}}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px 0; color: #6b7280;">English Name:</td>
+                    <td style="padding: 8px 0; font-weight: 600;">{{.zman_english_name}}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px 0; color: #6b7280;">Requested Key:</td>
+                    <td style="padding: 8px 0; font-family: monospace;">{{.zman_key}}</td>
+                </tr>
+            </table>
+        </div>
+        {{if .reviewer_notes}}
+        <div style="background: #fef2f2; border-left: 4px solid #dc2626; padding: 15px; margin: 20px 0;">
+            <p style="margin: 0 0 5px 0; color: #991b1b; font-weight: 600;">Reason:</p>
+            <p style="margin: 0; color: #7f1d1d;">{{.reviewer_notes}}</p>
+        </div>
+        {{end}}
+        <p>If you believe this decision was made in error or would like to discuss this further, please reach out to us.</p>
+        <div style="text-align: center; margin: 30px 0;">
+            <a href="{{.web_url}}/publisher/dashboard" style="background: #1e3a5f; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 600;">Go to Dashboard</a>
+        </div>
+        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;">
+        <p style="color: #718096; font-size: 12px;">Thank you for your understanding.</p>
     </div>
 </body>
 </html>`,

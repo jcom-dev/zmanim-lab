@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
@@ -13,6 +13,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	db "github.com/jcom-dev/zmanim-lab/internal/db/sqlcgen"
 )
 
@@ -116,7 +117,7 @@ type ZmanRegistryRequest struct {
 	RequestedEnglishName string     `json:"requested_english_name"`
 	RequestedFormulaDSL  *string    `json:"requested_formula_dsl,omitempty"`
 	TimeCategory         string     `json:"time_category"`
-	Justification        string     `json:"justification"`
+	Description          string     `json:"description"`
 	Status               string     `json:"status"`
 	ReviewedBy           *string    `json:"reviewed_by,omitempty"`
 	ReviewedAt           *time.Time `json:"reviewed_at,omitempty"`
@@ -135,12 +136,21 @@ type RollbackZmanRequest struct {
 }
 
 type CreateZmanRegistryRequestBody struct {
-	RequestedKey         string  `json:"requested_key" validate:"required"`
-	RequestedHebrewName  string  `json:"requested_hebrew_name" validate:"required"`
-	RequestedEnglishName string  `json:"requested_english_name" validate:"required"`
-	RequestedFormulaDSL  *string `json:"requested_formula_dsl"`
-	TimeCategory         string  `json:"time_category" validate:"required"`
-	Justification        string  `json:"justification" validate:"required"`
+	RequestedKey         string   `json:"requested_key" validate:"required"`
+	RequestedHebrewName  string   `json:"requested_hebrew_name" validate:"required"`
+	RequestedEnglishName string   `json:"requested_english_name" validate:"required"`
+	Transliteration      *string  `json:"transliteration"`
+	RequestedFormulaDSL  *string  `json:"requested_formula_dsl"`
+	TimeCategory         string   `json:"time_category" validate:"required"`
+	Description          string   `json:"description" validate:"required"`
+	HalachicNotes        *string  `json:"halachic_notes"`
+	HalachicSource       *string  `json:"halachic_source"`
+	TagIDs               []string `json:"tag_ids"`
+	RequestedNewTags     []struct {
+		Name string `json:"name"`
+		Type string `json:"type"`
+	} `json:"requested_new_tags"`
+	AutoAddOnApproval *bool `json:"auto_add_on_approval"`
 }
 
 type ReviewZmanRequestBody struct {
@@ -186,7 +196,7 @@ func (h *Handlers) GetMasterZmanim(w http.ResponseWriter, r *http.Request) {
 			ORDER BY sort_order LIMIT 50
 		`, search)
 		if err != nil {
-			log.Printf("Error searching master zmanim: %v", err)
+			slog.Error("error searching master zmanim", "error", err)
 			RespondInternalError(w, r, "Failed to search master zmanim")
 			return
 		}
@@ -199,7 +209,7 @@ func (h *Handlers) GetMasterZmanim(w http.ResponseWriter, r *http.Request) {
 				&z.TimeCategory, &z.DefaultFormulaDSL, &z.IsCore, &z.SortOrder,
 				&z.CreatedAt, &z.UpdatedAt)
 			if err != nil {
-				log.Printf("Error scanning master zman: %v", err)
+				slog.Error("error scanning master zman", "error", err)
 				continue
 			}
 			zmanim = append(zmanim, z)
@@ -218,7 +228,7 @@ func (h *Handlers) GetMasterZmanim(w http.ResponseWriter, r *http.Request) {
 			ORDER BY mr.time_category, mr.sort_order
 		`, tag)
 		if err != nil {
-			log.Printf("Error getting master zmanim by tag: %v", err)
+			slog.Error("error getting master zmanim by tag", "error", err)
 			RespondInternalError(w, r, "Failed to get master zmanim")
 			return
 		}
@@ -231,7 +241,7 @@ func (h *Handlers) GetMasterZmanim(w http.ResponseWriter, r *http.Request) {
 				&z.TimeCategory, &z.DefaultFormulaDSL, &z.IsCore, &z.SortOrder,
 				&z.CreatedAt, &z.UpdatedAt)
 			if err != nil {
-				log.Printf("Error scanning master zman: %v", err)
+				slog.Error("error scanning master zman", "error", err)
 				continue
 			}
 			zmanim = append(zmanim, z)
@@ -248,7 +258,7 @@ func (h *Handlers) GetMasterZmanim(w http.ResponseWriter, r *http.Request) {
 			ORDER BY sort_order, canonical_hebrew_name
 		`, category)
 		if err != nil {
-			log.Printf("Error getting master zmanim by category: %v", err)
+			slog.Error("error getting master zmanim by category", "error", err)
 			RespondInternalError(w, r, "Failed to get master zmanim")
 			return
 		}
@@ -261,7 +271,7 @@ func (h *Handlers) GetMasterZmanim(w http.ResponseWriter, r *http.Request) {
 				&z.TimeCategory, &z.DefaultFormulaDSL, &z.IsCore, &z.SortOrder,
 				&z.CreatedAt, &z.UpdatedAt)
 			if err != nil {
-				log.Printf("Error scanning master zman: %v", err)
+				slog.Error("error scanning master zman", "error", err)
 				continue
 			}
 			zmanim = append(zmanim, z)
@@ -277,7 +287,7 @@ func (h *Handlers) GetMasterZmanim(w http.ResponseWriter, r *http.Request) {
 			ORDER BY time_category, sort_order, canonical_hebrew_name
 		`)
 		if err != nil {
-			log.Printf("Error getting all master zmanim: %v", err)
+			slog.Error("error getting all master zmanim", "error", err)
 			RespondInternalError(w, r, "Failed to get master zmanim")
 			return
 		}
@@ -290,7 +300,7 @@ func (h *Handlers) GetMasterZmanim(w http.ResponseWriter, r *http.Request) {
 				&z.TimeCategory, &z.DefaultFormulaDSL, &z.IsCore, &z.SortOrder,
 				&z.CreatedAt, &z.UpdatedAt)
 			if err != nil {
-				log.Printf("Error scanning master zman: %v", err)
+				slog.Error("error scanning master zman", "error", err)
 				continue
 			}
 			zmanim = append(zmanim, z)
@@ -353,7 +363,7 @@ func (h *Handlers) GetMasterZmanimGrouped(w http.ResponseWriter, r *http.Request
 	}
 
 	if err != nil {
-		log.Printf("Error getting master zmanim: %v", err)
+		slog.Error("error getting master zmanim", "error", err)
 		RespondInternalError(w, r, "Failed to get master zmanim")
 		return
 	}
@@ -368,7 +378,7 @@ func (h *Handlers) GetMasterZmanimGrouped(w http.ResponseWriter, r *http.Request
 			&z.TimeCategory, &z.DefaultFormulaDSL, &z.IsCore, &z.SortOrder,
 			&z.CreatedAt, &z.UpdatedAt)
 		if err != nil {
-			log.Printf("Error scanning master zman: %v", err)
+			slog.Error("error scanning master zman", "error", err)
 			continue
 		}
 		grouped[z.TimeCategory] = append(grouped[z.TimeCategory], z)
@@ -428,7 +438,7 @@ func (h *Handlers) GetEventZmanimGrouped(w http.ResponseWriter, r *http.Request)
 		ORDER BY mz.sort_order, mz.canonical_hebrew_name
 	`)
 	if err != nil {
-		log.Printf("Error getting event zmanim: %v", err)
+		slog.Error("error getting event zmanim", "error", err)
 		RespondInternalError(w, r, "Failed to get event zmanim")
 		return
 	}
@@ -444,7 +454,7 @@ func (h *Handlers) GetEventZmanimGrouped(w http.ResponseWriter, r *http.Request)
 			&z.TimeCategory, &z.DefaultFormulaDSL, &z.IsCore, &z.SortOrder,
 			&z.CreatedAt, &z.UpdatedAt, &tagsJSON)
 		if err != nil {
-			log.Printf("Error scanning event zman: %v", err)
+			slog.Error("error scanning event zman", "error", err)
 			continue
 		}
 
@@ -531,7 +541,7 @@ func (h *Handlers) GetMasterZman(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		log.Printf("Error getting master zman: %v", err)
+		slog.Error("error getting master zman", "error", err)
 		RespondInternalError(w, r, "Failed to get master zman")
 		return
 	}
@@ -593,7 +603,7 @@ func (h *Handlers) GetAllTags(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		log.Printf("Error getting tags: %v", err)
+		slog.Error("error getting tags", "error", err)
 		RespondInternalError(w, r, "Failed to get tags")
 		return
 	}
@@ -604,7 +614,7 @@ func (h *Handlers) GetAllTags(w http.ResponseWriter, r *http.Request) {
 		err := rows.Scan(&tag.ID, &tag.Name, &tag.DisplayNameHebrew, &tag.DisplayNameEnglish,
 			&tag.TagType, &tag.Description, &tag.Color, &tag.SortOrder, &tag.CreatedAt)
 		if err != nil {
-			log.Printf("Error scanning tag: %v", err)
+			slog.Error("error scanning tag", "error", err)
 			continue
 		}
 		tags = append(tags, tag)
@@ -614,7 +624,9 @@ func (h *Handlers) GetAllTags(w http.ResponseWriter, r *http.Request) {
 		tags = []ZmanTag{}
 	}
 
-	RespondJSON(w, r, http.StatusOK, tags)
+	RespondJSON(w, r, http.StatusOK, map[string]interface{}{
+		"tags": tags,
+	})
 }
 
 // GetAllDayTypes returns all day types
@@ -650,7 +662,7 @@ func (h *Handlers) GetAllDayTypes(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		log.Printf("Error getting day types: %v", err)
+		slog.Error("error getting day types", "error", err)
 		RespondInternalError(w, r, "Failed to get day types")
 		return
 	}
@@ -661,7 +673,7 @@ func (h *Handlers) GetAllDayTypes(w http.ResponseWriter, r *http.Request) {
 		err := rows.Scan(&dt.ID, &dt.Name, &dt.DisplayNameHebrew, &dt.DisplayNameEnglish,
 			&dt.Description, &dt.ParentType, &dt.SortOrder)
 		if err != nil {
-			log.Printf("Error scanning day type: %v", err)
+			slog.Error("error scanning day type", "error", err)
 			continue
 		}
 		dayTypes = append(dayTypes, dt)
@@ -695,7 +707,7 @@ func (h *Handlers) GetZmanApplicableDayTypes(w http.ResponseWriter, r *http.Requ
 		ORDER BY dt.sort_order
 	`, zmanKey)
 	if err != nil {
-		log.Printf("Error getting zman day types: %v", err)
+		slog.Error("error getting zman day types", "error", err)
 		RespondInternalError(w, r, "Failed to get day types")
 		return
 	}
@@ -707,7 +719,7 @@ func (h *Handlers) GetZmanApplicableDayTypes(w http.ResponseWriter, r *http.Requ
 		err := rows.Scan(&dt.ID, &dt.Name, &dt.DisplayNameHebrew, &dt.DisplayNameEnglish,
 			&dt.Description, &dt.ParentType, &dt.SortOrder)
 		if err != nil {
-			log.Printf("Error scanning day type: %v", err)
+			slog.Error("error scanning day type", "error", err)
 			continue
 		}
 		dayTypes = append(dayTypes, dt)
@@ -752,7 +764,7 @@ func (h *Handlers) GetZmanVersionHistory(w http.ResponseWriter, r *http.Request)
 		LIMIT 7
 	`, publisherID, zmanKey)
 	if err != nil {
-		log.Printf("Error getting zman version history: %v", err)
+		slog.Error("error getting zman version history", "error", err)
 		RespondInternalError(w, r, "Failed to get version history")
 		return
 	}
@@ -764,7 +776,7 @@ func (h *Handlers) GetZmanVersionHistory(w http.ResponseWriter, r *http.Request)
 		err := rows.Scan(&v.ID, &v.PublisherZmanID, &v.VersionNumber,
 			&v.FormulaDSL, &v.CreatedBy, &v.CreatedAt)
 		if err != nil {
-			log.Printf("Error scanning version: %v", err)
+			slog.Error("error scanning version", "error", err)
 			continue
 		}
 		versions = append(versions, v)
@@ -818,7 +830,7 @@ func (h *Handlers) GetZmanVersionDetail(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	if err != nil {
-		log.Printf("Error getting zman version: %v", err)
+		slog.Error("error getting zman version", "error", err)
 		RespondInternalError(w, r, "Failed to get version")
 		return
 	}
@@ -866,7 +878,7 @@ func (h *Handlers) RollbackZmanVersion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		log.Printf("Error getting target version: %v", err)
+		slog.Error("error getting target version", "error", err)
 		RespondInternalError(w, r, "Failed to get target version")
 		return
 	}
@@ -900,7 +912,7 @@ func (h *Handlers) RollbackZmanVersion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		log.Printf("Error rolling back zman: %v", err)
+		slog.Error("error rolling back zman", "error", err)
 		RespondInternalError(w, r, "Failed to rollback zman")
 		return
 	}
@@ -917,7 +929,7 @@ func (h *Handlers) RollbackZmanVersion(w http.ResponseWriter, r *http.Request) {
 		WHERE pz.publisher_id = $1 AND pz.zman_key = $2
 	`, publisherID, zmanKey, targetFormula, userID)
 	if err != nil {
-		log.Printf("Error creating version for rollback: %v", err)
+		slog.Error("error creating version for rollback", "error", err)
 		// Don't fail the request, the rollback itself succeeded
 	}
 
@@ -960,7 +972,7 @@ func (h *Handlers) SoftDeletePublisherZman(w http.ResponseWriter, r *http.Reques
 	`, publisherID, zmanKey, userID)
 
 	if err != nil {
-		log.Printf("Error soft deleting zman: %v", err)
+		slog.Error("error soft deleting zman", "error", err)
 		RespondInternalError(w, r, "Failed to delete zman")
 		return
 	}
@@ -1010,7 +1022,7 @@ func (h *Handlers) GetDeletedZmanim(w http.ResponseWriter, r *http.Request) {
 		ORDER BY pz.deleted_at DESC
 	`, publisherID)
 	if err != nil {
-		log.Printf("Error getting deleted zmanim: %v", err)
+		slog.Error("error getting deleted zmanim", "error", err)
 		RespondInternalError(w, r, "Failed to get deleted zmanim")
 		return
 	}
@@ -1022,7 +1034,7 @@ func (h *Handlers) GetDeletedZmanim(w http.ResponseWriter, r *http.Request) {
 		err := rows.Scan(&d.ID, &d.PublisherID, &d.ZmanKey, &d.HebrewName, &d.EnglishName,
 			&d.FormulaDSL, &d.TimeCategory, &d.DeletedAt, &d.DeletedBy, &d.MasterZmanID)
 		if err != nil {
-			log.Printf("Error scanning deleted zman: %v", err)
+			slog.Error("error scanning deleted zman", "error", err)
 			continue
 		}
 		deleted = append(deleted, d)
@@ -1072,7 +1084,7 @@ func (h *Handlers) RestorePublisherZman(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	if err != nil {
-		log.Printf("Error restoring zman: %v", err)
+		slog.Error("error restoring zman", "error", err)
 		RespondInternalError(w, r, "Failed to restore zman")
 		return
 	}
@@ -1103,7 +1115,7 @@ func (h *Handlers) PermanentDeletePublisherZman(w http.ResponseWriter, r *http.R
 	`, publisherID, zmanKey)
 
 	if err != nil {
-		log.Printf("Error permanently deleting zman: %v", err)
+		slog.Error("error permanently deleting zman", "error", err)
 		RespondInternalError(w, r, "Failed to permanently delete zman")
 		return
 	}
@@ -1170,7 +1182,7 @@ func (h *Handlers) CreatePublisherZmanFromRegistry(w http.ResponseWriter, r *htt
 			return
 		}
 		if err != nil {
-			log.Printf("Error getting master zman: %v", err)
+			slog.Error("error getting master zman", "error", err)
 			RespondInternalError(w, r, "Failed to get master zman")
 			return
 		}
@@ -1220,7 +1232,7 @@ func (h *Handlers) CreatePublisherZmanFromRegistry(w http.ResponseWriter, r *htt
 			RespondConflict(w, r, "Zman already exists for this publisher")
 			return
 		}
-		log.Printf("Error creating publisher zman: %v", err)
+		slog.Error("error creating publisher zman", "error", err)
 		RespondInternalError(w, r, "Failed to create zman")
 		return
 	}
@@ -1231,7 +1243,7 @@ func (h *Handlers) CreatePublisherZmanFromRegistry(w http.ResponseWriter, r *htt
 		VALUES ($1, 1, $2)
 	`, result.ID, result.FormulaDSL)
 	if err != nil {
-		log.Printf("Error creating initial version: %v", err)
+		slog.Error("error creating initial version", "error", err)
 		// Don't fail - the zman was created successfully
 	}
 
@@ -1241,6 +1253,38 @@ func (h *Handlers) CreatePublisherZmanFromRegistry(w http.ResponseWriter, r *htt
 // ============================================
 // ZMAN REGISTRY REQUEST HANDLERS (EDGE CASE)
 // ============================================
+
+// GetPublisherZmanRequests returns the current publisher's zman requests
+// @Summary Get publisher's zman requests
+// @Tags Publisher Zmanim
+// @Produce json
+// @Success 200 {object} map[string]interface{}
+// @Router /api/v1/publisher/zman-requests [get]
+func (h *Handlers) GetPublisherZmanRequests(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// Resolve publisher ID
+	pc := h.publisherResolver.MustResolve(w, r)
+	if pc == nil {
+		return
+	}
+
+	requests, err := h.db.Queries.GetPublisherZmanRequests(ctx, pc.PublisherID)
+	if err != nil {
+		slog.Error("error getting publisher zman requests", "error", err, "publisher_id", pc.PublisherID)
+		RespondInternalError(w, r, "Failed to get requests")
+		return
+	}
+
+	if requests == nil {
+		requests = []db.GetPublisherZmanRequestsRow{}
+	}
+
+	RespondJSON(w, r, http.StatusOK, map[string]interface{}{
+		"requests": requests,
+		"total":    len(requests),
+	})
+}
 
 // CreateZmanRegistryRequest creates a request to add a new zman to the registry
 // @Summary Request new zman for master registry
@@ -1262,35 +1306,81 @@ func (h *Handlers) CreateZmanRegistryRequest(w http.ResponseWriter, r *http.Requ
 
 	var req CreateZmanRegistryRequestBody
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		slog.Error("failed to decode request body", "error", err)
 		RespondBadRequest(w, r, "Invalid request body")
 		return
 	}
 
+	slog.Info("received zman request",
+		"requested_key", req.RequestedKey,
+		"hebrew_name", req.RequestedHebrewName,
+		"english_name", req.RequestedEnglishName,
+		"time_category", req.TimeCategory,
+		"description", req.Description)
+
 	// Validate required fields
 	if req.RequestedKey == "" || req.RequestedHebrewName == "" || req.RequestedEnglishName == "" ||
-		req.TimeCategory == "" || req.Justification == "" {
+		req.TimeCategory == "" || req.Description == "" {
+		slog.Warn("missing required fields",
+			"has_key", req.RequestedKey != "",
+			"has_hebrew", req.RequestedHebrewName != "",
+			"has_english", req.RequestedEnglishName != "",
+			"has_category", req.TimeCategory != "",
+			"has_description", req.Description != "")
 		RespondBadRequest(w, r, "Missing required fields")
 		return
+	}
+
+	// Default auto_add_on_approval to true if not provided
+	autoAdd := true
+	if req.AutoAddOnApproval != nil {
+		autoAdd = *req.AutoAddOnApproval
 	}
 
 	var result ZmanRegistryRequest
 	err := h.db.Pool.QueryRow(ctx, `
 		INSERT INTO zman_registry_requests (
 			publisher_id, requested_key, requested_hebrew_name, requested_english_name,
-			requested_formula_dsl, time_category, justification
-		) VALUES ($1, $2, $3, $4, $5, $6, $7)
+			transliteration, requested_formula_dsl, time_category, description,
+			halachic_notes, halachic_source, auto_add_on_approval
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		RETURNING id, publisher_id, requested_key, requested_hebrew_name, requested_english_name,
-			requested_formula_dsl, time_category, justification, status, created_at
+			requested_formula_dsl, time_category, description, status, created_at
 	`, publisherID, req.RequestedKey, req.RequestedHebrewName, req.RequestedEnglishName,
-		req.RequestedFormulaDSL, req.TimeCategory, req.Justification).Scan(
+		req.Transliteration, req.RequestedFormulaDSL, req.TimeCategory, req.Description,
+		req.HalachicNotes, req.HalachicSource, autoAdd).Scan(
 		&result.ID, &result.PublisherID, &result.RequestedKey, &result.RequestedHebrewName,
 		&result.RequestedEnglishName, &result.RequestedFormulaDSL, &result.TimeCategory,
-		&result.Justification, &result.Status, &result.CreatedAt)
+		&result.Description, &result.Status, &result.CreatedAt)
 
 	if err != nil {
-		log.Printf("Error creating zman registry request: %v", err)
+		slog.Error("error creating zman registry request", "error", err)
 		RespondInternalError(w, r, "Failed to create request")
 		return
+	}
+
+	// Insert tags if provided
+	if len(req.TagIDs) > 0 || len(req.RequestedNewTags) > 0 {
+		// Insert existing tag references
+		for _, tagID := range req.TagIDs {
+			_, err := h.db.Pool.Exec(ctx, `
+				INSERT INTO zman_request_tags (request_id, tag_id, is_new_tag_request)
+				VALUES ($1, $2, false)
+			`, result.ID, tagID)
+			if err != nil {
+				slog.Warn("failed to insert tag reference", "error", err, "tag_id", tagID)
+			}
+		}
+		// Insert new tag requests
+		for _, newTag := range req.RequestedNewTags {
+			_, err := h.db.Pool.Exec(ctx, `
+				INSERT INTO zman_request_tags (request_id, requested_tag_name, requested_tag_type, is_new_tag_request)
+				VALUES ($1, $2, $3, true)
+			`, result.ID, newTag.Name, newTag.Type)
+			if err != nil {
+				slog.Warn("failed to insert new tag request", "error", err, "tag_name", newTag.Name)
+			}
+		}
 	}
 
 	RespondJSON(w, r, http.StatusCreated, result)
@@ -1313,7 +1403,7 @@ func (h *Handlers) AdminGetZmanRegistryRequests(w http.ResponseWriter, r *http.R
 	if status != "" {
 		rows, err = h.db.Pool.Query(ctx, `
 			SELECT id, publisher_id, requested_key, requested_hebrew_name, requested_english_name,
-				requested_formula_dsl, time_category, justification, status,
+				requested_formula_dsl, time_category, description, status,
 				reviewed_by, reviewed_at, reviewer_notes, created_at
 			FROM zman_registry_requests
 			WHERE status = $1
@@ -1322,7 +1412,7 @@ func (h *Handlers) AdminGetZmanRegistryRequests(w http.ResponseWriter, r *http.R
 	} else {
 		rows, err = h.db.Pool.Query(ctx, `
 			SELECT id, publisher_id, requested_key, requested_hebrew_name, requested_english_name,
-				requested_formula_dsl, time_category, justification, status,
+				requested_formula_dsl, time_category, description, status,
 				reviewed_by, reviewed_at, reviewer_notes, created_at
 			FROM zman_registry_requests
 			ORDER BY created_at DESC
@@ -1330,7 +1420,7 @@ func (h *Handlers) AdminGetZmanRegistryRequests(w http.ResponseWriter, r *http.R
 	}
 
 	if err != nil {
-		log.Printf("Error getting zman registry requests: %v", err)
+		slog.Error("error getting zman registry requests", "error", err)
 		RespondInternalError(w, r, "Failed to get requests")
 		return
 	}
@@ -1340,10 +1430,10 @@ func (h *Handlers) AdminGetZmanRegistryRequests(w http.ResponseWriter, r *http.R
 	for rows.Next() {
 		var req ZmanRegistryRequest
 		err := rows.Scan(&req.ID, &req.PublisherID, &req.RequestedKey, &req.RequestedHebrewName,
-			&req.RequestedEnglishName, &req.RequestedFormulaDSL, &req.TimeCategory, &req.Justification,
+			&req.RequestedEnglishName, &req.RequestedFormulaDSL, &req.TimeCategory, &req.Description,
 			&req.Status, &req.ReviewedBy, &req.ReviewedAt, &req.ReviewerNotes, &req.CreatedAt)
 		if err != nil {
-			log.Printf("Error scanning request: %v", err)
+			slog.Error("error scanning request", "error", err)
 			continue
 		}
 		requests = append(requests, req)
@@ -1353,7 +1443,10 @@ func (h *Handlers) AdminGetZmanRegistryRequests(w http.ResponseWriter, r *http.R
 		requests = []ZmanRegistryRequest{}
 	}
 
-	RespondJSON(w, r, http.StatusOK, requests)
+	RespondJSON(w, r, http.StatusOK, map[string]interface{}{
+		"requests": requests,
+		"total":    len(requests),
+	})
 }
 
 // AdminReviewZmanRegistryRequest approves or rejects a zman registry request
@@ -1388,10 +1481,22 @@ func (h *Handlers) AdminReviewZmanRegistryRequest(w http.ResponseWriter, r *http
 		return
 	}
 
+	// First, fetch the full request to get email, name, and auto_add_on_approval
+	fullRequest, err := h.db.Queries.GetZmanRequest(ctx, requestID)
+	if err == pgx.ErrNoRows {
+		RespondNotFound(w, r, "Request not found")
+		return
+	}
+	if err != nil {
+		slog.Error("error fetching zman request", "error", err, "request_id", requestID)
+		RespondInternalError(w, r, "Failed to fetch request")
+		return
+	}
+
 	// Start transaction
 	tx, err := h.db.Pool.Begin(ctx)
 	if err != nil {
-		log.Printf("Error starting transaction: %v", err)
+		slog.Error("error starting transaction", "error", err)
 		RespondInternalError(w, r, "Failed to process request")
 		return
 	}
@@ -1404,12 +1509,12 @@ func (h *Handlers) AdminReviewZmanRegistryRequest(w http.ResponseWriter, r *http
 		SET status = $2, reviewed_by = $3, reviewed_at = NOW(), reviewer_notes = $4
 		WHERE id = $1
 		RETURNING id, publisher_id, requested_key, requested_hebrew_name, requested_english_name,
-			requested_formula_dsl, time_category, justification, status,
+			requested_formula_dsl, time_category, description, status,
 			reviewed_by, reviewed_at, reviewer_notes, created_at
 	`, requestID, req.Status, reviewerID, req.ReviewerNotes).Scan(
 		&result.ID, &result.PublisherID, &result.RequestedKey, &result.RequestedHebrewName,
 		&result.RequestedEnglishName, &result.RequestedFormulaDSL, &result.TimeCategory,
-		&result.Justification, &result.Status, &result.ReviewedBy, &result.ReviewedAt,
+		&result.Description, &result.Status, &result.ReviewedBy, &result.ReviewedAt,
 		&result.ReviewerNotes, &result.CreatedAt)
 
 	if err == pgx.ErrNoRows {
@@ -1417,7 +1522,7 @@ func (h *Handlers) AdminReviewZmanRegistryRequest(w http.ResponseWriter, r *http
 		return
 	}
 	if err != nil {
-		log.Printf("Error updating request: %v", err)
+		slog.Error("error updating request", "error", err)
 		RespondInternalError(w, r, "Failed to update request")
 		return
 	}
@@ -1433,19 +1538,378 @@ func (h *Handlers) AdminReviewZmanRegistryRequest(w http.ResponseWriter, r *http
 			result.TimeCategory, result.RequestedFormulaDSL)
 
 		if err != nil {
-			log.Printf("Error adding to master registry: %v", err)
+			slog.Error("error adding to master registry", "error", err)
 			RespondInternalError(w, r, "Failed to add to registry")
 			return
+		}
+
+		// Auto-add to publisher's zmanim if auto_add_on_approval is true
+		if fullRequest.AutoAddOnApproval != nil && *fullRequest.AutoAddOnApproval {
+			_, err = tx.Exec(ctx, `
+				INSERT INTO publisher_zmanim (
+					id, publisher_id, zman_key, hebrew_name, english_name,
+					transliteration, description,
+					formula_dsl, ai_explanation, publisher_comment,
+					is_enabled, is_visible, is_published, is_custom, category,
+					dependencies, sort_order, current_version
+				)
+				SELECT
+					gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7,
+					NULL, NULL, true, true, false, true, $8,
+					'{}'::text[], 999, 1
+				ON CONFLICT (publisher_id, zman_key) DO NOTHING
+			`, fullRequest.PublisherID, result.RequestedKey, result.RequestedHebrewName,
+				result.RequestedEnglishName, fullRequest.Transliteration,
+				fullRequest.Description, result.RequestedFormulaDSL, result.TimeCategory)
+
+			if err != nil {
+				slog.Error("error auto-adding zman to publisher", "error", err, "publisher_id", fullRequest.PublisherID)
+				// Don't fail the approval, just log the error
+			} else {
+				slog.Info("auto-added zman to publisher", "publisher_id", fullRequest.PublisherID, "zman_key", result.RequestedKey)
+			}
 		}
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		log.Printf("Error committing transaction: %v", err)
+		slog.Error("error committing transaction", "error", err)
 		RespondInternalError(w, r, "Failed to process request")
 		return
 	}
 
+	// Send email notification (non-blocking, after transaction commit)
+	go func() {
+		publisherEmail := ""
+		if fullRequest.PublisherEmail != nil {
+			publisherEmail = *fullRequest.PublisherEmail
+		}
+		publisherName := ""
+		if fullRequest.PublisherName != nil {
+			publisherName = *fullRequest.PublisherName
+		}
+		reviewerNotes := ""
+		if req.ReviewerNotes != nil {
+			reviewerNotes = *req.ReviewerNotes
+		}
+
+		if publisherEmail != "" && h.emailService != nil {
+			hebrewName := result.RequestedHebrewName
+			englishName := result.RequestedEnglishName
+			zmanKey := result.RequestedKey
+
+			var emailErr error
+			if req.Status == "approved" {
+				emailErr = h.emailService.SendZmanRequestApproved(
+					publisherEmail,
+					publisherName,
+					hebrewName,
+					englishName,
+					zmanKey,
+					reviewerNotes,
+				)
+			} else {
+				emailErr = h.emailService.SendZmanRequestRejected(
+					publisherEmail,
+					publisherName,
+					hebrewName,
+					englishName,
+					zmanKey,
+					reviewerNotes,
+				)
+			}
+
+			if emailErr != nil {
+				slog.Error("failed to send zman request review email",
+					"error", emailErr,
+					"publisher_email", publisherEmail,
+					"status", req.Status,
+					"request_id", requestID,
+				)
+			} else {
+				slog.Info("sent zman request review email",
+					"publisher_email", publisherEmail,
+					"status", req.Status,
+					"request_id", requestID,
+				)
+			}
+		}
+	}()
+
 	RespondJSON(w, r, http.StatusOK, result)
+}
+
+// AdminGetZmanRegistryRequestByID returns a specific zman registry request by ID
+// @Summary Get zman registry request by ID
+// @Tags Admin
+// @Produce json
+// @Param id path string true "Request ID"
+// @Success 200 {object} ZmanRegistryRequest
+// @Router /api/v1/admin/zman-requests/{id} [get]
+func (h *Handlers) AdminGetZmanRegistryRequestByID(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	requestID := chi.URLParam(r, "id")
+
+	request, err := h.db.Queries.GetZmanRequest(ctx, requestID)
+	if err == pgx.ErrNoRows {
+		RespondNotFound(w, r, "Request not found")
+		return
+	}
+	if err != nil {
+		slog.Error("error getting zman request by ID", "error", err, "request_id", requestID)
+		RespondInternalError(w, r, "Failed to get request")
+		return
+	}
+
+	RespondJSON(w, r, http.StatusOK, map[string]interface{}{
+		"id":                     request.ID,
+		"publisher_id":           request.PublisherID,
+		"requested_key":          request.RequestedKey,
+		"requested_hebrew_name":  request.RequestedHebrewName,
+		"requested_english_name": request.RequestedEnglishName,
+		"transliteration":        request.Transliteration,
+		"requested_formula_dsl":  request.RequestedFormulaDsl,
+		"time_category":          request.TimeCategory,
+		"description":            request.Description,
+		"halachic_notes":         request.HalachicNotes,
+		"halachic_source":        request.HalachicSource,
+		"publisher_email":        request.PublisherEmail,
+		"publisher_name":         request.PublisherName,
+		"auto_add_on_approval":   request.AutoAddOnApproval,
+		"status":                 request.Status,
+		"reviewed_by":            request.ReviewedBy,
+		"reviewed_at":            request.ReviewedAt,
+		"reviewer_notes":         request.ReviewerNotes,
+		"created_at":             request.CreatedAt,
+		"submitter_name":         request.SubmitterName,
+	})
+}
+
+// ZmanRequestTagResponse represents a tag associated with a zman request
+type ZmanRequestTagResponse struct {
+	ID                 string  `json:"id"`
+	RequestID          string  `json:"request_id"`
+	TagID              *string `json:"tag_id,omitempty"`
+	RequestedTagName   *string `json:"requested_tag_name,omitempty"`
+	RequestedTagType   *string `json:"requested_tag_type,omitempty"`
+	IsNewTagRequest    bool    `json:"is_new_tag_request"`
+	ExistingTagKey     *string `json:"existing_tag_key,omitempty"`
+	ExistingTagName    *string `json:"existing_tag_name,omitempty"`
+	ExistingTagType    *string `json:"existing_tag_type,omitempty"`
+}
+
+// AdminGetZmanRequestTags returns all tags for a zman request
+// @Summary Get tags for zman request
+// @Tags Admin
+// @Produce json
+// @Param id path string true "Request ID"
+// @Success 200 {array} ZmanRequestTagResponse
+// @Router /api/v1/admin/zman-requests/{id}/tags [get]
+func (h *Handlers) AdminGetZmanRequestTags(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	requestID := chi.URLParam(r, "id")
+
+	tags, err := h.db.Queries.GetZmanRequestTags(ctx, requestID)
+	if err != nil {
+		slog.Error("error getting zman request tags", "error", err, "request_id", requestID)
+		RespondInternalError(w, r, "Failed to get tags")
+		return
+	}
+
+	result := make([]ZmanRequestTagResponse, 0, len(tags))
+	for _, t := range tags {
+		tag := ZmanRequestTagResponse{
+			ID:              t.ID,
+			RequestID:       t.RequestID,
+			IsNewTagRequest: t.IsNewTagRequest,
+		}
+		// Convert pgtype.UUID to string pointer if valid
+		if t.TagID.Valid {
+			tagIDStr := t.TagID.String()
+			tag.TagID = &tagIDStr
+		}
+		if t.RequestedTagName != nil {
+			tag.RequestedTagName = t.RequestedTagName
+		}
+		if t.RequestedTagType != nil {
+			tag.RequestedTagType = t.RequestedTagType
+		}
+		if t.ExistingTagKey != nil {
+			tag.ExistingTagKey = t.ExistingTagKey
+		}
+		if t.ExistingTagName != nil {
+			tag.ExistingTagName = t.ExistingTagName
+		}
+		if t.ExistingTagType != nil {
+			tag.ExistingTagType = t.ExistingTagType
+		}
+		result = append(result, tag)
+	}
+
+	RespondJSON(w, r, http.StatusOK, result)
+}
+
+// ApprovedTagResponse represents a newly created tag from approval
+type ApprovedTagResponse struct {
+	ID                 string `json:"id"`
+	TagKey             string `json:"tag_key"`
+	Name               string `json:"name"`
+	DisplayNameHebrew  string `json:"display_name_hebrew"`
+	DisplayNameEnglish string `json:"display_name_english"`
+	TagType            string `json:"tag_type"`
+}
+
+// AdminApproveTagRequest approves a new tag request, creating the tag
+// @Summary Approve tag request
+// @Tags Admin
+// @Produce json
+// @Param id path string true "Request ID"
+// @Param tagRequestId path string true "Tag Request ID"
+// @Success 200 {object} ApprovedTagResponse
+// @Router /api/v1/admin/zman-requests/{id}/tags/{tagRequestId}/approve [post]
+func (h *Handlers) AdminApproveTagRequest(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	requestID := chi.URLParam(r, "id")
+	tagRequestID := chi.URLParam(r, "tagRequestId")
+
+	// Get the tag request first
+	tagReq, err := h.db.Queries.GetZmanRequestTag(ctx, tagRequestID)
+	if err == pgx.ErrNoRows {
+		RespondNotFound(w, r, "Tag request not found")
+		return
+	}
+	if err != nil {
+		slog.Error("error getting tag request", "error", err, "tag_request_id", tagRequestID)
+		RespondInternalError(w, r, "Failed to get tag request")
+		return
+	}
+
+	// Verify it belongs to the specified zman request
+	if tagReq.RequestID != requestID {
+		RespondBadRequest(w, r, "Tag request does not belong to this zman request")
+		return
+	}
+
+	// Must be a new tag request
+	if !tagReq.IsNewTagRequest {
+		RespondBadRequest(w, r, "This is not a new tag request")
+		return
+	}
+
+	if tagReq.RequestedTagName == nil {
+		RespondBadRequest(w, r, "Tag request has no name")
+		return
+	}
+
+	// Generate tag key from name (lowercase, underscores)
+	tagKey := generateTagKey(*tagReq.RequestedTagName)
+	tagType := "behavior" // Default type
+	if tagReq.RequestedTagType != nil {
+		tagType = *tagReq.RequestedTagType
+	}
+
+	// Create the new tag
+	newTag, err := h.db.Queries.ApproveTagRequest(ctx, db.ApproveTagRequestParams{
+		TagKey:             tagKey,
+		Name:               *tagReq.RequestedTagName,
+		DisplayNameHebrew:  *tagReq.RequestedTagName, // Same for now
+		DisplayNameEnglish: *tagReq.RequestedTagName, // Same for now
+		TagType:            tagType,
+	})
+	if err != nil {
+		slog.Error("error creating tag", "error", err, "tag_key", tagKey)
+		RespondInternalError(w, r, "Failed to create tag")
+		return
+	}
+
+	// Link the new tag to the request
+	newTagUUID, _ := uuid.Parse(newTag.ID)
+	err = h.db.Queries.LinkTagToRequest(ctx, db.LinkTagToRequestParams{
+		ID:    tagRequestID,
+		TagID: pgtype.UUID{Bytes: newTagUUID, Valid: true},
+	})
+	if err != nil {
+		slog.Error("error linking tag to request", "error", err, "tag_id", newTag.ID)
+		// Don't fail - tag was created
+	}
+
+	slog.Info("tag request approved", "tag_id", newTag.ID, "tag_key", tagKey, "request_id", requestID)
+
+	RespondJSON(w, r, http.StatusOK, ApprovedTagResponse{
+		ID:                 newTag.ID,
+		TagKey:             newTag.TagKey,
+		Name:               newTag.Name,
+		DisplayNameHebrew:  newTag.DisplayNameHebrew,
+		DisplayNameEnglish: newTag.DisplayNameEnglish,
+		TagType:            newTag.TagType,
+	})
+}
+
+// AdminRejectTagRequest rejects a new tag request
+// @Summary Reject tag request
+// @Tags Admin
+// @Produce json
+// @Param id path string true "Request ID"
+// @Param tagRequestId path string true "Tag Request ID"
+// @Success 200 {object} map[string]string
+// @Router /api/v1/admin/zman-requests/{id}/tags/{tagRequestId}/reject [post]
+func (h *Handlers) AdminRejectTagRequest(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	requestID := chi.URLParam(r, "id")
+	tagRequestID := chi.URLParam(r, "tagRequestId")
+
+	// Get the tag request first to verify
+	tagReq, err := h.db.Queries.GetZmanRequestTag(ctx, tagRequestID)
+	if err == pgx.ErrNoRows {
+		RespondNotFound(w, r, "Tag request not found")
+		return
+	}
+	if err != nil {
+		slog.Error("error getting tag request", "error", err, "tag_request_id", tagRequestID)
+		RespondInternalError(w, r, "Failed to get tag request")
+		return
+	}
+
+	// Verify it belongs to the specified zman request
+	if tagReq.RequestID != requestID {
+		RespondBadRequest(w, r, "Tag request does not belong to this zman request")
+		return
+	}
+
+	// Must be a new tag request
+	if !tagReq.IsNewTagRequest {
+		RespondBadRequest(w, r, "This is not a new tag request")
+		return
+	}
+
+	// Delete the tag request
+	err = h.db.Queries.RejectTagRequest(ctx, tagRequestID)
+	if err != nil {
+		slog.Error("error rejecting tag request", "error", err, "tag_request_id", tagRequestID)
+		RespondInternalError(w, r, "Failed to reject tag request")
+		return
+	}
+
+	slog.Info("tag request rejected", "tag_request_id", tagRequestID, "request_id", requestID)
+
+	RespondJSON(w, r, http.StatusOK, map[string]string{
+		"status":  "rejected",
+		"message": "Tag request has been removed",
+	})
+}
+
+// generateTagKey creates a tag key from a display name
+func generateTagKey(name string) string {
+	// Convert to lowercase and replace spaces with underscores
+	key := strings.ToLower(name)
+	key = strings.ReplaceAll(key, " ", "_")
+	// Remove special characters
+	var result strings.Builder
+	for _, ch := range key {
+		if (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '_' {
+			result.WriteRune(ch)
+		}
+	}
+	return result.String()
 }
 
 // Helper function to check for duplicate key errors
@@ -1551,7 +2015,7 @@ func (h *Handlers) loadPrimitivesCache(ctx context.Context) error {
 	primitivesGroupedCache = grouped
 	primitivesCacheLoaded = true
 
-	log.Printf("Loaded %d astronomical primitives into cache", len(flatList))
+	slog.Info("loaded astronomical primitives into cache", "count", len(flatList))
 	return nil
 }
 
@@ -1604,7 +2068,7 @@ func (h *Handlers) GetAstronomicalPrimitives(w http.ResponseWriter, r *http.Requ
 
 	// Load cache
 	if err := h.loadPrimitivesCache(r.Context()); err != nil {
-		log.Printf("ERROR fetching astronomical primitives: %v", err)
+		slog.Error("failed to fetch astronomical primitives", "error", err)
 		RespondInternalError(w, r, "Failed to fetch astronomical primitives")
 		return
 	}
@@ -1635,7 +2099,7 @@ func (h *Handlers) GetAstronomicalPrimitivesGrouped(w http.ResponseWriter, r *ht
 
 	// Load cache
 	if err := h.loadPrimitivesCache(r.Context()); err != nil {
-		log.Printf("ERROR fetching astronomical primitives: %v", err)
+		slog.Error("failed to fetch astronomical primitives", "error", err)
 		RespondInternalError(w, r, "Failed to fetch astronomical primitives")
 		return
 	}
@@ -1750,7 +2214,7 @@ func (h *Handlers) AdminGetMasterZmanim(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if err != nil {
-		log.Printf("Error getting master zmanim: %v", err)
+		slog.Error("error getting master zmanim", "error", err)
 		RespondInternalError(w, r, "Failed to get master zmanim")
 		return
 	}
@@ -1763,7 +2227,7 @@ func (h *Handlers) AdminGetMasterZmanim(w http.ResponseWriter, r *http.Request) 
 			&z.TimeCategory, &z.DefaultFormulaDSL, &z.IsCore,
 			&z.IsHidden, &z.SortOrder, &z.CreatedBy, &z.UpdatedBy, &z.CreatedAt, &z.UpdatedAt)
 		if err != nil {
-			log.Printf("Error scanning master zman: %v", err)
+			slog.Error("error scanning master zman", "error", err)
 			continue
 		}
 		zmanim = append(zmanim, z)
@@ -1854,7 +2318,7 @@ func (h *Handlers) AdminGetMasterZmanByID(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if err != nil {
-		log.Printf("Error getting master zman: %v", err)
+		slog.Error("error getting master zman", "error", err)
 		RespondInternalError(w, r, "Failed to get master zman")
 		return
 	}
@@ -1983,7 +2447,7 @@ func (h *Handlers) AdminCreateMasterZman(w http.ResponseWriter, r *http.Request)
 			RespondConflict(w, r, "A zman with this key already exists")
 			return
 		}
-		log.Printf("Error creating master zman: %v", err)
+		slog.Error("error creating master zman", "error", err)
 		RespondInternalError(w, r, "Failed to create master zman")
 		return
 	}
@@ -1997,7 +2461,7 @@ func (h *Handlers) AdminCreateMasterZman(w http.ResponseWriter, r *http.Request)
 				ON CONFLICT DO NOTHING
 			`, result.ID, tagID)
 			if err != nil {
-				log.Printf("Error inserting tag: %v", err)
+				slog.Error("error inserting tag", "error", err)
 			}
 		}
 		result.TagIDs = req.TagIDs
@@ -2116,7 +2580,7 @@ func (h *Handlers) AdminUpdateMasterZman(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if err != nil {
-		log.Printf("Error updating master zman: %v", err)
+		slog.Error("error updating master zman", "error", err)
 		RespondInternalError(w, r, "Failed to update master zman")
 		return
 	}
@@ -2126,7 +2590,7 @@ func (h *Handlers) AdminUpdateMasterZman(w http.ResponseWriter, r *http.Request)
 		// Delete existing tags
 		_, err := h.db.Pool.Exec(ctx, `DELETE FROM master_zman_tags WHERE master_zman_id = $1`, id)
 		if err != nil {
-			log.Printf("Error deleting existing tags: %v", err)
+			slog.Error("error deleting existing tags", "error", err)
 		}
 
 		// Insert new tags
@@ -2137,7 +2601,7 @@ func (h *Handlers) AdminUpdateMasterZman(w http.ResponseWriter, r *http.Request)
 				ON CONFLICT DO NOTHING
 			`, id, tagID)
 			if err != nil {
-				log.Printf("Error inserting tag: %v", err)
+				slog.Error("error inserting tag", "error", err)
 			}
 		}
 		result.TagIDs = req.TagIDs
@@ -2162,7 +2626,7 @@ func (h *Handlers) AdminDeleteMasterZman(w http.ResponseWriter, r *http.Request)
 		SELECT EXISTS(SELECT 1 FROM publisher_zmanim WHERE master_zman_id = $1 AND deleted_at IS NULL)
 	`, id).Scan(&inUse)
 	if err != nil {
-		log.Printf("Error checking zman usage: %v", err)
+		slog.Error("error checking zman usage", "error", err)
 		RespondInternalError(w, r, "Failed to check zman usage")
 		return
 	}
@@ -2174,7 +2638,7 @@ func (h *Handlers) AdminDeleteMasterZman(w http.ResponseWriter, r *http.Request)
 
 	result, err := h.db.Pool.Exec(ctx, `DELETE FROM master_zmanim_registry WHERE id = $1`, id)
 	if err != nil {
-		log.Printf("Error deleting master zman: %v", err)
+		slog.Error("error deleting master zman", "error", err)
 		RespondInternalError(w, r, "Failed to delete master zman")
 		return
 	}
@@ -2227,7 +2691,7 @@ func (h *Handlers) AdminToggleZmanVisibility(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	if err != nil {
-		log.Printf("Error toggling zman visibility: %v", err)
+		slog.Error("error toggling zman visibility", "error", err)
 		RespondInternalError(w, r, "Failed to toggle visibility")
 		return
 	}
@@ -2271,7 +2735,7 @@ func (h *Handlers) AdminGetTags(w http.ResponseWriter, r *http.Request) {
 		ORDER BY tag_type, sort_order, name
 	`)
 	if err != nil {
-		log.Printf("Error getting tags: %v", err)
+		slog.Error("error getting tags", "error", err)
 		RespondInternalError(w, r, "Failed to get tags")
 		return
 	}
@@ -2283,7 +2747,7 @@ func (h *Handlers) AdminGetTags(w http.ResponseWriter, r *http.Request) {
 		err := rows.Scan(&tag.ID, &tag.Name, &tag.DisplayNameHebrew, &tag.DisplayNameEnglish,
 			&tag.TagType, &tag.Description, &tag.Color, &tag.SortOrder, &tag.CreatedAt)
 		if err != nil {
-			log.Printf("Error scanning tag: %v", err)
+			slog.Error("error scanning tag", "error", err)
 			continue
 		}
 		tags = append(tags, tag)
@@ -2312,7 +2776,7 @@ func (h *Handlers) AdminGetDayTypes(w http.ResponseWriter, r *http.Request) {
 		ORDER BY sort_order, name
 	`)
 	if err != nil {
-		log.Printf("Error getting day types: %v", err)
+		slog.Error("error getting day types", "error", err)
 		RespondInternalError(w, r, "Failed to get day types")
 		return
 	}
@@ -2324,7 +2788,7 @@ func (h *Handlers) AdminGetDayTypes(w http.ResponseWriter, r *http.Request) {
 		err := rows.Scan(&dt.ID, &dt.Name, &dt.DisplayNameHebrew, &dt.DisplayNameEnglish,
 			&dt.Description, &dt.ParentType, &dt.SortOrder)
 		if err != nil {
-			log.Printf("Error scanning day type: %v", err)
+			slog.Error("error scanning day type", "error", err)
 			continue
 		}
 		dayTypes = append(dayTypes, dt)

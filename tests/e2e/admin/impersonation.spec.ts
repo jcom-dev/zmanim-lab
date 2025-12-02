@@ -16,6 +16,9 @@ import {
   BASE_URL,
 } from '../utils';
 
+// Enable parallel mode for faster test execution
+test.describe.configure({ mode: 'parallel' });
+
 test.describe('Admin Impersonation', () => {
   let testPublisher: { id: string; name: string };
 

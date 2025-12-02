@@ -1,7 +1,7 @@
 'use client';
-import { API_BASE } from '@/lib/api';
+import { useApi } from '@/lib/api-client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 interface ZmanChange {
   zman_key: string;
@@ -23,46 +23,34 @@ interface AlgorithmDiff {
 interface VersionDiffProps {
   v1: number;
   v2: number;
-  getToken: () => Promise<string | null>;
+  /** @deprecated No longer needed - component uses useApi internally */
+  getToken?: () => Promise<string | null>;
 }
 
-export function VersionDiff({ v1, v2, getToken }: VersionDiffProps) {
+export function VersionDiff({ v1, v2 }: VersionDiffProps) {
+  const api = useApi();
   const [diff, setDiff] = useState<AlgorithmDiff | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadDiff();
-  }, [v1, v2]);
-
-  const loadDiff = async () => {
+  const loadDiff = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const token = await getToken();
-      
-      const response = await fetch(
-        `${API_BASE}/api/v1/publisher/algorithm/diff?v1=${v1}&v2=${v2}`,
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-          },
-        }
+      const data = await api.get<{ diff: AlgorithmDiff }>(
+        `/publisher/algorithm/diff?v1=${v1}&v2=${v2}`
       );
-
-      if (!response.ok) {
-        throw new Error('Failed to load diff');
-      }
-
-      const data = await response.json();
-      setDiff(data.diff);
+      setDiff(data?.diff || null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load diff');
     } finally {
       setLoading(false);
     }
-  };
+  }, [api, v1, v2]);
+
+  useEffect(() => {
+    loadDiff();
+  }, [loadDiff]);
 
   if (loading) {
     return (

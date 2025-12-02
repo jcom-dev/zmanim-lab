@@ -354,8 +354,20 @@ async function performClerkSignIn(page: Page, email: string): Promise<void> {
     { timeout: 60000 }
   );
 
-  // Give the app a moment to update state
-  await page.waitForTimeout(2000);
+  // Wait for app to recognize the authenticated state
+  // Instead of hard wait, wait for auth-dependent UI to appear
+  await page.waitForFunction(
+    () => {
+      const clerk = (window as any).Clerk;
+      // Verify session is fully active and user data is loaded
+      return clerk?.user !== null &&
+             clerk?.session?.status === 'active' &&
+             clerk?.user?.primaryEmailAddress !== undefined;
+    },
+    { timeout: 10000 }
+  ).catch(() => {
+    // If detailed check times out, the basic auth check passed - continue
+  });
 }
 
 /**
@@ -440,7 +452,18 @@ export async function cleanupTestUsers(): Promise<void> {
   }
 
   // Also clean up any orphaned test users (from previous failed runs)
-  const testDomains = ['@clerk.test', '@mailslurp.xyz', '@mailslurp.world', '@tempsmtp.com', '@mailslurp.info'];
+  // Include all domains used by generateTestEmail() and MailSlurp
+  const testDomains = [
+    '@clerk.test',
+    '@mailslurp.xyz',
+    '@mailslurp.world',
+    '@tempsmtp.com',
+    '@mailslurp.info',
+    '@mailslurp.dev',      // Fallback domain used in generateTestEmail()
+    '@mailslurp.biz',      // Additional MailSlurp domains
+    '@mailslurp.net',
+    '@test-zmanim.example.com',  // TEST_EMAIL_DOMAIN from test-fixtures
+  ];
   let offset = 0;
   const limit = 100;
   let hasMore = true;

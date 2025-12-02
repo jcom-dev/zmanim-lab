@@ -1,7 +1,7 @@
 'use client';
-import { API_BASE } from '@/lib/api';
+import { useApi } from '@/lib/api-client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
@@ -31,7 +31,8 @@ interface ZmanConfigModalProps {
   zmanKey: string;
   currentConfig?: ZmanConfig;
   onSave: (config: ZmanConfig) => void;
-  getToken: () => Promise<string | null>;
+  /** @deprecated No longer needed - component uses useApi internally */
+  getToken?: () => Promise<string | null>;
 }
 
 // Display names for zmanim
@@ -58,17 +59,26 @@ export function ZmanConfigModal({
   zmanKey,
   currentConfig,
   onSave,
-  getToken,
 }: ZmanConfigModalProps) {
+  const api = useApi();
   const [methods, setMethods] = useState<Method[]>([]);
   const [selectedMethod, setSelectedMethod] = useState<string>(currentConfig?.method || 'sunrise');
   const [params, setParams] = useState<Record<string, unknown>>(currentConfig?.params || {});
   const [error, setError] = useState<string | null>(null);
   const [methodFilter, setMethodFilter] = useState('');
 
+  const loadMethods = useCallback(async () => {
+    try {
+      const data = await api.get<{ methods: Method[] }>('/publisher/algorithm/methods');
+      setMethods(data?.methods || []);
+    } catch (err) {
+      console.error('Failed to load methods:', err);
+    }
+  }, [api]);
+
   useEffect(() => {
     loadMethods();
-  }, []);
+  }, [loadMethods]);
 
   useEffect(() => {
     if (currentConfig) {
@@ -76,30 +86,6 @@ export function ZmanConfigModal({
       setParams(currentConfig.params);
     }
   }, [currentConfig]);
-
-  const loadMethods = async () => {
-    try {
-      const token = await getToken();
-      if (!token) {
-        console.warn('No auth token available, skipping methods load');
-        return;
-      }
-
-      const response = await fetch(`${API_BASE}/api/v1/publisher/algorithm/methods`, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setMethods(data.data?.methods || data.methods || []);
-      }
-    } catch (err) {
-      console.error('Failed to load methods:', err);
-    }
-  };
 
   const handleMethodChange = (method: string) => {
     setSelectedMethod(method);

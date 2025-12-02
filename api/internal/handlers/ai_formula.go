@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"time"
 	"unicode/utf8"
@@ -193,7 +193,7 @@ func (h *Handlers) ExplainFormula(w http.ResponseWriter, r *http.Request) {
 	h.logAIAudit(ctx, r, "explain_formula", req.Formula, auditResult, err, durationMs, ragUsed)
 
 	if err != nil {
-		log.Printf("ERROR [ExplainFormula] Failed to generate explanation: %v", err)
+		slog.Error("failed to generate explanation", "error", err)
 		RespondInternalError(w, r, "Failed to generate explanation")
 		return
 	}

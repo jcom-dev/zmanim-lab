@@ -13,8 +13,12 @@ import {
   loginAsPublisher,
   createTestPublisherEntity,
   cleanupTestData,
+  cleanupPublisher,
   BASE_URL,
 } from '../utils';
+
+// Enable parallel mode for faster test execution
+test.describe.configure({ mode: 'parallel' });
 
 test.describe('Publisher Profile', () => {
   let testPublisher: { id: string; name: string };
@@ -60,12 +64,9 @@ test.describe('Publisher Profile', () => {
     await page.goto(`${BASE_URL}/publisher/profile`);
     await page.waitForLoadState('networkidle');
 
-    // Wait for data to load
-    await page.waitForTimeout(1000);
-
-    // Name field should be filled
+    // Name field should be filled - wait for it to have value
     const nameInput = page.getByLabel(/name/i).first();
-    await expect(nameInput).toHaveValue(testPublisher.name);
+    await expect(nameInput).toHaveValue(testPublisher.name, { timeout: 10000 });
   });
 
   test('profile has save and cancel buttons', async ({ page }) => {
@@ -122,11 +123,11 @@ test.describe('Publisher Profile Editing', () => {
     await page.goto(`${BASE_URL}/publisher/profile`);
     await page.waitForLoadState('networkidle');
 
-    // Wait for form to load
-    await page.waitForTimeout(1000);
+    // Wait for form to load by checking name field has value
+    const nameInput = page.getByLabel(/name/i).first();
+    await expect(nameInput).toHaveValue(publisher.name, { timeout: 10000 });
 
     // Update name
-    const nameInput = page.getByLabel(/name/i).first();
     await nameInput.clear();
     await nameInput.fill('TEST_E2E_Updated_Name');
 
@@ -134,9 +135,9 @@ test.describe('Publisher Profile Editing', () => {
     await page.getByRole('button', { name: /save/i }).click();
 
     // Should see success message
-    await expect(page.getByText(/success/i)).toBeVisible();
+    await expect(page.getByText(/success/i)).toBeVisible({ timeout: 10000 });
 
-    await cleanupTestData();
+    await cleanupPublisher(publisher.id);
   });
 
   test('validation error on empty name', async ({ page }) => {
@@ -149,20 +150,20 @@ test.describe('Publisher Profile Editing', () => {
     await page.goto(`${BASE_URL}/publisher/profile`);
     await page.waitForLoadState('networkidle');
 
-    // Wait for form to load
-    await page.waitForTimeout(1000);
+    // Wait for form to load by checking name field has value
+    const nameInput = page.getByLabel(/name/i).first();
+    await expect(nameInput).toHaveValue(publisher.name, { timeout: 10000 });
 
     // Clear name
-    const nameInput = page.getByLabel(/name/i).first();
     await nameInput.clear();
 
     // Try to save
     await page.getByRole('button', { name: /save/i }).click();
 
     // Should see error
-    await expect(page.getByText(/required/i)).toBeVisible();
+    await expect(page.getByText(/required/i)).toBeVisible({ timeout: 5000 });
 
-    await cleanupTestData();
+    await cleanupPublisher(publisher.id);
   });
 
   test('validation error on empty email', async ({ page }) => {
@@ -176,8 +177,9 @@ test.describe('Publisher Profile Editing', () => {
     await page.goto(`${BASE_URL}/publisher/profile`);
     await page.waitForLoadState('networkidle');
 
-    // Wait for form to load
-    await page.waitForTimeout(1000);
+    // Wait for form to load by checking name field has value
+    const nameInput = page.getByLabel(/name/i).first();
+    await expect(nameInput).toHaveValue(publisher.name, { timeout: 10000 });
 
     // Clear email
     const emailInput = page.getByLabel(/email/i);
@@ -187,9 +189,9 @@ test.describe('Publisher Profile Editing', () => {
     await page.getByRole('button', { name: /save/i }).click();
 
     // Should see error
-    await expect(page.getByText(/required/i)).toBeVisible();
+    await expect(page.getByText(/required/i)).toBeVisible({ timeout: 5000 });
 
-    await cleanupTestData();
+    await cleanupPublisher(publisher.id);
   });
 
   test('publisher can update organization', async ({ page }) => {
@@ -203,8 +205,9 @@ test.describe('Publisher Profile Editing', () => {
     await page.goto(`${BASE_URL}/publisher/profile`);
     await page.waitForLoadState('networkidle');
 
-    // Wait for form to load
-    await page.waitForTimeout(1000);
+    // Wait for form to load by checking name field has value
+    const nameInput = page.getByLabel(/name/i).first();
+    await expect(nameInput).toHaveValue(publisher.name, { timeout: 10000 });
 
     // Update organization
     const orgInput = page.getByLabel(/organization/i);
@@ -215,9 +218,9 @@ test.describe('Publisher Profile Editing', () => {
     await page.getByRole('button', { name: /save/i }).click();
 
     // Should see success message
-    await expect(page.getByText(/success/i)).toBeVisible();
+    await expect(page.getByText(/success/i)).toBeVisible({ timeout: 10000 });
 
-    await cleanupTestData();
+    await cleanupPublisher(publisher.id);
   });
 
   test('publisher can update website', async ({ page }) => {
@@ -230,8 +233,9 @@ test.describe('Publisher Profile Editing', () => {
     await page.goto(`${BASE_URL}/publisher/profile`);
     await page.waitForLoadState('networkidle');
 
-    // Wait for form to load
-    await page.waitForTimeout(1000);
+    // Wait for form to load by checking name field has value
+    const nameInput = page.getByLabel(/name/i).first();
+    await expect(nameInput).toHaveValue(publisher.name, { timeout: 10000 });
 
     // Update website
     const websiteInput = page.getByLabel(/website/i);
@@ -241,9 +245,9 @@ test.describe('Publisher Profile Editing', () => {
     await page.getByRole('button', { name: /save/i }).click();
 
     // Should see success message
-    await expect(page.getByText(/success/i)).toBeVisible();
+    await expect(page.getByText(/success/i)).toBeVisible({ timeout: 10000 });
 
-    await cleanupTestData();
+    await cleanupPublisher(publisher.id);
   });
 
   test('publisher can update bio', async ({ page }) => {
@@ -256,8 +260,9 @@ test.describe('Publisher Profile Editing', () => {
     await page.goto(`${BASE_URL}/publisher/profile`);
     await page.waitForLoadState('networkidle');
 
-    // Wait for form to load
-    await page.waitForTimeout(1000);
+    // Wait for form to load by checking name field has value
+    const nameInput = page.getByLabel(/name/i).first();
+    await expect(nameInput).toHaveValue(publisher.name, { timeout: 10000 });
 
     // Update bio
     const bioInput = page.getByLabel(/bio/i);
@@ -267,8 +272,8 @@ test.describe('Publisher Profile Editing', () => {
     await page.getByRole('button', { name: /save/i }).click();
 
     // Should see success message
-    await expect(page.getByText(/success/i)).toBeVisible();
+    await expect(page.getByText(/success/i)).toBeVisible({ timeout: 10000 });
 
-    await cleanupTestData();
+    await cleanupPublisher(publisher.id);
   });
 });

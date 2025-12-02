@@ -1,6 +1,6 @@
 // Geographic Data Seed Tool
 // Loads compressed CSV files using PostgreSQL COPY protocol for fast seeding.
-// Works with both PostgreSQL and Supabase.
+// Works with PostgreSQL.
 package main
 
 import (

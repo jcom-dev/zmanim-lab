@@ -6,7 +6,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 
 interface PublisherCardProps {
   name: string;
-  organization?: string | null;
   logoUrl?: string | null;
   website?: string | null;
   email?: string | null;
@@ -18,7 +17,6 @@ interface PublisherCardProps {
 
 export function PublisherCard({
   name,
-  organization,
   logoUrl,
   website,
   email,
@@ -59,7 +57,7 @@ export function PublisherCard({
             )}
           </div>
 
-          {/* Name and Organization */}
+          {/* Name */}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <CardTitle className="text-xl truncate">{name}</CardTitle>
@@ -67,11 +65,6 @@ export function PublisherCard({
                 <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" aria-label="Verified Publisher" />
               )}
             </div>
-            {organization && (
-              <CardDescription className="mt-1 truncate">
-                {organization}
-              </CardDescription>
-            )}
           </div>
         </div>
       </CardHeader>

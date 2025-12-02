@@ -374,32 +374,32 @@ Explanation: Based on Dr. Baruch Cohn's calculations
 
 ### GRA Method
 Request: "End of Shema according to GRA"
-Formula: shaos(3, gra)
+Formula: proportional_hours(3, gra)
 Explanation: 3 proportional hours into the day using GRA (sunrise to sunset)
 
 ### MGA Method
 Request: "End of Shema according to Magen Avraham"
-Formula: shaos(3, mga)
+Formula: proportional_hours(3, mga)
 Explanation: 3 proportional hours using MGA (72 minutes before sunrise to 72 after sunset)
 
 ### Chatzos
 Request: "Midday"
-Formula: shaos(6, gra)
+Formula: proportional_hours(6, gra)
 Explanation: Exactly half of the day
 
 ### Mincha Gedola
 Request: "Earliest time for Mincha"
-Formula: shaos(6.5, gra)
+Formula: proportional_hours(6.5, gra)
 Explanation: Half an hour after midday
 
 ### Mincha Ketana
 Request: "Mincha Ketana"
-Formula: shaos(9.5, gra)
+Formula: proportional_hours(9.5, gra)
 Explanation: 2.5 hours before sunset
 
 ### Plag HaMincha
 Request: "Plag HaMincha"
-Formula: shaos(10.75, gra)
+Formula: proportional_hours(10.75, gra)
 Explanation: 1.25 hours before sunset
 
 ## Midpoint Examples

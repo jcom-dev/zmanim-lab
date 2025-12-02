@@ -11,6 +11,9 @@
 import { test, expect } from '@playwright/test';
 import { BASE_URL } from '../utils';
 
+// Enable parallel mode for faster test execution
+test.describe.configure({ mode: 'parallel' });
+
 test.describe('Home Page - Location Selection', () => {
   test('home page loads with location selection', async ({ page }) => {
     await page.goto(`${BASE_URL}/`);
@@ -27,12 +30,9 @@ test.describe('Home Page - Location Selection', () => {
     await page.goto(`${BASE_URL}/`);
     await page.waitForLoadState('networkidle');
 
-    // Wait for countries to load
-    await page.waitForTimeout(1000);
-
-    // Should see country buttons
+    // Should see country buttons - wait for them to load
     const countryButtons = page.locator('button').filter({ hasText: /cities$/i });
-    await expect(countryButtons.first()).toBeVisible();
+    await expect(countryButtons.first()).toBeVisible({ timeout: 10000 });
   });
 
   test('clicking country shows regions or cities', async ({ page }) => {
@@ -40,24 +40,19 @@ test.describe('Home Page - Location Selection', () => {
     await page.waitForLoadState('networkidle');
 
     // Wait for countries to load
-    await page.waitForTimeout(1000);
+    const countryButtons = page.locator('button').filter({ hasText: /cities$/i });
+    await expect(countryButtons.first()).toBeVisible({ timeout: 10000 });
 
     // Click first country
-    const countryButtons = page.locator('button').filter({ hasText: /cities$/i });
     await countryButtons.first().click();
 
-    // Should show next step (region or city selection)
-    await page.waitForTimeout(500);
-
-    // URL should still be home or breadcrumb should update
+    // Wait for next selection to appear (region or city)
     const breadcrumb = page.locator('button').filter({ hasText: /← Back/i });
 
     // Either we see cities directly or regions first
-    const hasRegions = await page.getByText('Select State').isVisible().catch(() => false);
-    const hasCities = await page.getByText('Select City').isVisible().catch(() => false);
-    const hasBackButton = await breadcrumb.isVisible().catch(() => false);
-
-    expect(hasRegions || hasCities || hasBackButton).toBe(true);
+    await expect(
+      page.getByText('Select State').or(page.getByText('Select City')).or(breadcrumb)
+    ).toBeVisible({ timeout: 5000 });
   });
 
   test('breadcrumb navigation works', async ({ page }) => {
@@ -65,22 +60,21 @@ test.describe('Home Page - Location Selection', () => {
     await page.waitForLoadState('networkidle');
 
     // Wait for countries to load
-    await page.waitForTimeout(1000);
+    const countryButtons = page.locator('button').filter({ hasText: /cities$/i });
+    await expect(countryButtons.first()).toBeVisible({ timeout: 10000 });
 
     // Click first country
-    const countryButtons = page.locator('button').filter({ hasText: /cities$/i });
-    const firstCountryName = await countryButtons.first().textContent();
     await countryButtons.first().click();
 
-    await page.waitForTimeout(500);
-
-    // Should see back button
+    // Wait for back button to appear
     const backButton = page.getByText('← Back');
+    await expect(backButton).toBeVisible({ timeout: 5000 }).catch(() => {});
+
     if (await backButton.isVisible()) {
       await backButton.click();
 
       // Should be back at country selection
-      await expect(page.getByText('Select Country')).toBeVisible();
+      await expect(page.getByText('Select Country')).toBeVisible({ timeout: 5000 });
     }
   });
 
@@ -89,16 +83,18 @@ test.describe('Home Page - Location Selection', () => {
     await page.waitForLoadState('networkidle');
 
     // Wait for countries to load
-    await page.waitForTimeout(1000);
+    const countryButtons = page.locator('button').filter({ hasText: /cities$/i });
+    await expect(countryButtons.first()).toBeVisible({ timeout: 10000 });
 
     // Find Israel (usually has Jerusalem which we use for testing)
     const israelButton = page.locator('button').filter({ hasText: /Israel/i });
     if (await israelButton.isVisible()) {
       await israelButton.click();
-      await page.waitForTimeout(500);
 
-      // Find Jerusalem city
+      // Wait for cities to load
       const jerusalemButton = page.locator('button').filter({ hasText: /Jerusalem/i });
+      await expect(jerusalemButton).toBeVisible({ timeout: 5000 }).catch(() => {});
+
       if (await jerusalemButton.isVisible()) {
         await jerusalemButton.click();
 

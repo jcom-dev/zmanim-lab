@@ -126,8 +126,14 @@ test.describe('Public Pages - Auth Pages', () => {
     await page.goto(`${BASE_URL}/sign-in`);
     await page.waitForLoadState('networkidle');
 
-    // Wait for Clerk to load
-    await page.waitForTimeout(2000);
+    // Wait for Clerk to load by checking for auth-related content
+    await page.waitForFunction(
+      () => {
+        const content = document.body.textContent?.toLowerCase() || '';
+        return content.includes('sign in') || content.includes('email') || content.includes('continue');
+      },
+      { timeout: 15000 }
+    );
 
     const pageContent = await page.textContent('body');
     expect(
@@ -141,7 +147,14 @@ test.describe('Public Pages - Auth Pages', () => {
     await page.goto(`${BASE_URL}/sign-up`);
     await page.waitForLoadState('networkidle');
 
-    await page.waitForTimeout(2000);
+    // Wait for Clerk to load by checking for auth-related content
+    await page.waitForFunction(
+      () => {
+        const content = document.body.textContent?.toLowerCase() || '';
+        return content.includes('sign up') || content.includes('create') || content.includes('email');
+      },
+      { timeout: 15000 }
+    );
 
     const pageContent = await page.textContent('body');
     expect(
@@ -243,8 +256,8 @@ test.describe('Public Pages - Accept Invitation', () => {
     await page.goto(`${BASE_URL}/accept-invitation?token=invalid-token-12345`);
     await page.waitForLoadState('networkidle');
 
-    // Wait for content to load
-    await page.waitForTimeout(2000);
+    // Wait for content to load by checking body has content
+    await expect(page.locator('body')).not.toBeEmpty({ timeout: 10000 });
 
     // Should show error or redirect
     const pageContent = await page.textContent('body');

@@ -28,6 +28,7 @@ export {
   getTestCity,
   createFullTestPublisher,
   cleanupTestData,
+  cleanupPublisher,  // Use this for individual test cleanup (parallel-safe)
   clearEntityCache,
   getTestPrefix,
   isDatabaseConfigured,

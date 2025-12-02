@@ -1,9 +1,8 @@
 'use client';
-import { API_BASE } from '@/lib/api';
-
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useApi } from '@/lib/api-client';
 
 interface AlgorithmVersion {
   id: string;
@@ -18,79 +17,42 @@ interface AlgorithmVersion {
 
 interface VersionHistoryProps {
   onClose?: () => void;
-  getToken: () => Promise<string | null>;
+  /** @deprecated No longer needed - component uses useApi internally */
+  getToken?: () => Promise<string | null>;
 }
 
-export function VersionHistory({ onClose, getToken }: VersionHistoryProps) {
+export function VersionHistory({ onClose }: VersionHistoryProps) {
+  const api = useApi();
   const [versions, setVersions] = useState<AlgorithmVersion[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deprecating, setDeprecating] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadVersions();
-  }, []);
-
-  const loadVersions = async () => {
+  const loadVersions = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
 
-      const token = await getToken();
-      if (!token) {
-        setError('Not authenticated');
-        setLoading(false);
-        return;
-      }
-
-      const response = await fetch(`${API_BASE}/api/v1/publisher/algorithm/versions`, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to load version history');
-      }
-
-      const data = await response.json();
-      setVersions(data.data?.versions || data.versions || []);
+      const data = await api.get<{ versions: AlgorithmVersion[] }>('/publisher/algorithm/versions');
+      setVersions(data?.versions || []);
     } catch (err) {
       console.error('Failed to load versions:', err);
       setError('Failed to load version history');
     } finally {
       setLoading(false);
     }
-  };
+  }, [api]);
+
+  useEffect(() => {
+    loadVersions();
+  }, [loadVersions]);
 
   const handleDeprecate = async (versionId: string) => {
     try {
       setDeprecating(versionId);
       setError(null);
 
-      const token = await getToken();
-      if (!token) {
-        setError('Not authenticated');
-        setDeprecating(null);
-        return;
-      }
-
-      const response = await fetch(
-        `${API_BASE}/api/v1/publisher/algorithm/versions/${versionId}/deprecate`,
-        {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-          },
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error('Failed to deprecate version');
-      }
-
+      await api.put(`/publisher/algorithm/versions/${versionId}/deprecate`, {});
       await loadVersions();
     } catch (err) {
       console.error('Failed to deprecate version:', err);

@@ -12,7 +12,6 @@ import { useApi } from '@/lib/api-client';
 interface PublisherProfile {
   id: string;
   name: string;
-  organization?: string;
   email: string;
   website?: string;
   bio?: string;
@@ -33,7 +32,6 @@ export default function PublisherProfilePage() {
 
   // Form state
   const [name, setName] = useState('');
-  const [organization, setOrganization] = useState('');
   const [email, setEmail] = useState('');
   const [website, setWebsite] = useState('');
   const [bio, setBio] = useState('');
@@ -49,7 +47,6 @@ export default function PublisherProfilePage() {
 
       setProfile(profileData);
       setName(profileData.name || '');
-      setOrganization(profileData.organization || '');
       setEmail(profileData.email || '');
       setWebsite(profileData.website || '');
       setBio(profileData.bio || '');
@@ -105,7 +102,6 @@ export default function PublisherProfilePage() {
       const updatedProfile = await api.put<PublisherProfile>('/publisher/profile', {
         body: JSON.stringify({
           name,
-          organization: organization || null,
           email,
           website: website || null,
           bio: bio || null,
@@ -188,33 +184,22 @@ export default function PublisherProfilePage() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Name */}
+              {/* Name (Publisher/Organization Name) */}
               <div>
                 <label htmlFor="name" className="block text-sm font-medium mb-2">
-                  Name *
+                  Publisher / Organization Name *
                 </label>
                 <Input
                   id="name"
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="Your name"
+                  placeholder="Congregation Beth Israel"
                   required
                 />
-              </div>
-
-              {/* Organization */}
-              <div>
-                <label htmlFor="organization" className="block text-sm font-medium mb-2">
-                  Organization
-                </label>
-                <Input
-                  id="organization"
-                  type="text"
-                  value={organization}
-                  onChange={(e) => setOrganization(e.target.value)}
-                  placeholder="Your organization or synagogue"
-                />
+                <p className="mt-1 text-sm text-muted-foreground">
+                  This will be the name displayed to users
+                </p>
               </div>
 
               {/* Email */}
@@ -255,7 +240,7 @@ export default function PublisherProfilePage() {
                   id="bio"
                   value={bio}
                   onChange={(e) => setBio(e.target.value)}
-                  placeholder="Tell users about your organization..."
+                  placeholder="Tell users about your community and approach to zmanim..."
                   rows={4}
                   className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                 />
@@ -268,6 +253,7 @@ export default function PublisherProfilePage() {
                 </label>
                 <LogoUpload
                   currentLogoUrl={profile?.logo_url}
+                  publisherName={name}
                   onUploadComplete={(logoUrl) => {
                     setProfile(prev => prev ? { ...prev, logo_url: logoUrl } : null);
                     setSuccess(true);

@@ -4,8 +4,9 @@
 -- 1. Add continent_code column
 ALTER TABLE publisher_coverage ADD COLUMN continent_code VARCHAR(2);
 
--- 2. Drop old check constraint
+-- 2. Drop old check constraints (both named and auto-generated)
 ALTER TABLE publisher_coverage DROP CONSTRAINT IF EXISTS coverage_level_check;
+ALTER TABLE publisher_coverage DROP CONSTRAINT IF EXISTS publisher_coverage_coverage_level_check;
 ALTER TABLE publisher_coverage DROP CONSTRAINT IF EXISTS valid_coverage_data;
 
 -- 3. Update coverage_level check to include 'continent'

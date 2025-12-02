@@ -1,5 +1,5 @@
 'use client';
-import { API_BASE } from '@/lib/api';
+import { useApi } from '@/lib/api-client';
 
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -8,10 +8,12 @@ interface RestoreDialogProps {
   version: number;
   onClose: () => void;
   onRestore: () => void;
-  getToken: () => Promise<string | null>;
+  /** @deprecated No longer needed - component uses useApi internally */
+  getToken?: () => Promise<string | null>;
 }
 
-export function RestoreDialog({ version, onClose, onRestore, getToken }: RestoreDialogProps) {
+export function RestoreDialog({ version, onClose, onRestore }: RestoreDialogProps) {
+  const api = useApi();
   const [status, setStatus] = useState<'draft' | 'published'>('draft');
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(false);
@@ -21,24 +23,13 @@ export function RestoreDialog({ version, onClose, onRestore, getToken }: Restore
     setLoading(true);
     setError(null);
     try {
-      const token = await getToken();
-      
-      const response = await fetch(`${API_BASE}/api/v1/publisher/algorithm/rollback`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
+      await api.post('/publisher/algorithm/rollback', {
         body: JSON.stringify({
           target_version: version,
           status,
           description: description || `Restored from v${version}`,
         }),
       });
-
-      if (!response.ok) {
-        throw new Error('Failed to restore version');
-      }
 
       onRestore();
     } catch (err) {

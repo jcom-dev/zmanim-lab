@@ -20,9 +20,6 @@ export function ImpersonationBanner() {
             <span className="font-medium text-sm sm:text-base">
               Impersonating: {impersonatedPublisher.name}
             </span>
-            <span className="text-yellow-800 text-sm sm:text-base ml-1">
-              ({impersonatedPublisher.organization})
-            </span>
           </div>
         </div>
         <button

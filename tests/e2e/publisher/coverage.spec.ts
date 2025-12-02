@@ -104,9 +104,9 @@ test.describe('Coverage - Add Dialog', () => {
     await page.waitForLoadState('networkidle');
 
     await page.getByRole('button', { name: /add coverage/i }).first().click();
-    await page.waitForTimeout(2000);
 
-    await expect(page.getByText('Countries')).toBeVisible();
+    // Wait for countries to load
+    await expect(page.getByText('Countries')).toBeVisible({ timeout: 10000 });
   });
 
   test('dialog can be closed', async ({ page }) => {
@@ -119,9 +119,9 @@ test.describe('Coverage - Add Dialog', () => {
     await expect(page.getByText('Add Coverage Area')).toBeVisible();
 
     await page.keyboard.press('Escape');
-    await page.waitForTimeout(500);
 
-    await expect(page.getByText('Add Coverage Area')).not.toBeVisible();
+    // Wait for dialog to close
+    await expect(page.getByText('Add Coverage Area')).not.toBeVisible({ timeout: 5000 });
   });
 });
 

@@ -1,22 +1,20 @@
 'use client';
 
 import { useState } from 'react';
-import { useAuth } from '@clerk/nextjs';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { API_BASE } from '@/lib/api';
+import { useApi } from '@/lib/api-client';
 
 export default function NewPublisherPage() {
   const router = useRouter();
-  const { getToken } = useAuth();
+  const api = useApi();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     email: '',
     name: '',
-    organization: '',
     website: '',
     bio: '',
   });
@@ -48,10 +46,6 @@ export default function NewPublisherPage() {
       errors.name = 'Name is required';
     }
 
-    if (!formData.organization.trim()) {
-      errors.organization = 'Organization is required';
-    }
-
     if (formData.website && !/^https?:\/\/.+/.test(formData.website)) {
       errors.website = 'Website must be a valid URL (http:// or https://)';
     }
@@ -74,7 +68,6 @@ export default function NewPublisherPage() {
       const payload: any = {
         email: formData.email.trim(),
         name: formData.name.trim(),
-        organization: formData.organization.trim(),
       };
 
       if (formData.website.trim()) {
@@ -85,22 +78,9 @@ export default function NewPublisherPage() {
         payload.bio = formData.bio.trim();
       }
 
-      const token = await getToken();
-
-      const response = await fetch(`${API_BASE}/api/v1/admin/publishers`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
+      await api.admin.post('/admin/publishers', {
         body: JSON.stringify(payload),
       });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error?.message || 'Failed to create publisher');
-      }
 
       // Success - redirect to publishers list
       router.push('/admin/publishers');
@@ -159,10 +139,10 @@ export default function NewPublisherPage() {
               )}
             </div>
 
-            {/* Name */}
+            {/* Name (Publisher/Organization Name) */}
             <div>
               <label htmlFor="name" className="block text-sm font-medium mb-2">
-                Name <span className="text-red-500">*</span>
+                Publisher / Organization Name <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
@@ -175,34 +155,14 @@ export default function NewPublisherPage() {
                     ? 'border-red-500 focus:ring-red-500'
                     : 'border-border focus:ring-primary'
                 }`}
-                placeholder="Rabbi John Doe"
+                placeholder="Congregation Beth Israel"
               />
               {validationErrors.name && (
                 <p className="mt-1 text-sm text-red-600">{validationErrors.name}</p>
               )}
-            </div>
-
-            {/* Organization */}
-            <div>
-              <label htmlFor="organization" className="block text-sm font-medium mb-2">
-                Organization <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                id="organization"
-                name="organization"
-                value={formData.organization}
-                onChange={handleChange}
-                className={`w-full px-4 py-2 border rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 ${
-                  validationErrors.organization
-                    ? 'border-red-500 focus:ring-red-500'
-                    : 'border-border focus:ring-primary'
-                }`}
-                placeholder="Congregation Beth Israel"
-              />
-              {validationErrors.organization && (
-                <p className="mt-1 text-sm text-red-600">{validationErrors.organization}</p>
-              )}
+              <p className="mt-1 text-sm text-muted-foreground">
+                This will be the name displayed to users
+              </p>
             </div>
 
             {/* Website (Optional) */}

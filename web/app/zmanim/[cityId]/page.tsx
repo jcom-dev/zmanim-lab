@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import { useParams, useRouter } from 'next/navigation';
-import { MapPin, User, Building, ChevronRight, Loader2, AlertCircle, ArrowLeft } from 'lucide-react';
+import { MapPin, Building, ChevronRight, Loader2, AlertCircle, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
-import { API_BASE } from '@/lib/api';
+import { useApi } from '@/lib/api-client';
+import { ModeToggle } from '@/components/mode-toggle';
 
 interface City {
   id: string;
@@ -32,7 +33,6 @@ interface PublisherApiResponse {
 interface Publisher {
   id: string;
   name: string;
-  organization: string | null;
   description: string | null;
   logo_url: string | null;
   website: string | null;
@@ -51,39 +51,24 @@ interface CityPublishersResponse {
 export default function CityPublishersPage() {
   const params = useParams();
   const router = useRouter();
+  const api = useApi();
   const cityId = params.cityId as string;
 
   const [data, setData] = useState<CityPublishersResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (cityId) {
-      loadPublishers();
-    }
-  }, [cityId]);
-
-  const loadPublishers = async () => {
+  const loadPublishers = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
 
-      const response = await fetch(`${API_BASE}/api/v1/cities/${cityId}/publishers`);
-      if (!response.ok) {
-        if (response.status === 404) {
-          throw new Error('City not found');
-        }
-        throw new Error('Failed to load publishers');
-      }
-
-      const result = await response.json();
-      const raw = result.data || result;
+      const raw = await api.public.get<{ city: City; publishers: PublisherApiResponse[]; has_coverage: boolean }>(`/cities/${cityId}/publishers`);
 
       // Map API response to normalized Publisher shape
-      const normalizedPublishers: Publisher[] = (raw.publishers || []).map((p: PublisherApiResponse) => ({
+      const normalizedPublishers: Publisher[] = (raw?.publishers || []).map((p: PublisherApiResponse) => ({
         id: p.publisher_id,
         name: p.publisher_name,
-        organization: null,
         description: null,
         logo_url: null,
         website: null,
@@ -94,9 +79,9 @@ export default function CityPublishersPage() {
       }));
 
       setData({
-        city: raw.city,
+        city: raw?.city as City,
         publishers: normalizedPublishers,
-        has_coverage: raw.has_coverage ?? normalizedPublishers.length > 0,
+        has_coverage: raw?.has_coverage ?? normalizedPublishers.length > 0,
       });
     } catch (err) {
       console.error('Failed to load publishers:', err);
@@ -104,7 +89,13 @@ export default function CityPublishersPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [api, cityId]);
+
+  useEffect(() => {
+    if (cityId) {
+      loadPublishers();
+    }
+  }, [cityId, loadPublishers]);
 
   const handlePublisherSelect = (publisher: Publisher) => {
     // Save selection and navigate to zmanim view
@@ -155,13 +146,16 @@ export default function CityPublishersPage() {
       {/* Header */}
       <div className="bg-card border-b border-border">
         <div className="container mx-auto px-4 py-8">
-          <Link
-            href="/"
-            className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground mb-4"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Change location
-          </Link>
+          <div className="flex justify-between items-start mb-4">
+            <Link
+              href="/"
+              className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Change location
+            </Link>
+            <ModeToggle />
+          </div>
 
           <div className="flex items-center gap-3">
             <MapPin className="w-8 h-8 text-blue-400" />
@@ -247,12 +241,6 @@ export default function CityPublishersPage() {
                       </span>
                     )}
                   </div>
-                  {publisher.organization && (
-                    <div className="flex items-center gap-2 text-muted-foreground mb-1">
-                      <Building className="w-4 h-4" />
-                      <span className="truncate">{publisher.organization}</span>
-                    </div>
-                  )}
                   {publisher.description && (
                     <p className="text-sm text-muted-foreground line-clamp-2">
                       {publisher.description}

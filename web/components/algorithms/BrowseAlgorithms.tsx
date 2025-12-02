@@ -1,5 +1,5 @@
 'use client';
-import { API_BASE } from '@/lib/api';
+import { useApi } from '@/lib/api-client';
 
 import { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
@@ -30,10 +30,12 @@ interface BrowseAlgorithmsProps {
   onCopy?: (algorithmId: string) => void;
   onFork?: (algorithmId: string) => void;
   onPreview?: (algorithm: PublicAlgorithm) => void;
-  getToken: () => Promise<string | null>;
+  /** @deprecated No longer needed - component uses useApi internally */
+  getToken?: () => Promise<string | null>;
 }
 
-export function BrowseAlgorithms({ onCopy, onFork, onPreview, getToken }: BrowseAlgorithmsProps) {
+export function BrowseAlgorithms({ onCopy, onFork, onPreview }: BrowseAlgorithmsProps) {
+  const api = useApi();
   const [algorithms, setAlgorithms] = useState<PublicAlgorithm[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -46,8 +48,6 @@ export function BrowseAlgorithms({ onCopy, onFork, onPreview, getToken }: Browse
     setLoading(true);
     setError(null);
     try {
-      const token = await getToken();
-      
       const params = new URLSearchParams({
         page: page.toString(),
         page_size: pageSize.toString(),
@@ -56,26 +56,15 @@ export function BrowseAlgorithms({ onCopy, onFork, onPreview, getToken }: Browse
         params.set('search', search);
       }
 
-      const response = await fetch(`${API_BASE}/api/v1/algorithms/public?${params}`, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to load algorithms');
-      }
-
-      const data = await response.json();
-      setAlgorithms(data.algorithms || []);
-      setTotal(data.total || 0);
+      const data = await api.get<{ algorithms: PublicAlgorithm[]; total: number }>(`/algorithms/public?${params}`);
+      setAlgorithms(data?.algorithms || []);
+      setTotal(data?.total || 0);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load algorithms');
     } finally {
       setLoading(false);
     }
-  }, [page, search]);
+  }, [api, page, search]);
 
   useEffect(() => {
     loadAlgorithms();
@@ -83,22 +72,8 @@ export function BrowseAlgorithms({ onCopy, onFork, onPreview, getToken }: Browse
 
   const handleCopy = async (algorithmId: string) => {
     try {
-      const token = await getToken();
-      
-      const response = await fetch(`${API_BASE}/api/v1/algorithms/${algorithmId}/copy`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to copy algorithm');
-      }
-
-      const data = await response.json();
-      onCopy?.(data.new_algorithm_id);
+      const data = await api.post<{ new_algorithm_id: string }>(`/algorithms/${algorithmId}/copy`, {});
+      onCopy?.(data?.new_algorithm_id || '');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to copy algorithm');
     }
@@ -106,22 +81,8 @@ export function BrowseAlgorithms({ onCopy, onFork, onPreview, getToken }: Browse
 
   const handleFork = async (algorithmId: string) => {
     try {
-      const token = await getToken();
-      
-      const response = await fetch(`${API_BASE}/api/v1/algorithms/${algorithmId}/fork`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fork algorithm');
-      }
-
-      const data = await response.json();
-      onFork?.(data.new_algorithm_id);
+      const data = await api.post<{ new_algorithm_id: string }>(`/algorithms/${algorithmId}/fork`, {});
+      onFork?.(data?.new_algorithm_id || '');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fork algorithm');
     }

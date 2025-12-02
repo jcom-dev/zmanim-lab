@@ -1,21 +1,14 @@
 package handlers
 
 import (
-	"bytes"
-	"context"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"net/http"
-	"os"
-	"path/filepath"
-
-	"github.com/google/uuid"
-	"github.com/jcom-dev/zmanim-lab/internal/middleware"
 )
 
 const (
 	maxUploadSize = 5 * 1024 * 1024 // 5MB
-	storageBucket = "publisher-logos"
 )
 
 var allowedMimeTypes = map[string]bool{
@@ -26,27 +19,19 @@ var allowedMimeTypes = map[string]bool{
 }
 
 // UploadPublisherLogo handles logo upload for publishers
+// Stores logo as base64 data URL directly in the database
 func (h *Handlers) UploadPublisherLogo(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	// Get user ID from context
-	userID := middleware.GetUserID(ctx)
-	if userID == "" {
-		RespondUnauthorized(w, r, "User ID not found in context")
-		return
+	// Step 1: Resolve publisher context
+	pc := h.publisherResolver.MustResolve(w, r)
+	if pc == nil {
+		return // Response already sent
 	}
-
-	// Get publisher ID from database
-	query := `SELECT id FROM publishers WHERE clerk_user_id = $1`
-	var publisherID string
-	err := h.db.Pool.QueryRow(ctx, query, userID).Scan(&publisherID)
-	if err != nil {
-		RespondNotFound(w, r, "Publisher profile not found")
-		return
-	}
+	publisherID := pc.PublisherID
 
 	// Parse multipart form
-	err = r.ParseMultipartForm(maxUploadSize)
+	err := r.ParseMultipartForm(maxUploadSize)
 	if err != nil {
 		RespondBadRequest(w, r, "File too large or invalid form data")
 		return
@@ -73,21 +58,6 @@ func (h *Handlers) UploadPublisherLogo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Generate unique filename
-	ext := filepath.Ext(header.Filename)
-	if ext == "" {
-		// Determine extension from content type
-		switch contentType {
-		case "image/jpeg", "image/jpg":
-			ext = ".jpg"
-		case "image/png":
-			ext = ".png"
-		case "image/webp":
-			ext = ".webp"
-		}
-	}
-	filename := fmt.Sprintf("%s-%s%s", publisherID, uuid.New().String(), ext)
-
 	// Read file content
 	fileBytes, err := io.ReadAll(file)
 	if err != nil {
@@ -95,73 +65,26 @@ func (h *Handlers) UploadPublisherLogo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Upload to Supabase Storage
-	logoURL, err := h.uploadToSupabaseStorage(ctx, filename, contentType, fileBytes)
-	if err != nil {
-		RespondInternalError(w, r, fmt.Sprintf("Failed to upload file: %v", err))
-		return
-	}
+	// Convert to base64 data URL
+	base64Data := base64.StdEncoding.EncodeToString(fileBytes)
+	dataURL := fmt.Sprintf("data:%s;base64,%s", contentType, base64Data)
 
-	// Update publisher's logo_url in database
+	// Update publisher's logo_data in database
 	updateQuery := `
 		UPDATE publishers
-		SET logo_url = $1, updated_at = NOW()
-		WHERE clerk_user_id = $2
-		RETURNING logo_url
+		SET logo_data = $1, updated_at = NOW()
+		WHERE id = $2
+		RETURNING logo_data
 	`
-	var updatedLogoURL string
-	err = h.db.Pool.QueryRow(ctx, updateQuery, logoURL, userID).Scan(&updatedLogoURL)
+	var updatedLogoData string
+	err = h.db.Pool.QueryRow(ctx, updateQuery, dataURL, publisherID).Scan(&updatedLogoData)
 	if err != nil {
 		RespondInternalError(w, r, "Failed to update publisher profile")
 		return
 	}
 
 	RespondJSON(w, r, http.StatusOK, map[string]interface{}{
-		"logo_url": updatedLogoURL,
-		"message":  "Logo uploaded successfully",
+		"logo_data": updatedLogoData,
+		"message":   "Logo uploaded successfully",
 	})
-}
-
-// uploadToSupabaseStorage uploads a file to Supabase Storage
-func (h *Handlers) uploadToSupabaseStorage(ctx context.Context, filename, contentType string, fileBytes []byte) (string, error) {
-	// For now, use environment variables directly
-	// TODO: Pass config through handlers struct for better testability
-	supabaseURL := os.Getenv("SUPABASE_URL")
-	serviceKey := os.Getenv("SUPABASE_SERVICE_KEY")
-
-	if supabaseURL == "" || serviceKey == "" {
-		return "", fmt.Errorf("Supabase configuration missing")
-	}
-
-	// Supabase Storage API endpoint
-	url := fmt.Sprintf("%s/storage/v1/object/%s/%s", supabaseURL, storageBucket, filename)
-
-	// Create request
-	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(fileBytes))
-	if err != nil {
-		return "", err
-	}
-
-	// Set headers
-	req.Header.Set("Authorization", "Bearer "+serviceKey)
-	req.Header.Set("Content-Type", contentType)
-
-	// Send request
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	// Check response
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		body, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("Supabase Storage error: %s (status: %d)", string(body), resp.StatusCode)
-	}
-
-	// Construct public URL
-	publicURL := fmt.Sprintf("%s/storage/v1/object/public/%s/%s", supabaseURL, storageBucket, filename)
-
-	return publicURL, nil
 }

@@ -15,14 +15,13 @@ Zmanim Lab enables halachic authorities to:
 ┌─────────────────────────────────────────────────────────────────┐
 │                         Zmanim Lab                               │
 ├─────────────────────────────────────────────────────────────────┤
-│  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────┐ │
-│  │   Web Frontend  │───▶│    Go API       │───▶│  Supabase   │ │
-│  │   (Next.js)     │    │   (Chi Router)  │    │ (PostgreSQL)│ │
-│  │     /web        │    │     /api        │    │   + PostGIS │ │
+│  │   Web Frontend  │───▶│    Go API       │───▶│  PostgreSQL │ │
+│  │   (Next.js)     │    │   (Chi Router)  │    │  + PostGIS  │ │
+│  │     /web        │    │     /api        │    │             │ │
 │  └─────────────────┘    └─────────────────┘    └─────────────┘ │
 │         │                       │                     │         │
 │         ▼                       ▼                     ▼         │
-│      Vercel               Fly.io                Supabase.com    │
+│      Vercel               Fly.io              Cloud Provider    │
 └─────────────────────────────────────────────────────────────────┘
 
 Authentication: Clerk
@@ -46,7 +45,7 @@ zmanim-lab/
 │   ├── e2e/            # Test specs
 │   ├── playwright.config.ts
 │   └── TESTING.md      # Testing guide
-├── supabase/           # Database migrations
+├── db/                 # Database migrations
 │   └── migrations/
 ├── docs/               # Documentation
 └── .github/workflows/  # CI/CD
@@ -123,7 +122,7 @@ See [.coder/README.md](./.coder/README.md) for detailed tmux usage.
 - Node.js 24+ LTS
 - Go 1.25+
 - npm 10+
-- Supabase account
+- PostgreSQL Database
 - Clerk account
 - Upstash account
 
@@ -163,7 +162,7 @@ API available at [http://localhost:8080](http://localhost:8080)
 ### Environment Variables
 
 Required services:
-- **Supabase** - PostgreSQL database ([supabase.com](https://supabase.com))
+- **PostgreSQL** - Database
 - **Upstash** - Redis caching ([upstash.com](https://upstash.com))
 - **Clerk** - Authentication ([clerk.com](https://clerk.com))
 
@@ -175,7 +174,7 @@ See `.env.example` for all required variables.
 |-----------|----------|-----------|-----|
 | Frontend | Vercel | `web/` | TBD |
 | Backend | Fly.io | `api/` | https://zmanim-lab.fly.dev |
-| Database | Supabase | — | — |
+| Database | PostgreSQL | — | — |
 | Auth | Clerk | — | — |
 
 ### Deploy Backend
@@ -251,12 +250,12 @@ See [docs/](./docs/) for comprehensive documentation:
 |-------|------------|
 | Frontend | Next.js 16, React 19, TypeScript, Tailwind CSS, shadcn/ui |
 | Backend | Go 1.25, Chi router, pgx |
-| Database | PostgreSQL (Supabase) |
+| Database | PostgreSQL |
 | Caching | Upstash Redis (REST API, 24hr TTL) |
 | Auth | Clerk |
 | Zmanim | Custom Go calculation engine |
 | Testing | Vitest (unit), Playwright (E2E) |
-| Hosting | Vercel, Fly.io, Supabase |
+| Hosting | Vercel, Fly.io |
 | Dev Environment | Coder (cloud IDE) |
 
 ## Features

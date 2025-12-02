@@ -1,16 +1,16 @@
 'use client';
 
 import { useEffect, useState, Suspense } from 'react';
-import { useUser, useAuth } from '@clerk/nextjs';
+import { useUser } from '@clerk/nextjs';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { API_BASE } from '@/lib/api';
+import { useApi } from '@/lib/api-client';
 
 function AcceptInvitationContent() {
   const { isLoaded, isSignedIn, user } = useUser();
-  const { getToken } = useAuth();
+  const api = useApi();
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get('token');
@@ -18,6 +18,29 @@ function AcceptInvitationContent() {
   const [status, setStatus] = useState<'loading' | 'accepting' | 'success' | 'error' | 'redirect'>('loading');
   const [error, setError] = useState<string | null>(null);
   const [publisherName, setPublisherName] = useState<string | null>(null);
+
+  const acceptInvitation = async () => {
+    if (!token) return;
+
+    setStatus('accepting');
+
+    try {
+      const data = await api.post<{ publisher_name: string }>('/publisher/team/accept', {
+        body: JSON.stringify({ token }),
+      });
+
+      setPublisherName(data?.publisher_name || null);
+      setStatus('success');
+
+      // Redirect to publisher dashboard after a short delay
+      setTimeout(() => {
+        router.push(`/publisher/dashboard`);
+      }, 2000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to accept invitation');
+      setStatus('error');
+    }
+  };
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -39,44 +62,6 @@ function AcceptInvitationContent() {
       handleClerkInvitation();
     }
   }, [isLoaded, isSignedIn, token]);
-
-  const acceptInvitation = async () => {
-    if (!token) return;
-
-    setStatus('accepting');
-
-    try {
-      const authToken = await getToken();
-
-      const response = await fetch(`${API_BASE}/api/v1/publisher/team/accept`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${authToken}`,
-        },
-        body: JSON.stringify({ token }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        setError(data.message || 'Failed to accept invitation');
-        setStatus('error');
-        return;
-      }
-
-      setPublisherName(data.publisher_name);
-      setStatus('success');
-
-      // Redirect to publisher dashboard after a short delay
-      setTimeout(() => {
-        router.push(`/publisher/dashboard`);
-      }, 2000);
-    } catch {
-      setError('Network error. Please try again.');
-      setStatus('error');
-    }
-  };
 
   const handleClerkInvitation = () => {
     // Original Clerk invitation flow

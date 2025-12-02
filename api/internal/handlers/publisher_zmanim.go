@@ -23,12 +23,15 @@ type PublisherZman struct {
 	ZmanKey          string    `json:"zman_key" db:"zman_key"`
 	HebrewName       string    `json:"hebrew_name" db:"hebrew_name"`
 	EnglishName      string    `json:"english_name" db:"english_name"`
+	Transliteration  *string   `json:"transliteration,omitempty" db:"transliteration"`
+	Description      *string   `json:"description,omitempty" db:"description"`
 	FormulaDSL       string    `json:"formula_dsl" db:"formula_dsl"`
 	AIExplanation    *string   `json:"ai_explanation" db:"ai_explanation"`
 	PublisherComment *string   `json:"publisher_comment" db:"publisher_comment"`
 	IsEnabled        bool      `json:"is_enabled" db:"is_enabled"`
 	IsVisible        bool      `json:"is_visible" db:"is_visible"`
 	IsPublished      bool      `json:"is_published" db:"is_published"`
+	IsBeta           bool      `json:"is_beta" db:"is_beta"`
 	IsCustom         bool      `json:"is_custom" db:"is_custom"`
 	IsEventZman      bool      `json:"is_event_zman" db:"is_event_zman"`
 	Category         string    `json:"category" db:"category"`
@@ -44,6 +47,12 @@ type PublisherZman struct {
 	IsLinked                  bool    `json:"is_linked" db:"is_linked"`
 	LinkedSourcePublisherName *string `json:"linked_source_publisher_name,omitempty" db:"linked_source_publisher_name"`
 	LinkedSourceIsDeleted     bool    `json:"linked_source_is_deleted" db:"linked_source_is_deleted"`
+	// Source/original values from registry or linked publisher (for diff/revert functionality)
+	SourceHebrewName      *string `json:"source_hebrew_name,omitempty" db:"source_hebrew_name"`
+	SourceEnglishName     *string `json:"source_english_name,omitempty" db:"source_english_name"`
+	SourceTransliteration *string `json:"source_transliteration,omitempty" db:"source_transliteration"`
+	SourceDescription     *string `json:"source_description,omitempty" db:"source_description"`
+	SourceFormulaDSL      *string `json:"source_formula_dsl,omitempty" db:"source_formula_dsl"`
 }
 
 // ZmanimTemplate represents a system-wide default zman template
@@ -78,12 +87,15 @@ type CreateZmanRequest struct {
 type UpdateZmanRequest struct {
 	HebrewName       *string `json:"hebrew_name"`
 	EnglishName      *string `json:"english_name"`
+	Transliteration  *string `json:"transliteration"`
+	Description      *string `json:"description"`
 	FormulaDSL       *string `json:"formula_dsl"`
 	AIExplanation    *string `json:"ai_explanation"`
 	PublisherComment *string `json:"publisher_comment"`
 	IsEnabled        *bool   `json:"is_enabled"`
 	IsVisible        *bool   `json:"is_visible"`
 	IsPublished      *bool   `json:"is_published"`
+	IsBeta           *bool   `json:"is_beta"`
 	Category         *string `json:"category"`
 	SortOrder        *int    `json:"sort_order"`
 }
@@ -129,11 +141,18 @@ func (h *Handlers) GetPublisherZmanim(w http.ResponseWriter, r *http.Request) {
 	query := `
 		SELECT
 			pz.id, pz.publisher_id, pz.zman_key, pz.hebrew_name, pz.english_name,
+			pz.transliteration, pz.description,
 			COALESCE(linked_pz.formula_dsl, pz.formula_dsl) AS formula_dsl,
 			pz.ai_explanation, pz.publisher_comment,
-			pz.is_enabled, pz.is_visible, pz.is_published, pz.is_custom, pz.category,
+			pz.is_enabled, pz.is_visible, pz.is_published, pz.is_beta, pz.is_custom, pz.category,
 			pz.dependencies, pz.sort_order, pz.created_at, pz.updated_at,
 			pz.master_zman_id, pz.linked_publisher_zman_id, pz.source_type,
+			-- Source/original values from registry or linked publisher (for diff/revert UI)
+			COALESCE(mr.canonical_hebrew_name, linked_pz.hebrew_name) AS source_hebrew_name,
+			COALESCE(mr.canonical_english_name, linked_pz.english_name) AS source_english_name,
+			COALESCE(mr.transliteration, linked_pz.transliteration) AS source_transliteration,
+			COALESCE(mr.description, linked_pz.description) AS source_description,
+			COALESCE(mr.default_formula_dsl, linked_pz.formula_dsl) AS source_formula_dsl,
 			EXISTS (
 				SELECT 1 FROM master_zman_events mze
 				WHERE mze.master_zman_id = pz.master_zman_id
@@ -159,6 +178,7 @@ func (h *Handlers) GetPublisherZmanim(w http.ResponseWriter, r *http.Request) {
 		FROM publisher_zmanim pz
 		LEFT JOIN publisher_zmanim linked_pz ON pz.linked_publisher_zman_id = linked_pz.id
 		LEFT JOIN publishers linked_pub ON linked_pz.publisher_id = linked_pub.id
+		LEFT JOIN master_zmanim_registry mr ON pz.master_zman_id = mr.id
 		WHERE pz.publisher_id = $1
 		  AND pz.deleted_at IS NULL
 		ORDER BY pz.sort_order, pz.hebrew_name
@@ -178,10 +198,12 @@ func (h *Handlers) GetPublisherZmanim(w http.ResponseWriter, r *http.Request) {
 		var tagsJSON []byte
 		err := rows.Scan(
 			&z.ID, &z.PublisherID, &z.ZmanKey, &z.HebrewName, &z.EnglishName,
+			&z.Transliteration, &z.Description,
 			&z.FormulaDSL, &z.AIExplanation, &z.PublisherComment,
-			&z.IsEnabled, &z.IsVisible, &z.IsPublished, &z.IsCustom, &z.Category,
+			&z.IsEnabled, &z.IsVisible, &z.IsPublished, &z.IsBeta, &z.IsCustom, &z.Category,
 			&z.Dependencies, &z.SortOrder, &z.CreatedAt, &z.UpdatedAt,
 			&z.MasterZmanID, &z.LinkedPublisherZmanID, &z.SourceType,
+			&z.SourceHebrewName, &z.SourceEnglishName, &z.SourceTransliteration, &z.SourceDescription, &z.SourceFormulaDSL,
 			&z.IsEventZman, &tagsJSON, &z.IsLinked, &z.LinkedSourcePublisherName, &z.LinkedSourceIsDeleted,
 		)
 		if err != nil {
@@ -230,48 +252,150 @@ type sqlcZmanRow interface {
 
 // Convert GetPublisherZmanimRow to PublisherZman
 func getPublisherZmanimRowToPublisherZman(z sqlcgen.GetPublisherZmanimRow) PublisherZman {
+	var masterZmanID, linkedPublisherZmanID, linkedSourcePublisherName *string
+	if z.MasterZmanID.Valid {
+		id := z.MasterZmanID.Bytes[:]
+		idStr := fmt.Sprintf("%x-%x-%x-%x-%x", id[0:4], id[4:6], id[6:8], id[8:10], id[10:16])
+		masterZmanID = &idStr
+	}
+	if z.LinkedPublisherZmanID.Valid {
+		id := z.LinkedPublisherZmanID.Bytes[:]
+		idStr := fmt.Sprintf("%x-%x-%x-%x-%x", id[0:4], id[4:6], id[6:8], id[8:10], id[10:16])
+		linkedPublisherZmanID = &idStr
+	}
+	if z.LinkedSourcePublisherName != nil {
+		linkedSourcePublisherName = z.LinkedSourcePublisherName
+	}
+
+	// Convert source values - COALESCE makes these non-nullable strings
+	var sourceHebrewName, sourceEnglishName, sourceTransliteration, sourceDescription, sourceFormulaDSL *string
+	if z.SourceHebrewName != "" {
+		sourceHebrewName = &z.SourceHebrewName
+	}
+	if z.SourceEnglishName != "" {
+		sourceEnglishName = &z.SourceEnglishName
+	}
+	if z.SourceTransliteration != nil && *z.SourceTransliteration != "" {
+		sourceTransliteration = z.SourceTransliteration
+	}
+	if z.SourceDescription != nil && *z.SourceDescription != "" {
+		sourceDescription = z.SourceDescription
+	}
+	if z.SourceFormulaDsl != "" {
+		sourceFormulaDSL = &z.SourceFormulaDsl
+	}
+
+	// Parse tags from JSON
+	var tags []ZmanTag
+	if z.Tags != nil {
+		if tagsBytes, err := json.Marshal(z.Tags); err == nil {
+			json.Unmarshal(tagsBytes, &tags)
+		}
+	}
+
 	return PublisherZman{
-		ID:               z.ID,
-		PublisherID:      z.PublisherID,
-		ZmanKey:          z.ZmanKey,
-		HebrewName:       z.HebrewName,
-		EnglishName:      z.EnglishName,
-		FormulaDSL:       z.FormulaDsl,
-		AIExplanation:    z.AiExplanation,
-		PublisherComment: z.PublisherComment,
-		IsEnabled:        z.IsEnabled,
-		IsVisible:        z.IsVisible,
-		IsPublished:      z.IsPublished,
-		IsCustom:         z.IsCustom,
-		IsEventZman:      z.IsEventZman,
-		Category:         z.Category,
-		Dependencies:     z.Dependencies,
-		SortOrder:        int(z.SortOrder),
-		CreatedAt:        z.CreatedAt,
-		UpdatedAt:        z.UpdatedAt,
+		ID:                        z.ID,
+		PublisherID:               z.PublisherID,
+		ZmanKey:                   z.ZmanKey,
+		HebrewName:                z.HebrewName,
+		EnglishName:               z.EnglishName,
+		Transliteration:           z.Transliteration,
+		Description:               z.Description,
+		FormulaDSL:                z.FormulaDsl,
+		AIExplanation:             z.AiExplanation,
+		PublisherComment:          z.PublisherComment,
+		IsEnabled:                 z.IsEnabled,
+		IsVisible:                 z.IsVisible,
+		IsPublished:               z.IsPublished,
+		IsBeta:                    z.IsBeta,
+		IsCustom:                  z.IsCustom,
+		IsEventZman:               z.IsEventZman,
+		Category:                  z.Category,
+		Dependencies:              z.Dependencies,
+		SortOrder:                 int(z.SortOrder),
+		CreatedAt:                 z.CreatedAt,
+		UpdatedAt:                 z.UpdatedAt,
+		Tags:                      tags,
+		MasterZmanID:              masterZmanID,
+		LinkedPublisherZmanID:     linkedPublisherZmanID,
+		SourceType:                z.SourceType,
+		IsLinked:                  z.IsLinked,
+		LinkedSourcePublisherName: linkedSourcePublisherName,
+		LinkedSourceIsDeleted:     z.LinkedSourceIsDeleted,
+		SourceHebrewName:          sourceHebrewName,
+		SourceEnglishName:         sourceEnglishName,
+		SourceTransliteration:     sourceTransliteration,
+		SourceDescription:         sourceDescription,
+		SourceFormulaDSL:          sourceFormulaDSL,
 	}
 }
 
 // Convert GetPublisherZmanByKeyRow to PublisherZman
 func getPublisherZmanByKeyRowToPublisherZman(z sqlcgen.GetPublisherZmanByKeyRow) PublisherZman {
+	var masterZmanID, linkedPublisherZmanID, linkedSourcePublisherName *string
+	if z.MasterZmanID.Valid {
+		id := z.MasterZmanID.Bytes[:]
+		idStr := fmt.Sprintf("%x-%x-%x-%x-%x", id[0:4], id[4:6], id[6:8], id[8:10], id[10:16])
+		masterZmanID = &idStr
+	}
+	if z.LinkedPublisherZmanID.Valid {
+		id := z.LinkedPublisherZmanID.Bytes[:]
+		idStr := fmt.Sprintf("%x-%x-%x-%x-%x", id[0:4], id[4:6], id[6:8], id[8:10], id[10:16])
+		linkedPublisherZmanID = &idStr
+	}
+	if z.LinkedSourcePublisherName != nil {
+		linkedSourcePublisherName = z.LinkedSourcePublisherName
+	}
+
+	// Convert source values - COALESCE makes these non-nullable strings
+	var sourceHebrewName, sourceEnglishName, sourceTransliteration, sourceDescription, sourceFormulaDSL *string
+	if z.SourceHebrewName != "" {
+		sourceHebrewName = &z.SourceHebrewName
+	}
+	if z.SourceEnglishName != "" {
+		sourceEnglishName = &z.SourceEnglishName
+	}
+	if z.SourceTransliteration != nil && *z.SourceTransliteration != "" {
+		sourceTransliteration = z.SourceTransliteration
+	}
+	if z.SourceDescription != nil && *z.SourceDescription != "" {
+		sourceDescription = z.SourceDescription
+	}
+	if z.SourceFormulaDsl != "" {
+		sourceFormulaDSL = &z.SourceFormulaDsl
+	}
+
 	return PublisherZman{
-		ID:               z.ID,
-		PublisherID:      z.PublisherID,
-		ZmanKey:          z.ZmanKey,
-		HebrewName:       z.HebrewName,
-		EnglishName:      z.EnglishName,
-		FormulaDSL:       z.FormulaDsl,
-		AIExplanation:    z.AiExplanation,
-		PublisherComment: z.PublisherComment,
-		IsEnabled:        z.IsEnabled,
-		IsVisible:        z.IsVisible,
-		IsPublished:      z.IsPublished,
-		IsCustom:         z.IsCustom,
-		Category:         z.Category,
-		Dependencies:     z.Dependencies,
-		SortOrder:        int(z.SortOrder),
-		CreatedAt:        z.CreatedAt,
-		UpdatedAt:        z.UpdatedAt,
+		ID:                        z.ID,
+		PublisherID:               z.PublisherID,
+		ZmanKey:                   z.ZmanKey,
+		HebrewName:                z.HebrewName,
+		EnglishName:               z.EnglishName,
+		Transliteration:           z.Transliteration,
+		Description:               z.Description,
+		FormulaDSL:                z.FormulaDsl,
+		AIExplanation:             z.AiExplanation,
+		PublisherComment:          z.PublisherComment,
+		IsEnabled:                 z.IsEnabled,
+		IsVisible:                 z.IsVisible,
+		IsPublished:               z.IsPublished,
+		IsBeta:                    z.IsBeta,
+		IsCustom:                  z.IsCustom,
+		Category:                  z.Category,
+		Dependencies:              z.Dependencies,
+		SortOrder:                 int(z.SortOrder),
+		CreatedAt:                 z.CreatedAt,
+		UpdatedAt:                 z.UpdatedAt,
+		MasterZmanID:              masterZmanID,
+		LinkedPublisherZmanID:     linkedPublisherZmanID,
+		SourceType:                z.SourceType,
+		IsLinked:                  z.IsLinked,
+		LinkedSourcePublisherName: linkedSourcePublisherName,
+		SourceHebrewName:          sourceHebrewName,
+		SourceEnglishName:         sourceEnglishName,
+		SourceTransliteration:     sourceTransliteration,
+		SourceDescription:         sourceDescription,
+		SourceFormulaDSL:          sourceFormulaDSL,
 	}
 }
 
@@ -289,6 +413,7 @@ func createPublisherZmanRowToPublisherZman(z sqlcgen.CreatePublisherZmanRow) Pub
 		IsEnabled:        z.IsEnabled,
 		IsVisible:        z.IsVisible,
 		IsPublished:      z.IsPublished,
+		IsBeta:           z.IsBeta,
 		IsCustom:         z.IsCustom,
 		Category:         z.Category,
 		Dependencies:     z.Dependencies,
@@ -306,12 +431,15 @@ func updatePublisherZmanRowToPublisherZman(z sqlcgen.UpdatePublisherZmanRow) Pub
 		ZmanKey:          z.ZmanKey,
 		HebrewName:       z.HebrewName,
 		EnglishName:      z.EnglishName,
+		Transliteration:  z.Transliteration,
+		Description:      z.Description,
 		FormulaDSL:       z.FormulaDsl,
 		AIExplanation:    z.AiExplanation,
 		PublisherComment: z.PublisherComment,
 		IsEnabled:        z.IsEnabled,
 		IsVisible:        z.IsVisible,
 		IsPublished:      z.IsPublished,
+		IsBeta:           z.IsBeta,
 		IsCustom:         z.IsCustom,
 		Category:         z.Category,
 		Dependencies:     z.Dependencies,
@@ -511,13 +639,14 @@ func (h *Handlers) UpdatePublisherZman(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slog.Info("UpdatePublisherZman: request",
-		"zman_key", zmanKey, "category", req.Category, "is_enabled", req.IsEnabled, "is_published", req.IsPublished)
+		"zman_key", zmanKey, "category", req.Category, "is_enabled", req.IsEnabled, "is_published", req.IsPublished, "is_beta", req.IsBeta)
 
 	// At least one field must be provided
-	if req.HebrewName == nil && req.EnglishName == nil && req.FormulaDSL == nil &&
+	if req.HebrewName == nil && req.EnglishName == nil && req.Transliteration == nil &&
+		req.Description == nil && req.FormulaDSL == nil &&
 		req.AIExplanation == nil && req.PublisherComment == nil &&
 		req.IsEnabled == nil && req.IsVisible == nil && req.IsPublished == nil &&
-		req.Category == nil && req.SortOrder == nil {
+		req.IsBeta == nil && req.Category == nil && req.SortOrder == nil {
 		slog.Error("UpdatePublisherZman: no fields to update")
 		RespondBadRequest(w, r, "No fields to update")
 		return
@@ -542,12 +671,15 @@ func (h *Handlers) UpdatePublisherZman(w http.ResponseWriter, r *http.Request) {
 		ZmanKey:          zmanKey,
 		HebrewName:       req.HebrewName,
 		EnglishName:      req.EnglishName,
+		Transliteration:  req.Transliteration,
+		Description:      req.Description,
 		FormulaDsl:       req.FormulaDSL,
 		AiExplanation:    req.AIExplanation,
 		PublisherComment: req.PublisherComment,
 		IsEnabled:        req.IsEnabled,
 		IsVisible:        req.IsVisible,
 		IsPublished:      req.IsPublished,
+		IsBeta:           req.IsBeta,
 		Category:         req.Category,
 		SortOrder:        sortOrder,
 		Dependencies:     dependencies,
@@ -863,11 +995,10 @@ func (h *Handlers) BrowsePublicZmanim(w http.ResponseWriter, r *http.Request) {
 
 // VerifiedPublisher represents a verified publisher for linking
 type VerifiedPublisher struct {
-	ID           string  `json:"id"`
-	Name         string  `json:"name"`
-	Organization *string `json:"organization,omitempty"`
-	LogoURL      *string `json:"logo_url,omitempty"`
-	ZmanimCount  int     `json:"zmanim_count"`
+	ID          string  `json:"id"`
+	Name        string  `json:"name"`
+	LogoURL     *string `json:"logo_url,omitempty"`
+	ZmanimCount int     `json:"zmanim_count"`
 }
 
 // PublisherZmanForLinking represents a zman available for linking/copying
@@ -903,7 +1034,7 @@ func (h *Handlers) GetVerifiedPublishers(w http.ResponseWriter, r *http.Request)
 
 	query := `
 		SELECT
-			p.id, p.name, p.organization, p.logo_url,
+			p.id, p.name, p.logo_url,
 			COUNT(pz.id) AS zmanim_count
 		FROM publishers p
 		JOIN publisher_zmanim pz ON pz.publisher_id = p.id
@@ -913,7 +1044,7 @@ func (h *Handlers) GetVerifiedPublishers(w http.ResponseWriter, r *http.Request)
 		WHERE p.is_verified = true
 		  AND p.status = 'active'
 		  AND p.id != $1
-		GROUP BY p.id, p.name, p.organization, p.logo_url
+		GROUP BY p.id, p.name, p.logo_url
 		HAVING COUNT(pz.id) > 0
 		ORDER BY p.name
 	`
@@ -929,7 +1060,7 @@ func (h *Handlers) GetVerifiedPublishers(w http.ResponseWriter, r *http.Request)
 	var publishers []VerifiedPublisher
 	for rows.Next() {
 		var p VerifiedPublisher
-		err := rows.Scan(&p.ID, &p.Name, &p.Organization, &p.LogoURL, &p.ZmanimCount)
+		err := rows.Scan(&p.ID, &p.Name, &p.LogoURL, &p.ZmanimCount)
 		if err != nil {
 			slog.Error("failed to scan publisher", "error", err)
 			RespondInternalError(w, r, "Failed to fetch publishers")

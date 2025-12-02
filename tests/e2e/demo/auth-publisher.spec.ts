@@ -13,6 +13,9 @@ import {
   TIMEOUTS,
 } from '../utils';
 
+// Enable parallel mode for faster test execution
+test.describe.configure({ mode: 'parallel' });
+
 test.describe('Publisher Authentication Demo', () => {
   let publisherId: string;
 

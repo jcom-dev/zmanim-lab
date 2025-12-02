@@ -1,13 +1,12 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useAuth } from '@clerk/nextjs';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { PendingRequests } from '@/components/admin/PendingRequests';
 import Link from 'next/link';
 
-import { API_BASE } from '@/lib/api';
+import { useApi } from '@/lib/api-client';
 import { getStatusBadgeClasses } from '@/lib/badge-colors';
 import { StatusTooltip } from '@/components/shared/InfoTooltip';
 import { STATUS_TOOLTIPS, ADMIN_TOOLTIPS } from '@/lib/tooltip-content';
@@ -15,7 +14,6 @@ import { STATUS_TOOLTIPS, ADMIN_TOOLTIPS } from '@/lib/tooltip-content';
 interface Publisher {
   id: string;
   name: string;
-  organization: string;
   email: string;
   status: 'pending' | 'pending_verification' | 'verified' | 'suspended';
   clerk_user_id?: string;
@@ -27,7 +25,7 @@ interface Publisher {
 }
 
 export default function AdminPublishersPage() {
-  const { getToken } = useAuth();
+  const api = useApi();
   const [publishers, setPublishers] = useState<Publisher[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -37,28 +35,15 @@ export default function AdminPublishersPage() {
   const fetchPublishers = useCallback(async () => {
     try {
       setLoading(true);
-      const token = await getToken();
 
-      const response = await fetch(`${API_BASE}/api/v1/admin/publishers`, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch publishers');
-      }
-
-      const data = await response.json();
-      // API wraps response in {data: {publishers: [...]}, meta: {...}}
-      setPublishers(data.data?.publishers || data.publishers || []);
+      const data = await api.admin.get<{ publishers: Publisher[] }>('/admin/publishers');
+      setPublishers(data?.publishers || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setLoading(false);
     }
-  }, [getToken]);
+  }, [api]);
 
   useEffect(() => {
     fetchPublishers();
@@ -66,19 +51,7 @@ export default function AdminPublishersPage() {
 
   const handleStatusChange = async (publisherId: string, action: 'verify' | 'suspend' | 'reactivate') => {
     try {
-      const token = await getToken();
-      const endpoint = `${API_BASE}/api/v1/admin/publishers/${publisherId}/${action}`;
-      const response = await fetch(endpoint, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to ${action} publisher`);
-      }
+      await api.admin.put(`/admin/publishers/${publisherId}/${action}`);
 
       // Refresh the list
       await fetchPublishers();
@@ -91,7 +64,6 @@ export default function AdminPublishersPage() {
   const filteredPublishers = publishers.filter((publisher) => {
     const matchesSearch =
       publisher.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      publisher.organization.toLowerCase().includes(searchTerm.toLowerCase()) ||
       publisher.email.toLowerCase().includes(searchTerm.toLowerCase());
 
     // Match pending filter to both 'pending' and 'pending_verification' statuses
@@ -150,7 +122,7 @@ export default function AdminPublishersPage() {
             <div className="flex-1">
               <input
                 type="text"
-                placeholder="Search by name, organization, or email..."
+                placeholder="Search by name or email..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full px-4 py-2 border border-border rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
@@ -185,8 +157,7 @@ export default function AdminPublishersPage() {
             <table className="w-full">
               <thead className="border-b">
                 <tr className="text-left">
-                  <th className="pb-3 font-semibold">Name</th>
-                  <th className="pb-3 font-semibold">Organization</th>
+                  <th className="pb-3 font-semibold">Publisher Name</th>
                   <th className="pb-3 font-semibold">Email</th>
                   <th className="pb-3 font-semibold">Status</th>
                   <th className="pb-3 font-semibold">Created</th>
@@ -196,7 +167,7 @@ export default function AdminPublishersPage() {
               <tbody>
                 {filteredPublishers.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="py-8 text-center text-muted-foreground">
+                    <td colSpan={5} className="py-8 text-center text-muted-foreground">
                       No publishers found
                     </td>
                   </tr>
@@ -207,11 +178,6 @@ export default function AdminPublishersPage() {
                         <Link href={`/admin/publishers/${publisher.id}`} className="font-medium text-blue-600 hover:underline">
                           {publisher.name}
                         </Link>
-                      </td>
-                      <td className="py-4">
-                        <div className="max-w-[150px] md:max-w-none truncate">
-                          {publisher.organization}
-                        </div>
                       </td>
                       <td className="py-4">
                         <a

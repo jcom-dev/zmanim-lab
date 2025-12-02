@@ -11,6 +11,9 @@
 import { test, expect } from '@playwright/test';
 import { BASE_URL, testData } from '../utils';
 
+// Enable parallel mode for faster test execution
+test.describe.configure({ mode: 'parallel' });
+
 test.describe('Become Publisher - Page Access', () => {
   test('become publisher page is accessible', async ({ page }) => {
     await page.goto(`${BASE_URL}/become-publisher`);

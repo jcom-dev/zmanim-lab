@@ -1,7 +1,7 @@
 'use client';
-import { API_BASE } from '@/lib/api';
+import { useApi } from '@/lib/api-client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
@@ -16,43 +16,32 @@ interface Fork {
 
 interface MyForksProps {
   onEdit?: (algorithmId: string) => void;
-  getToken: () => Promise<string | null>;
+  /** @deprecated No longer needed - component uses useApi internally */
+  getToken?: () => Promise<string | null>;
 }
 
-export function MyForks({ onEdit, getToken }: MyForksProps) {
+export function MyForks({ onEdit }: MyForksProps) {
+  const api = useApi();
   const [forks, setForks] = useState<Fork[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadForks();
-  }, []);
-
-  const loadForks = async () => {
+  const loadForks = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const token = await getToken();
-      
-      const response = await fetch(`${API_BASE}/api/v1/publisher/algorithm/forks`, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to load forks');
-      }
-
-      const data = await response.json();
-      setForks(data.forks || []);
+      const data = await api.get<{ forks: Fork[] }>('/publisher/algorithm/forks');
+      setForks(data?.forks || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load forks');
     } finally {
       setLoading(false);
     }
-  };
+  }, [api]);
+
+  useEffect(() => {
+    loadForks();
+  }, [loadForks]);
 
   if (loading) {
     return (

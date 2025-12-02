@@ -49,8 +49,8 @@ func main() {
 		}
 		migrationsDir = os.Args[1]
 	} else {
-		// Default to supabase migrations directory
-		migrationsDir = "../supabase/migrations"
+		// Default to db migrations directory
+		migrationsDir = "../db/migrations"
 	}
 
 	// Find all .sql files in migrations directory

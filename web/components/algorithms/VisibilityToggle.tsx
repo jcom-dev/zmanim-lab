@@ -1,5 +1,5 @@
 'use client';
-import { API_BASE } from '@/lib/api';
+import { useApi } from '@/lib/api-client';
 
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -7,10 +7,12 @@ import { Button } from '@/components/ui/button';
 interface VisibilityToggleProps {
   isPublic: boolean;
   onChange?: (isPublic: boolean) => void;
-  getToken: () => Promise<string | null>;
+  /** @deprecated No longer needed - component uses useApi internally */
+  getToken?: () => Promise<string | null>;
 }
 
-export function VisibilityToggle({ isPublic: initialPublic, onChange, getToken }: VisibilityToggleProps) {
+export function VisibilityToggle({ isPublic: initialPublic, onChange }: VisibilityToggleProps) {
+  const api = useApi();
   const [isPublic, setIsPublic] = useState(initialPublic);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -21,20 +23,9 @@ export function VisibilityToggle({ isPublic: initialPublic, onChange, getToken }
     const newValue = !isPublic;
 
     try {
-      const token = await getToken();
-      
-      const response = await fetch(`${API_BASE}/api/v1/publisher/algorithm/visibility`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
+      await api.put('/publisher/algorithm/visibility', {
         body: JSON.stringify({ is_public: newValue }),
       });
-
-      if (!response.ok) {
-        throw new Error('Failed to update visibility');
-      }
 
       setIsPublic(newValue);
       onChange?.(newValue);

@@ -5,6 +5,7 @@ import { QueryProvider } from '@/providers/QueryProvider';
 import { ThemeProvider } from '@/components/theme-provider';
 import { Toaster } from 'sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { DevModeBanner } from '@/components/shared/DevModeBanner';
 import './globals.css';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -60,6 +61,7 @@ export default function RootLayout({
           >
             <QueryProvider>
               <TooltipProvider delayDuration={300}>
+                <DevModeBanner />
                 <div className="min-h-screen bg-background text-foreground">
                   {children}
                 </div>

@@ -1,5 +1,5 @@
 'use client';
-import { API_BASE } from '@/lib/api';
+import { useApi } from '@/lib/api-client';
 
 import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
@@ -19,10 +19,12 @@ interface Version {
 interface VersionHistoryProps {
   algorithmId?: string;
   onRestore?: () => void;
-  getToken: () => Promise<string | null>;
+  /** @deprecated No longer needed - component uses useApi internally */
+  getToken?: () => Promise<string | null>;
 }
 
-export function VersionHistory({ onRestore, getToken }: VersionHistoryProps) {
+export function VersionHistory({ onRestore }: VersionHistoryProps) {
+  const api = useApi();
   const [versions, setVersions] = useState<Version[]>([]);
   const [currentVersion, setCurrentVersion] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -34,28 +36,15 @@ export function VersionHistory({ onRestore, getToken }: VersionHistoryProps) {
     setLoading(true);
     setError(null);
     try {
-      const token = await getToken();
-      
-      const response = await fetch(`${API_BASE}/api/v1/publisher/algorithm/history`, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to load version history');
-      }
-
-      const data = await response.json();
-      setVersions(data.versions || []);
-      setCurrentVersion(data.current_version || 0);
+      const data = await api.get<{ versions: Version[]; current_version: number }>('/publisher/algorithm/history');
+      setVersions(data?.versions || []);
+      setCurrentVersion(data?.current_version || 0);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load versions');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [api]);
 
   useEffect(() => {
     loadVersions();
@@ -208,7 +197,6 @@ export function VersionHistory({ onRestore, getToken }: VersionHistoryProps) {
         <VersionDiff
           v1={Math.min(...selectedVersions)}
           v2={Math.max(...selectedVersions)}
-          getToken={getToken}
         />
       )}
 
@@ -218,7 +206,6 @@ export function VersionHistory({ onRestore, getToken }: VersionHistoryProps) {
           version={restoreVersion}
           onClose={() => setRestoreVersion(null)}
           onRestore={handleRestoreComplete}
-          getToken={getToken}
         />
       )}
     </div>

@@ -18,6 +18,9 @@ import {
   BASE_URL,
 } from '../utils';
 
+// Enable parallel mode for faster test execution
+test.describe.configure({ mode: 'parallel' });
+
 test.describe('Publisher Algorithm Editor', () => {
   let testPublisher: { id: string; name: string };
 
@@ -142,7 +145,18 @@ test.describe('Publisher Algorithm - New Publisher Flow', () => {
     const getStartedButton = page.getByRole('button', { name: /get started/i });
     if (await getStartedButton.isVisible({ timeout: 5000 }).catch(() => false)) {
       await getStartedButton.click();
-      await page.waitForTimeout(500);
+
+      // Wait for template options to appear
+      await page.waitForFunction(
+        () => {
+          const text = document.body.textContent || '';
+          return text.includes('GRA') ||
+            text.includes('template') ||
+            text.includes('Publisher') ||
+            text.includes('Copy');
+        },
+        { timeout: 10000 }
+      );
 
       // Should now see template options or copy from publisher option
       const pageContent = await page.textContent('body');

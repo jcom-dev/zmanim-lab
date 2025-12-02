@@ -8,6 +8,9 @@
 import { test, expect } from '@playwright/test';
 import { loginAsAdmin, BASE_URL, TIMEOUTS } from '../utils';
 
+// Enable parallel mode for faster test execution
+test.describe.configure({ mode: 'parallel' });
+
 test.describe('Admin Authentication Demo', () => {
   test('admin can login and access /admin route', async ({ page }) => {
     // Login as admin using our helper

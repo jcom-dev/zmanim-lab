@@ -18,7 +18,6 @@ import { useAdminApi } from '@/lib/api-client';
 interface PublisherRequest {
   id: string;
   name: string;
-  organization: string;
   email: string;
   website?: string;
   description: string;
@@ -150,7 +149,6 @@ export function PendingRequests({ onApprove }: PendingRequestsProps) {
                   <div className="flex justify-between items-start">
                     <div>
                       <h4 className="font-medium">{request.name}</h4>
-                      <p className="text-sm text-muted-foreground">{request.organization}</p>
                       <p className="text-sm text-muted-foreground">{request.email}</p>
                     </div>
                     <span className="text-xs text-muted-foreground">
@@ -175,12 +173,8 @@ export function PendingRequests({ onApprove }: PendingRequestsProps) {
               </DialogHeader>
               <div className="space-y-4 py-4">
                 <div>
-                  <label className="text-sm font-medium text-muted-foreground">Name</label>
+                  <label className="text-sm font-medium text-muted-foreground">Publisher / Organization Name</label>
                   <p className="text-foreground">{selectedRequest.name}</p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">Organization</label>
-                  <p className="text-foreground">{selectedRequest.organization}</p>
                 </div>
                 <div>
                   <label className="text-sm font-medium text-muted-foreground">Email</label>

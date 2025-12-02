@@ -112,22 +112,26 @@ development_status:
   #   - If API/web not working: run ./restart.sh from project root
   #   - Full E2E regression only required at epic completion, not per-story
   epic-5: contexted
-  # Stories 5.0-5.10: Feature stories - READY FOR DEV with context files (2025-12-02)
-  5-0-database-schema-aliases: ready-for-dev        # Schema for publisher aliases & zman requests
-  5-1-human-friendly-errors: ready-for-dev          # Plain language validation error messages
-  5-2-contextual-tooltips: ready-for-dev            # Cursor-position-aware hints in DSL editor
-  5-3-smart-placeholders: ready-for-dev             # Real examples instead of abstract placeholders
-  5-4-publisher-alias-api: ready-for-dev            # API for publisher zman custom naming
-  5-5-publisher-alias-ui: ready-for-dev             # UI for renaming zmanim in Advanced mode
-  5-6-request-zman-api: ready-for-dev               # API for requesting new zmanim + email
-  5-7-request-zman-ui: ready-for-dev                # Multi-step form for new zman requests
-  5-8-admin-zman-review: ready-for-dev              # Admin page for reviewing zman requests
-  5-9-reference-panel-enhancements: ready-for-dev   # Contextual highlighting in reference panel
-  5-10-publisher-logo-editor: ready-for-dev         # Mandatory logo with crop/zoom editor
-  # Stories 5.11-5.16: Technical debt stories - READY FOR DEV with context files (2025-12-02)
-  5-11-frontend-useapi-migration: ready-for-dev     # Migrate 73 raw fetch() to useApi hook
-  5-12-backend-slog-migration: ready-for-dev        # Migrate ~100 log.Printf to slog
-  5-13-e2e-deterministic-waits: ready-for-dev       # Replace 52 waitForTimeout with proper waits
-  5-14-e2e-parallel-mode: ready-for-dev             # Add parallel mode to 23 test files
-  5-15-api-response-standardization: ready-for-dev  # Fix ~80 double-wrapped API responses
-  5-16-ci-quality-gates: ready-for-dev              # Pre-commit hooks and CI standards checks
+  # Stories 5.0-5.10: Feature stories - COMPLETED 2025-12-02
+  5-0-database-schema-aliases: done                 # Schema for publisher aliases & zman requests
+  5-1-human-friendly-errors: done                   # Plain language validation error messages
+  5-2-contextual-tooltips: done                     # Cursor-position-aware hints in DSL editor
+  5-3-smart-placeholders: done                      # Real examples instead of abstract placeholders
+  5-4-publisher-alias-api: done                     # API for publisher zman custom naming
+  5-5-publisher-alias-ui: done                      # UI for renaming zmanim in Advanced mode
+  5-6-request-zman-api: done                        # API for requesting new zmanim + email
+  5-7-request-zman-ui: done                         # Multi-step form for new zman requests
+  5-8-admin-zman-review: done                       # Admin page for reviewing zman requests
+  5-9-reference-panel-enhancements: done            # Contextual highlighting in reference panel
+  5-10-publisher-logo-editor: done                  # Mandatory logo with crop/zoom editor
+  # Stories 5.11-5.17: Technical debt stories - COMPLETED 2025-12-02
+  5-11-frontend-useapi-migration: done              # Migrate 73 raw fetch() to useApi hook
+  5-12-backend-slog-migration: done                 # Migrate ~100 log.Printf to slog
+  5-13-e2e-deterministic-waits: done                # Replace 52 waitForTimeout with proper waits
+  5-14-e2e-parallel-mode: done                      # Add parallel mode to 23 test files
+  5-15-api-response-standardization: done           # Fix ~80 double-wrapped API responses
+  5-16-ci-quality-gates: done                       # Pre-commit hooks and CI standards checks
+  5-17-publisher-schema-refactor: done              # Remove organization field, mandatory logo with AI generation
+  # Remaining stories
+  5-18-publisher-zman-field-ownership: done           # Publisher owns copy of description, transliteration, formula with diff/revert
+  5-19-zman-request-review-workflow: done            # Unified review form, tag approval pipeline, email notifications

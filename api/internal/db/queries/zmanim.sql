@@ -6,12 +6,19 @@
 -- name: GetPublisherZmanim :many
 SELECT
     pz.id, pz.publisher_id, pz.zman_key, pz.hebrew_name, pz.english_name,
+    pz.transliteration, pz.description,
     -- Resolve formula from linked source if applicable
     COALESCE(linked_pz.formula_dsl, pz.formula_dsl) AS formula_dsl,
     pz.ai_explanation, pz.publisher_comment,
-    pz.is_enabled, pz.is_visible, pz.is_published, pz.is_custom, pz.category,
+    pz.is_enabled, pz.is_visible, pz.is_published, pz.is_beta, pz.is_custom, pz.category,
     pz.dependencies, pz.sort_order, pz.created_at, pz.updated_at,
     pz.master_zman_id, pz.linked_publisher_zman_id, pz.source_type,
+    -- Source/original values from registry or linked publisher (for diff/revert UI)
+    COALESCE(mr.canonical_hebrew_name, linked_pz.hebrew_name) AS source_hebrew_name,
+    COALESCE(mr.canonical_english_name, linked_pz.english_name) AS source_english_name,
+    COALESCE(mr.transliteration, linked_pz.transliteration) AS source_transliteration,
+    COALESCE(mr.description, linked_pz.description) AS source_description,
+    COALESCE(mr.default_formula_dsl, linked_pz.formula_dsl) AS source_formula_dsl,
     -- Check if this zman is linked to any events (daily zmanim have no event links)
     EXISTS (
         SELECT 1 FROM master_zman_events mze
@@ -40,31 +47,47 @@ SELECT
 FROM publisher_zmanim pz
 LEFT JOIN publisher_zmanim linked_pz ON pz.linked_publisher_zman_id = linked_pz.id
 LEFT JOIN publishers linked_pub ON linked_pz.publisher_id = linked_pub.id
+LEFT JOIN master_zmanim_registry mr ON pz.master_zman_id = mr.id
 WHERE pz.publisher_id = $1
   AND pz.deleted_at IS NULL
 ORDER BY pz.sort_order, pz.hebrew_name;
 
 -- name: GetPublisherZmanByKey :one
 SELECT
-    id, publisher_id, zman_key, hebrew_name, english_name,
-    formula_dsl, ai_explanation, publisher_comment,
-    is_enabled, is_visible, is_published, is_custom, category,
-    dependencies, sort_order, created_at, updated_at
-FROM publisher_zmanim
-WHERE publisher_id = $1 AND zman_key = $2;
+    pz.id, pz.publisher_id, pz.zman_key, pz.hebrew_name, pz.english_name,
+    pz.transliteration, pz.description,
+    COALESCE(linked_pz.formula_dsl, pz.formula_dsl) AS formula_dsl,
+    pz.ai_explanation, pz.publisher_comment,
+    pz.is_enabled, pz.is_visible, pz.is_published, pz.is_beta, pz.is_custom, pz.category,
+    pz.dependencies, pz.sort_order, pz.created_at, pz.updated_at,
+    pz.master_zman_id, pz.linked_publisher_zman_id, pz.source_type,
+    -- Source/original values from registry or linked publisher (for diff/revert UI)
+    COALESCE(mr.canonical_hebrew_name, linked_pz.hebrew_name) AS source_hebrew_name,
+    COALESCE(mr.canonical_english_name, linked_pz.english_name) AS source_english_name,
+    COALESCE(mr.transliteration, linked_pz.transliteration) AS source_transliteration,
+    COALESCE(mr.description, linked_pz.description) AS source_description,
+    COALESCE(mr.default_formula_dsl, linked_pz.formula_dsl) AS source_formula_dsl,
+    -- Linked source info
+    CASE WHEN pz.linked_publisher_zman_id IS NOT NULL THEN true ELSE false END AS is_linked,
+    linked_pub.name AS linked_source_publisher_name
+FROM publisher_zmanim pz
+LEFT JOIN publisher_zmanim linked_pz ON pz.linked_publisher_zman_id = linked_pz.id
+LEFT JOIN publishers linked_pub ON linked_pz.publisher_id = linked_pub.id
+LEFT JOIN master_zmanim_registry mr ON pz.master_zman_id = mr.id
+WHERE pz.publisher_id = $1 AND pz.zman_key = $2 AND pz.deleted_at IS NULL;
 
 -- name: CreatePublisherZman :one
 INSERT INTO publisher_zmanim (
     id, publisher_id, zman_key, hebrew_name, english_name,
     formula_dsl, ai_explanation, publisher_comment,
-    is_enabled, is_visible, is_published, is_custom, category,
+    is_enabled, is_visible, is_published, is_beta, is_custom, category,
     dependencies, sort_order, master_zman_id, linked_publisher_zman_id, source_type
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19
 )
 RETURNING id, publisher_id, zman_key, hebrew_name, english_name,
     formula_dsl, ai_explanation, publisher_comment,
-    is_enabled, is_visible, is_published, is_custom, category,
+    is_enabled, is_visible, is_published, is_beta, is_custom, category,
     dependencies, sort_order, master_zman_id, linked_publisher_zman_id, source_type,
     created_at, updated_at;
 
@@ -72,20 +95,27 @@ RETURNING id, publisher_id, zman_key, hebrew_name, english_name,
 UPDATE publisher_zmanim
 SET hebrew_name = COALESCE(sqlc.narg('hebrew_name'), hebrew_name),
     english_name = COALESCE(sqlc.narg('english_name'), english_name),
+    transliteration = COALESCE(sqlc.narg('transliteration'), transliteration),
+    description = COALESCE(sqlc.narg('description'), description),
     formula_dsl = COALESCE(sqlc.narg('formula_dsl'), formula_dsl),
     ai_explanation = COALESCE(sqlc.narg('ai_explanation'), ai_explanation),
     publisher_comment = COALESCE(sqlc.narg('publisher_comment'), publisher_comment),
     is_enabled = COALESCE(sqlc.narg('is_enabled'), is_enabled),
     is_visible = COALESCE(sqlc.narg('is_visible'), is_visible),
     is_published = COALESCE(sqlc.narg('is_published'), is_published),
+    is_beta = COALESCE(sqlc.narg('is_beta'), is_beta),
+    certified_at = CASE
+        WHEN sqlc.narg('is_beta')::boolean = false AND is_beta = true THEN NOW()
+        ELSE certified_at
+    END,
     category = COALESCE(sqlc.narg('category'), category),
     sort_order = COALESCE(sqlc.narg('sort_order'), sort_order),
     dependencies = COALESCE(sqlc.narg('dependencies'), dependencies),
     updated_at = NOW()
 WHERE publisher_id = $1 AND zman_key = $2
 RETURNING id, publisher_id, zman_key, hebrew_name, english_name,
-    formula_dsl, ai_explanation, publisher_comment,
-    is_enabled, is_visible, is_published, is_custom, category,
+    transliteration, description, formula_dsl, ai_explanation, publisher_comment,
+    is_enabled, is_visible, is_published, is_beta, is_custom, category,
     dependencies, sort_order, created_at, updated_at;
 
 -- name: DeletePublisherZman :one
@@ -207,7 +237,7 @@ WHERE publisher_id = $1 AND zman_key = ANY($2::text[]);
 -- name: GetVerifiedPublishersForLinking :many
 -- Get verified publishers that current publisher can link to (excludes self)
 SELECT
-    p.id, p.name, p.organization, p.logo_url,
+    p.id, p.name, p.logo_url,
     COUNT(pz.id) AS zmanim_count
 FROM publishers p
 JOIN publisher_zmanim pz ON pz.publisher_id = p.id
@@ -217,7 +247,7 @@ JOIN publisher_zmanim pz ON pz.publisher_id = p.id
 WHERE p.is_verified = true
   AND p.status = 'active'
   AND p.id != $1  -- Exclude self
-GROUP BY p.id, p.name, p.organization, p.logo_url
+GROUP BY p.id, p.name, p.logo_url
 HAVING COUNT(pz.id) > 0
 ORDER BY p.name;
 

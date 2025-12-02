@@ -18,7 +18,7 @@ Zmanim Lab is a multi-publisher platform enabling halachic authorities to publis
 **Structure Audit Results:**
 - Frontend: Next.js 16 + React 19 + Tailwind CSS ✅
 - Backend: Go 1.21 + Chi v5 + pgx v5 ✅
-- Database: Supabase (PostgreSQL) ✅
+- Database: PostgreSQL (Xata) with PostGIS ✅
 - Monorepo: `web/` + `api/` separation ✅
 
 **Gaps to Address:**
@@ -37,7 +37,7 @@ Zmanim Lab is a multi-publisher platform enabling halachic authorities to publis
 | Styling | Tailwind CSS | 3.4+ | All UI | Existing, utility-first |
 | State Management | TanStack Query | 5.x | FR21-FR33 | Server state, caching |
 | Backend Framework | Go + Chi | 1.21 / 5.x | All API | Existing, performant |
-| Database | Supabase (PostgreSQL) | Latest | All data | Existing, managed |
+| Database | PostgreSQL (Xata) + PostGIS | Latest | All data | Existing, managed |
 | Authentication | Clerk | Latest | FR1-FR6 | Per PRD, managed auth |
 | API Pattern | REST | - | FR39-FR42 | Go-native, simple |
 | Hosting (API) | Fly.io | - | All | Existing deployment |
@@ -103,7 +103,7 @@ zmanim-lab/
 │   │   ├── config/
 │   │   │   └── config.go         # Environment config
 │   │   ├── db/
-│   │   │   └── supabase.go       # Database connection
+│   │   │   └── postgres.go       # Database connection
 │   │   ├── handlers/
 │   │   │   ├── health.go         # Health check
 │   │   │   ├── publishers.go     # Publisher endpoints
@@ -133,7 +133,7 @@ zmanim-lab/
 │   │       ├── angles.go           # Solar depression angles
 │   │       └── times.go            # Time calculations
 │   └── Dockerfile
-├── supabase/
+├── db/
 │   └── migrations/               # SQL migrations
 ├── docs/                         # Documentation
 │   ├── architecture.md           # This document
@@ -185,7 +185,7 @@ zmanim-lab/
 **Infrastructure:**
 | Technology | Purpose |
 |------------|---------|
-| Supabase | Managed PostgreSQL + Auth helpers |
+| Xata PostgreSQL | Managed PostgreSQL + PostGIS |
 | Fly.io | API hosting (Go backend) |
 | Vercel | Frontend hosting (Next.js) |
 | Upstash Redis | Serverless caching (REST API) |
@@ -232,7 +232,7 @@ zmanim-lab/
                        │                │                        │
                        ▼                ▼                        │
 ┌─────────────────────────────┐  ┌─────────────────────────────┐ │
-│      Upstash Redis          │  │     Supabase (PostgreSQL)   │ │
+│      Upstash Redis          │  │     Xata (PostgreSQL)        │ │
 │  (Serverless Cache)         │  │  publishers, algorithms,    │ │
 │  - Zmanim calculations      │  │  cities, users              │ │
 │  - 24hr TTL                 │  └─────────────────────────────┘ │
@@ -791,7 +791,7 @@ func (s *CacheService) SetZmanim(ctx context.Context, key string, result *Zmanim
 │                                        │                    │
 │                                        ▼                    │
 │                            ┌─────────────────┐              │
-│                            │    Supabase     │              │
+│                            │       Xata      │              │
 │                            │  (PostgreSQL)   │              │
 │                            │                 │              │
 │                            │  - Managed DB   │              │
@@ -845,7 +845,7 @@ CLERK_SECRET_KEY=sk_live_...
 | Node.js | 20+ LTS | Frontend development |
 | npm | 10+ | Package management |
 | Docker | Latest | Local services (optional) |
-| Supabase CLI | Latest | Database migrations |
+| psql | Latest | Database migrations |
 
 ### Local Setup
 
@@ -864,12 +864,11 @@ npm run dev
 # Backend setup (separate terminal)
 cd api
 cp .env.example .env
-# Edit .env with Supabase connection and Clerk secret
+# Edit .env with database connection and Clerk secret
 go run cmd/api/main.go
 
-# Database (if using Supabase CLI locally)
-supabase start
-supabase db push
+# Run database migrations
+./scripts/migrate.sh
 ```
 
 ### Testing Strategy
@@ -894,7 +893,7 @@ supabase db push
 1. Rename workspace from "shtetl" to "zmanim-lab"
 2. Remove Redis (not needed for POC)
 3. Update to single repo (not multi-repo submodules)
-4. Configure Supabase connection
+4. Configure database connection
 5. Update ports: Web (3000), API (8080)
 6. Add Playwright for E2E testing
 
@@ -944,7 +943,7 @@ Zmanim Lab uses Playwright for comprehensive E2E testing with Clerk authenticati
 | Playwright | E2E browser automation |
 | @clerk/testing | Clerk auth injection |
 | MailSlurp | Email testing |
-| Supabase client | Test fixture creation |
+| pg client | Test fixture creation |
 
 ### Test Organization
 

@@ -8,6 +8,9 @@
 import { test, expect } from '@playwright/test';
 import { BASE_URL, TIMEOUTS } from '../utils';
 
+// Enable parallel mode for faster test execution
+test.describe.configure({ mode: 'parallel' });
+
 test.describe('Unauthenticated Redirect Demo', () => {
   test('unauthenticated user redirected from /admin to sign-in', async ({
     page,

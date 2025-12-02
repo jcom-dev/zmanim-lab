@@ -35,7 +35,7 @@
 
 import { useCallback, useMemo } from 'react';
 import { useAuth } from '@clerk/nextjs';
-import { usePublisherContext } from '@/providers/PublisherContext';
+import { usePublisherContextOptional } from '@/providers/PublisherContext';
 
 // =============================================================================
 // Configuration
@@ -96,7 +96,6 @@ export interface RequestOptions extends Omit<RequestInit, 'headers' | 'body'> {
 export interface Publisher {
   id: string;
   name: string;
-  organization?: string;
   status?: string;
 }
 
@@ -333,11 +332,11 @@ export function createApiClient(
  */
 export function usePublisherApi() {
   const { getToken } = useAuth();
-  const publisherContext = usePublisherContext();
+  const publisherContext = usePublisherContextOptional();
 
   const api = useMemo(
-    () => createApiClient(getToken, publisherContext.selectedPublisher),
-    [getToken, publisherContext.selectedPublisher]
+    () => createApiClient(getToken, publisherContext?.selectedPublisher ?? null),
+    [getToken, publisherContext?.selectedPublisher]
   );
 
   return api;

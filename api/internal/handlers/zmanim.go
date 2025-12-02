@@ -2,7 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
-	"log"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -32,10 +32,9 @@ type ZmanimWithFormulaResponse struct {
 
 // ZmanimPublisherInfo contains publisher details for the response
 type ZmanimPublisherInfo struct {
-	ID           string  `json:"id"`
-	Name         string  `json:"name"`
-	Organization *string `json:"organization,omitempty"`
-	LogoURL      *string `json:"logo_url,omitempty"`
+	ID      string  `json:"id"`
+	Name    string  `json:"name"`
+	LogoURL *string `json:"logo_url,omitempty"`
 }
 
 // ZmanimLocationInfo contains location details for the response
@@ -51,10 +50,11 @@ type ZmanimLocationInfo struct {
 
 // ZmanWithFormula represents a single zman with formula details
 type ZmanWithFormula struct {
-	Name       string                 `json:"name"`
-	Key        string                 `json:"key"`
-	Time       string                 `json:"time"`
-	Formula    FormulaDetails         `json:"formula"`
+	Name    string         `json:"name"`
+	Key     string         `json:"key"`
+	Time    string         `json:"time"`
+	IsBeta  bool           `json:"is_beta"`
+	Formula FormulaDetails `json:"formula"`
 }
 
 // FormulaDetails contains information about how a zman was calculated
@@ -103,7 +103,7 @@ func (h *Handlers) GetZmanimForCity(w http.ResponseWriter, r *http.Request) {
 	if h.cache != nil {
 		cached, err := h.cache.GetZmanim(ctx, cachePublisherID, cityID, dateStr)
 		if err != nil {
-			log.Printf("Cache read error: %v", err)
+			slog.Error("cache read error", "error", err)
 		} else if cached != nil {
 			// Return cached response
 			var response ZmanimWithFormulaResponse
@@ -148,16 +148,15 @@ func (h *Handlers) GetZmanimForCity(w http.ResponseWriter, r *http.Request) {
 	var publisherInfo *ZmanimPublisherInfo
 	if publisherID != "" {
 		// First, get publisher info
-		pubQuery := `SELECT name, organization, logo_url FROM publishers WHERE id = $1`
+		pubQuery := `SELECT name, logo_url FROM publishers WHERE id = $1`
 		var pubName string
-		var pubOrg, pubLogo *string
-		err = h.db.Pool.QueryRow(ctx, pubQuery, publisherID).Scan(&pubName, &pubOrg, &pubLogo)
+		var pubLogo *string
+		err = h.db.Pool.QueryRow(ctx, pubQuery, publisherID).Scan(&pubName, &pubLogo)
 		if err == nil {
 			publisherInfo = &ZmanimPublisherInfo{
-				ID:           publisherID,
-				Name:         pubName,
-				Organization: pubOrg,
-				LogoURL:      pubLogo,
+				ID:      publisherID,
+				Name:    pubName,
+				LogoURL: pubLogo,
 			}
 		}
 
@@ -188,6 +187,27 @@ func (h *Handlers) GetZmanimForCity(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Fetch beta status for zmanim if a publisher is specified
+	betaStatusMap := make(map[string]bool)
+	if publisherID != "" {
+		betaQuery := `
+			SELECT zman_key, is_beta
+			FROM publisher_zmanim
+			WHERE publisher_id = $1 AND deleted_at IS NULL AND is_beta = true
+		`
+		betaRows, betaErr := h.db.Pool.Query(ctx, betaQuery, publisherID)
+		if betaErr == nil {
+			defer betaRows.Close()
+			for betaRows.Next() {
+				var zmanKey string
+				var isBeta bool
+				if err := betaRows.Scan(&zmanKey, &isBeta); err == nil {
+					betaStatusMap[zmanKey] = isBeta
+				}
+			}
+		}
+	}
+
 	// Build response
 	response := ZmanimWithFormulaResponse{
 		Date: dateStr,
@@ -207,9 +227,10 @@ func (h *Handlers) GetZmanimForCity(w http.ResponseWriter, r *http.Request) {
 
 	for _, zman := range results.Zmanim {
 		response.Zmanim = append(response.Zmanim, ZmanWithFormula{
-			Name: zman.Name,
-			Key:  zman.Key,
-			Time: zman.TimeString,
+			Name:   zman.Name,
+			Key:    zman.Key,
+			Time:   zman.TimeString,
+			IsBeta: betaStatusMap[zman.Key],
 			Formula: FormulaDetails{
 				Method:      zman.Formula.Method,
 				DisplayName: zman.Formula.DisplayName,
@@ -237,9 +258,10 @@ func (h *Handlers) GetZmanimForCity(w http.ResponseWriter, r *http.Request) {
 		// Default: 18 minutes before sunset
 		candleLightingTime := astro.SubtractMinutes(sunTimes.Sunset, 18)
 		response.Zmanim = append(response.Zmanim, ZmanWithFormula{
-			Name: "Candle Lighting",
-			Key:  "candle_lighting",
-			Time: astro.FormatTime(candleLightingTime),
+			Name:   "Candle Lighting",
+			Key:    "candle_lighting",
+			Time:   astro.FormatTime(candleLightingTime),
+			IsBeta: false, // System-generated, never beta
 			Formula: FormulaDetails{
 				Method:      "fixed_minutes",
 				DisplayName: "18 minutes before sunset",
@@ -257,9 +279,10 @@ func (h *Handlers) GetZmanimForCity(w http.ResponseWriter, r *http.Request) {
 		// Default: 42 minutes after sunset (8.5° below horizon approximation)
 		havdalahTime := astro.AddMinutes(sunTimes.Sunset, 42)
 		response.Zmanim = append(response.Zmanim, ZmanWithFormula{
-			Name: "Havdalah",
-			Key:  "havdalah",
-			Time: astro.FormatTime(havdalahTime),
+			Name:   "Havdalah",
+			Key:    "havdalah",
+			Time:   astro.FormatTime(havdalahTime),
+			IsBeta: false, // System-generated, never beta
 			Formula: FormulaDetails{
 				Method:      "fixed_minutes",
 				DisplayName: "42 minutes after sunset",
@@ -275,7 +298,7 @@ func (h *Handlers) GetZmanimForCity(w http.ResponseWriter, r *http.Request) {
 	// Cache the result (if cache available)
 	if h.cache != nil {
 		if err := h.cache.SetZmanim(ctx, cachePublisherID, cityID, dateStr, response); err != nil {
-			log.Printf("Cache write error: %v", err)
+			slog.Error("cache write error", "error", err)
 		}
 	}
 
@@ -354,14 +377,14 @@ func (h *Handlers) InvalidatePublisherCache(w http.ResponseWriter, r *http.Reque
 	// Invalidate Redis cache (if available)
 	if h.cache != nil {
 		if err := h.cache.InvalidateZmanim(ctx, publisherID); err != nil {
-			log.Printf("Redis cache invalidation error: %v", err)
+			slog.Error("redis cache invalidation error", "error", err)
 		} else {
-			log.Printf("Redis cache invalidated for publisher %s", publisherID)
+			slog.Info("redis cache invalidated", "publisher_id", publisherID)
 			redisDeleted = 1 // Indicates success (actual count is logged by cache)
 		}
 		// Also invalidate algorithm cache
 		if err := h.cache.InvalidateAlgorithm(ctx, publisherID); err != nil {
-			log.Printf("Redis algorithm cache invalidation error: %v", err)
+			slog.Error("redis algorithm cache invalidation error", "error", err)
 		}
 	}
 
@@ -374,7 +397,7 @@ func (h *Handlers) InvalidatePublisherCache(w http.ResponseWriter, r *http.Reque
 	`
 	result, err := h.db.Pool.Exec(ctx, query, publisherID)
 	if err != nil {
-		log.Printf("Database cache invalidation error: %v", err)
+		slog.Error("database cache invalidation error", "error", err)
 	} else {
 		dbDeleted = result.RowsAffected()
 	}

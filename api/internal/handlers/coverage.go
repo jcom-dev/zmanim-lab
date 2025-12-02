@@ -3,7 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -162,8 +162,10 @@ func (h *Handlers) CreatePublisherCoverage(w http.ResponseWriter, r *http.Reques
 	)
 
 	if insertErr != nil {
+		slog.Error("failed to create coverage", "error", insertErr, "publisher_id", publisherID)
+
 		// Check for unique constraint violation
-		if insertErr.Error() != "" {
+		if strings.Contains(insertErr.Error(), "duplicate key") || strings.Contains(insertErr.Error(), "unique constraint") {
 			RespondBadRequest(w, r, "Coverage already exists for this area")
 			return
 		}
@@ -390,7 +392,7 @@ func (h *Handlers) GetContinents(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := h.db.Pool.Query(ctx, query)
 	if err != nil {
-		log.Printf("Error fetching continents: %v", err)
+		slog.Error("failed to fetch continents", "error", err)
 		RespondInternalError(w, r, "Failed to fetch continents")
 		return
 	}
@@ -410,7 +412,7 @@ func (h *Handlers) GetContinents(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		continents = append(continents, Continent{
-			Code:      name, // Use full name for filtering (maintains backward compat)
+			Code:      code, // 2-character ISO continent code (AF, AN, AS, EU, NA, OC, SA)
 			Name:      name,
 			CityCount: cityCount,
 		})
@@ -443,7 +445,7 @@ func (h *Handlers) GetCountries(w http.ResponseWriter, r *http.Request) {
 			FROM geo_countries co
 			JOIN geo_continents ct ON co.continent_id = ct.id
 			LEFT JOIN cities c ON c.country_id = co.id
-			WHERE ct.name = $1
+			WHERE ct.code = $1 OR ct.name = $1
 			GROUP BY co.id, co.code, co.name
 			ORDER BY co.name
 		`

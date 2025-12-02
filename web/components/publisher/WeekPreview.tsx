@@ -1,11 +1,10 @@
 'use client';
-import { API_BASE } from '@/lib/api';
 import { useApi } from '@/lib/api-client';
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Eye, EyeOff, Moon, Sun, Calendar, Star } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Eye, EyeOff, Moon, Sun, Calendar, Star, FlaskConical } from 'lucide-react';
 import { PublisherZman } from '@/lib/hooks/useZmanimList';
 
 // Hebrew months with their numeric values (matching hdate library)
@@ -77,7 +76,8 @@ interface DayResult {
 
 interface WeekPreviewProps {
   zmanim: PublisherZman[];
-  getToken: () => Promise<string | null>;
+  /** @deprecated No longer needed - component uses useApi internally */
+  getToken?: () => Promise<string | null>;
   location: PreviewLocation;
 }
 
@@ -159,7 +159,7 @@ function shouldShowEventZman(zmanKey: string, day: DayResult): boolean {
   return false;
 }
 
-export function WeekPreview({ zmanim, getToken, location }: WeekPreviewProps) {
+export function WeekPreview({ zmanim, location }: WeekPreviewProps) {
   const api = useApi();
   const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [weekData, setWeekData] = useState<DayResult[]>([]);
@@ -208,13 +208,6 @@ export function WeekPreview({ zmanim, getToken, location }: WeekPreviewProps) {
       setError(null);
       setProgress({ current: 0, total: enabledZmanim.length + 1 }); // +1 for calendar fetch
 
-      const token = await getToken();
-      if (!token) {
-        setError('Not authenticated');
-        setLoading(false);
-        return;
-      }
-
       const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
       const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
       const startDate = new Date(weekStartStr + 'T00:00:00');
@@ -238,30 +231,17 @@ export function WeekPreview({ zmanim, getToken, location }: WeekPreviewProps) {
 
       // Fetch Hebrew calendar data
       try {
-        const calendarResponse = await fetch(
-          `${API_BASE}/api/v1/calendar/week?date=${weekStartStr}`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-            signal: abortControllerRef.current?.signal,
-          }
-        );
+        const calendarData = await api.get<{ days: CalendarDayInfo[] }>(`/calendar/week?date=${weekStartStr}`);
 
-        if (calendarResponse.ok) {
-          const calendarData = await calendarResponse.json();
-          const result = calendarData.data || calendarData;
-
-          if (result.days && Array.isArray(result.days)) {
-            result.days.forEach((dayInfo: CalendarDayInfo) => {
-              const dayIndex = days.findIndex(d => d.date === dayInfo.date);
-              if (dayIndex !== -1) {
-                days[dayIndex].hebrewDate = dayInfo.hebrew_date;
-                days[dayIndex].holidays = dayInfo.holidays || [];
-                days[dayIndex].isYomTov = dayInfo.is_yomtov;
-              }
-            });
-          }
+        if (calendarData?.days && Array.isArray(calendarData.days)) {
+          calendarData.days.forEach((dayInfo: CalendarDayInfo) => {
+            const dayIndex = days.findIndex(d => d.date === dayInfo.date);
+            if (dayIndex !== -1) {
+              days[dayIndex].hebrewDate = dayInfo.hebrew_date;
+              days[dayIndex].holidays = dayInfo.holidays || [];
+              days[dayIndex].isYomTov = dayInfo.is_yomtov;
+            }
+          });
         }
       } catch (err) {
         if ((err as Error).name === 'AbortError') return;
@@ -280,12 +260,7 @@ export function WeekPreview({ zmanim, getToken, location }: WeekPreviewProps) {
           }
 
           try {
-            const response = await fetch(`${API_BASE}/api/v1/dsl/preview-week`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${token}`,
-              },
+            const data = await api.post<{ days: Array<{ date: string; result: string }> }>('/dsl/preview-week', {
               body: JSON.stringify({
                 formula: zman.formula_dsl,
                 start_date: weekStartStr,
@@ -293,24 +268,14 @@ export function WeekPreview({ zmanim, getToken, location }: WeekPreviewProps) {
                 longitude: location.longitude,
                 timezone: location.timezone,
               }),
-              signal: abortControllerRef.current?.signal,
             });
 
-            if (response.ok) {
-              const data = await response.json();
-              const result = data.data || data;
-
-              if (result.days && Array.isArray(result.days)) {
-                result.days.forEach((dayResult: { date: string; result: string }) => {
-                  const dayIndex = days.findIndex(d => d.date === dayResult.date);
-                  if (dayIndex !== -1) {
-                    days[dayIndex].times[zman.zman_key] = dayResult.result || null;
-                  }
-                });
-              }
-            } else {
-              days.forEach(day => {
-                day.times[zman.zman_key] = null;
+            if (data?.days && Array.isArray(data.days)) {
+              data.days.forEach((dayResult: { date: string; result: string }) => {
+                const dayIndex = days.findIndex(d => d.date === dayResult.date);
+                if (dayIndex !== -1) {
+                  days[dayIndex].times[zman.zman_key] = dayResult.result || null;
+                }
               });
             }
           } catch (err) {
@@ -339,7 +304,7 @@ export function WeekPreview({ zmanim, getToken, location }: WeekPreviewProps) {
     } finally {
       setLoading(false);
     }
-  }, [weekStartStr, enabledZmanim, getToken, location]);
+  }, [api, weekStartStr, enabledZmanim, location]);
 
   useEffect(() => {
     loadWeek();
@@ -715,6 +680,10 @@ export function WeekPreview({ zmanim, getToken, location }: WeekPreviewProps) {
             <div className="w-3 h-3 rounded border border-amber-500 bg-amber-500/20" />
             <span>Shabbat</span>
           </div>
+          <div className="flex items-center gap-1">
+            <FlaskConical className="h-3 w-3 text-amber-500" />
+            <span>Beta</span>
+          </div>
         </div>
       </div>
 
@@ -917,9 +886,12 @@ export function WeekPreview({ zmanim, getToken, location }: WeekPreviewProps) {
                         ) : (
                           <EyeOff className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                         )}
-                        <span className="text-sm text-foreground">
+                        <span className="text-sm text-foreground truncate max-w-[200px]" title={zman.english_name}>
                           {zman.english_name}
                         </span>
+                        {zman.is_beta && (
+                          <FlaskConical className="h-3 w-3 text-amber-500 shrink-0" />
+                        )}
                         {!zman.is_published && (
                           <span className="text-[10px] text-muted-foreground">(draft)</span>
                         )}

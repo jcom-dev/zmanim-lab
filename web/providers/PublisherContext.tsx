@@ -9,7 +9,6 @@ import type { ClerkPublicMetadata } from '@/types/clerk';
 interface Publisher {
   id: string;
   name: string;
-  organization: string;
   status: string;
 }
 
@@ -245,4 +244,13 @@ export function usePublisherContext() {
     throw new Error('usePublisherContext must be used within PublisherProvider');
   }
   return context;
+}
+
+/**
+ * Optional version of usePublisherContext that returns null instead of throwing
+ * when used outside of PublisherProvider. Useful for components that work
+ * both inside and outside the provider.
+ */
+export function usePublisherContextOptional() {
+  return useContext(PublisherContext);
 }

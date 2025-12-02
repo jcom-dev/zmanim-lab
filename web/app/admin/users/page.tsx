@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useAuth } from '@clerk/nextjs';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -23,7 +22,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { API_BASE } from '@/lib/api';
+import { useApi } from '@/lib/api-client';
 import {
   UserPlus,
   MoreHorizontal,
@@ -34,6 +33,7 @@ import {
   Plus,
   X,
   RefreshCw,
+  Pencil,
 } from 'lucide-react';
 
 interface Publisher {
@@ -59,7 +59,7 @@ interface AddUserFormData {
 }
 
 export default function AdminUsersPage() {
-  const { getToken } = useAuth();
+  const api = useApi();
   const [users, setUsers] = useState<UserWithRoles[]>([]);
   const [allPublishers, setAllPublishers] = useState<Publisher[]>([]);
   const [loading, setLoading] = useState(true);
@@ -70,9 +70,13 @@ export default function AdminUsersPage() {
   // Dialog states
   const [addUserDialogOpen, setAddUserDialogOpen] = useState(false);
   const [addPublisherDialogOpen, setAddPublisherDialogOpen] = useState(false);
+  const [editUserDialogOpen, setEditUserDialogOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserWithRoles | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
+
+  // Edit user form state
+  const [editUserName, setEditUserName] = useState('');
 
   // Form state for adding user
   const [addUserForm, setAddUserForm] = useState<AddUserFormData>({
@@ -88,48 +92,24 @@ export default function AdminUsersPage() {
   const fetchUsers = useCallback(async () => {
     try {
       setLoading(true);
-      const token = await getToken();
 
-      const response = await fetch(`${API_BASE}/api/v1/admin/users`, {
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch users');
-      }
-
-      const data = await response.json();
-      setUsers(data.data?.users || data.users || []);
+      const data = await api.admin.get<{ users: UserWithRoles[] }>('/admin/users');
+      setUsers(data?.users || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setLoading(false);
     }
-  }, [getToken]);
+  }, [api]);
 
   const fetchPublishers = useCallback(async () => {
     try {
-      const token = await getToken();
-      const response = await fetch(`${API_BASE}/api/v1/admin/publishers`, {
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch publishers');
-      }
-
-      const data = await response.json();
-      setAllPublishers(data.data?.publishers || data.publishers || []);
+      const data = await api.admin.get<{ publishers: Publisher[] }>('/admin/publishers');
+      setAllPublishers(data?.publishers || []);
     } catch (err) {
       console.error('Failed to fetch publishers:', err);
     }
-  }, [getToken]);
+  }, [api]);
 
   useEffect(() => {
     fetchUsers();
@@ -139,14 +119,8 @@ export default function AdminUsersPage() {
   const handleAddUser = async () => {
     try {
       setActionLoading(true);
-      const token = await getToken();
 
-      const response = await fetch(`${API_BASE}/api/v1/admin/users`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
+      await api.admin.post('/admin/users', {
         body: JSON.stringify({
           email: addUserForm.email,
           name: addUserForm.name,
@@ -154,11 +128,6 @@ export default function AdminUsersPage() {
           publisher_ids: addUserForm.publisherIds,
         }),
       });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to add user');
-      }
 
       setAddUserDialogOpen(false);
       setAddUserForm({ email: '', name: '', isAdmin: false, publisherIds: [] });
@@ -170,23 +139,40 @@ export default function AdminUsersPage() {
     }
   };
 
+  const openEditUserDialog = (user: UserWithRoles) => {
+    setSelectedUser(user);
+    setEditUserName(user.name || '');
+    setEditUserDialogOpen(true);
+  };
+
+  const handleEditUser = async () => {
+    if (!selectedUser || !editUserName.trim()) return;
+
+    try {
+      setActionLoading(true);
+
+      await api.admin.put(`/admin/users/${selectedUser.clerk_user_id}`, {
+        body: JSON.stringify({ name: editUserName.trim() }),
+      });
+
+      setEditUserDialogOpen(false);
+      setSelectedUser(null);
+      setEditUserName('');
+      await fetchUsers();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update user');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const handleToggleAdmin = async (user: UserWithRoles) => {
     try {
       setActionLoading(true);
-      const token = await getToken();
 
-      const response = await fetch(`${API_BASE}/api/v1/admin/users/${user.clerk_user_id}/admin`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
+      await api.admin.put(`/admin/users/${user.clerk_user_id}/admin`, {
         body: JSON.stringify({ is_admin: !user.is_admin }),
       });
-
-      if (!response.ok) {
-        throw new Error('Failed to update admin status');
-      }
 
       await fetchUsers();
     } catch (err) {
@@ -199,22 +185,8 @@ export default function AdminUsersPage() {
   const handleResetPassword = async (user: UserWithRoles) => {
     try {
       setActionLoading(true);
-      const token = await getToken();
 
-      const response = await fetch(
-        `${API_BASE}/api/v1/admin/users/${user.clerk_user_id}/reset-password`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error('Failed to send password reset');
-      }
+      await api.admin.post(`/admin/users/${user.clerk_user_id}/reset-password`);
 
       alert(`Password reset email sent to ${user.email}`);
     } catch (err) {
@@ -231,19 +203,8 @@ export default function AdminUsersPage() {
 
     try {
       setActionLoading(true);
-      const token = await getToken();
 
-      const response = await fetch(`${API_BASE}/api/v1/admin/users/${userToDelete.clerk_user_id}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to delete user');
-      }
+      await api.admin.delete(`/admin/users/${userToDelete.clerk_user_id}`);
 
       // Optimistic update: remove user from local state immediately
       setUsers((prevUsers) => prevUsers.filter((u) => u.clerk_user_id !== userToDelete.clerk_user_id));
@@ -266,23 +227,10 @@ export default function AdminUsersPage() {
 
     try {
       setActionLoading(true);
-      const token = await getToken();
 
-      const response = await fetch(
-        `${API_BASE}/api/v1/admin/users/${selectedUser.clerk_user_id}/publishers`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ publisher_id: selectedPublisherId }),
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error('Failed to add publisher access');
-      }
+      await api.admin.post(`/admin/users/${selectedUser.clerk_user_id}/publishers`, {
+        body: JSON.stringify({ publisher_id: selectedPublisherId }),
+      });
 
       setAddPublisherDialogOpen(false);
       setSelectedPublisherId('');
@@ -298,22 +246,8 @@ export default function AdminUsersPage() {
   const handleRemovePublisherFromUser = async (user: UserWithRoles, publisherId: string) => {
     try {
       setActionLoading(true);
-      const token = await getToken();
 
-      const response = await fetch(
-        `${API_BASE}/api/v1/admin/users/${user.clerk_user_id}/publishers/${publisherId}`,
-        {
-          method: 'DELETE',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error('Failed to remove publisher access');
-      }
+      await api.admin.delete(`/admin/users/${user.clerk_user_id}/publishers/${publisherId}`);
 
       await fetchUsers();
     } catch (err) {
@@ -528,6 +462,11 @@ export default function AdminUsersPage() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => openEditUserDialog(user)}>
+                              <Pencil className="w-4 h-4 mr-2" />
+                              Edit User
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
                             <DropdownMenuItem onClick={() => handleToggleAdmin(user)}>
                               <Shield className="w-4 h-4 mr-2" />
                               {user.is_admin ? 'Remove Admin' : 'Make Admin'}
@@ -649,6 +588,51 @@ export default function AdminUsersPage() {
               disabled={!addUserForm.email || !addUserForm.name || actionLoading}
             >
               {actionLoading ? 'Adding...' : 'Add User'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit User Dialog */}
+      <Dialog open={editUserDialogOpen} onOpenChange={setEditUserDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit User</DialogTitle>
+            <DialogDescription>
+              Update the user&apos;s information.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-email">Email</Label>
+              <Input
+                id="edit-email"
+                type="email"
+                value={selectedUser?.email || ''}
+                disabled
+                className="bg-muted"
+              />
+              <p className="text-xs text-muted-foreground">Email cannot be changed</p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-name">Name</Label>
+              <Input
+                id="edit-name"
+                placeholder="John Doe"
+                value={editUserName}
+                onChange={(e) => setEditUserName(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditUserDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleEditUser}
+              disabled={!editUserName.trim() || actionLoading}
+            >
+              {actionLoading ? 'Saving...' : 'Save Changes'}
             </Button>
           </DialogFooter>
         </DialogContent>

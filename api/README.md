@@ -13,7 +13,7 @@ backend/
 │   ├── config/
 │   │   └── config.go         # Configuration management
 │   ├── db/
-│   │   └── supabase.go       # Database connection
+│   │   └── postgres.go       # Database connection
 │   ├── handlers/
 │   │   └── handlers.go       # HTTP handlers
 │   ├── middleware/
@@ -39,11 +39,8 @@ Copy `.env.example` to `.env` and configure:
 PORT=8080
 ENVIRONMENT=development
 
-# Supabase Configuration
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_ANON_KEY=your-anon-key
-SUPABASE_SERVICE_KEY=your-service-key
-DATABASE_URL=postgresql://postgres:password@db.your-project.supabase.co:5432/postgres
+# Database Configuration
+DATABASE_URL=postgresql://postgres:password@localhost:5432/zmanim
 
 # JWT Configuration
 JWT_SECRET=your-jwt-secret
@@ -61,7 +58,7 @@ RATE_LIMIT_DURATION=1m
 ### Prerequisites
 
 - Go 1.21 or higher
-- PostgreSQL (via Supabase)
+- PostgreSQL
 
 ### Running Locally
 

@@ -289,11 +289,10 @@ type PasswordResetToken struct {
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
-// Publishers who provide zmanim calculations
+// Publishers who provide zmanim calculations. Publisher name IS the organization name.
 type Publisher struct {
 	ID                string             `json:"id"`
 	Name              string             `json:"name"`
-	Organization      *string            `json:"organization"`
 	Email             string             `json:"email"`
 	Phone             *string            `json:"phone"`
 	Website           *string            `json:"website"`
@@ -317,6 +316,8 @@ type Publisher struct {
 	Slug *string `json:"slug"`
 	// Verified publishers can have their zmanim linked to by other publishers
 	IsVerified bool `json:"is_verified"`
+	// Base64 encoded logo image (PNG format, data:image/png;base64,...)
+	LogoData *string `json:"logo_data"`
 }
 
 // Publisher geographic coverage at country, region, or city level
@@ -364,10 +365,10 @@ type PublisherOnboarding struct {
 	Skipped *bool `json:"skipped"`
 }
 
+// Requests from users to become publishers. Publisher name IS the organization name.
 type PublisherRequest struct {
 	ID              string             `json:"id"`
 	Name            string             `json:"name"`
-	Organization    string             `json:"organization"`
 	Email           string             `json:"email"`
 	Website         *string            `json:"website"`
 	Description     string             `json:"description"`
@@ -433,8 +434,9 @@ type PublisherZmanim struct {
 	HebrewName  string `json:"hebrew_name"`
 	EnglishName string `json:"english_name"`
 	// DSL formula string. Examples: "proportional_hours(3, gra)" for 3 hours after sunrise, "solar(16.1, before_sunrise)" for dawn
-	FormulaDsl       string  `json:"formula_dsl"`
-	AiExplanation    *string `json:"ai_explanation"`
+	FormulaDsl    string  `json:"formula_dsl"`
+	AiExplanation *string `json:"ai_explanation"`
+	// Publisher's personal notes, minhag, or halachic source
 	PublisherComment *string `json:"publisher_comment"`
 	// Whether this zman is active in the algorithm (for preview/calculation)
 	IsEnabled bool `json:"is_enabled"`
@@ -457,6 +459,14 @@ type PublisherZmanim struct {
 	LinkedPublisherZmanID pgtype.UUID `json:"linked_publisher_zman_id"`
 	// How this zman was created: registry, copied, linked, or custom
 	SourceType *string `json:"source_type"`
+	// When true, this zman is in beta mode and displayed with a warning to users. Publishers use beta mode to gather feedback before certifying a zman as stable.
+	IsBeta bool `json:"is_beta"`
+	// Timestamp when is_beta was changed from true to false, indicating publisher certification
+	CertifiedAt pgtype.Timestamptz `json:"certified_at"`
+	// Publisher's custom transliteration (can differ from registry)
+	Transliteration *string `json:"transliteration"`
+	// Publisher's description of what this zman represents (can differ from registry)
+	Description *string `json:"description"`
 }
 
 // Resolves linked zmanim to their source formulas at query time
@@ -570,7 +580,6 @@ type ZmanRegistryRequest struct {
 	RequestedEnglishName string             `json:"requested_english_name"`
 	RequestedFormulaDsl  *string            `json:"requested_formula_dsl"`
 	TimeCategory         string             `json:"time_category"`
-	Justification        string             `json:"justification"`
 	Status               string             `json:"status"`
 	ReviewedBy           *string            `json:"reviewed_by"`
 	ReviewedAt           pgtype.Timestamptz `json:"reviewed_at"`

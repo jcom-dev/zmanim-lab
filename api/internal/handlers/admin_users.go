@@ -30,9 +30,8 @@ func (h *Handlers) AdminListAllUsers(w http.ResponseWriter, r *http.Request) {
 
 	// Publisher info struct for enrichment
 	type publisherBasic struct {
-		ID           string `json:"id"`
-		Name         string `json:"name"`
-		Organization string `json:"organization"`
+		ID   string `json:"id"`
+		Name string `json:"name"`
 	}
 
 	// Enrich with publisher names
@@ -50,13 +49,13 @@ func (h *Handlers) AdminListAllUsers(w http.ResponseWriter, r *http.Request) {
 
 	// Get all publishers for name lookup
 	publisherMap := make(map[string]publisherBasic)
-	rows, err := h.db.Pool.Query(ctx, "SELECT id, name, organization FROM publishers")
+	rows, err := h.db.Pool.Query(ctx, "SELECT id, name FROM publishers")
 	if err == nil {
 		defer rows.Close()
 		for rows.Next() {
-			var id, name, org string
-			if err := rows.Scan(&id, &name, &org); err == nil {
-				publisherMap[id] = publisherBasic{ID: id, Name: name, Organization: org}
+			var id, name string
+			if err := rows.Scan(&id, &name); err == nil {
+				publisherMap[id] = publisherBasic{ID: id, Name: name}
 			}
 		}
 	}
@@ -279,6 +278,67 @@ func (h *Handlers) AdminDeleteUser(w http.ResponseWriter, r *http.Request) {
 		"message": "User deleted successfully",
 		"user_id": userID,
 		"email":   email,
+	})
+}
+
+// AdminUpdateUser updates a user's basic information (name)
+// PUT /api/v1/admin/users/{userId}
+// Body: { name: string }
+func (h *Handlers) AdminUpdateUser(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	userID := chi.URLParam(r, "userId")
+
+	if userID == "" {
+		RespondValidationError(w, r, "User ID is required", nil)
+		return
+	}
+
+	var req struct {
+		Name string `json:"name"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		RespondBadRequest(w, r, "Invalid request body")
+		return
+	}
+
+	if req.Name == "" {
+		RespondValidationError(w, r, "Name is required", map[string]string{"name": "Name is required"})
+		return
+	}
+
+	if h.clerkService == nil {
+		RespondInternalError(w, r, "Clerk service not available")
+		return
+	}
+
+	// Get user info first to verify they exist
+	user, err := h.clerkService.GetUser(ctx, userID)
+	if err != nil {
+		slog.Error("failed to get user", "error", err, "user_id", userID)
+		RespondNotFound(w, r, "User not found")
+		return
+	}
+
+	email := ""
+	if len(user.EmailAddresses) > 0 {
+		email = user.EmailAddresses[0].EmailAddress
+	}
+
+	// Update the user's name in Clerk
+	if err := h.clerkService.UpdateUserName(ctx, userID, req.Name); err != nil {
+		slog.Error("failed to update user name", "error", err, "user_id", userID)
+		RespondInternalError(w, r, "Failed to update user")
+		return
+	}
+
+	slog.Info("user updated", "user_id", userID, "email", email, "name", req.Name)
+
+	RespondJSON(w, r, http.StatusOK, map[string]interface{}{
+		"status":  "success",
+		"message": "User updated successfully",
+		"user_id": userID,
+		"name":    req.Name,
 	})
 }
 

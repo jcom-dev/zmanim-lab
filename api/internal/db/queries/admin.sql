@@ -4,7 +4,7 @@
 -- Admin Publisher Management --
 
 -- name: AdminListPublishers :many
-SELECT id, clerk_user_id, name, organization, email, status, created_at, updated_at
+SELECT id, clerk_user_id, name, email, status, created_at, updated_at
 FROM publishers
 WHERE ($1::text IS NULL OR status = $1)
 ORDER BY created_at DESC
@@ -16,7 +16,7 @@ FROM publishers
 WHERE ($1::text IS NULL OR status = $1);
 
 -- name: AdminGetPublisher :one
-SELECT id, clerk_user_id, name, organization, email, description, bio,
+SELECT id, clerk_user_id, name, email, description, bio,
        website, logo_url, status, created_at, updated_at
 FROM publishers
 WHERE id = $1;

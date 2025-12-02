@@ -17,6 +17,9 @@ import {
   BASE_URL,
 } from '../utils';
 
+// Enable parallel mode for faster test execution
+test.describe.configure({ mode: 'parallel' });
+
 // Skip all tests if MailSlurp is not configured
 test.beforeEach(async () => {
   if (!isMailSlurpConfigured()) {

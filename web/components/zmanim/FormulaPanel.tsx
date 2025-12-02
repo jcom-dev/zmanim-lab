@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Clock, Calculator, BookOpen, Info } from 'lucide-react';
+import { Clock, Calculator, BookOpen, Info, FlaskConical, AlertTriangle } from 'lucide-react';
 import {
   Sheet,
   SheetContent,
@@ -23,6 +23,7 @@ export interface Zman {
   key: string;
   time: string;
   formula: ZmanFormula;
+  is_beta?: boolean;
 }
 
 interface FormulaPanelProps {
@@ -105,6 +106,25 @@ export function FormulaPanel({ zman, open, onClose }: FormulaPanelProps) {
         </SheetHeader>
 
         <div className="mt-6 space-y-6 overflow-y-auto">
+          {/* Beta Warning Section */}
+          {zman.is_beta && (
+            <section className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/50 rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <div className="p-1.5 bg-amber-100 dark:bg-amber-800/30 rounded-lg flex-shrink-0 mt-0.5">
+                  <FlaskConical className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-amber-800 dark:text-amber-200 mb-1">
+                    Beta Calculation
+                  </h3>
+                  <p className="text-sm text-amber-700 dark:text-amber-300 leading-relaxed">
+                    This zman is currently in beta. The publisher is seeking feedback and may refine this calculation before certifying it as stable.
+                  </p>
+                </div>
+              </div>
+            </section>
+          )}
+
           {/* Method Section */}
           <section>
             <div className="flex items-center gap-2 mb-3">

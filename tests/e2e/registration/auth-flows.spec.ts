@@ -10,6 +10,9 @@
 import { test, expect } from '@playwright/test';
 import { loginAsUser, BASE_URL } from '../utils';
 
+// Enable parallel mode for faster test execution
+test.describe.configure({ mode: 'parallel' });
+
 test.describe('Sign In Page', () => {
   test('sign in page is accessible', async ({ page }) => {
     await page.goto(`${BASE_URL}/sign-in`);
@@ -23,11 +26,10 @@ test.describe('Sign In Page', () => {
     await page.goto(`${BASE_URL}/sign-in`);
     await page.waitForLoadState('networkidle');
 
-    // Wait for Clerk to load
-    await page.waitForTimeout(1000);
-
-    // Clerk sign-in should have an identifier input
+    // Wait for Clerk to load by checking for input fields
     const emailInput = page.locator('input[name="identifier"], input[type="email"]');
+    await expect(emailInput.or(page.locator('[data-clerk-component]'))).toBeVisible({ timeout: 10000 }).catch(() => {});
+
     const hasEmailInput = await emailInput.isVisible().catch(() => false);
 
     // If Clerk modal, it might have different structure
@@ -42,8 +44,9 @@ test.describe('Sign In Page', () => {
     const signInButton = page.getByText('Sign In');
     await signInButton.click();
 
-    // Should either redirect to sign-in page or open modal
-    await page.waitForTimeout(1000);
+    // Wait for sign-in page or modal to appear
+    await page.waitForURL(/sign-in/, { timeout: 10000 }).catch(() => {});
+    await expect(page.locator('[data-clerk-component="sign-in"]')).toBeVisible({ timeout: 5000 }).catch(() => {});
 
     const isOnSignInPage = page.url().includes('/sign-in');
     const hasSignInModal = await page.locator('[data-clerk-component="sign-in"]').isVisible().catch(() => false);
@@ -80,8 +83,8 @@ test.describe('Authentication Redirects', () => {
     await page.goto(`${BASE_URL}/publisher/dashboard`);
     await page.waitForLoadState('networkidle');
 
-    // Should be redirected to sign-in
-    await page.waitForTimeout(1000);
+    // Wait for redirect to complete
+    await page.waitForURL(/sign-in|(?!.*\/publisher)/, { timeout: 10000 }).catch(() => {});
 
     const isOnSignIn = page.url().includes('/sign-in');
     const isOnPublisher = page.url().includes('/publisher');
@@ -97,7 +100,8 @@ test.describe('Authentication Redirects', () => {
     await page.goto(`${BASE_URL}/admin`);
     await page.waitForLoadState('networkidle');
 
-    await page.waitForTimeout(1000);
+    // Wait for redirect to complete
+    await page.waitForURL(/sign-in|(?!.*\/admin)/, { timeout: 10000 }).catch(() => {});
 
     const isOnSignIn = page.url().includes('/sign-in');
     const isOnAdmin = page.url().includes('/admin');

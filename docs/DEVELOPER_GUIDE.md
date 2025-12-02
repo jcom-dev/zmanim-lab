@@ -33,8 +33,16 @@ This guide will help you get started with developing Zmanim Lab, a multi-publish
 - Git
 
 **Database:**
-- Supabase CLI (optional but recommended)
+- PostgreSQL client (psql)
 - PostgreSQL 15+ (or use Docker)
+
+### Database (PostgreSQL)
+```sql
+-- PostgreSQL 15+
+-- PostGIS extension (geographic calculations)
+-- pg_cron (scheduled jobs)
+-- Object Storage (algorithm assets)
+```
 
 ### Recommended Tools
 
@@ -49,7 +57,7 @@ This guide will help you get started with developing Zmanim Lab, a multi-publish
 
 ### Sign up for Services
 
-1. **Supabase** - Create a free account at https://supabase.com
+1. **PostgreSQL** - Ensure you have access to a PostgreSQL instance
 2. **Upstash Redis** (optional for local dev) - https://upstash.com
 3. **Vercel** (for deployment) - https://vercel.com
 
@@ -109,33 +117,29 @@ git clone https://github.com/your-org/zmanim-lab.git
 cd zmanim-lab
 ```
 
-### Step 2: Set Up Supabase
+### Step 2: Set Up Database
 
-**Option A: Use Supabase Cloud (Recommended for beginners)**
+**Option A: Use Cloud PostgreSQL**
 
-1. Go to https://supabase.com and create a new project
-2. Save your project URL and anon key
+1. Create a new PostgreSQL database
+2. Save your connection URL
 3. Apply the database schema:
 
 ```bash
 # Copy schema from docs/ARCHITECTURE.md database section
-# Paste into Supabase SQL Editor and execute
+# Execute in your database
 ```
 
-**Option B: Use Supabase CLI (Local development)**
+**Option B: Use Local PostgreSQL**
 
 ```bash
-# Install Supabase CLI
-npm install -g supabase
+# Ensure PostgreSQL is running locally
 
-# Initialize Supabase
-supabase init
-
-# Start local Supabase
-supabase start
+# Create database
+createdb zmanim
 
 # Apply migrations
-supabase db push
+# (Use your preferred migration tool or the provided scripts)
 ```
 
 ### Step 3: Set Up Backend (Go)
@@ -159,11 +163,8 @@ nano .env
 PORT=8080
 ENVIRONMENT=development
 
-# Database (Supabase)
-DATABASE_URL=postgresql://postgres:password@localhost:54322/postgres
-SUPABASE_URL=https://xxxxx.supabase.co
-SUPABASE_ANON_KEY=eyJxxx...
-SUPABASE_SERVICE_KEY=eyJxxx...
+# Database
+DATABASE_URL=postgresql://postgres:password@localhost:5432/zmanim
 
 # Redis Cache
 REDIS_URL=redis://localhost:6379
@@ -212,8 +213,6 @@ nano .env.local
 **.env.local example:**
 ```bash
 NEXT_PUBLIC_API_URL=http://localhost:8080/api/v1
-NEXT_PUBLIC_SUPABASE_URL=https://xxxxx.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJxxx...
 ```
 
 **Run the web app:**
@@ -665,8 +664,8 @@ DROP TABLE IF EXISTS your_table;
 # Using golang-migrate
 migrate -path migrations -database "${DATABASE_URL}" up
 
-# Or using Supabase CLI
-supabase db push
+# Or using migration tool
+migrate -path migrations -database "${DATABASE_URL}" up
 ```
 
 ### Adding a New Frontend Component
@@ -886,7 +885,7 @@ psql $DATABASE_URL -f script.sql
 ### Documentation
 - [Go Documentation](https://golang.org/doc/)
 - [Next.js Documentation](https://nextjs.org/docs)
-- [Supabase Documentation](https://supabase.com/docs)
+
 - [PostgreSQL Documentation](https://www.postgresql.org/docs/)
 - [PostGIS Documentation](https://postgis.net/documentation/)
 

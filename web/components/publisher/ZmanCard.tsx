@@ -28,7 +28,10 @@ import {
   Copy,
   Library,
   AlertTriangle,
+  FlaskConical,
+  Edit2,
 } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Switch } from '@/components/ui/switch';
 import {
   AlertDialog,
@@ -153,6 +156,41 @@ function getEventBadgeVariant(event: string): 'default' | 'secondary' | 'outline
   }
 }
 
+/**
+ * Get the source name for a zman (Registry or linked publisher name)
+ */
+function getSourceName(zman: PublisherZman): string | null {
+  if (zman.is_linked && zman.linked_source_publisher_name) {
+    return zman.linked_source_publisher_name;
+  }
+  // All zmanim come from either the registry or another publisher
+  if (zman.source_type === 'registry' || zman.source_type === 'copied') {
+    return 'Registry';
+  }
+  // If linked but no publisher name (shouldn't happen), fallback
+  if (zman.source_type === 'linked') {
+    return 'Linked Publisher';
+  }
+  return null;
+}
+
+/**
+ * Check if the zman names have been modified from source
+ */
+function hasNameModifications(zman: PublisherZman): {
+  hebrewModified: boolean;
+  englishModified: boolean;
+  anyModified: boolean;
+} {
+  const hebrewModified = zman.source_hebrew_name != null && zman.hebrew_name !== zman.source_hebrew_name;
+  const englishModified = zman.source_english_name != null && zman.english_name !== zman.source_english_name;
+  return {
+    hebrewModified,
+    englishModified,
+    anyModified: hebrewModified || englishModified,
+  };
+}
+
 interface ZmanCardProps {
   zman: PublisherZman;
   category: 'essential' | 'optional';
@@ -182,6 +220,10 @@ export function ZmanCard({ zman, category, onEdit, displayLanguage = 'both' }: Z
     showHistoryDialog ? zman.zman_key : null
   );
   const rollbackVersion = useRollbackZmanVersion(zman.zman_key);
+
+  // Check for name modifications from source
+  const nameModifications = hasNameModifications(zman);
+  const sourceName = getSourceName(zman);
 
   const handleEdit = () => {
     if (onEdit) {
@@ -227,6 +269,26 @@ export function ZmanCard({ zman, category, onEdit, displayLanguage = 'both' }: Z
     });
   };
 
+  const handleToggleBeta = async () => {
+    await updateZman.mutateAsync({
+      is_beta: !zman.is_beta,
+    });
+  };
+
+  // Revert name to source
+  const handleRevertNames = async () => {
+    const updates: { hebrew_name?: string; english_name?: string } = {};
+    if (nameModifications.hebrewModified && zman.source_hebrew_name) {
+      updates.hebrew_name = zman.source_hebrew_name;
+    }
+    if (nameModifications.englishModified && zman.source_english_name) {
+      updates.english_name = zman.source_english_name;
+    }
+    if (Object.keys(updates).length > 0) {
+      await updateZman.mutateAsync(updates);
+    }
+  };
+
   const handleDelete = async () => {
     await deleteZman.mutateAsync(zman.zman_key);
     setShowDeleteDialog(false);
@@ -260,6 +322,7 @@ export function ZmanCard({ zman, category, onEdit, displayLanguage = 'both' }: Z
           hover:border-primary/50 transition-colors group
           ${!zman.is_enabled ? 'opacity-60' : ''}
           ${!zman.is_visible ? 'border-dashed border-muted-foreground/30' : ''}
+          ${zman.is_beta ? 'border-amber-400 dark:border-amber-600 bg-amber-50/50 dark:bg-amber-950/20' : ''}
         `}
       >
         <CardHeader className="pb-3">
@@ -267,20 +330,73 @@ export function ZmanCard({ zman, category, onEdit, displayLanguage = 'both' }: Z
           <div className="flex flex-col-reverse sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-4">
             {/* Left: Name and Dependencies */}
             <div className="flex-1 min-w-0">
-              {/* Name - respects displayLanguage setting */}
-              <h3 className={`text-base sm:text-lg font-semibold leading-tight mb-2 ${displayLanguage === 'hebrew' ? 'font-hebrew' : ''}`}>
-                {displayLanguage === 'hebrew' ? (
-                  <span className="text-foreground">{zman.hebrew_name}</span>
-                ) : displayLanguage === 'english' ? (
-                  <span className="text-foreground">{zman.english_name}</span>
-                ) : (
-                  <>
-                    <span className="text-foreground block sm:inline font-hebrew">{zman.hebrew_name}</span>
-                    <span className="text-muted-foreground mx-0 sm:mx-2 hidden sm:inline">•</span>
-                    <span className="text-foreground block sm:inline">{zman.english_name}</span>
-                  </>
+              {/* Name - respects displayLanguage setting, shows modification indicator */}
+              <div className="flex items-start gap-2 mb-2">
+                <h3 className={`text-base sm:text-lg font-semibold leading-tight flex-1 ${displayLanguage === 'hebrew' ? 'font-hebrew' : ''}`}>
+                  {displayLanguage === 'hebrew' ? (
+                    <span className={nameModifications.hebrewModified ? 'text-amber-700 dark:text-amber-300' : 'text-foreground'}>
+                      {zman.hebrew_name}
+                    </span>
+                  ) : displayLanguage === 'english' ? (
+                    <span className={nameModifications.englishModified ? 'text-amber-700 dark:text-amber-300' : 'text-foreground'}>
+                      {zman.english_name}
+                    </span>
+                  ) : (
+                    <>
+                      <span className={`block sm:inline font-hebrew ${nameModifications.hebrewModified ? 'text-amber-700 dark:text-amber-300' : 'text-foreground'}`}>
+                        {zman.hebrew_name}
+                      </span>
+                      <span className="text-muted-foreground mx-0 sm:mx-2 hidden sm:inline">•</span>
+                      <span className={`block sm:inline ${nameModifications.englishModified ? 'text-amber-700 dark:text-amber-300' : 'text-foreground'}`}>
+                        {zman.english_name}
+                      </span>
+                    </>
+                  )}
+                </h3>
+
+                {/* Modified indicator with revert - only shows when names have been changed */}
+                {nameModifications.anyModified && sourceName && (
+                  <TooltipProvider delayDuration={0}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={handleRevertNames}
+                          disabled={updateZman.isPending}
+                          className="h-7 px-2 gap-1.5 text-amber-600 hover:text-amber-700 hover:bg-amber-100 dark:text-amber-400 dark:hover:text-amber-300 dark:hover:bg-amber-900/50 flex-shrink-0"
+                        >
+                          <Edit2 className="h-3 w-3" />
+                          <span className="text-xs font-medium">Modified</span>
+                          <RotateCcw className="h-3 w-3 ml-0.5" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" className="max-w-xs">
+                        <div className="text-sm space-y-1">
+                          <p className="font-medium text-amber-600 dark:text-amber-400">
+                            Name changed from {sourceName}
+                          </p>
+                          {nameModifications.hebrewModified && zman.source_hebrew_name && (
+                            <p>
+                              <span className="text-muted-foreground">Hebrew:</span>{' '}
+                              <span className="font-hebrew">{zman.source_hebrew_name}</span>
+                            </p>
+                          )}
+                          {nameModifications.englishModified && zman.source_english_name && (
+                            <p>
+                              <span className="text-muted-foreground">English:</span>{' '}
+                              {zman.source_english_name}
+                            </p>
+                          )}
+                          <p className="text-xs text-muted-foreground pt-1 border-t border-border mt-1">
+                            Click to revert to {sourceName.toLowerCase()} names
+                          </p>
+                        </div>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 )}
-              </h3>
+              </div>
 
               {/* Dependencies */}
               {zman.dependencies && zman.dependencies.length > 0 && (
@@ -332,6 +448,21 @@ export function ZmanCard({ zman, category, onEdit, displayLanguage = 'both' }: Z
                   </Badge>
                 )}
 
+                {/* Beta Status Badge - always visible, clickable to toggle */}
+                <Badge
+                  variant="outline"
+                  className={`text-xs cursor-pointer transition-colors ${
+                    zman.is_beta
+                      ? 'bg-amber-100 text-amber-800 border-amber-400 dark:bg-amber-900/50 dark:text-amber-200 dark:border-amber-600 font-medium'
+                      : 'bg-green-50 text-green-700 border-green-300 dark:bg-green-900/30 dark:text-green-300 dark:border-green-700 hover:bg-green-100 dark:hover:bg-green-900/50'
+                  } ${updateZman.isPending ? 'opacity-50 pointer-events-none' : ''}`}
+                  onClick={handleToggleBeta}
+                  title={zman.is_beta ? 'Click to certify as stable' : 'Click to mark as beta'}
+                >
+                  <FlaskConical className={`h-3 w-3 mr-1 ${zman.is_beta ? 'text-amber-600 dark:text-amber-400' : 'text-green-600 dark:text-green-400'}`} />
+                  {zman.is_beta ? 'Beta' : 'Stable'}
+                </Badge>
+
                 {/* Hidden Badge - when not visible to public */}
                 {!zman.is_visible && (
                   <Badge variant="outline" className="text-xs text-muted-foreground border-muted-foreground/50">
@@ -365,7 +496,7 @@ export function ZmanCard({ zman, category, onEdit, displayLanguage = 'both' }: Z
                 )}
 
                 {/* Source Type Badge - shows how the zman was added */}
-                {zman.source_type && zman.source_type !== 'custom' && !zman.is_linked && (
+                {zman.source_type && !zman.is_linked && (
                   <Badge
                     variant="outline"
                     className={`text-xs ${
@@ -448,6 +579,18 @@ export function ZmanCard({ zman, category, onEdit, displayLanguage = 'both' }: Z
                 ) : (
                   <EyeOff className="h-4 w-4" />
                 )}
+              </Button>
+
+              {/* Toggle Beta - mark as beta/seeking feedback */}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleToggleBeta}
+                title={zman.is_beta ? 'Certify as stable (remove beta)' : 'Mark as beta (seeking feedback)'}
+                className={`h-8 w-8 ${zman.is_beta ? 'text-amber-600 hover:text-amber-700' : 'text-muted-foreground hover:text-amber-600'}`}
+                disabled={updateZman.isPending}
+              >
+                <FlaskConical className="h-4 w-4" />
               </Button>
 
               {/* Version History */}

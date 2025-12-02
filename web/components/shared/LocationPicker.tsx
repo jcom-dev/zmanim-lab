@@ -1,5 +1,5 @@
 'use client';
-import { API_BASE } from '@/lib/api';
+import { useApi } from '@/lib/api-client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { MapPin, Search, Navigation, X, Loader2 } from 'lucide-react';
@@ -41,6 +41,7 @@ export default function LocationPicker({
   initialCity,
   placeholder = 'Search for a city...',
 }: LocationPickerProps) {
+  const api = useApi();
   const [query, setQuery] = useState('');
   const [cities, setCities] = useState<City[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -82,16 +83,10 @@ export default function LocationPicker({
     setError(null);
 
     try {
-      const response = await fetch(
-        `${API_BASE}/api/v1/cities?search=${encodeURIComponent(searchQuery)}&limit=10`
+      const data = await api.public.get<{ cities: City[] }>(
+        `/cities?search=${encodeURIComponent(searchQuery)}&limit=10`
       );
-
-      if (!response.ok) {
-        throw new Error('Failed to search cities');
-      }
-
-      const data = await response.json();
-      setCities(data.data?.cities || data.cities || []);
+      setCities(data?.cities || []);
     } catch (err) {
       console.error('City search error:', err);
       setError('Failed to search cities');
@@ -99,7 +94,7 @@ export default function LocationPicker({
     } finally {
       setIsSearching(false);
     }
-  }, []);
+  }, [api]);
 
   // Handle input change with debounce
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -162,17 +157,10 @@ export default function LocationPicker({
       const { latitude, longitude } = position.coords;
 
       // Call nearby API to find closest city
-      const response = await fetch(
-        `${API_BASE}/api/v1/cities/nearby?lat=${latitude}&lng=${longitude}`
+      const nearbyData = await api.public.get<{ city: City }>(
+        `/cities/nearby?lat=${latitude}&lng=${longitude}`
       );
-
-      if (!response.ok) {
-        throw new Error('Failed to find nearby city');
-      }
-
-      const data = await response.json();
-      const nearbyData = data.data || data;
-      const city = nearbyData.city;
+      const city = nearbyData?.city;
 
       if (city) {
         handleSelectCity(city);

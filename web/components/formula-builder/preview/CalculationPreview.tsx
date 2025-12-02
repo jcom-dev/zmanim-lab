@@ -1,7 +1,7 @@
 'use client';
-import { API_BASE } from '@/lib/api';
+import { useApi } from '@/lib/api-client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { Loader2 } from 'lucide-react';
 import { cn, formatTime } from '@/lib/utils';
 
@@ -30,6 +30,7 @@ export function CalculationPreview({
   date,
   className,
 }: CalculationPreviewProps) {
+  const api = useApi();
   const [result, setResult] = useState<PreviewResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -46,60 +47,47 @@ export function CalculationPreview({
     return d.toISOString().split('T')[0];
   }, [date, stableDate]);
 
-  useEffect(() => {
+  const fetchPreview = useCallback(async () => {
     if (!isValid || !formula) {
       setResult(null);
       return;
     }
 
-    const controller = new AbortController();
+    setLoading(true);
+    setError(null);
 
-    const fetchPreview = async () => {
-      setLoading(true);
-      setError(null);
+    try {
+      const data = await api.public.post<{ time: string; result: string; formatted: string }>('/dsl/preview', {
+        body: JSON.stringify({
+          formula,
+          latitude,
+          longitude,
+          date: dateString,
+        }),
+      });
 
-      try {
-        const response = await fetch(`${API_BASE}/api/v1/dsl/preview`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            formula,
-            latitude,
-            longitude,
-            date: dateString,
-          }),
-          signal: controller.signal,
-        });
+      setResult({
+        time: data?.time || data?.result || '',
+        formatted: data?.formatted || formatTime(data?.time || data?.result || ''),
+        success: true,
+      });
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') return;
+      setError(err instanceof Error ? err.message : 'Preview failed');
+      setResult(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [api, formula, isValid, latitude, longitude, dateString]);
 
-        if (!response.ok) {
-          const data = await response.json();
-          throw new Error(data.error || 'Preview failed');
-        }
-
-        const json = await response.json();
-        const data = json.data || json; // Handle wrapped or direct response
-        setResult({
-          time: data.time || data.result,
-          formatted: data.formatted || formatTime(data.time || data.result),
-          success: true,
-        });
-      } catch (err) {
-        if (err instanceof Error && err.name === 'AbortError') return;
-        setError(err instanceof Error ? err.message : 'Preview failed');
-        setResult(null);
-      } finally {
-        setLoading(false);
-      }
-    };
-
+  useEffect(() => {
     // Debounce API calls
     const timeoutId = setTimeout(fetchPreview, 300);
 
     return () => {
       clearTimeout(timeoutId);
-      controller.abort();
     };
-  }, [formula, isValid, latitude, longitude, dateString]);
+  }, [fetchPreview]);
 
   return (
     <div className={cn('rounded-xl border-2 border-primary/20 bg-card p-5 text-center', className)}>

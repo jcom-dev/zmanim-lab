@@ -12,6 +12,9 @@
 import { test, expect } from '@playwright/test';
 import { loginAsAdmin, BASE_URL } from '../utils';
 
+// Enable parallel mode for faster test execution
+test.describe.configure({ mode: 'parallel' });
+
 test.describe('Admin Publisher Management', () => {
   test.beforeEach(async ({ page }) => {
     await loginAsAdmin(page);
@@ -59,7 +62,8 @@ test.describe('Admin Publisher Management', () => {
     const searchInput = page.locator('input[type="search"], input[placeholder*="earch"], input[placeholder*="filter"]').first();
     if (await searchInput.isVisible()) {
       await searchInput.fill('test');
-      await page.waitForTimeout(500);
+      // Wait for debounced search to filter results
+      await expect(page.locator('table, [role="table"], .publisher-list').first()).toBeVisible({ timeout: 5000 });
     }
     // Search is optional, test passes if page loads
   });
@@ -215,11 +219,8 @@ test.describe('Admin Publisher Status Changes', () => {
     if (await verifyButton.isVisible()) {
       await verifyButton.click();
 
-      // Wait for status to update
-      await page.waitForTimeout(1000);
-
-      // Status should now show verified
-      await expect(page.getByText(/verified|approved/i).first()).toBeVisible();
+      // Wait for status to update by checking for verified status text
+      await expect(page.getByText(/verified|approved/i).first()).toBeVisible({ timeout: 10000 });
     }
   });
 });

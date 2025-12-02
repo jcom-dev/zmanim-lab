@@ -147,6 +147,11 @@ func main() {
 	// Health check endpoint
 	r.Get("/health", h.HealthCheck)
 
+	// Static file server for uploads (logos, etc.)
+	uploadsDir := http.Dir("./uploads")
+	fileServer := http.FileServer(uploadsDir)
+	r.Handle("/uploads/*", http.StripPrefix("/uploads", fileServer))
+
 	// Swagger documentation UI
 	r.Get("/swagger/*", httpSwagger.Handler(
 		httpSwagger.URL("/swagger/doc.json"), // URL pointing to API definition
@@ -288,7 +293,9 @@ func main() {
 			r.Get("/zmanim/{zmanKey}/alias", h.GetAlias)
 			r.Put("/zmanim/{zmanKey}/alias", h.CreateOrUpdateAlias)
 			r.Delete("/zmanim/{zmanKey}/alias", h.DeleteAlias)
-			// Zman registry requests (Story 5.6 - uses existing CreateZmanRegistryRequest handler)
+			// Zman registry requests (Story 5.6)
+			r.Get("/zman-requests", h.GetPublisherZmanRequests)
+			r.Post("/zman-requests", h.CreateZmanRegistryRequest)
 			r.Post("/algorithm/publish", h.PublishAlgorithm)
 			r.Get("/algorithm/versions", h.GetAlgorithmVersions)
 			r.Get("/algorithm/versions/{id}", h.GetAlgorithmVersion)
@@ -367,9 +374,13 @@ func main() {
 			r.Post("/ai/reindex", h.TriggerReindex)
 			r.Get("/ai/audit", h.GetAIAuditLogs)
 
-			// Zman registry request management (Story 5.8 - uses existing AdminGetZmanRegistryRequests, AdminReviewZmanRegistryRequest)
+			// Zman registry request management (Story 5.8, 5.19)
 			r.Get("/zman-requests", h.AdminGetZmanRegistryRequests)
+			r.Get("/zman-requests/{id}", h.AdminGetZmanRegistryRequestByID)
 			r.Put("/zman-requests/{id}", h.AdminReviewZmanRegistryRequest)
+			r.Get("/zman-requests/{id}/tags", h.AdminGetZmanRequestTags)
+			r.Post("/zman-requests/{id}/tags/{tagRequestId}/approve", h.AdminApproveTagRequest)
+			r.Post("/zman-requests/{id}/tags/{tagRequestId}/reject", h.AdminRejectTagRequest)
 
 			// Master Zmanim Registry CRUD (admin)
 			r.Get("/registry/zmanim", h.AdminGetMasterZmanim)
@@ -387,6 +398,7 @@ func main() {
 			r.Route("/users", func(r chi.Router) {
 				r.Get("/", h.AdminListAllUsers)                                       // List all users with roles
 				r.Post("/", h.AdminAddUser)                                           // Add user (create or update)
+				r.Put("/{userId}", h.AdminUpdateUser)                                 // Update user info (name)
 				r.Delete("/{userId}", h.AdminDeleteUser)                              // Delete user completely
 				r.Put("/{userId}/admin", h.AdminSetAdminRole)                         // Toggle admin status
 				r.Post("/{userId}/reset-password", h.AdminResetUserPassword)          // Trigger password reset

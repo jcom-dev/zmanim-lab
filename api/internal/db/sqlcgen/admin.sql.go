@@ -59,25 +59,24 @@ func (q *Queries) AdminDeletePublisher(ctx context.Context, id string) error {
 }
 
 const adminGetPublisher = `-- name: AdminGetPublisher :one
-SELECT id, clerk_user_id, name, organization, email, description, bio,
+SELECT id, clerk_user_id, name, email, description, bio,
        website, logo_url, status, created_at, updated_at
 FROM publishers
 WHERE id = $1
 `
 
 type AdminGetPublisherRow struct {
-	ID           string             `json:"id"`
-	ClerkUserID  *string            `json:"clerk_user_id"`
-	Name         string             `json:"name"`
-	Organization *string            `json:"organization"`
-	Email        string             `json:"email"`
-	Description  *string            `json:"description"`
-	Bio          *string            `json:"bio"`
-	Website      *string            `json:"website"`
-	LogoUrl      *string            `json:"logo_url"`
-	Status       string             `json:"status"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+	ID          string             `json:"id"`
+	ClerkUserID *string            `json:"clerk_user_id"`
+	Name        string             `json:"name"`
+	Email       string             `json:"email"`
+	Description *string            `json:"description"`
+	Bio         *string            `json:"bio"`
+	Website     *string            `json:"website"`
+	LogoUrl     *string            `json:"logo_url"`
+	Status      string             `json:"status"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
 
 func (q *Queries) AdminGetPublisher(ctx context.Context, id string) (AdminGetPublisherRow, error) {
@@ -87,7 +86,6 @@ func (q *Queries) AdminGetPublisher(ctx context.Context, id string) (AdminGetPub
 		&i.ID,
 		&i.ClerkUserID,
 		&i.Name,
-		&i.Organization,
 		&i.Email,
 		&i.Description,
 		&i.Bio,
@@ -198,7 +196,7 @@ func (q *Queries) AdminListAlgorithms(ctx context.Context, arg AdminListAlgorith
 const adminListPublishers = `-- name: AdminListPublishers :many
 
 
-SELECT id, clerk_user_id, name, organization, email, status, created_at, updated_at
+SELECT id, clerk_user_id, name, email, status, created_at, updated_at
 FROM publishers
 WHERE ($1::text IS NULL OR status = $1)
 ORDER BY created_at DESC
@@ -212,14 +210,13 @@ type AdminListPublishersParams struct {
 }
 
 type AdminListPublishersRow struct {
-	ID           string             `json:"id"`
-	ClerkUserID  *string            `json:"clerk_user_id"`
-	Name         string             `json:"name"`
-	Organization *string            `json:"organization"`
-	Email        string             `json:"email"`
-	Status       string             `json:"status"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+	ID          string             `json:"id"`
+	ClerkUserID *string            `json:"clerk_user_id"`
+	Name        string             `json:"name"`
+	Email       string             `json:"email"`
+	Status      string             `json:"status"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
 
 // Admin SQL Queries
@@ -238,7 +235,6 @@ func (q *Queries) AdminListPublishers(ctx context.Context, arg AdminListPublishe
 			&i.ID,
 			&i.ClerkUserID,
 			&i.Name,
-			&i.Organization,
 			&i.Email,
 			&i.Status,
 			&i.CreatedAt,

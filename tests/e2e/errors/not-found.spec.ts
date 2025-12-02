@@ -10,6 +10,9 @@
 import { test, expect } from '@playwright/test';
 import { loginAsAdmin, BASE_URL } from '../utils';
 
+// Enable parallel mode for faster test execution
+test.describe.configure({ mode: 'parallel' });
+
 test.describe('Not Found - Admin Routes', () => {
   test.beforeEach(async ({ page }) => {
     await loginAsAdmin(page);

@@ -18,6 +18,9 @@ import {
   BASE_URL,
 } from '../utils';
 
+// Enable parallel mode for faster test execution
+test.describe.configure({ mode: 'parallel' });
+
 test.describe('Edge Cases - Empty States', () => {
   test('empty publishers list shows appropriate message', async ({ page }) => {
     await loginAsAdmin(page);
@@ -29,7 +32,8 @@ test.describe('Edge Cases - Empty States', () => {
     const statusFilter = page.locator('select');
     if (await statusFilter.isVisible()) {
       await statusFilter.selectOption('suspended');
-      await page.waitForTimeout(500);
+      // Wait for filter to apply by checking table updates
+      await expect(page.locator('table, [role="table"], .publisher-list').first()).toBeVisible({ timeout: 5000 }).catch(() => {});
     }
 
     // Page should handle empty state gracefully

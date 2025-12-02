@@ -42,15 +42,17 @@ export interface PublisherZman {
   zman_key: string;
   hebrew_name: string;
   english_name: string;
+  transliteration?: string | null;
+  description?: string | null;
   formula_dsl: string;
   ai_explanation: string | null;
   publisher_comment: string | null;
   is_enabled: boolean;
   is_visible: boolean;
   is_published: boolean;
-  is_custom: boolean;
+  is_beta: boolean;
   is_event_zman: boolean;
-  category: 'essential' | 'optional' | 'custom';
+  category: 'essential' | 'optional';
   dependencies: string[];
   sort_order: number;
   created_at: string;
@@ -59,10 +61,16 @@ export interface PublisherZman {
   // Linked zmanim fields
   master_zman_id?: string | null;
   linked_publisher_zman_id?: string | null;
-  source_type?: 'registry' | 'copied' | 'linked' | 'custom' | null;
+  source_type?: 'registry' | 'copied' | 'linked' | null;
   is_linked: boolean;
   linked_source_publisher_name?: string | null;
   linked_source_is_deleted: boolean;
+  // Source/original values from registry or linked publisher (for diff/revert functionality)
+  source_hebrew_name?: string | null;
+  source_english_name?: string | null;
+  source_transliteration?: string | null;
+  source_description?: string | null;
+  source_formula_dsl?: string | null;
 }
 
 export interface ZmanimTemplate {
@@ -94,12 +102,15 @@ export interface CreateZmanRequest {
 export interface UpdateZmanRequest {
   hebrew_name?: string;
   english_name?: string;
+  transliteration?: string;
+  description?: string;
   formula_dsl?: string;
   ai_explanation?: string;
   publisher_comment?: string;
   is_enabled?: boolean;
   is_visible?: boolean;
   is_published?: boolean;
+  is_beta?: boolean;
   category?: 'essential' | 'optional';
   sort_order?: number;
 }
@@ -328,7 +339,6 @@ export function categorizeZmanim(zmanim: PublisherZman[]) {
   return {
     essential: zmanim.filter((z) => z.category === 'essential'),
     optional: zmanim.filter((z) => z.category === 'optional'),
-    custom: zmanim.filter((z) => z.category === 'custom'),
   };
 }
 

@@ -103,7 +103,7 @@ export const ALGORITHM_TOOLTIPS = {
 
 export const FORM_TOOLTIPS = {
   // Publisher profile
-  organization:
+  publisher_name:
     'The name of your synagogue, organization, or religious authority. This is displayed publicly to users.',
   bio: 'A brief description of your halachic approach, credentials, and authority. Help users understand your methodology.',
   logo: 'Recommended: Square image, minimum 200x200 pixels. PNG or JPG format.',

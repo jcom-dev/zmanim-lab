@@ -42,10 +42,11 @@ export function InfoTooltip({
     <Tooltip>
       <TooltipTrigger asChild={asChild || !!children}>
         {children || (
-          <button
-            type="button"
+          <span
+            role="button"
+            tabIndex={0}
             className={cn(
-              'inline-flex items-center justify-center rounded-full',
+              'inline-flex items-center justify-center rounded-full cursor-pointer',
               'text-muted-foreground hover:text-foreground',
               'focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
               'transition-colors duration-200',
@@ -54,7 +55,7 @@ export function InfoTooltip({
             aria-label="More information"
           >
             <Icon className={cn('h-4 w-4', iconClassName)} />
-          </button>
+          </span>
         )}
       </TooltipTrigger>
       <TooltipContent

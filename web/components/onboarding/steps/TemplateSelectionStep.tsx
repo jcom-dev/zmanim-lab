@@ -24,7 +24,6 @@ interface TemplateSelectionStepProps {
 interface PublisherInfo {
   id: string;
   name: string;
-  organization_name?: string;
   zmanim_count: number;
 }
 
@@ -189,9 +188,6 @@ export function TemplateSelectionStep({ state, onUpdate, onNext, onBack }: Templ
             <div className="pt-3 border-t border-border">
               <p className="text-xs font-medium text-muted-foreground mb-1">Selected Publisher:</p>
               <p className="text-sm font-medium">{selectedPublisher.name}</p>
-              {selectedPublisher.organization_name && (
-                <p className="text-xs text-muted-foreground">{selectedPublisher.organization_name}</p>
-              )}
               <p className="text-xs text-muted-foreground mt-1">{selectedPublisher.zmanim_count} zmanim configured</p>
             </div>
           ) : (
@@ -249,9 +245,6 @@ export function TemplateSelectionStep({ state, onUpdate, onNext, onBack }: Templ
                     className="w-full text-left p-3 rounded-lg border border-border hover:border-primary/50 transition-colors"
                   >
                     <div className="font-medium">{publisher.name}</div>
-                    {publisher.organization_name && (
-                      <div className="text-sm text-muted-foreground">{publisher.organization_name}</div>
-                    )}
                     <div className="text-xs text-muted-foreground mt-1">
                       {publisher.zmanim_count} zmanim configured
                     </div>

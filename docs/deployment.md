@@ -10,7 +10,7 @@ This guide covers deployment configuration for Zmanim Lab across all platforms.
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                      │
 │   ┌───────────┐      ┌───────────┐      ┌───────────────────────┐  │
-│   │  Vercel   │      │  Fly.io   │      │      Supabase         │  │
+│   │  Vercel   │      │  Fly.io   │      │        Xata           │  │
 │   │ (Frontend)│─────▶│ (Backend) │─────▶│   (PostgreSQL)        │  │
 │   │ Next.js   │      │   Go API  │      │   + PostGIS           │  │
 │   └───────────┘      └───────────┘      └───────────────────────┘  │
@@ -75,10 +75,7 @@ CMD ["./main"]
 4. **Set secrets:**
    ```bash
    fly secrets set DATABASE_URL="postgresql://..."
-   fly secrets set SUPABASE_URL="https://xxx.supabase.co"
-   fly secrets set SUPABASE_ANON_KEY="eyJ..."
-   fly secrets set SUPABASE_SERVICE_KEY="eyJ..."
-   fly secrets set JWT_SECRET="your-secret"
+   fly secrets set CLERK_SECRET_KEY="sk_..."
    fly secrets set ALLOWED_ORIGINS="https://your-frontend.vercel.app"
    ```
 
@@ -94,9 +91,7 @@ CMD ["./main"]
 | `PORT` | No | Server port (default: 8080) |
 | `ENVIRONMENT` | No | development/production |
 | `DATABASE_URL` | Yes | PostgreSQL connection string |
-| `SUPABASE_URL` | Yes | Supabase project URL |
-| `SUPABASE_ANON_KEY` | Yes | Supabase anonymous key |
-| `SUPABASE_SERVICE_KEY` | No | Supabase service role key |
+| `CLERK_SECRET_KEY` | Yes | Clerk secret key |
 | `JWT_SECRET` | Prod | JWT signing secret |
 | `ALLOWED_ORIGINS` | No | CORS allowed origins (comma-separated) |
 | `RATE_LIMIT_REQUESTS` | No | Rate limit requests (default: 60) |
@@ -153,22 +148,14 @@ Or configure in Vercel dashboard: Settings > General > Root Directory > `web`
 
 ---
 
-## Database (Supabase)
-
-### Project Info
-- **Project ID:** bwyrcnimgpiwrngxvser
-- **URL:** https://bwyrcnimgpiwrngxvser.supabase.co
-- **Dashboard:** https://supabase.com/dashboard/project/bwyrcnimgpiwrngxvser
+## Database (PostgreSQL)
 
 ### Setup Steps
 
 1. **Apply migrations:**
    ```bash
-   # Via Supabase CLI
-   supabase db push
-
-   # Or manually via SQL Editor
-   # Copy contents of supabase/migrations/*.sql
+   # Run migration script
+   ./scripts/migrate.sh
    ```
 
 2. **Verify tables:**
@@ -176,21 +163,6 @@ Or configure in Vercel dashboard: Settings > General > Root Directory > `web`
    SELECT table_name FROM information_schema.tables
    WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
    ORDER BY table_name;
-   ```
-
-   Expected tables:
-   - algorithms
-   - audit_logs
-   - calculation_cache
-   - coverage_areas
-   - geographic_regions
-   - publishers
-   - user_profiles
-   - user_subscriptions
-
-3. **Apply seed data:**
-   ```bash
-   # Run supabase/migrations/20240002_seed_data.sql
    ```
 
 ---
@@ -214,9 +186,9 @@ Or configure in Vercel dashboard: Settings > General > Root Directory > `web`
 
 3. **Configure allowed origins in Clerk dashboard**
 
-4. **Integrate with backend (optional):**
+4. **Integrate with backend:**
    - Verify Clerk JWT tokens in Go middleware
-   - Map Clerk user IDs to Supabase user_profiles
+   - Map Clerk user IDs to publishers table
 
 ---
 
@@ -303,7 +275,7 @@ go mod download
 
 # Set environment variables
 cp .env.example .env
-# Edit .env with your Supabase credentials
+# Edit .env with your database credentials
 
 # Run development server
 go run ./cmd/api
@@ -329,8 +301,6 @@ services:
       - "8080:8080"
     environment:
       - DATABASE_URL=${DATABASE_URL}
-      - SUPABASE_URL=${SUPABASE_URL}
-      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
 ```
 
 ---

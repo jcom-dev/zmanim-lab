@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
-import { useAuth } from '@clerk/nextjs';
 import { useParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -28,12 +27,11 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import Link from 'next/link';
-import { API_BASE } from '@/lib/api';
+import { useApi } from '@/lib/api-client';
 
 interface Publisher {
   id: string;
   name: string;
-  organization: string;
   email?: string;
   status: string;
   website?: string;
@@ -53,7 +51,7 @@ interface PublisherUser {
 export default function AdminPublisherDetailPage() {
   const { id } = useParams();
   const router = useRouter();
-  const { getToken } = useAuth();
+  const api = useApi();
   const [publisher, setPublisher] = useState<Publisher | null>(null);
   const [users, setUsers] = useState<PublisherUser[]>([]);
   const [loading, setLoading] = useState(true);
@@ -67,7 +65,6 @@ export default function AdminPublisherDetailPage() {
   const [editLoading, setEditLoading] = useState(false);
   const [editForm, setEditForm] = useState({
     name: '',
-    organization: '',
     email: '',
     website: '',
     bio: '',
@@ -76,20 +73,8 @@ export default function AdminPublisherDetailPage() {
 
   const fetchPublisher = useCallback(async () => {
     try {
-      const token = await getToken();
-      const response = await fetch(`${API_BASE}/api/v1/admin/publishers`, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch publisher');
-      }
-
-      const data = await response.json();
-      const publishers = data.data?.publishers || data.publishers || [];
+      const data = await api.admin.get<{ publishers: Publisher[] }>('/admin/publishers');
+      const publishers = data?.publishers || [];
       const found = publishers.find((p: Publisher) => p.id === id);
 
       if (!found) {
@@ -100,30 +85,18 @@ export default function AdminPublisherDetailPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     }
-  }, [getToken, id]);
+  }, [api, id]);
 
   const fetchUsers = useCallback(async () => {
     try {
-      const token = await getToken();
-      const response = await fetch(`${API_BASE}/api/v1/admin/publishers/${id}/users`, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch users');
-      }
-
-      const data = await response.json();
-      setUsers(data.data?.users || data.users || []);
+      const data = await api.admin.get<{ users: PublisherUser[] }>(`/admin/publishers/${id}/users`);
+      setUsers(data?.users || []);
     } catch (err) {
       console.error('Failed to fetch users:', err);
       // Don't set error for users - publisher may have no users yet
       setUsers([]);
     }
-  }, [getToken, id]);
+  }, [api, id]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -145,23 +118,11 @@ export default function AdminPublisherDetailPage() {
       setInviteError(null);
       setInviteSuccess(null);
 
-      const token = await getToken();
-      const response = await fetch(`${API_BASE}/api/v1/admin/publishers/${id}/users/invite`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
+      const data = await api.admin.post<{ message: string }>(`/admin/publishers/${id}/users/invite`, {
         body: JSON.stringify({ email: inviteEmail }),
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || data.message || 'Failed to invite user');
-      }
-
-      setInviteSuccess(data.data?.message || data.message || 'Invitation sent successfully');
+      setInviteSuccess(data?.message || 'Invitation sent successfully');
       setInviteEmail('');
       await fetchUsers();
 
@@ -179,19 +140,7 @@ export default function AdminPublisherDetailPage() {
 
   const handleRemoveUser = async (userId: string) => {
     try {
-      const token = await getToken();
-      const response = await fetch(`${API_BASE}/api/v1/admin/publishers/${id}/users/${userId}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to remove user');
-      }
-
+      await api.admin.delete(`/admin/publishers/${id}/users/${userId}`);
       await fetchUsers();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to remove user');
@@ -200,19 +149,7 @@ export default function AdminPublisherDetailPage() {
 
   const handleStatusChange = async (action: 'verify' | 'suspend' | 'reactivate') => {
     try {
-      const token = await getToken();
-      const response = await fetch(`${API_BASE}/api/v1/admin/publishers/${id}/${action}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to ${action} publisher`);
-      }
-
+      await api.admin.put(`/admin/publishers/${id}/${action}`);
       await fetchPublisher();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
@@ -222,19 +159,9 @@ export default function AdminPublisherDetailPage() {
   const handleEditPublisher = async () => {
     try {
       setEditLoading(true);
-      const token = await getToken();
-      const response = await fetch(`${API_BASE}/api/v1/admin/publishers/${id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
+      await api.admin.put(`/admin/publishers/${id}`, {
         body: JSON.stringify(editForm),
       });
-
-      if (!response.ok) {
-        throw new Error('Failed to update publisher');
-      }
 
       await fetchPublisher();
       setEditDialogOpen(false);
@@ -248,19 +175,7 @@ export default function AdminPublisherDetailPage() {
   const handleDeletePublisher = async () => {
     try {
       setDeleteLoading(true);
-      const token = await getToken();
-      const response = await fetch(`${API_BASE}/api/v1/admin/publishers/${id}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to delete publisher');
-      }
-
+      await api.admin.delete(`/admin/publishers/${id}`);
       router.push('/admin/publishers');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
@@ -272,7 +187,6 @@ export default function AdminPublisherDetailPage() {
     if (publisher) {
       setEditForm({
         name: publisher.name || '',
-        organization: publisher.organization || '',
         email: publisher.email || '',
         website: publisher.website || '',
         bio: publisher.bio || '',
@@ -336,7 +250,6 @@ export default function AdminPublisherDetailPage() {
             <span className="text-muted-foreground">{publisher.name}</span>
           </div>
           <h1 className="text-3xl font-bold">{publisher.name}</h1>
-          <p className="text-muted-foreground">{publisher.organization}</p>
         </div>
         <span
           className={`inline-block px-4 py-2 rounded-full text-sm font-semibold border ${getStatusBadgeClass(
@@ -361,7 +274,6 @@ export default function AdminPublisherDetailPage() {
                 publisher: {
                   id: publisher.id,
                   name: publisher.name,
-                  organization: publisher.organization,
                   status: publisher.status,
                 }
               }));
@@ -401,19 +313,11 @@ export default function AdminPublisherDetailPage() {
                 </DialogHeader>
                 <div className="space-y-4 py-4">
                   <div>
-                    <label className="text-sm font-medium">Name</label>
+                    <label className="text-sm font-medium">Publisher / Organization Name</label>
                     <Input
                       value={editForm.name}
                       onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-                      placeholder="Publisher name"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium">Organization</label>
-                    <Input
-                      value={editForm.organization}
-                      onChange={(e) => setEditForm({ ...editForm, organization: e.target.value })}
-                      placeholder="Organization name"
+                      placeholder="Congregation Beth Israel"
                     />
                   </div>
                   <div>

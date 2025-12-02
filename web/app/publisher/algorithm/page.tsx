@@ -24,6 +24,7 @@ import {
 } from '@/lib/hooks/useZmanimList';
 import { MasterZmanPicker } from '@/components/publisher/MasterZmanPicker';
 import { PublisherZmanPicker } from '@/components/publisher/PublisherZmanPicker';
+import { RequestZmanModal } from '@/components/publisher/RequestZmanModal';
 
 interface OnboardingState {
   completed_at?: string | null;
@@ -46,7 +47,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { MapPin, Search, Plus, Download, Filter, AlertTriangle, ChevronLeft, ChevronRight, Calendar, RotateCcw, Trash2, Loader2, CalendarDays, Flame, Tag, ChevronDown, Library, Copy, Link2 } from 'lucide-react';
+import { MapPin, Search, Plus, Download, Filter, AlertTriangle, ChevronLeft, ChevronRight, Calendar, RotateCcw, Trash2, Loader2, CalendarDays, Flame, Tag, ChevronDown, Library, Copy, Link2, FileQuestion } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { InfoTooltip, StatusTooltip } from '@/components/shared/InfoTooltip';
 import { ALGORITHM_TOOLTIPS, STATUS_TOOLTIPS } from '@/lib/tooltip-content';
@@ -248,12 +249,12 @@ function getDaysInMonth(year: number, month: number): number {
 // Hebrew days (1-30)
 const hebrewDays = Array.from({ length: 30 }, (_, i) => i + 1);
 
-// Default location: Brooklyn, NY
-const DEFAULT_LOCATION = {
-  latitude: 40.6782,
-  longitude: -73.9442,
-  timezone: 'America/New_York',
-  displayName: 'Brooklyn, NY',
+// Placeholder location when no coverage is defined (used for type safety but won't be displayed)
+const NO_COVERAGE_PLACEHOLDER: PreviewLocation = {
+  latitude: 0,
+  longitude: 0,
+  timezone: 'UTC',
+  displayName: 'No Coverage',
 };
 
 // localStorage key prefix for preview location (per-publisher)
@@ -278,7 +279,8 @@ interface CoverageCity {
 
 interface PublisherCoverage {
   id: string;
-  coverage_level: 'country' | 'region' | 'city';
+  coverage_level: 'continent' | 'country' | 'region' | 'city';
+  continent_code?: string;
   country_code?: string;
   region?: string;
   city_id?: string;
@@ -331,6 +333,7 @@ export default function AlgorithmEditorPage() {
   const [showAddZmanModeDialog, setShowAddZmanModeDialog] = useState(false);
   const [showPublisherZmanPicker, setShowPublisherZmanPicker] = useState(false);
   const [publisherZmanMode, setPublisherZmanMode] = useState<'copy' | 'link'>('copy');
+  const [showRequestZmanModal, setShowRequestZmanModal] = useState(false);
   const [showRestartConfirm, setShowRestartConfirm] = useState(false);
   const [forceShowWizard, setForceShowWizard] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -338,8 +341,8 @@ export default function AlgorithmEditorPage() {
   const [viewMode, setViewMode] = useState<'everyday' | 'events'>('everyday');
   const [tagFilter, setTagFilter] = useState<string>('all');
 
-  // Location state - initialized with default, will be updated when publisher loads
-  const [previewLocation, setPreviewLocation] = useState<PreviewLocation>(DEFAULT_LOCATION);
+  // Location state - initialized with placeholder, will be updated when publisher coverage loads
+  const [previewLocation, setPreviewLocation] = useState<PreviewLocation>(NO_COVERAGE_PLACEHOLDER);
   const [coverageCities, setCoverageCities] = useState<CoverageCity[]>([]);
   const [coverageCountryCodes, setCoverageCountryCodes] = useState<string[]>([]);
   const [citySearch, setCitySearch] = useState('');
@@ -442,10 +445,21 @@ export default function AlgorithmEditorPage() {
       const cities: CoverageCity[] = [];
 
       for (const coverage of coverageAreas) {
-        if (coverage.coverage_level === 'city' && coverage.city_id) {
+        if (coverage.coverage_level === 'continent' && coverage.continent_code) {
+          // For continent-level coverage, get a representative city from that continent
+          try {
+            const cityData = await api.public.get<{ cities: CoverageCity[] }>(`/cities?continent_code=${encodeURIComponent(coverage.continent_code)}&limit=5`);
+            if (cityData.cities && cityData.cities.length > 0) {
+              // Add a few major cities from the continent
+              cities.push(...cityData.cities);
+            }
+          } catch {
+            // Ignore errors fetching continent cities
+          }
+        } else if (coverage.coverage_level === 'city' && coverage.city_id) {
           // For city-level coverage, search for the specific city by name
           try {
-            const cityData = await api.get<{ cities: CoverageCity[] }>(`/cities?search=${encodeURIComponent(coverage.city_name || '')}&limit=1`);
+            const cityData = await api.public.get<{ cities: CoverageCity[] }>(`/cities?search=${encodeURIComponent(coverage.city_name || '')}&limit=1`);
             if (cityData.cities && cityData.cities.length > 0) {
               cities.push(cityData.cities[0]);
             }
@@ -455,7 +469,7 @@ export default function AlgorithmEditorPage() {
         } else if (coverage.coverage_level === 'country' && coverage.country_code) {
           // For country-level coverage, get the most populous city in that country
           try {
-            const cityData = await api.get<{ cities: CoverageCity[] }>(`/cities?country_code=${encodeURIComponent(coverage.country_code)}&limit=1`);
+            const cityData = await api.public.get<{ cities: CoverageCity[] }>(`/cities?country_code=${encodeURIComponent(coverage.country_code)}&limit=1`);
             if (cityData.cities && cityData.cities.length > 0) {
               cities.push(cityData.cities[0]);
             }
@@ -465,7 +479,7 @@ export default function AlgorithmEditorPage() {
         } else if (coverage.coverage_level === 'region' && coverage.country_code && coverage.region) {
           // For region-level coverage, get a city in that region
           try {
-            const cityData = await api.get<{ cities: CoverageCity[] }>(`/cities?search=${encodeURIComponent(coverage.region)}&country_code=${encodeURIComponent(coverage.country_code)}&limit=1`);
+            const cityData = await api.public.get<{ cities: CoverageCity[] }>(`/cities?search=${encodeURIComponent(coverage.region)}&country_code=${encodeURIComponent(coverage.country_code)}&limit=1`);
             if (cityData.cities && cityData.cities.length > 0) {
               cities.push(cityData.cities[0]);
             }
@@ -476,6 +490,12 @@ export default function AlgorithmEditorPage() {
       }
 
       setCoverageCities(cities);
+
+      // If no coverage, reset to placeholder
+      if (cities.length === 0 && countryCodes.length === 0) {
+        setPreviewLocation(NO_COVERAGE_PLACEHOLDER);
+        return;
+      }
 
       // Helper to check if a location is valid (matches a coverage city)
       const isLocationValid = (loc: PreviewLocation) => {
@@ -489,11 +509,11 @@ export default function AlgorithmEditorPage() {
       const savedKey = PREVIEW_LOCATION_KEY_PREFIX + selectedPublisher.id;
       const saved = typeof window !== 'undefined' ? localStorage.getItem(savedKey) : null;
 
-      if (saved) {
+      if (saved && cities.length > 0) {
         try {
           const parsed = JSON.parse(saved) as PreviewLocation;
           // Only use saved location if it's still valid (in coverage)
-          if (cities.length === 0 || isLocationValid(parsed)) {
+          if (isLocationValid(parsed)) {
             setPreviewLocation(parsed);
             return;
           }
@@ -514,6 +534,9 @@ export default function AlgorithmEditorPage() {
           displayName: `${firstCity.name}${firstCity.region ? `, ${firstCity.region}` : ''}, ${firstCity.country}`,
         };
         setPreviewLocation(newLocation);
+      } else {
+        // No cities available, use placeholder
+        setPreviewLocation(NO_COVERAGE_PLACEHOLDER);
       }
     } catch (err) {
       console.error('Failed to load coverage:', err);
@@ -855,76 +878,97 @@ export default function AlgorithmEditorPage() {
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <button className="flex items-center gap-2 px-3 py-2 rounded-md border border-input bg-background hover:bg-muted/50 transition-colors text-left">
-                          <MapPin className="h-4 w-4 text-muted-foreground shrink-0" />
-                          <span className="text-sm font-medium text-foreground truncate max-w-[140px] sm:max-w-[200px]">
-                            {previewLocation.displayName}
+                          <MapPin className={`h-4 w-4 shrink-0 ${coverageCities.length === 0 && coverageCountryCodes.length === 0 ? 'text-amber-500' : 'text-muted-foreground'}`} />
+                          <span className={`text-sm font-medium truncate max-w-[140px] sm:max-w-[200px] ${coverageCities.length === 0 && coverageCountryCodes.length === 0 ? 'text-amber-600 dark:text-amber-400' : 'text-foreground'}`}>
+                            {coverageCities.length === 0 && coverageCountryCodes.length === 0 ? 'No Coverage' : previewLocation.displayName}
                           </span>
                           <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" />
                         </button>
                       </DropdownMenuTrigger>
                     <DropdownMenuContent align="start" className="w-80 p-0">
-                      <div className="p-3">
-                        <div className="relative">
-                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                          <input
-                            type="text"
-                            placeholder="Search for a city..."
-                            value={citySearch}
-                            onChange={(e) => handleCitySearch(e.target.value)}
-                            className="w-full bg-background border border-input rounded-md pl-10 pr-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                            onClick={(e) => e.stopPropagation()}
-                            autoFocus
-                          />
-                        </div>
-                      </div>
-                      {searchResults.length > 0 ? (
-                        <div className="max-h-[300px] overflow-y-auto border-t border-border">
-                          {searchResults.map((city) => (
-                            <DropdownMenuItem
-                              key={city.id}
-                              onClick={() => selectCity(city)}
-                              className="flex items-center gap-2 mx-1"
-                            >
-                              <MapPin className="h-3 w-3 text-muted-foreground shrink-0" />
-                              <span className="truncate">
-                                {city.name}
-                                {city.region && <span className="text-muted-foreground">, {city.region}</span>}
-                                <span className="text-muted-foreground">, {city.country}</span>
-                              </span>
-                              {coverageCities.some(c => c.id === city.id) && (
-                                <span className="ml-auto text-xs bg-primary/20 text-primary px-2 py-0.5 rounded shrink-0">
-                                  Coverage
-                                </span>
-                              )}
-                            </DropdownMenuItem>
-                          ))}
-                        </div>
-                      ) : coverageCities.length > 0 && citySearch.length < 2 ? (
-                        <div className="max-h-[300px] overflow-y-auto border-t border-border">
-                          <div className="px-3 py-1.5 text-xs text-muted-foreground font-medium">Coverage Cities</div>
-                          {coverageCities.map((city) => (
-                            <DropdownMenuItem
-                              key={city.id}
-                              onClick={() => selectCity(city)}
-                              className="flex items-center gap-2 mx-1"
-                            >
-                              <MapPin className="h-3 w-3 text-muted-foreground shrink-0" />
-                              <span className="truncate">
-                                {city.name}
-                                {city.region && <span className="text-muted-foreground">, {city.region}</span>}
-                                <span className="text-muted-foreground">, {city.country}</span>
-                              </span>
-                            </DropdownMenuItem>
-                          ))}
-                        </div>
-                      ) : citySearch.length >= 2 ? (
-                        <div className="px-3 py-2 text-sm text-muted-foreground text-center border-t border-border">
-                          No cities found
+                      {/* No coverage - show warning */}
+                      {coverageCities.length === 0 && coverageCountryCodes.length === 0 ? (
+                        <div className="p-4 text-center">
+                          <MapPin className="h-8 w-8 mx-auto mb-2 text-amber-500" />
+                          <p className="text-sm font-medium text-foreground mb-1">No Coverage Areas</p>
+                          <p className="text-xs text-muted-foreground mb-3">
+                            Add coverage areas first to preview zmanim for specific cities.
+                          </p>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => router.push('/publisher/coverage')}
+                            className="text-xs"
+                          >
+                            Add Coverage
+                          </Button>
                         </div>
                       ) : (
-                        <div className="px-3 py-2 text-sm text-muted-foreground text-center border-t border-border">
-                          Type to search for cities
-                        </div>
+                        <>
+                          <div className="p-3">
+                            <div className="relative">
+                              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                              <input
+                                type="text"
+                                placeholder="Search for a city..."
+                                value={citySearch}
+                                onChange={(e) => handleCitySearch(e.target.value)}
+                                className="w-full bg-background border border-input rounded-md pl-10 pr-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                                onClick={(e) => e.stopPropagation()}
+                                autoFocus
+                              />
+                            </div>
+                          </div>
+                          {searchResults.length > 0 ? (
+                            <div className="max-h-[300px] overflow-y-auto border-t border-border">
+                              {searchResults.map((city) => (
+                                <DropdownMenuItem
+                                  key={city.id}
+                                  onClick={() => selectCity(city)}
+                                  className="flex items-center gap-2 mx-1"
+                                >
+                                  <MapPin className="h-3 w-3 text-muted-foreground shrink-0" />
+                                  <span className="truncate">
+                                    {city.name}
+                                    {city.region && <span className="text-muted-foreground">, {city.region}</span>}
+                                    <span className="text-muted-foreground">, {city.country}</span>
+                                  </span>
+                                  {coverageCities.some(c => c.id === city.id) && (
+                                    <span className="ml-auto text-xs bg-primary/20 text-primary px-2 py-0.5 rounded shrink-0">
+                                      Coverage
+                                    </span>
+                                  )}
+                                </DropdownMenuItem>
+                              ))}
+                            </div>
+                          ) : coverageCities.length > 0 && citySearch.length < 2 ? (
+                            <div className="max-h-[300px] overflow-y-auto border-t border-border">
+                              <div className="px-3 py-1.5 text-xs text-muted-foreground font-medium">Coverage Cities</div>
+                              {coverageCities.map((city) => (
+                                <DropdownMenuItem
+                                  key={city.id}
+                                  onClick={() => selectCity(city)}
+                                  className="flex items-center gap-2 mx-1"
+                                >
+                                  <MapPin className="h-3 w-3 text-muted-foreground shrink-0" />
+                                  <span className="truncate">
+                                    {city.name}
+                                    {city.region && <span className="text-muted-foreground">, {city.region}</span>}
+                                    <span className="text-muted-foreground">, {city.country}</span>
+                                  </span>
+                                </DropdownMenuItem>
+                              ))}
+                            </div>
+                          ) : citySearch.length >= 2 ? (
+                            <div className="px-3 py-2 text-sm text-muted-foreground text-center border-t border-border">
+                              No cities found
+                            </div>
+                          ) : (
+                            <div className="px-3 py-2 text-sm text-muted-foreground text-center border-t border-border">
+                              Type to search for cities
+                            </div>
+                          )}
+                        </>
                       )}
                     </DropdownMenuContent>
                     </DropdownMenu>
@@ -1335,6 +1379,7 @@ export default function AlgorithmEditorPage() {
                 location={previewLocation}
                 selectedDate={previewDate}
                 displayLanguage={displayLanguage}
+                hasCoverage={coverageCities.length > 0 || coverageCountryCodes.length > 0}
               />
             </div>
           </div>
@@ -1347,6 +1392,7 @@ export default function AlgorithmEditorPage() {
             location={previewLocation}
             selectedDate={previewDate}
             displayLanguage={displayLanguage}
+            hasCoverage={coverageCities.length > 0 || coverageCountryCodes.length > 0}
           />
         </div>
 
@@ -1355,6 +1401,9 @@ export default function AlgorithmEditorPage() {
           <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Week Preview</DialogTitle>
+              <DialogDescription>
+                Preview calculated zmanim times for the upcoming week
+              </DialogDescription>
             </DialogHeader>
             <WeekPreview
               zmanim={zmanim}
@@ -1477,6 +1526,27 @@ export default function AlgorithmEditorPage() {
                   </div>
                 </div>
               </button>
+
+              {/* Request New Zman - opens RequestZmanModal */}
+              <button
+                className="w-full p-4 rounded-lg border border-border hover:border-primary hover:bg-primary/5 transition-colors text-left group"
+                onClick={() => {
+                  setShowAddZmanModeDialog(false);
+                  setShowRequestZmanModal(true);
+                }}
+              >
+                <div className="flex items-start gap-4">
+                  <div className="p-2 rounded-lg bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 group-hover:bg-purple-200 dark:group-hover:bg-purple-900/50 transition-colors">
+                    <FileQuestion className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-foreground">Request New Zman</h4>
+                    <p className="text-sm text-muted-foreground mt-0.5">
+                      Can&apos;t find what you need? Request a new zman to be added
+                    </p>
+                  </div>
+                </div>
+              </button>
             </div>
           </DialogContent>
         </Dialog>
@@ -1495,6 +1565,13 @@ export default function AlgorithmEditorPage() {
           onOpenChange={setShowPublisherZmanPicker}
           mode={publisherZmanMode}
           existingZmanKeys={existingZmanKeys}
+          onSuccess={() => refetch()}
+        />
+
+        {/* Request New Zman Modal - outside parent dialog to avoid unmount */}
+        <RequestZmanModal
+          open={showRequestZmanModal}
+          onOpenChange={setShowRequestZmanModal}
           onSuccess={() => refetch()}
         />
 

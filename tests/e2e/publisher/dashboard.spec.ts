@@ -16,8 +16,12 @@ import {
   createTestCoverage,
   getTestCity,
   cleanupTestData,
+  cleanupPublisher,
   BASE_URL,
 } from '../utils';
+
+// Enable parallel mode for faster test execution
+test.describe.configure({ mode: 'parallel' });
 
 test.describe('Publisher Dashboard', () => {
   let testPublisher: { id: string; name: string; organization: string };
@@ -172,7 +176,7 @@ test.describe('Publisher Dashboard - Status Indicators', () => {
     // Should show verified indicator
     await expect(page.getByText(/verified/i)).toBeVisible();
 
-    await cleanupTestData();
+    await cleanupPublisher(verifiedPublisher.id);
   });
 
   test('shows pending status badge for pending publisher', async ({ page }) => {
@@ -188,7 +192,7 @@ test.describe('Publisher Dashboard - Status Indicators', () => {
     // Should show pending indicator
     await expect(page.getByText(/pending/i)).toBeVisible();
 
-    await cleanupTestData();
+    await cleanupPublisher(pendingPublisher.id);
   });
 
   test('shows draft warning for unpublished algorithm', async ({ page }) => {
@@ -209,6 +213,6 @@ test.describe('Publisher Dashboard - Status Indicators', () => {
     // Should show draft warning
     await expect(page.getByText(/draft/i)).toBeVisible();
 
-    await cleanupTestData();
+    await cleanupPublisher(publisher.id);
   });
 });

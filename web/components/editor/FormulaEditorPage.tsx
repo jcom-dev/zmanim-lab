@@ -1,5 +1,5 @@
 'use client';
-import { API_BASE } from '@/lib/api';
+import { useApi } from '@/lib/api-client';
 
 import { useState, useCallback } from 'react';
 import { Code2, Wand2, AlertTriangle, Save } from 'lucide-react';
@@ -41,6 +41,7 @@ export function FormulaEditorPage({
   onSave,
   className,
 }: FormulaEditorPageProps) {
+  const api = useApi();
   const [mode, setMode] = useState<EditorMode>('guided');
   const [showModeWarning, setShowModeWarning] = useState(false);
   const [pendingMode, setPendingMode] = useState<EditorMode | null>(null);
@@ -86,22 +87,17 @@ export function FormulaEditorPage({
   // Validate formula via API
   const validateFormula = useCallback(async (formulaText: string) => {
     try {
-      
-      const response = await fetch(`${API_BASE}/api/v1/dsl/validate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const data = await api.public.post<{ valid: boolean; errors: Array<{ message: string }> }>('/dsl/validate', {
         body: JSON.stringify({ formula: formulaText }),
       });
-
-      const data = await response.json();
       return {
-        valid: data.valid ?? response.ok,
-        errors: data.errors || [],
+        valid: data?.valid ?? true,
+        errors: data?.errors || [],
       };
     } catch {
       return { valid: false, errors: [{ message: 'Validation service unavailable' }] };
     }
-  }, []);
+  }, [api]);
 
   // Handle save
   const handleSave = useCallback(async () => {

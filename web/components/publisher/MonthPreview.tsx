@@ -1,9 +1,8 @@
 'use client';
-import { API_BASE } from '@/lib/api';
-
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { useApi } from '@/lib/api-client';
 
 interface ZmanConfig {
   method: string;
@@ -34,11 +33,13 @@ export interface PreviewLocation {
 
 interface MonthPreviewProps {
   configuration: AlgorithmConfig;
-  getToken: () => Promise<string | null>;
+  /** @deprecated No longer needed - component uses useApi internally */
+  getToken?: () => Promise<string | null>;
   location: PreviewLocation;
 }
 
-export function MonthPreview({ configuration, getToken, location }: MonthPreviewProps) {
+export function MonthPreview({ configuration, location }: MonthPreviewProps) {
+  const api = useApi();
   const [currentMonth, setCurrentMonth] = useState(() => {
     const now = new Date();
     return { year: now.getFullYear(), month: now.getMonth() };
@@ -47,11 +48,7 @@ export function MonthPreview({ configuration, getToken, location }: MonthPreview
   const [loading, setLoading] = useState(false);
   const [selectedDay, setSelectedDay] = useState<DayZmanim | null>(null);
 
-  useEffect(() => {
-    loadMonth();
-  }, [currentMonth, configuration, location]);
-
-  const loadMonth = async () => {
+  const loadMonth = useCallback(async () => {
     if (Object.keys(configuration.zmanim).length === 0) {
       setMonthData([]);
       return;
@@ -66,13 +63,6 @@ export function MonthPreview({ configuration, getToken, location }: MonthPreview
       const month = currentMonth.month;
       const daysInMonth = new Date(year, month + 1, 0).getDate();
 
-      const token = await getToken();
-      if (!token) {
-        console.warn('No auth token available, skipping month preview load');
-        setLoading(false);
-        return;
-      }
-
       // Fetch zmanim for each day (we'll batch this in a real implementation)
       // For now, fetch a few key days to demonstrate
       const daysToFetch = [1, 7, 14, 21, daysInMonth];
@@ -81,12 +71,7 @@ export function MonthPreview({ configuration, getToken, location }: MonthPreview
         const date = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 
         try {
-          const response = await fetch(`${API_BASE}/api/v1/publisher/algorithm/preview`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`,
-            },
+          const data = await api.post<{ zmanim: Array<{ key: string; name: string; time: string }> }>('/publisher/algorithm/preview', {
             body: JSON.stringify({
               configuration,
               date,
@@ -96,13 +81,10 @@ export function MonthPreview({ configuration, getToken, location }: MonthPreview
             }),
           });
 
-          if (response.ok) {
-            const data = await response.json();
-            days.push({
-              date,
-              zmanim: data.zmanim || [],
-            });
-          }
+          days.push({
+            date,
+            zmanim: data?.zmanim || [],
+          });
         } catch {
           // Skip failed days
         }
@@ -114,7 +96,11 @@ export function MonthPreview({ configuration, getToken, location }: MonthPreview
     } finally {
       setLoading(false);
     }
-  };
+  }, [api, currentMonth, configuration, location]);
+
+  useEffect(() => {
+    loadMonth();
+  }, [loadMonth]);
 
   const prevMonth = () => {
     setCurrentMonth(prev => {

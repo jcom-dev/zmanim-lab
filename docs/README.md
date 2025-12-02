@@ -1,358 +1,160 @@
-# Zmanim Lab - Documentation Hub
+# Zmanim Lab Documentation
 
-Welcome to the comprehensive documentation for Zmanim Lab, a multi-publisher platform for calculating Jewish prayer times (zmanim).
-
-## 📚 Documentation Overview
-
-This documentation suite provides everything you need to understand, develop, and deploy the Zmanim Lab platform.
-
-### Core Documents
-
-1. **[Architecture Documentation](./ARCHITECTURE.md)** - Complete system architecture
-   - System overview and high-level design
-   - Technology stack details
-   - Database schema with PostGIS integration
-   - REST API specifications
-   - Publisher system design
-   - Authentication & authorization
-   - Deployment architecture
-   - Security & scalability considerations
-
-2. **[Developer Guide](./DEVELOPER_GUIDE.md)** - Complete onboarding guide for developers
-   - Local development setup
-   - Project structure
-   - Development workflow
-   - Code standards and testing
-   - Common tasks and troubleshooting
-
-## 🎯 Quick Start Guide
-
-### For Users
-The platform allows you to:
-- Search for locations worldwide
-- Select religious authorities (publishers) serving your area
-- View accurate zmanim calculations based on authoritative algorithms
-- Compare different calculation methods
-
-### For Publishers
-Religious authorities can:
-- Register and get verified by admins
-- Define custom calculation algorithms
-- Set geographic coverage areas
-- Manage and update their formulas
-- View usage analytics
-
-### For Developers
-Get started in 3 steps:
-1. Read the [Developer Guide](./DEVELOPER_GUIDE.md#local-development-setup)
-2. Set up your local environment
-3. Start coding!
-
-## 🏗️ System Architecture Summary
-
-```
-┌─────────────────────────────────────────────────────┐
-│              FRONTEND LAYER                         │
-│  ┌──────────────────┐  ┌──────────────────┐       │
-│  │  Web App         │  │  Admin Panel     │       │
-│  │  (Next.js)       │  │  (Next.js)       │       │
-│  └─────────┬────────┘  └─────────┬────────┘       │
-└────────────┼───────────────────────┼────────────────┘
-             │                       │
-             └───────────┬───────────┘
-                         │ REST API
-┌────────────────────────┼────────────────────────────┐
-│              BACKEND LAYER (Go)                      │
-│  ┌──────────────────────┴──────────────────┐       │
-│  │  Publisher  │  Calculation  │  Location │       │
-│  │  Service    │  Service      │  Service  │       │
-│  └──────────────────────────────────────────┘       │
-└────────────────────────┬────────────────────────────┘
-                         │
-┌────────────────────────┼────────────────────────────┐
-│              DATA LAYER                              │
-│  ┌─────────────────┐  ┌─────────────────┐          │
-│  │  Supabase       │  │  Redis Cache    │          │
-│  │  PostgreSQL     │  │                 │          │
-│  │  + PostGIS      │  │                 │          │
-│  └─────────────────┘  └─────────────────┘          │
-└──────────────────────────────────────────────────────┘
-```
-
-## 🔑 Key Features
-
-### Multi-Publisher Architecture
-- Religious authorities maintain independent calculation methods
-- Each publisher controls their own algorithms and coverage areas
-- Users can choose which authority to follow
-
-### Flexible Algorithm System
-Publishers can define algorithms using:
-- **Solar Depression Angles** (e.g., 16.1° for Alos)
-- **Fixed Time Offsets** (e.g., 72 minutes before sunrise)
-- **Proportional Hours** (Shaos Zmaniyos calculations)
-- **Custom Formulas** (complete algorithmic control)
-
-### Geographic Coverage
-- PostGIS-powered geographic searching
-- Publishers define service areas with polygon boundaries
-- Automatic publisher matching based on location
-- Priority system for overlapping coverage
-
-### Real-Time Calculations
-- On-demand REST API calculations
-- Multi-tier caching (Redis + in-memory + database)
-- Sub-second response times
-- Historical data caching
-
-## 🛠️ Technology Stack
-
-### Backend
-- **Language**: Go 1.21+
-- **Framework**: Chi Router
-- **Database**: Supabase (PostgreSQL 15+ with PostGIS)
-- **Cache**: Redis
-- **Auth**: Supabase Auth with JWT
-
-### Frontend
-- **Framework**: Next.js 16 (App Router)
-- **Language**: TypeScript
-- **UI**: Tailwind CSS + Radix UI
-- **State**: Zustand + React Query
-
-### Infrastructure
-- **Backend Hosting**: Google Cloud Run / AWS ECS
-- **Frontend Hosting**: Vercel
-- **Database**: Supabase (managed)
-- **Cache**: Upstash Redis / AWS ElastiCache
-- **CDN**: Cloudflare
-
-## 📊 Database Schema Overview
-
-The system uses PostgreSQL with PostGIS extension for geographic calculations:
-
-### Core Tables
-- **publishers** - Religious authorities and organizations
-- **algorithms** - Calculation method definitions
-- **calculation_methods** - Individual zmanim formulas
-- **coverage_areas** - Geographic service areas (PostGIS polygons)
-- **geographic_regions** - Location database
-- **user_profiles** - User accounts and preferences
-- **calculation_cache** - Performance optimization
-
-### Key Features
-- PostGIS for geographic queries
-- JSONB for flexible algorithm definitions
-- Full audit logging
-- Automatic timestamp triggers
-
-## 🔐 Security
-
-- **Authentication**: JWT tokens via Supabase Auth
-- **Authorization**: Role-based access control (Public/User/Publisher/Admin)
-- **Data Protection**: Encryption at rest and in transit
-- **API Security**: Rate limiting, CORS, security headers
-- **Input Validation**: Strict validation on all endpoints
-
-## 📈 Performance
-
-### Targets
-- API Response: p95 < 100ms
-- Calculation: p99 < 500ms
-- Throughput: 10,000 req/sec
-- Availability: 99.9% uptime
-
-### Optimization
-- Multi-tier caching strategy
-- Database query optimization with indexes
-- Horizontal auto-scaling
-- CDN for static assets
-
-## 🚀 Getting Started
-
-### Prerequisites
-- Go 1.21+ (backend development)
-- Node.js 18+ (frontend development)
-- Docker (optional, for services)
-- Supabase account
-
-### Quick Setup
-
-**1. Clone the repository:**
-```bash
-git clone https://github.com/your-org/zmanim-lab.git
-cd zmanim-lab
-```
-
-**2. Set up Supabase:**
-- Create project at https://supabase.com
-- Apply database schema from [ARCHITECTURE.md](./ARCHITECTURE.md#database-schema)
-
-**3. Start backend:**
-```bash
-cd backend
-cp .env.example .env
-# Edit .env with your Supabase credentials
-go run cmd/api/main.go
-```
-
-**4. Start frontend:**
-```bash
-cd frontend
-npm install
-cp .env.local.example .env.local
-# Edit .env.local with API URL
-npm run dev
-```
-
-See the [Developer Guide](./DEVELOPER_GUIDE.md) for detailed setup instructions.
-
-## 📖 API Documentation
-
-### Base URL
-```
-https://api.zmanim.lab/v1
-```
-
-### Key Endpoints
-
-**Calculate Zmanim:**
-```bash
-POST /api/v1/zmanim/calculate
-{
-  "location_id": "uuid",
-  "date": "2024-11-24",
-  "publisher_id": "uuid"
-}
-```
-
-**Search Locations:**
-```bash
-GET /api/v1/locations/search?q=Jerusalem
-```
-
-**List Publishers:**
-```bash
-GET /api/v1/publishers?status=active
-```
-
-See [ARCHITECTURE.md - API Design](./ARCHITECTURE.md#api-design) for complete API documentation.
-
-## 🧪 Testing
-
-### Backend Tests
-```bash
-cd backend
-go test ./...                    # Run all tests
-go test -race ./...              # Race detection
-go test -cover ./...             # Coverage report
-```
-
-### Frontend Tests
-```bash
-cd frontend
-npm test                         # Run all tests
-npm run lint                     # Linting
-npm run type-check               # TypeScript validation
-```
-
-## 📦 Deployment
-
-### Backend Deployment
-```bash
-# Build Docker image
-docker build -t zmanim-api:latest .
-
-# Deploy to Cloud Run
-gcloud run deploy zmanim-api \
-  --image gcr.io/project/zmanim-api:latest \
-  --platform managed
-```
-
-### Frontend Deployment
-```bash
-# Deploy to Vercel
-vercel deploy --prod
-```
-
-See [ARCHITECTURE.md - Deployment](./ARCHITECTURE.md#deployment-architecture) for detailed deployment instructions.
-
-## 🤝 Contributing
-
-We welcome contributions! Please follow these steps:
-
-1. Read the [Developer Guide](./DEVELOPER_GUIDE.md)
-2. Fork the repository
-3. Create a feature branch
-4. Make your changes with tests
-5. Submit a pull request
-
-### Code Standards
-- Follow language-specific style guides
-- Write comprehensive tests
-- Document public APIs
-- Use meaningful commit messages
-
-## 📋 Project Roadmap
-
-### Phase 1: Core Platform (Current)
-- ✅ System architecture design
-- ✅ Database schema with PostGIS
-- ✅ REST API specification
-- ✅ Authentication & authorization
-- 🔄 Go backend implementation
-- 🔄 Next.js frontend development
-- 🔄 Admin panel
-
-### Phase 2: Publisher Features
-- Algorithm validation engine
-- Coverage area management UI
-- Publisher analytics dashboard
-- Algorithm testing suite
-
-### Phase 3: Enhanced Features
-- Mobile application
-- Offline calculation support
-- Multi-language support
-- Advanced analytics
-
-### Phase 4: Scale & Optimize
-- Global CDN distribution
-- Advanced caching strategies
-- Performance monitoring
-- Auto-scaling optimization
-
-## 🆘 Support & Resources
-
-### Documentation
-- [Architecture Documentation](./ARCHITECTURE.md)
-- [Developer Guide](./DEVELOPER_GUIDE.md)
-- [API Reference](./ARCHITECTURE.md#api-design)
-
-### External Resources
-- [Supabase Docs](https://supabase.com/docs)
-- [Go Documentation](https://golang.org/doc/)
-- [Next.js Documentation](https://nextjs.org/docs)
-- [PostGIS Documentation](https://postgis.net/documentation/)
-
-### Community
-- GitHub Issues: Bug reports and feature requests
-- GitHub Discussions: Questions and ideas
-- Contributing Guidelines: `CONTRIBUTING.md`
-
-## 📄 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## 🙏 Acknowledgments
-
-- **kosher-zmanim** library for reference implementations
-- Supabase for managed PostgreSQL and authentication
-- PostGIS for geographic calculations
-- The Jewish community for domain expertise
+**Halachic Zmanim Publishing Platform** - A multi-publisher platform for rabbinic authorities to publish customized Jewish prayer times with complete algorithm control and transparency.
 
 ---
 
-**Built with ❤️ for accurate zmanim calculations worldwide**
+## 📚 Documentation Index
 
-*Last Updated: November 2024*
+### Getting Started
+1. **[README.md](README.md)** - Project overview and quick start guide
+2. **[DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md)** - Complete developer onboarding and workflow guide
+
+### Product & Design
+3. **[PRD (Product Requirements)](prd.md)** - Complete product requirements document
+4. **[Business Documentation](business/)** - Non-technical documentation
+   - [What is Zmanim Lab?](business/01-what-is-zmanim-lab.md) - Vision, purpose, problems solved
+   - [Comprehensive Features List](business/02-features-comprehensive-list.md) - All 135+ features
+   - [Technical Architecture Overview](business/03-technical-architecture.md) - High-level tech explanation
+5. **[UX DSL Editor Spec](ux-dsl-editor-inline-guidance.md)** - Current UX specification for DSL editor
+
+### Technical Architecture
+6. **[Architecture](architecture.md)** - Complete system architecture, technology stack, patterns
+7. **[Data Models](data-models.md)** - Database schema and model definitions  
+8. **[API Reference](api-reference.md)** - REST API endpoints documentation
+9. **[Deployment](deployment.md)** - Deployment guide for Fly.io, Vercel, Xata
+10. **[Coding Standards](coding-standards.md)** - Development standards and best practices
+
+### Epic & Story History
+11. **[Epics](epics.md)** - Complete epic history (Epics 1-5, 113 stories)
+12. **[Epic-Specific Documents](sprint-artifacts/):**
+    - [Epic 2: Publisher User Management](epic-2-publisher-user-management.md)
+    - [Epic 3: Consolidation & Quality](epic-3-consolidation-quality.md)
+    - [Epic 4: Comprehensive Plan](sprint-artifacts/epic-4-comprehensive-plan.md)
+    - [Epic 4: DSL Specification](sprint-artifacts/epic-4-dsl-specification.md)
+    - [Epic 4: UI Wireframes](sprint-artifacts/epic-4-ui-wireframes.md)
+13. **[Sprint Artifacts](sprint-artifacts/)** - All epic plans, stories, and retrospectives
+    - Epic 1 MVP stories: `1-1-coder...md` through `1-11-formula-reveal.md`
+    - Epic 4 foundation: `4-0-postgres-pgvector-image.md`
+    - Tech specs: `tech-spec-epic-1.md`, `tech-spec-epic-2.md`
+    - Stories folder: All individual story files (Epic 2-5)
+
+### Archived Documentation
+14. **[Archive](archive/)** - Old snapshots and outdated documentation
+    - Codebase audits (historical snapshots)
+    - Old UX specs (superseded versions)
+    - Dev agent context files (development artifacts)
+
+---
+
+## 🗂️ Documentation Structure
+
+```
+docs/
+├── README.md                          # This file - documentation index
+├── DEVELOPER_GUIDE.md                 # Developer onboarding
+├── prd.md                             # Product requirements
+├── architecture.md                    # System architecture (CURRENT)
+├── data-models.md                     # Database schema
+├── api-reference.md                   # API documentation
+├── deployment.md                      # Deployment guide
+├── coding-standards.md                # Development standards
+├── epics.md                           # Complete epic history
+├── epic-2-publisher-user-management.md
+├── epic-3-consolidation-quality.md
+├── ux-dsl-editor-inline-guidance.md   # Current UX spec
+├── business/                          # Business documentation
+│   ├── README.md
+│   ├── 01-what-is-zmanim-lab.md
+│   ├── 02-features-comprehensive-list.md
+│   └── 03-technical-architecture.md
+├── sprint-artifacts/                  # Epic & story history
+│   ├── 1-1-coder-development-environment.md
+│   ├── 1-2-foundation-authentication.md
+│   ├── ... (all Epic 1 stories)
+│   ├── 4-0-postgres-pgvector-image.md
+│   ├── epic-4-comprehensive-plan.md
+│   ├── epic-4-dsl-specification.md
+│   ├── epic-4-ui-wireframes.md
+│   ├── epic-1-2-retro-2025-11-27.md
+│   ├── tech-spec-epic-1.md
+│   ├── tech-spec-epic-2.md
+│   ├── tooltip-implementation-plan.md
+│   └── stories/                       # Individual stories
+│       ├── 2-0-code-review-refactor.md
+│       ├── 2-1-publisher-user-invitation.md
+│       ├── ... (all Epic 2-5 stories)
+│       └── 5-19-zman-request-review-workflow.md
+└── archive/                           # Historical documentation
+    ├── ARCHITECTURE-old.md
+    ├── codebase-audit.md
+    ├── code-review-recommendations-2025-11-28.md
+    ├── ... (old snapshots)
+    └── *-context.md (dev agent artifacts)
+```
+
+---
+
+## 📊 Project Status
+
+**Current Sprint:** Epic 5 (DSL Editor Experience & Zman Management)  
+**Completed Epics:** 1, 2, 3, 4, 5  
+**Total Stories:** 113 across 5 epics  
+**Functional Requirements:** 125+ (FR1-FR125)  
+**Features:** 135+ distinct features  
+
+**Last Updated:** December 2, 2025
+
+---
+
+## 🎯 Quick Navigation by Role
+
+### For Developers
+→ Start with **[DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md)**  
+→ Reference **[architecture.md](architecture.md)** for system design  
+→ Follow **[coding-standards.md](coding-standards.md)** for best practices  
+→ Use **[api-reference.md](api-reference.md)** for endpoints  
+
+### For Product/Business
+→ Start with **[business/01-what-is-zmanim-lab.md](business/01-what-is-zmanim-lab.md)**  
+→ Review **[business/02-features-comprehensive-list.md](business/02-features-comprehensive-list.md)**  
+→ See **[prd.md](prd.md)** for requirements  
+→ Check **[epics.md](epics.md)** for development history  
+
+### For Designers
+→ See **[ux-dsl-editor-inline-guidance.md](ux-dsl-editor-inline-guidance.md)** for current UX spec  
+→ Review **[business/02-features-comprehensive-list.md](business/02-features-comprehensive-list.md)** for UI features  
+
+### For DevOps
+→ See **[deployment.md](deployment.md)** for deployment process  
+→ Review **[architecture.md](architecture.md)** for infrastructure  
+
+---
+
+## 📖 Documentation Philosophy
+
+- **Current over Historical**: Active docs in root, old versions in `archive/`
+- **Business + Technical**: Separate business docs for non-technical stakeholders
+- **Epic History Preserved**: All epics and stories retained for reference
+- **Living Documents**: Architecture, PRD, standards updated as project evolves
+- **Clear Structure**: Easy navigation via this index
+
+---
+
+## ✨ Key Documents You Should Read
+
+| Priority | Document | Why? |
+|----------|----------|------|
+| 🔴 **High** | [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md) | Complete developer onboarding |
+| 🔴 **High** | [architecture.md](architecture.md) | System design and patterns |
+| 🔴 **High** | [coding-standards.md](coding-standards.md) | Required development practices |
+| 🟡 **Medium** | [prd.md](prd.md) | Product vision and requirements |
+| 🟡 **Medium** | [epics.md](epics.md) | Development history and decisions |
+| 🟡 **Medium** | [business/](business/) | Non-technical overview |
+| 🟢 **Low** | [archive/](archive/) | Historical reference only |
+
+---
+
+**Generated:** December 2, 2025  
+**Maintained by:** Development Team  
+**Status:** Consolidated from 113 files → streamlined structure

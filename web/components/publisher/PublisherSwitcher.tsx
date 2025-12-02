@@ -29,7 +29,6 @@ export function PublisherSwitcher() {
           </div>
           <div className="flex flex-col">
             <span className="font-medium text-sm text-foreground">{selectedPublisher.name}</span>
-            <span className="text-xs text-muted-foreground">{selectedPublisher.organization}</span>
           </div>
         </div>
       );
@@ -51,7 +50,7 @@ export function PublisherSwitcher() {
       >
         {publishers.map((publisher) => (
           <option key={publisher.id} value={publisher.id}>
-            {publisher.name} - {publisher.organization}
+            {publisher.name}
           </option>
         ))}
       </select>

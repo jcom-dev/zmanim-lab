@@ -5,10 +5,10 @@ import { useRouter } from 'next/navigation';
 import { MapPin, ChevronRight, Building2, Globe, Loader2, Mountain, Search, Navigation } from 'lucide-react';
 import { SignInButton, UserButton, useUser } from '@clerk/nextjs';
 import { RoleNavigation } from '@/components/home/RoleNavigation';
+import { ModeToggle } from '@/components/mode-toggle';
 import { InfoTooltip } from '@/components/shared/InfoTooltip';
 import { USER_TOOLTIPS } from '@/lib/tooltip-content';
-
-import { API_BASE } from '@/lib/api';
+import { useApi } from '@/lib/api-client';
 
 interface Continent {
   code: string;
@@ -51,6 +51,7 @@ const STORAGE_KEY_CITY = 'zmanim_selected_city';
 export default function Home() {
   const router = useRouter();
   const { isSignedIn, isLoaded: userLoaded } = useUser();
+  const api = useApi();
 
   // Selection state
   const [selectedContinent, setSelectedContinent] = useState<Continent | null>(null);
@@ -80,12 +81,6 @@ export default function Home() {
   const [isGeolocating, setIsGeolocating] = useState(false);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Load continents on mount
-  useEffect(() => {
-    loadContinents();
-    loadSavedSelections();
-  }, []);
-
   const loadSavedSelections = () => {
     try {
       const savedCity = localStorage.getItem(STORAGE_KEY_CITY);
@@ -99,23 +94,26 @@ export default function Home() {
     }
   };
 
-  const loadContinents = async () => {
+  const loadContinents = useCallback(async () => {
     try {
       setLoadingContinents(true);
       setError(null);
 
-      const response = await fetch(`${API_BASE}/api/v1/continents`);
-      if (!response.ok) throw new Error('Failed to load continents');
-
-      const data = await response.json();
-      setContinents(data.data?.continents || data.continents || []);
+      const data = await api.public.get<{ continents: Continent[] }>('/continents');
+      setContinents(data?.continents || []);
     } catch (err) {
       console.error('Failed to load continents:', err);
       setError('Failed to load continents. Please try again.');
     } finally {
       setLoadingContinents(false);
     }
-  };
+  }, [api]);
+
+  // Load continents on mount
+  useEffect(() => {
+    loadContinents();
+    loadSavedSelections();
+  }, [loadContinents]);
 
   const loadCountries = useCallback(async (continentCode: string) => {
     try {
@@ -125,18 +123,15 @@ export default function Home() {
       setRegions([]);
       setCities([]);
 
-      const response = await fetch(`${API_BASE}/api/v1/countries?continent=${continentCode}`);
-      if (!response.ok) throw new Error('Failed to load countries');
-
-      const data = await response.json();
-      setCountries(data.data?.countries || data.countries || []);
+      const data = await api.public.get<{ countries: Country[] }>(`/countries?continent=${continentCode}`);
+      setCountries(data?.countries || []);
     } catch (err) {
       console.error('Failed to load countries:', err);
       setError('Failed to load countries. Please try again.');
     } finally {
       setLoadingCountries(false);
     }
-  }, []);
+  }, [api]);
 
   const loadRegions = useCallback(async (countryCode: string) => {
     try {
@@ -145,11 +140,8 @@ export default function Home() {
       setRegions([]);
       setCities([]);
 
-      const response = await fetch(`${API_BASE}/api/v1/regions?country_code=${countryCode}`);
-      if (!response.ok) throw new Error('Failed to load regions');
-
-      const data = await response.json();
-      const regionList = data.data?.regions || data.regions || [];
+      const data = await api.public.get<{ regions: Region[] }>(`/regions?country_code=${countryCode}`);
+      const regionList = data?.regions || [];
       setRegions(regionList);
 
       // If no regions, load cities directly
@@ -162,7 +154,7 @@ export default function Home() {
     } finally {
       setLoadingRegions(false);
     }
-  }, []);
+  }, [api]);
 
   // City search with debounce
   const searchCities = useCallback(async (query: string) => {
@@ -173,19 +165,17 @@ export default function Home() {
 
     setIsSearching(true);
     try {
-      const response = await fetch(
-        `${API_BASE}/api/v1/cities?search=${encodeURIComponent(query)}&limit=10`
+      const data = await api.public.get<{ cities: City[] }>(
+        `/cities?search=${encodeURIComponent(query)}&limit=10`
       );
-      if (!response.ok) throw new Error('Search failed');
-      const data = await response.json();
-      setSearchResults(data.data?.cities || data.cities || []);
+      setSearchResults(data?.cities || []);
     } catch (err) {
       console.error('Search error:', err);
       setSearchResults([]);
     } finally {
       setIsSearching(false);
     }
-  }, []);
+  }, [api]);
 
   const handleSearchInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
@@ -230,15 +220,10 @@ export default function Home() {
 
       const { latitude, longitude } = position.coords;
 
-      const response = await fetch(
-        `${API_BASE}/api/v1/cities/nearby?lat=${latitude}&lng=${longitude}`
+      const nearbyData = await api.public.get<{ city: City }>(
+        `/cities/nearby?lat=${latitude}&lng=${longitude}`
       );
-
-      if (!response.ok) throw new Error('Failed to find nearby city');
-
-      const data = await response.json();
-      const nearbyData = data.data || data;
-      const city = nearbyData.city;
+      const city = nearbyData?.city;
 
       if (city) {
         localStorage.setItem(STORAGE_KEY_CITY, JSON.stringify(city));
@@ -275,16 +260,13 @@ export default function Home() {
       setLoadingCities(true);
       setError(null);
 
-      let url = `${API_BASE}/api/v1/cities?country_code=${countryCode}&limit=100`;
+      let url = `/cities?country_code=${countryCode}&limit=100`;
       if (regionName) {
         url += `&region=${encodeURIComponent(regionName)}`;
       }
 
-      const response = await fetch(url);
-      if (!response.ok) throw new Error('Failed to load cities');
-
-      const data = await response.json();
-      setCities(data.data?.cities || data.cities || []);
+      const data = await api.public.get<{ cities: City[] }>(url);
+      setCities(data?.cities || []);
     } catch (err) {
       console.error('Failed to load cities:', err);
       setError('Failed to load cities. Please try again.');
@@ -384,6 +366,7 @@ export default function Home() {
             </div>
             <div className="flex items-center gap-4">
               <RoleNavigation />
+              <ModeToggle />
               {userLoaded && (
                 isSignedIn ? (
                   <UserButton afterSignOutUrl="/" />

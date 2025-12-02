@@ -53,9 +53,6 @@ jobs:
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-      SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
 
     steps:
       - name: Checkout
@@ -67,11 +64,6 @@ jobs:
           go-version: '1.24'
           cache-dependency-path: api/go.sum
 
-      - name: Setup Node.js (for Supabase CLI)
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
       - name: Download dependencies
         run: go mod download
 
@@ -80,10 +72,6 @@ jobs:
 
       - name: Build
         run: go build -v ./...
-
-      - name: Run database migrations
-        run: npx supabase migration up --db-url "$DATABASE_URL"
-        working-directory: ${{ github.workspace }}
 
       # Note: Cities are pre-seeded in production database via seed-geo tool
       # The CI environment uses the existing database state

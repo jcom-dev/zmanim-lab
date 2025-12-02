@@ -1,10 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useAuth } from '@clerk/nextjs';
+import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { API_BASE } from '@/lib/api';
+import { useApi } from '@/lib/api-client';
 
 interface SystemConfig {
   [key: string]: {
@@ -15,7 +14,7 @@ interface SystemConfig {
 }
 
 export default function AdminSettingsPage() {
-  const { getToken } = useAuth();
+  const api = useApi();
   const [config, setConfig] = useState<SystemConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -29,38 +28,25 @@ export default function AdminSettingsPage() {
   const [algorithmEditor, setAlgorithmEditor] = useState<boolean>(true);
   const [formulaReveal, setFormulaReveal] = useState<boolean>(true);
 
-  const fetchConfig = async () => {
+  const fetchConfig = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
 
-      const token = await getToken();
-      const response = await fetch(`${API_BASE}/api/v1/admin/config`, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch configuration');
-      }
-
-      const data = await response.json();
-      const configData = data.data;
+      const configData = await api.admin.get<SystemConfig>('/admin/config');
       setConfig(configData);
 
       // Populate form fields
-      if (configData.rate_limit_anonymous) {
+      if (configData?.rate_limit_anonymous) {
         setRateLimitAnonymous(configData.rate_limit_anonymous.value.requests_per_hour);
       }
-      if (configData.rate_limit_authenticated) {
+      if (configData?.rate_limit_authenticated) {
         setRateLimitAuthenticated(configData.rate_limit_authenticated.value.requests_per_hour);
       }
-      if (configData.cache_ttl_hours) {
+      if (configData?.cache_ttl_hours) {
         setCacheTTL(configData.cache_ttl_hours.value.hours);
       }
-      if (configData.feature_flags) {
+      if (configData?.feature_flags) {
         setAlgorithmEditor(configData.feature_flags.value.algorithm_editor ?? true);
         setFormulaReveal(configData.feature_flags.value.formula_reveal ?? true);
       }
@@ -69,29 +55,16 @@ export default function AdminSettingsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [api]);
 
   useEffect(() => {
     fetchConfig();
-  }, []);
+  }, [fetchConfig]);
 
-  const updateConfig = async (key: string, value: Record<string, any>) => {
-    const token = await getToken();
-    const response = await fetch(`${API_BASE}/api/v1/admin/config`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
+  const updateConfig = async (key: string, value: Record<string, unknown>) => {
+    await api.admin.put('/admin/config', {
       body: JSON.stringify({ key, value }),
     });
-
-    if (!response.ok) {
-      const data = await response.json();
-      throw new Error(data.error?.message || 'Failed to update configuration');
-    }
-
-    return response.json();
   };
 
   const handleSave = async () => {

@@ -24,8 +24,6 @@ export interface ClerkPublicMetadata {
   publisher_access_list?: string[];
   /** Primary publisher ID for users with multiple publishers */
   primary_publisher_id?: string;
-  /** Organization name (for publishers) */
-  organization?: string;
 }
 
 /**

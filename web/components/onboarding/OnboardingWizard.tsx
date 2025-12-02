@@ -7,6 +7,7 @@ import { CoverageSetupStep } from './steps/CoverageSetupStep';
 import { ReviewPublishStep } from './steps/ReviewPublishStep';
 import { useApi } from '@/lib/api-client';
 import { usePublisherContext } from '@/providers/PublisherContext';
+import type { CoverageSelection } from '@/components/shared/CoverageSelector';
 
 // API response uses snake_case
 interface OnboardingStateAPI {
@@ -81,11 +82,8 @@ export interface SelectedZmanCustomization {
   modified: boolean;
 }
 
-export interface CoverageSelection {
-  type: 'city' | 'region' | 'country';
-  id: string;
-  name: string;
-}
+// Re-export CoverageSelection from shared component for backwards compatibility
+export type { CoverageSelection } from '@/components/shared/CoverageSelector';
 
 interface StepDefinition {
   id: string;

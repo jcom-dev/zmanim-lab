@@ -1,12 +1,12 @@
 #!/bin/bash
 # Initialize local development database
-# Runs migrations from /supabase/migrations directory
+# Runs migrations from /db/migrations directory
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
-MIGRATIONS_DIR="$PROJECT_ROOT/supabase/migrations"
+MIGRATIONS_DIR="$PROJECT_ROOT/db/migrations"
 
 # Load environment variables
 if [ -f "$SCRIPT_DIR/../.env" ]; then

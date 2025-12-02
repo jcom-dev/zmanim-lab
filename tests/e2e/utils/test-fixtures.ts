@@ -4,7 +4,7 @@
  * Provides utilities to create test data in the database
  * for E2E testing scenarios.
  *
- * Uses native PostgreSQL client (pg) instead of Supabase.
+ * Uses native PostgreSQL client (pg).
  */
 
 import { Pool, PoolClient } from 'pg';
@@ -348,6 +348,41 @@ export async function createFullTestPublisher(): Promise<{
   }
 
   return { publisher, algorithm, coverage };
+}
+
+/**
+ * Clean up a specific publisher and its related data
+ * Use this in individual tests to avoid affecting parallel tests
+ */
+export async function cleanupPublisher(publisherId: string): Promise<void> {
+  if (!isDatabaseConfigured()) {
+    return;
+  }
+
+  const client = await getPool().connect();
+  try {
+    // Delete algorithm for this publisher
+    await client.query(
+      `DELETE FROM algorithms WHERE publisher_id = $1`,
+      [publisherId]
+    );
+
+    // Delete coverage for this publisher
+    await client.query(
+      `DELETE FROM publisher_coverage WHERE publisher_id = $1`,
+      [publisherId]
+    );
+
+    // Delete the publisher
+    await client.query(
+      `DELETE FROM publishers WHERE id = $1`,
+      [publisherId]
+    );
+  } catch (error) {
+    console.error(`Error cleaning up publisher ${publisherId}:`, error);
+  } finally {
+    client.release();
+  }
 }
 
 /**

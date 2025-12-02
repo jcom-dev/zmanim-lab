@@ -37,7 +37,6 @@
     "@clerk/backend": "^2.24.0",
     "@clerk/testing": "^1.13.19",
     "@playwright/test": "^1.57.0",
-    "@supabase/supabase-js": "^2.86.0",
     "@types/node": "^24.10.1",
     "@types/pg": "^8.15.6",
     "dotenv": "^17.2.3",

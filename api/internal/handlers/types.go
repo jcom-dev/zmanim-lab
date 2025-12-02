@@ -55,14 +55,12 @@ type PaginationMeta struct {
 // =============================================================================
 
 // Publisher represents a zmanim publisher profile
-// @Description Publisher organization profile
+// @Description Publisher profile
 type PublisherResponse struct {
 	// Unique identifier
 	ID string `json:"id" example:"550e8400-e29b-41d4-a716-446655440000"`
-	// Publisher display name
+	// Publisher display name (the organization name)
 	Name string `json:"name" example:"Congregation Beth Israel"`
-	// Organization name (optional)
-	Organization *string `json:"organization,omitempty" example:"Beth Israel"`
 	// Contact email
 	Email string `json:"email" example:"rabbi@bethisrael.org"`
 	// Publisher description
@@ -84,10 +82,8 @@ type PublisherResponse struct {
 // PublisherProfileUpdateRequest represents a profile update request
 // @Description Request body for updating publisher profile
 type PublisherProfileUpdateRequest struct {
-	// Publisher display name
+	// Publisher display name (the organization name)
 	Name *string `json:"name,omitempty" example:"Congregation Beth Israel"`
-	// Organization name
-	Organization *string `json:"organization,omitempty" example:"Beth Israel"`
 	// Contact email
 	Email *string `json:"email,omitempty" example:"rabbi@bethisrael.org"`
 	// Website URL

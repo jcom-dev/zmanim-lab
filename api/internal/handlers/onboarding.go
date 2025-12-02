@@ -2,7 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
-	"log"
+	"log/slog"
 	"net/http"
 	"time"
 )
@@ -80,20 +80,20 @@ func (h *Handlers) GetOnboardingState(w http.ResponseWriter, r *http.Request) {
 // PUT /api/publisher/onboarding
 func (h *Handlers) SaveOnboardingState(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	log.Printf("INFO [SaveOnboardingState] Starting save")
+	slog.Info("SaveOnboardingState starting")
 
 	// Use PublisherResolver to get publisher context
 	pc := h.publisherResolver.MustResolve(w, r)
 	if pc == nil {
-		log.Printf("ERROR [SaveOnboardingState] Failed to resolve publisher")
+		slog.Error("SaveOnboardingState failed to resolve publisher")
 		return // Response already sent
 	}
 	publisherID := pc.PublisherID
-	log.Printf("INFO [SaveOnboardingState] publisher_id=%s", publisherID)
+	slog.Info("SaveOnboardingState resolved publisher", "publisher_id", publisherID)
 
 	var req OnboardingState
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Printf("ERROR [SaveOnboardingState] Invalid request body: %v", err)
+		slog.Error("SaveOnboardingState invalid request body", "error", err)
 		RespondBadRequest(w, r, "Invalid request body")
 		return
 	}
@@ -101,11 +101,11 @@ func (h *Handlers) SaveOnboardingState(w http.ResponseWriter, r *http.Request) {
 	// Convert data to JSON
 	wizardData, err := json.Marshal(req.Data)
 	if err != nil {
-		log.Printf("ERROR [SaveOnboardingState] Failed to marshal data: %v", err)
+		slog.Error("SaveOnboardingState failed to marshal data", "error", err)
 		RespondBadRequest(w, r, "Invalid data format")
 		return
 	}
-	log.Printf("INFO [SaveOnboardingState] wizard_data=%s", string(wizardData))
+	slog.Debug("SaveOnboardingState wizard_data", "wizard_data", string(wizardData))
 
 	// Upsert onboarding state
 	_, err = h.db.Pool.Exec(ctx, `
@@ -121,12 +121,12 @@ func (h *Handlers) SaveOnboardingState(w http.ResponseWriter, r *http.Request) {
 	`, publisherID, req.CurrentStep, req.CompletedSteps, wizardData)
 
 	if err != nil {
-		log.Printf("ERROR [SaveOnboardingState] Failed to save: %v", err)
+		slog.Error("SaveOnboardingState failed to save", "error", err)
 		RespondInternalError(w, r, "Failed to save onboarding state")
 		return
 	}
 
-	log.Printf("INFO [SaveOnboardingState] Successfully saved")
+	slog.Info("SaveOnboardingState completed successfully")
 	RespondJSON(w, r, http.StatusOK, map[string]string{
 		"status": "saved",
 	})
@@ -194,7 +194,7 @@ func (z WizardZman) GetCategory() string {
 
 // WizardCoverage represents a coverage selection from the onboarding wizard
 type WizardCoverage struct {
-	Type string `json:"type"` // "city", "region", or "country"
+	Type string `json:"type"` // "city", "region", "country", or "continent"
 	ID   string `json:"id"`
 	Name string `json:"name"`
 }
@@ -203,16 +203,16 @@ type WizardCoverage struct {
 // POST /api/publisher/onboarding/complete
 func (h *Handlers) CompleteOnboarding(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	log.Printf("INFO [CompleteOnboarding] Starting completion")
+	slog.Info("CompleteOnboarding starting")
 
 	// Use PublisherResolver to get publisher context
 	pc := h.publisherResolver.MustResolve(w, r)
 	if pc == nil {
-		log.Printf("ERROR [CompleteOnboarding] Failed to resolve publisher")
+		slog.Error("CompleteOnboarding failed to resolve publisher")
 		return // Response already sent
 	}
 	publisherID := pc.PublisherID
-	log.Printf("INFO [CompleteOnboarding] publisher_id=%s", publisherID)
+	slog.Info("CompleteOnboarding resolved publisher", "publisher_id", publisherID)
 
 	// Get the wizard data with user's customizations
 	var wizardData []byte
@@ -220,22 +220,22 @@ func (h *Handlers) CompleteOnboarding(w http.ResponseWriter, r *http.Request) {
 		SELECT wizard_data FROM publisher_onboarding WHERE publisher_id = $1
 	`, publisherID).Scan(&wizardData)
 	if err != nil {
-		log.Printf("ERROR [CompleteOnboarding] No onboarding data found: %v", err)
+		slog.Error("CompleteOnboarding no onboarding data found", "error", err)
 		RespondBadRequest(w, r, "No onboarding data found")
 		return
 	}
-	log.Printf("INFO [CompleteOnboarding] wizard_data=%s", string(wizardData))
+	slog.Debug("CompleteOnboarding wizard_data", "wizard_data", string(wizardData))
 
 	var data struct {
 		Customizations []WizardZman     `json:"customizations"`
 		Coverage       []WizardCoverage `json:"coverage"`
 	}
 	if err := json.Unmarshal(wizardData, &data); err != nil {
-		log.Printf("ERROR [CompleteOnboarding] Invalid wizard data: %v", err)
+		slog.Error("CompleteOnboarding invalid wizard data", "error", err)
 		RespondBadRequest(w, r, "Invalid wizard data")
 		return
 	}
-	log.Printf("INFO [CompleteOnboarding] Parsed %d customizations, %d coverage items", len(data.Customizations), len(data.Coverage))
+	slog.Info("CompleteOnboarding parsed data", "customizations", len(data.Customizations), "coverage_items", len(data.Coverage))
 
 	// Import zmanim from wizard customizations (only enabled ones)
 	if len(data.Customizations) > 0 {
@@ -246,7 +246,7 @@ func (h *Handlers) CompleteOnboarding(w http.ResponseWriter, r *http.Request) {
 				enabledZmanim = append(enabledZmanim, zman)
 			}
 		}
-		log.Printf("INFO [CompleteOnboarding] Importing %d enabled zmanim (out of %d total)", len(enabledZmanim), len(data.Customizations))
+		slog.Info("CompleteOnboarding importing zmanim", "enabled", len(enabledZmanim), "total", len(data.Customizations))
 
 		for i, zman := range enabledZmanim {
 			zmanKey := zman.GetKey()
@@ -254,7 +254,7 @@ func (h *Handlers) CompleteOnboarding(w http.ResponseWriter, r *http.Request) {
 			englishName := zman.GetEnglishName()
 			category := zman.GetCategory()
 
-			log.Printf("INFO [CompleteOnboarding] Inserting zman %d: key=%s hebrew=%s english=%s", i+1, zmanKey, hebrewName, englishName)
+			slog.Debug("CompleteOnboarding inserting zman", "index", i+1, "key", zmanKey, "hebrew", hebrewName, "english", englishName)
 
 			// Check if this is a registry-based zman (has master_zman_id)
 			if zman.MasterZmanID != "" {
@@ -293,12 +293,12 @@ func (h *Handlers) CompleteOnboarding(w http.ResponseWriter, r *http.Request) {
 					zman.Formula, category, i+1)
 			}
 			if err != nil {
-				log.Printf("ERROR [CompleteOnboarding] Failed to insert zman %s: %v", zmanKey, err)
+				slog.Error("CompleteOnboarding failed to insert zman", "zman_key", zmanKey, "error", err)
 				RespondInternalError(w, r, "Failed to import zmanim: "+err.Error())
 				return
 			}
 		}
-		log.Printf("INFO [CompleteOnboarding] Successfully imported %d zmanim", len(enabledZmanim))
+		slog.Info("CompleteOnboarding successfully imported zmanim", "count", len(enabledZmanim))
 	} else {
 		// Fallback: import essential zmanim from templates if no customizations
 		_, err = h.db.Pool.Exec(ctx, `
@@ -321,11 +321,22 @@ func (h *Handlers) CompleteOnboarding(w http.ResponseWriter, r *http.Request) {
 
 	// Import coverage from wizard selections
 	if len(data.Coverage) > 0 {
-		log.Printf("INFO [CompleteOnboarding] Importing %d coverage items", len(data.Coverage))
+		slog.Info("CompleteOnboarding importing coverage", "count", len(data.Coverage))
 		for i, cov := range data.Coverage {
-			log.Printf("INFO [CompleteOnboarding] Processing coverage %d: type=%s id=%s name=%s", i+1, cov.Type, cov.ID, cov.Name)
+			slog.Debug("CompleteOnboarding processing coverage", "index", i+1, "type", cov.Type, "id", cov.ID, "name", cov.Name)
 
 			switch cov.Type {
+			case "continent":
+				// For continent coverage, the ID is the continent code (e.g., "EU", "NA")
+				_, err = h.db.Pool.Exec(ctx, `
+					INSERT INTO publisher_coverage (publisher_id, coverage_level, continent_code)
+					VALUES ($1, 'continent', $2)
+					ON CONFLICT DO NOTHING
+				`, publisherID, cov.ID)
+				if err != nil {
+					slog.Error("CompleteOnboarding failed to insert continent coverage", "id", cov.ID, "error", err)
+				}
+
 			case "country":
 				// For country coverage, the ID is the country code
 				_, err = h.db.Pool.Exec(ctx, `
@@ -334,7 +345,7 @@ func (h *Handlers) CompleteOnboarding(w http.ResponseWriter, r *http.Request) {
 					ON CONFLICT DO NOTHING
 				`, publisherID, cov.ID)
 				if err != nil {
-					log.Printf("ERROR [CompleteOnboarding] Failed to insert country coverage %s: %v", cov.ID, err)
+					slog.Error("CompleteOnboarding failed to insert country coverage", "id", cov.ID, "error", err)
 				}
 
 			case "region":
@@ -347,10 +358,10 @@ func (h *Handlers) CompleteOnboarding(w http.ResponseWriter, r *http.Request) {
 						ON CONFLICT DO NOTHING
 					`, publisherID, parts[0], parts[1])
 					if err != nil {
-						log.Printf("ERROR [CompleteOnboarding] Failed to insert region coverage %s: %v", cov.ID, err)
+						slog.Error("CompleteOnboarding failed to insert region coverage", "id", cov.ID, "error", err)
 					}
 				} else {
-					log.Printf("WARN [CompleteOnboarding] Invalid region ID format: %s", cov.ID)
+					slog.Warn("CompleteOnboarding invalid region ID format", "id", cov.ID)
 				}
 
 			case "city":
@@ -364,7 +375,7 @@ func (h *Handlers) CompleteOnboarding(w http.ResponseWriter, r *http.Request) {
 						SELECT id FROM cities WHERE LOWER(name) = LOWER($1) LIMIT 1
 					`, cityName).Scan(&cityID)
 					if err != nil {
-						log.Printf("WARN [CompleteOnboarding] Could not find city for quick select %s: %v", cov.ID, err)
+						slog.Warn("CompleteOnboarding could not find city for quick select", "id", cov.ID, "error", err)
 						continue
 					}
 					_, err = h.db.Pool.Exec(ctx, `
@@ -373,7 +384,7 @@ func (h *Handlers) CompleteOnboarding(w http.ResponseWriter, r *http.Request) {
 						ON CONFLICT DO NOTHING
 					`, publisherID, cityID)
 					if err != nil {
-						log.Printf("ERROR [CompleteOnboarding] Failed to insert city coverage %s: %v", cityID, err)
+						slog.Error("CompleteOnboarding failed to insert city coverage", "city_id", cityID, "error", err)
 					}
 				} else {
 					// Regular city ID (UUID)
@@ -383,12 +394,12 @@ func (h *Handlers) CompleteOnboarding(w http.ResponseWriter, r *http.Request) {
 						ON CONFLICT DO NOTHING
 					`, publisherID, cov.ID)
 					if err != nil {
-						log.Printf("ERROR [CompleteOnboarding] Failed to insert city coverage %s: %v", cov.ID, err)
+						slog.Error("CompleteOnboarding failed to insert city coverage", "id", cov.ID, "error", err)
 					}
 				}
 			}
 		}
-		log.Printf("INFO [CompleteOnboarding] Finished importing coverage")
+		slog.Info("CompleteOnboarding finished importing coverage")
 	}
 
 	// Mark onboarding as complete
@@ -503,7 +514,7 @@ func (h *Handlers) ResetOnboarding(w http.ResponseWriter, r *http.Request) {
 		DELETE FROM publisher_zmanim WHERE publisher_id = $1
 	`, publisherID)
 	if err != nil {
-		log.Printf("ERROR [ResetOnboarding] Failed to delete zmanim: %v", err)
+		slog.Error("ResetOnboarding failed to delete zmanim", "error", err)
 		RespondInternalError(w, r, "Failed to reset onboarding")
 		return
 	}
@@ -513,7 +524,7 @@ func (h *Handlers) ResetOnboarding(w http.ResponseWriter, r *http.Request) {
 		DELETE FROM publisher_coverage WHERE publisher_id = $1
 	`, publisherID)
 	if err != nil {
-		log.Printf("ERROR [ResetOnboarding] Failed to delete coverage: %v", err)
+		slog.Error("ResetOnboarding failed to delete coverage", "error", err)
 		// Continue anyway, coverage deletion is not critical
 	}
 

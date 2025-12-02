@@ -72,6 +72,7 @@ func (q *Queries) AddMasterZmanFromRequest(ctx context.Context, id string) (AddM
 const createPublisherZmanFromRegistry = `-- name: CreatePublisherZmanFromRegistry :one
 INSERT INTO publisher_zmanim (
     id, publisher_id, zman_key, hebrew_name, english_name,
+    transliteration, description,
     formula_dsl, ai_explanation, publisher_comment,
     is_enabled, is_visible, is_published, is_custom, category,
     dependencies, sort_order, master_zman_id, current_version
@@ -82,6 +83,8 @@ SELECT
     mr.zman_key AS zman_key,
     mr.canonical_hebrew_name AS hebrew_name,
     mr.canonical_english_name AS english_name,
+    mr.transliteration AS transliteration,
+    mr.description AS description,
     COALESCE($3, mr.default_formula_dsl) AS formula_dsl,
     NULL AS ai_explanation,
     NULL AS publisher_comment,
@@ -97,7 +100,7 @@ SELECT
 FROM master_zmanim_registry mr
 WHERE mr.id = $2
 RETURNING id, publisher_id, zman_key, hebrew_name, english_name,
-    formula_dsl, ai_explanation, publisher_comment,
+    transliteration, description, formula_dsl, ai_explanation, publisher_comment,
     is_enabled, is_visible, is_published, is_custom, category,
     dependencies, sort_order, created_at, updated_at, master_zman_id, current_version
 `
@@ -114,6 +117,8 @@ type CreatePublisherZmanFromRegistryRow struct {
 	ZmanKey          string      `json:"zman_key"`
 	HebrewName       string      `json:"hebrew_name"`
 	EnglishName      string      `json:"english_name"`
+	Transliteration  *string     `json:"transliteration"`
+	Description      *string     `json:"description"`
 	FormulaDsl       string      `json:"formula_dsl"`
 	AiExplanation    *string     `json:"ai_explanation"`
 	PublisherComment *string     `json:"publisher_comment"`
@@ -139,6 +144,8 @@ func (q *Queries) CreatePublisherZmanFromRegistry(ctx context.Context, arg Creat
 		&i.ZmanKey,
 		&i.HebrewName,
 		&i.EnglishName,
+		&i.Transliteration,
+		&i.Description,
 		&i.FormulaDsl,
 		&i.AiExplanation,
 		&i.PublisherComment,
@@ -166,10 +173,10 @@ INSERT INTO zman_registry_requests (
     requested_english_name,
     requested_formula_dsl,
     time_category,
-    justification
+    description
 ) VALUES ($1, $2, $3, $4, $5, $6, $7)
 RETURNING id, publisher_id, requested_key, requested_hebrew_name, requested_english_name,
-    requested_formula_dsl, time_category, justification, status, created_at
+    requested_formula_dsl, time_category, description, status, created_at
 `
 
 type CreateZmanRegistryRequestParams struct {
@@ -179,7 +186,7 @@ type CreateZmanRegistryRequestParams struct {
 	RequestedEnglishName string  `json:"requested_english_name"`
 	RequestedFormulaDsl  *string `json:"requested_formula_dsl"`
 	TimeCategory         string  `json:"time_category"`
-	Justification        string  `json:"justification"`
+	Description          *string `json:"description"`
 }
 
 type CreateZmanRegistryRequestRow struct {
@@ -190,7 +197,7 @@ type CreateZmanRegistryRequestRow struct {
 	RequestedEnglishName string    `json:"requested_english_name"`
 	RequestedFormulaDsl  *string   `json:"requested_formula_dsl"`
 	TimeCategory         string    `json:"time_category"`
-	Justification        string    `json:"justification"`
+	Description          *string   `json:"description"`
 	Status               string    `json:"status"`
 	CreatedAt            time.Time `json:"created_at"`
 }
@@ -206,7 +213,7 @@ func (q *Queries) CreateZmanRegistryRequest(ctx context.Context, arg CreateZmanR
 		arg.RequestedEnglishName,
 		arg.RequestedFormulaDsl,
 		arg.TimeCategory,
-		arg.Justification,
+		arg.Description,
 	)
 	var i CreateZmanRegistryRequestRow
 	err := row.Scan(
@@ -217,7 +224,7 @@ func (q *Queries) CreateZmanRegistryRequest(ctx context.Context, arg CreateZmanR
 		&i.RequestedEnglishName,
 		&i.RequestedFormulaDsl,
 		&i.TimeCategory,
-		&i.Justification,
+		&i.Description,
 		&i.Status,
 		&i.CreatedAt,
 	)
@@ -1277,7 +1284,7 @@ func (q *Queries) GetTagsForMasterZman(ctx context.Context, masterZmanID string)
 const getZmanRegistryRequestByID = `-- name: GetZmanRegistryRequestByID :one
 SELECT
     id, publisher_id, requested_key, requested_hebrew_name, requested_english_name,
-    requested_formula_dsl, time_category, justification, status,
+    requested_formula_dsl, time_category, description, status,
     reviewed_by, reviewed_at, reviewer_notes, created_at
 FROM zman_registry_requests
 WHERE id = $1
@@ -1291,7 +1298,7 @@ type GetZmanRegistryRequestByIDRow struct {
 	RequestedEnglishName string             `json:"requested_english_name"`
 	RequestedFormulaDsl  *string            `json:"requested_formula_dsl"`
 	TimeCategory         string             `json:"time_category"`
-	Justification        string             `json:"justification"`
+	Description          *string            `json:"description"`
 	Status               string             `json:"status"`
 	ReviewedBy           *string            `json:"reviewed_by"`
 	ReviewedAt           pgtype.Timestamptz `json:"reviewed_at"`
@@ -1310,7 +1317,7 @@ func (q *Queries) GetZmanRegistryRequestByID(ctx context.Context, id string) (Ge
 		&i.RequestedEnglishName,
 		&i.RequestedFormulaDsl,
 		&i.TimeCategory,
-		&i.Justification,
+		&i.Description,
 		&i.Status,
 		&i.ReviewedBy,
 		&i.ReviewedAt,
@@ -1323,7 +1330,7 @@ func (q *Queries) GetZmanRegistryRequestByID(ctx context.Context, id string) (Ge
 const getZmanRegistryRequests = `-- name: GetZmanRegistryRequests :many
 SELECT
     id, publisher_id, requested_key, requested_hebrew_name, requested_english_name,
-    requested_formula_dsl, time_category, justification, status,
+    requested_formula_dsl, time_category, description, status,
     reviewed_by, reviewed_at, reviewer_notes, created_at
 FROM zman_registry_requests
 WHERE status = COALESCE($1, status)
@@ -1338,7 +1345,7 @@ type GetZmanRegistryRequestsRow struct {
 	RequestedEnglishName string             `json:"requested_english_name"`
 	RequestedFormulaDsl  *string            `json:"requested_formula_dsl"`
 	TimeCategory         string             `json:"time_category"`
-	Justification        string             `json:"justification"`
+	Description          *string            `json:"description"`
 	Status               string             `json:"status"`
 	ReviewedBy           *string            `json:"reviewed_by"`
 	ReviewedAt           pgtype.Timestamptz `json:"reviewed_at"`
@@ -1363,7 +1370,7 @@ func (q *Queries) GetZmanRegistryRequests(ctx context.Context, status *string) (
 			&i.RequestedEnglishName,
 			&i.RequestedFormulaDsl,
 			&i.TimeCategory,
-			&i.Justification,
+			&i.Description,
 			&i.Status,
 			&i.ReviewedBy,
 			&i.ReviewedAt,
@@ -1467,6 +1474,7 @@ func (q *Queries) GetZmanVersionHistory(ctx context.Context, arg GetZmanVersionH
 const importZmanimFromRegistryByKeys = `-- name: ImportZmanimFromRegistryByKeys :many
 INSERT INTO publisher_zmanim (
     id, publisher_id, zman_key, hebrew_name, english_name,
+    transliteration, description,
     formula_dsl, ai_explanation, publisher_comment,
     is_enabled, is_visible, is_published, is_custom, category,
     dependencies, sort_order, master_zman_id, current_version
@@ -1477,6 +1485,8 @@ SELECT
     mr.zman_key,
     mr.canonical_hebrew_name,
     mr.canonical_english_name,
+    mr.transliteration,
+    mr.description,
     mr.default_formula_dsl,
     NULL,
     NULL,
@@ -1493,7 +1503,7 @@ FROM master_zmanim_registry mr
 WHERE mr.zman_key = ANY($2::text[])
 ON CONFLICT (publisher_id, zman_key) DO NOTHING
 RETURNING id, publisher_id, zman_key, hebrew_name, english_name,
-    formula_dsl, ai_explanation, publisher_comment,
+    transliteration, description, formula_dsl, ai_explanation, publisher_comment,
     is_enabled, is_visible, is_published, is_custom, category,
     dependencies, sort_order, created_at, updated_at, master_zman_id, current_version
 `
@@ -1509,6 +1519,8 @@ type ImportZmanimFromRegistryByKeysRow struct {
 	ZmanKey          string      `json:"zman_key"`
 	HebrewName       string      `json:"hebrew_name"`
 	EnglishName      string      `json:"english_name"`
+	Transliteration  *string     `json:"transliteration"`
+	Description      *string     `json:"description"`
 	FormulaDsl       string      `json:"formula_dsl"`
 	AiExplanation    *string     `json:"ai_explanation"`
 	PublisherComment *string     `json:"publisher_comment"`
@@ -1540,6 +1552,8 @@ func (q *Queries) ImportZmanimFromRegistryByKeys(ctx context.Context, arg Import
 			&i.ZmanKey,
 			&i.HebrewName,
 			&i.EnglishName,
+			&i.Transliteration,
+			&i.Description,
 			&i.FormulaDsl,
 			&i.AiExplanation,
 			&i.PublisherComment,
@@ -1823,7 +1837,7 @@ SET
     reviewer_notes = $4
 WHERE id = $1
 RETURNING id, publisher_id, requested_key, requested_hebrew_name, requested_english_name,
-    requested_formula_dsl, time_category, justification, status,
+    requested_formula_dsl, time_category, description, status,
     reviewed_by, reviewed_at, reviewer_notes, created_at
 `
 
@@ -1842,7 +1856,7 @@ type UpdateZmanRegistryRequestStatusRow struct {
 	RequestedEnglishName string             `json:"requested_english_name"`
 	RequestedFormulaDsl  *string            `json:"requested_formula_dsl"`
 	TimeCategory         string             `json:"time_category"`
-	Justification        string             `json:"justification"`
+	Description          *string            `json:"description"`
 	Status               string             `json:"status"`
 	ReviewedBy           *string            `json:"reviewed_by"`
 	ReviewedAt           pgtype.Timestamptz `json:"reviewed_at"`
@@ -1866,7 +1880,7 @@ func (q *Queries) UpdateZmanRegistryRequestStatus(ctx context.Context, arg Updat
 		&i.RequestedEnglishName,
 		&i.RequestedFormulaDsl,
 		&i.TimeCategory,
-		&i.Justification,
+		&i.Description,
 		&i.Status,
 		&i.ReviewedBy,
 		&i.ReviewedAt,

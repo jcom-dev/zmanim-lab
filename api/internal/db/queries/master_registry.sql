@@ -225,6 +225,7 @@ WHERE pz.publisher_id = $1
 -- name: CreatePublisherZmanFromRegistry :one
 INSERT INTO publisher_zmanim (
     id, publisher_id, zman_key, hebrew_name, english_name,
+    transliteration, description,
     formula_dsl, ai_explanation, publisher_comment,
     is_enabled, is_visible, is_published, is_custom, category,
     dependencies, sort_order, master_zman_id, current_version
@@ -235,6 +236,8 @@ SELECT
     mr.zman_key AS zman_key,
     mr.canonical_hebrew_name AS hebrew_name,
     mr.canonical_english_name AS english_name,
+    mr.transliteration AS transliteration,
+    mr.description AS description,
     COALESCE(sqlc.narg('formula_dsl'), mr.default_formula_dsl) AS formula_dsl,
     NULL AS ai_explanation,
     NULL AS publisher_comment,
@@ -250,13 +253,14 @@ SELECT
 FROM master_zmanim_registry mr
 WHERE mr.id = $2
 RETURNING id, publisher_id, zman_key, hebrew_name, english_name,
-    formula_dsl, ai_explanation, publisher_comment,
+    transliteration, description, formula_dsl, ai_explanation, publisher_comment,
     is_enabled, is_visible, is_published, is_custom, category,
     dependencies, sort_order, created_at, updated_at, master_zman_id, current_version;
 
 -- name: ImportZmanimFromRegistryByKeys :many
 INSERT INTO publisher_zmanim (
     id, publisher_id, zman_key, hebrew_name, english_name,
+    transliteration, description,
     formula_dsl, ai_explanation, publisher_comment,
     is_enabled, is_visible, is_published, is_custom, category,
     dependencies, sort_order, master_zman_id, current_version
@@ -267,6 +271,8 @@ SELECT
     mr.zman_key,
     mr.canonical_hebrew_name,
     mr.canonical_english_name,
+    mr.transliteration,
+    mr.description,
     mr.default_formula_dsl,
     NULL,
     NULL,
@@ -283,7 +289,7 @@ FROM master_zmanim_registry mr
 WHERE mr.zman_key = ANY($2::text[])
 ON CONFLICT (publisher_id, zman_key) DO NOTHING
 RETURNING id, publisher_id, zman_key, hebrew_name, english_name,
-    formula_dsl, ai_explanation, publisher_comment,
+    transliteration, description, formula_dsl, ai_explanation, publisher_comment,
     is_enabled, is_visible, is_published, is_custom, category,
     dependencies, sort_order, created_at, updated_at, master_zman_id, current_version;
 
@@ -404,15 +410,15 @@ INSERT INTO zman_registry_requests (
     requested_english_name,
     requested_formula_dsl,
     time_category,
-    justification
+    description
 ) VALUES ($1, $2, $3, $4, $5, $6, $7)
 RETURNING id, publisher_id, requested_key, requested_hebrew_name, requested_english_name,
-    requested_formula_dsl, time_category, justification, status, created_at;
+    requested_formula_dsl, time_category, description, status, created_at;
 
 -- name: GetZmanRegistryRequests :many
 SELECT
     id, publisher_id, requested_key, requested_hebrew_name, requested_english_name,
-    requested_formula_dsl, time_category, justification, status,
+    requested_formula_dsl, time_category, description, status,
     reviewed_by, reviewed_at, reviewer_notes, created_at
 FROM zman_registry_requests
 WHERE status = COALESCE(sqlc.narg('status'), status)
@@ -421,7 +427,7 @@ ORDER BY created_at DESC;
 -- name: GetZmanRegistryRequestByID :one
 SELECT
     id, publisher_id, requested_key, requested_hebrew_name, requested_english_name,
-    requested_formula_dsl, time_category, justification, status,
+    requested_formula_dsl, time_category, description, status,
     reviewed_by, reviewed_at, reviewer_notes, created_at
 FROM zman_registry_requests
 WHERE id = $1;
@@ -435,7 +441,7 @@ SET
     reviewer_notes = $4
 WHERE id = $1
 RETURNING id, publisher_id, requested_key, requested_hebrew_name, requested_english_name,
-    requested_formula_dsl, time_category, justification, status,
+    requested_formula_dsl, time_category, description, status,
     reviewed_by, reviewed_at, reviewer_notes, created_at;
 
 -- name: AddMasterZmanFromRequest :one

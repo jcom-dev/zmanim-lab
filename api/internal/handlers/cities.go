@@ -12,7 +12,7 @@ import (
 )
 
 // SearchCities handles city search with autocomplete and filtering
-// GET /api/v1/cities?search={query}&country_code={code}&region={region}&limit={limit}
+// GET /api/v1/cities?search={query}&country_code={code}&region={region}&continent_code={code}&limit={limit}
 func (h *Handlers) SearchCities(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -20,10 +20,11 @@ func (h *Handlers) SearchCities(w http.ResponseWriter, r *http.Request) {
 	search := strings.TrimSpace(r.URL.Query().Get("search"))
 	countryCode := strings.TrimSpace(r.URL.Query().Get("country_code"))
 	region := strings.TrimSpace(r.URL.Query().Get("region"))
+	continentCode := strings.TrimSpace(r.URL.Query().Get("continent_code"))
 
 	// At least one filter must be provided
-	if search == "" && countryCode == "" {
-		RespondBadRequest(w, r, "Either search or country_code parameter is required")
+	if search == "" && countryCode == "" && continentCode == "" {
+		RespondBadRequest(w, r, "Either search, country_code, or continent_code parameter is required")
 		return
 	}
 
@@ -54,6 +55,13 @@ func (h *Handlers) SearchCities(w http.ResponseWriter, r *http.Request) {
 
 	args := make([]interface{}, 0)
 	argNum := 1
+
+	// Add continent code filter
+	if continentCode != "" {
+		queryBuilder.WriteString(fmt.Sprintf(" AND ct.code = $%d", argNum))
+		args = append(args, continentCode)
+		argNum++
+	}
 
 	// Add country code filter
 	if countryCode != "" {
