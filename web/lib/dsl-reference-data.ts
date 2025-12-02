@@ -105,10 +105,10 @@ export const DSL_FUNCTIONS: ReferenceItem[] = [
   },
   // Proportional hours (sha'os zmaniyos)
   {
-    name: 'shaos',
-    signature: 'shaos(hours, base)',
+    name: 'proportional_hours',
+    signature: 'proportional_hours(hours, base)',
     description: 'Proportional hours. Bases: gra (sunrise-sunset), mga (72min), mga_90, mga_120',
-    snippet: 'shaos(hours, base)',
+    snippet: 'proportional_hours(hours, base)',
     category: 'function',
   },
   // Midpoint function
@@ -121,7 +121,7 @@ export const DSL_FUNCTIONS: ReferenceItem[] = [
   },
 ];
 
-// Shaos bases for reference
+// Proportional hours bases for reference
 export const DSL_SHAOS_BASES: ReferenceItem[] = [
   {
     name: 'gra',
@@ -214,7 +214,7 @@ export const EXAMPLE_PATTERNS: ExamplePattern[] = [
     description: 'Dawn at 16.1° (Magen Avraham)',
   },
   {
-    formula: 'shaos(4, sunrise)',
+    formula: 'proportional_hours(4, gra)',
     description: 'End of 4th proportional hour (Sof Zman Shema)',
   },
   {

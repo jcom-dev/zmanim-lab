@@ -41,7 +41,7 @@ export const PRIMITIVES = [
 
 export const FUNCTIONS = [
   'solar',
-  'shaos',
+  'proportional_hours',
   'midpoint',
   'if',
   'else',

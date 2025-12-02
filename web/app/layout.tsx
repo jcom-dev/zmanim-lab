@@ -4,6 +4,7 @@ import { ClerkProvider } from '@clerk/nextjs';
 import { QueryProvider } from '@/providers/QueryProvider';
 import { ThemeProvider } from '@/components/theme-provider';
 import { Toaster } from 'sonner';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import './globals.css';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -58,10 +59,12 @@ export default function RootLayout({
             disableTransitionOnChange
           >
             <QueryProvider>
-              <div className="min-h-screen bg-background text-foreground">
-                {children}
-              </div>
-              <Toaster richColors position="bottom-right" />
+              <TooltipProvider delayDuration={300}>
+                <div className="min-h-screen bg-background text-foreground">
+                  {children}
+                </div>
+                <Toaster richColors position="bottom-right" />
+              </TooltipProvider>
             </QueryProvider>
           </ThemeProvider>
         </body>

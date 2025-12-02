@@ -117,8 +117,8 @@ func (v *Validator) validateFunction(n *FunctionNode) {
 	switch n.Name {
 	case "solar":
 		v.validateSolarFunction(n)
-	case "shaos":
-		v.validateShaosFunction(n)
+	case "proportional_hours":
+		v.validateProportionalHoursFunction(n)
 	case "midpoint":
 		v.validateMidpointFunction(n)
 	default:
@@ -165,10 +165,10 @@ func (v *Validator) validateSolarFunction(n *FunctionNode) {
 	}
 }
 
-// validateShaosFunction validates a shaos() function call
-func (v *Validator) validateShaosFunction(n *FunctionNode) {
+// validateProportionalHoursFunction validates a proportional_hours() function call
+func (v *Validator) validateProportionalHoursFunction(n *FunctionNode) {
 	if len(n.Args) != 2 {
-		v.addError(n.Pos, "shaos() requires 2 arguments (hours, base), got %d", len(n.Args))
+		v.addError(n.Pos, "proportional_hours() requires 2 arguments (hours, base), got %d", len(n.Args))
 		return
 	}
 
@@ -177,7 +177,7 @@ func (v *Validator) validateShaosFunction(n *FunctionNode) {
 	if numNode, ok := hours.(*NumberNode); ok {
 		if numNode.Value < 0.5 || numNode.Value > 12 {
 			v.addErrorWithSuggestion(n.Pos,
-				fmt.Sprintf("shaos() hours must be between 0.5 and 12, got %.1f", numNode.Value),
+				fmt.Sprintf("proportional_hours() hours must be between 0.5 and 12, got %.1f", numNode.Value),
 				"Common values: 3 (Shma), 4 (Tefila), 9.5 (Mincha Ketana), 10.75 (Plag)")
 		}
 	} else {
@@ -189,7 +189,7 @@ func (v *Validator) validateShaosFunction(n *FunctionNode) {
 	if baseNode, ok := base.(*BaseNode); ok {
 		v.validateBase(baseNode)
 	} else {
-		v.addError(n.Pos, "second argument to shaos() must be a base (gra, mga, mga_90, mga_120, or custom)")
+		v.addError(n.Pos, "second argument to proportional_hours() must be a base (gra, mga, mga_90, mga_120, or custom)")
 	}
 }
 

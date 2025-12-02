@@ -37,9 +37,9 @@ func (n *PrimitiveNode) Type() NodeType    { return NodeTypePrimitive }
 func (n *PrimitiveNode) Position() Position { return n.Pos }
 func (n *PrimitiveNode) String() string     { return n.Name }
 
-// FunctionNode represents a function call (solar, shaos, midpoint)
+// FunctionNode represents a function call (solar, proportional_hours, midpoint)
 type FunctionNode struct {
-	Name string   // "solar", "shaos", "midpoint"
+	Name string   // "solar", "proportional_hours", "midpoint"
 	Args []Node   // Function arguments
 	Pos  Position // Source position
 }
@@ -124,7 +124,7 @@ func (n *DirectionNode) Type() NodeType    { return NodeTypeString }
 func (n *DirectionNode) Position() Position { return n.Pos }
 func (n *DirectionNode) String() string     { return n.Direction }
 
-// BaseNode represents a base keyword for shaos function
+// BaseNode represents a base keyword for proportional_hours function
 type BaseNode struct {
 	Base      string   // "gra", "mga", etc.
 	CustomArgs []Node  // For custom(start, end)
@@ -200,7 +200,7 @@ func GetValueType(n Node) ValueType {
 	case *ReferenceNode:
 		return ValueTypeTime
 	case *FunctionNode:
-		// solar, shaos return Time; midpoint returns Time
+		// solar, proportional_hours return Time; midpoint returns Time
 		return ValueTypeTime
 	case *DurationNode:
 		return ValueTypeDuration

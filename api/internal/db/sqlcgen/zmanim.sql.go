@@ -361,6 +361,21 @@ SELECT
         SELECT 1 FROM master_zman_events mze
         WHERE mze.master_zman_id = pz.master_zman_id
     ) AS is_event_zman,
+    -- Tags from master zman (if from registry)
+    COALESCE(
+        (SELECT json_agg(json_build_object(
+            'id', t.id,
+            'tag_key', t.tag_key,
+            'name', t.name,
+            'display_name_hebrew', t.display_name_hebrew,
+            'display_name_english', t.display_name_english,
+            'tag_type', t.tag_type
+        ) ORDER BY t.sort_order)
+        FROM master_zman_tags mzt
+        JOIN zman_tags t ON mzt.tag_id = t.id
+        WHERE mzt.master_zman_id = pz.master_zman_id),
+        '[]'::json
+    ) AS tags,
     -- Linked source info
     CASE WHEN pz.linked_publisher_zman_id IS NOT NULL THEN true ELSE false END AS is_linked,
     linked_pub.name AS linked_source_publisher_name,
@@ -396,6 +411,7 @@ type GetPublisherZmanimRow struct {
 	LinkedPublisherZmanID     pgtype.UUID `json:"linked_publisher_zman_id"`
 	SourceType                *string     `json:"source_type"`
 	IsEventZman               bool        `json:"is_event_zman"`
+	Tags                      interface{} `json:"tags"`
 	IsLinked                  bool        `json:"is_linked"`
 	LinkedSourcePublisherName *string     `json:"linked_source_publisher_name"`
 	LinkedSourceIsDeleted     bool        `json:"linked_source_is_deleted"`
@@ -435,6 +451,7 @@ func (q *Queries) GetPublisherZmanim(ctx context.Context, publisherID string) ([
 			&i.LinkedPublisherZmanID,
 			&i.SourceType,
 			&i.IsEventZman,
+			&i.Tags,
 			&i.IsLinked,
 			&i.LinkedSourcePublisherName,
 			&i.LinkedSourceIsDeleted,

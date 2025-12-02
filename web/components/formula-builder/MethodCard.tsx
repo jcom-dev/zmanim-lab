@@ -2,6 +2,7 @@
 
 import { Sun, Clock, Scale, Star } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { InfoTooltip } from '@/components/shared/InfoTooltip';
 import type { MethodType } from './types';
 
 interface MethodCardProps {
@@ -11,6 +12,7 @@ interface MethodCardProps {
   selected: boolean;
   onSelect: () => void;
   children?: React.ReactNode;
+  tooltip?: string;
 }
 
 const methodIcons: Record<string, React.ReactNode> = {
@@ -27,6 +29,7 @@ export function MethodCard({
   selected,
   onSelect,
   children,
+  tooltip,
 }: MethodCardProps) {
   return (
     <div
@@ -51,7 +54,16 @@ export function MethodCard({
             {method && methodIcons[method]}
           </div>
           <div className="min-w-0">
-            <h3 className="font-semibold text-base">{title}</h3>
+            <div className="flex items-center gap-1.5">
+              <h3 className="font-semibold text-base">{title}</h3>
+              {tooltip && (
+                <InfoTooltip
+                  content={tooltip}
+                  side="right"
+                  iconClassName="h-3.5 w-3.5"
+                />
+              )}
+            </div>
             <p className="text-sm text-muted-foreground leading-snug">{description}</p>
           </div>
         </div>

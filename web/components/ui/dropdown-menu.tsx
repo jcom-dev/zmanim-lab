@@ -50,8 +50,9 @@ export function DropdownMenu({ children }: DropdownMenuProps) {
     };
 
     if (open) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
+      // Use 'click' instead of 'mousedown' to allow onClick handlers to fire first
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
     }
   }, [open]);
 
@@ -95,7 +96,7 @@ export function DropdownMenuTrigger({ asChild, children }: DropdownMenuTriggerPr
 }
 
 export function DropdownMenuContent({ children, align = 'end', className = '' }: DropdownMenuContentProps) {
-  const { open, setOpen } = React.useContext(DropdownMenuContext);
+  const { open } = React.useContext(DropdownMenuContext);
 
   if (!open) return null;
 
@@ -108,7 +109,6 @@ export function DropdownMenuContent({ children, align = 'end', className = '' }:
   return (
     <div
       className={`absolute top-full mt-2 ${alignClass} z-50 min-w-[200px] bg-popover border border-border rounded-md shadow-lg py-1 ${className}`}
-      onClick={() => setOpen(false)}
     >
       {children}
     </div>

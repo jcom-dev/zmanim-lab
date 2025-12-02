@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { MapPin, ChevronRight, Building2, Globe, Loader2, Mountain, Search, Navigation } from 'lucide-react';
 import { SignInButton, UserButton, useUser } from '@clerk/nextjs';
 import { RoleNavigation } from '@/components/home/RoleNavigation';
+import { InfoTooltip } from '@/components/shared/InfoTooltip';
+import { USER_TOOLTIPS } from '@/lib/tooltip-content';
 
 import { API_BASE } from '@/lib/api';
 
@@ -459,21 +461,23 @@ export default function Home() {
                 </div>
 
                 {/* Use My Location Button */}
-                <button
-                  type="button"
-                  onClick={handleUseMyLocation}
-                  disabled={isGeolocating}
-                  className="flex items-center gap-2 px-4 py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl transition-colors whitespace-nowrap"
-                >
-                  {isGeolocating ? (
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                  ) : (
-                    <Navigation className="w-5 h-5" />
-                  )}
-                  <span className="hidden sm:inline">
-                    {isGeolocating ? 'Locating...' : 'Use My Location'}
-                  </span>
-                </button>
+                <InfoTooltip content={USER_TOOLTIPS.use_my_location} side="bottom" asChild>
+                  <button
+                    type="button"
+                    onClick={handleUseMyLocation}
+                    disabled={isGeolocating}
+                    className="flex items-center gap-2 px-4 py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl transition-colors whitespace-nowrap"
+                  >
+                    {isGeolocating ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <Navigation className="w-5 h-5" />
+                    )}
+                    <span className="hidden sm:inline">
+                      {isGeolocating ? 'Locating...' : 'Use My Location'}
+                    </span>
+                  </button>
+                </InfoTooltip>
               </div>
 
               <p className="text-xs text-muted-foreground mt-3">
@@ -716,10 +720,12 @@ export default function Home() {
                           {city.region && `${city.region}, `}{city.country}
                         </div>
                         {city.elevation !== null && city.elevation !== undefined && (
-                          <div className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                            <Mountain className="w-3 h-3" />
-                            {formatElevation(city.elevation)}
-                          </div>
+                          <InfoTooltip content={USER_TOOLTIPS.elevation} side="right">
+                            <div className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5 cursor-help">
+                              <Mountain className="w-3 h-3" />
+                              {formatElevation(city.elevation)}
+                            </div>
+                          </InfoTooltip>
                         )}
                       </div>
                     </div>

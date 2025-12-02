@@ -19,6 +19,7 @@ import {
   generateFormula,
   parseFormula,
 } from './types';
+import { ALGORITHM_TOOLTIPS } from '@/lib/tooltip-content';
 
 interface FormulaBuilderProps {
   initialFormula?: string;
@@ -182,7 +183,7 @@ export function FormulaBuilder({
             <MethodCard method="fixed_zman" title="Fixed Zmanim" description="Select standalone astronomical events" selected={false} onSelect={() => {}} />
             <MethodCard method="solar" title="Solar Angle" description="Calculate based on sun position" selected={false} onSelect={() => {}} />
             <MethodCard method="fixed" title="Fixed Offset" description="Add or subtract fixed minutes" selected={false} onSelect={() => {}} />
-            <MethodCard method="proportional" title="Proportional Hours" description="Calculate using shaos zmanios" selected={false} onSelect={() => {}} />
+            <MethodCard method="proportional" title="Proportional Hours" description="Calculate using halachic hours" selected={false} onSelect={() => {}} />
           </div>
         </div>
       </div>
@@ -209,6 +210,7 @@ export function FormulaBuilder({
             description="Select standalone astronomical events (no parameters needed)"
             selected={state.method === 'fixed_zman'}
             onSelect={() => handleMethodSelect('fixed_zman')}
+            tooltip={ALGORITHM_TOOLTIPS.fixed_zman}
           >
             <FixedZmanForm
               value={state.selectedFixedZman}
@@ -222,6 +224,7 @@ export function FormulaBuilder({
             description="Calculate based on sun position below horizon"
             selected={state.method === 'solar'}
             onSelect={() => handleMethodSelect('solar')}
+            tooltip={ALGORITHM_TOOLTIPS.solar_angle}
           >
             <SolarAngleForm
               degrees={state.solarDegrees}
@@ -237,6 +240,7 @@ export function FormulaBuilder({
             description="Add or subtract fixed minutes from a reference time"
             selected={state.method === 'fixed'}
             onSelect={() => handleMethodSelect('fixed')}
+            tooltip={ALGORITHM_TOOLTIPS.fixed_offset}
           >
             <FixedOffsetForm
               minutes={state.offsetMinutes}
@@ -251,9 +255,10 @@ export function FormulaBuilder({
           <MethodCard
             method="proportional"
             title="Proportional Hours"
-            description="Calculate using shaos zmanios (halachic hours)"
+            description="Calculate using halachic proportional hours"
             selected={state.method === 'proportional'}
             onSelect={() => handleMethodSelect('proportional')}
+            tooltip={ALGORITHM_TOOLTIPS.proportional_hours}
           >
             <ProportionalHoursForm
               hours={state.shaosHours}

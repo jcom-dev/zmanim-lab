@@ -36,7 +36,7 @@ function inferTagsFromFormula(formula: string): InferredTags {
   }
 
   // Check for calculation method
-  if (formula.includes('shaos(')) {
+  if (formula.includes('proportional_hours(')) {
     result.method = 'Proportional Hours';
   } else if (formula.includes('solar(')) {
     result.method = 'Solar Angle';

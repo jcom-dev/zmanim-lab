@@ -29,11 +29,11 @@ export const FUNCTION_COMPLETIONS: Completion[] = [
     snippet: 'solar(${1:16.1}, ${2:before_sunrise})',
   },
   {
-    label: 'shaos',
+    label: 'proportional_hours',
     type: 'function',
     info: 'Calculate using proportional hours',
-    detail: 'shaos(hours, base)',
-    snippet: 'shaos(${1:3}, ${2:gra})',
+    detail: 'proportional_hours(hours, base)',
+    snippet: 'proportional_hours(${1:3}, ${2:gra})',
   },
   {
     label: 'midpoint',

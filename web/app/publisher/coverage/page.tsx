@@ -25,6 +25,8 @@ import {
 } from '@/components/ui/alert-dialog';
 import { useApi } from '@/lib/api-client';
 import { getCoverageBadgeClasses } from '@/lib/wcag-colors';
+import { InfoTooltip, StatusTooltip } from '@/components/shared/InfoTooltip';
+import { COVERAGE_TOOLTIPS, STATUS_TOOLTIPS } from '@/lib/tooltip-content';
 
 interface Coverage {
   id: string;
@@ -326,7 +328,10 @@ export default function PublisherCoveragePage() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6 sm:mb-8">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold">Coverage Areas</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl sm:text-3xl font-bold">Coverage Areas</h1>
+              <InfoTooltip content={COVERAGE_TOOLTIPS.matching} side="right" />
+            </div>
             <p className="text-sm sm:text-base text-muted-foreground mt-1">
               Define where users can find your zmanim
             </p>
@@ -372,11 +377,22 @@ export default function PublisherCoveragePage() {
                   <div className="min-w-0 flex-1">
                     <div className="font-medium text-sm sm:text-base truncate">{item.display_name || item.city_name || item.country}</div>
                     <div className="flex items-center gap-2 text-xs sm:text-sm text-muted-foreground flex-wrap">
-                      <span className={`px-2 py-0.5 rounded-full border text-xs ${getLevelBadgeColor(item.coverage_level)}`}>
-                        {item.coverage_level}
-                      </span>
-                      <span className="whitespace-nowrap">Priority: {item.priority}</span>
-                      {!item.is_active && <span className="text-yellow-600 dark:text-yellow-400 whitespace-nowrap">Inactive</span>}
+                      <StatusTooltip
+                        status={item.coverage_level}
+                        tooltip={COVERAGE_TOOLTIPS.level[item.coverage_level]}
+                      >
+                        <span className={`px-2 py-0.5 rounded-full border text-xs ${getLevelBadgeColor(item.coverage_level)}`}>
+                          {item.coverage_level}
+                        </span>
+                      </StatusTooltip>
+                      <StatusTooltip status="priority" tooltip={COVERAGE_TOOLTIPS.priority}>
+                        <span className="whitespace-nowrap">Priority: {item.priority}</span>
+                      </StatusTooltip>
+                      {!item.is_active && (
+                        <StatusTooltip status="inactive" tooltip={STATUS_TOOLTIPS.inactive}>
+                          <span className="text-yellow-600 dark:text-yellow-400 whitespace-nowrap">Inactive</span>
+                        </StatusTooltip>
+                      )}
                     </div>
                   </div>
                 </div>

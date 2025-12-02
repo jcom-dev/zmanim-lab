@@ -70,7 +70,7 @@ function inferTagsFromFormula(formula: string): InferredTags {
   }
 
   // Check for calculation method
-  if (formula.includes('shaos(')) {
+  if (formula.includes('proportional_hours(')) {
     result.method = 'Proportional Hours';
   } else if (formula.includes('solar(')) {
     result.method = 'Solar Angle';
@@ -157,6 +157,7 @@ interface ZmanCardProps {
   zman: PublisherZman;
   category: 'essential' | 'optional';
   onEdit?: (zmanKey: string) => void;
+  displayLanguage?: 'hebrew' | 'english' | 'both';
 }
 
 /**
@@ -169,7 +170,7 @@ interface ZmanCardProps {
  * - Quick action buttons (Edit, Toggle Visibility, Delete)
  * - Drag handle for reordering
  */
-export function ZmanCard({ zman, category, onEdit }: ZmanCardProps) {
+export function ZmanCard({ zman, category, onEdit, displayLanguage = 'both' }: ZmanCardProps) {
   const router = useRouter();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showHistoryDialog, setShowHistoryDialog] = useState(false);
@@ -262,14 +263,23 @@ export function ZmanCard({ zman, category, onEdit }: ZmanCardProps) {
         `}
       >
         <CardHeader className="pb-3">
-          <div className="flex items-start justify-between gap-4">
+          {/* Mobile: Actions on top, then title | Desktop: Title left, actions right */}
+          <div className="flex flex-col-reverse sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-4">
             {/* Left: Name and Dependencies */}
             <div className="flex-1 min-w-0">
-              {/* Name */}
-              <h3 className="text-lg font-semibold leading-tight mb-2">
-                <span className="text-foreground">{zman.hebrew_name}</span>
-                <span className="text-muted-foreground mx-2">•</span>
-                <span className="text-foreground">{zman.english_name}</span>
+              {/* Name - respects displayLanguage setting */}
+              <h3 className={`text-base sm:text-lg font-semibold leading-tight mb-2 ${displayLanguage === 'hebrew' ? 'font-hebrew' : ''}`}>
+                {displayLanguage === 'hebrew' ? (
+                  <span className="text-foreground">{zman.hebrew_name}</span>
+                ) : displayLanguage === 'english' ? (
+                  <span className="text-foreground">{zman.english_name}</span>
+                ) : (
+                  <>
+                    <span className="text-foreground block sm:inline font-hebrew">{zman.hebrew_name}</span>
+                    <span className="text-muted-foreground mx-0 sm:mx-2 hidden sm:inline">•</span>
+                    <span className="text-foreground block sm:inline">{zman.english_name}</span>
+                  </>
+                )}
               </h3>
 
               {/* Dependencies */}
@@ -284,7 +294,7 @@ export function ZmanCard({ zman, category, onEdit }: ZmanCardProps) {
               )}
 
               {/* Status Toggles */}
-              <div className="flex flex-wrap items-center gap-4 mt-3">
+              <div className="flex flex-wrap items-center gap-2 sm:gap-4 mt-3">
                 {/* Enabled/Disabled Toggle */}
                 <div className="flex items-center gap-2">
                   <span className={`text-xs ${!zman.is_enabled ? 'text-muted-foreground' : 'font-medium text-foreground'}`}>
@@ -395,8 +405,8 @@ export function ZmanCard({ zman, category, onEdit }: ZmanCardProps) {
               )}
             </div>
 
-            {/* Right: Quick Actions */}
-            <div className="flex gap-1 flex-shrink-0">
+            {/* Right: Quick Actions - top row centered on mobile, right side on desktop */}
+            <div className="flex justify-center sm:justify-end gap-0.5 sm:gap-1 flex-shrink-0 w-full sm:w-auto">
               {/* Edit Button */}
               <Button
                 variant="ghost"
@@ -645,10 +655,12 @@ export function ZmanGrid({
   zmanim,
   category,
   onEdit,
+  displayLanguage = 'both',
 }: {
   zmanim: PublisherZman[];
   category: 'essential' | 'optional';
   onEdit?: (zmanKey: string) => void;
+  displayLanguage?: 'hebrew' | 'english' | 'both';
 }) {
   if (zmanim.length === 0) {
     return (
@@ -661,7 +673,7 @@ export function ZmanGrid({
   return (
     <div className="space-y-4">
       {zmanim.map((zman) => (
-        <ZmanCard key={zman.id} zman={zman} category={category} onEdit={onEdit} />
+        <ZmanCard key={zman.id} zman={zman} category={category} onEdit={onEdit} displayLanguage={displayLanguage} />
       ))}
     </div>
   );

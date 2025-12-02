@@ -61,7 +61,7 @@ function getTokenColorClass(type: TokenType): string {
       return 'text-blue-600 dark:text-blue-400 font-semibold';
 
     case 'function':
-      // Functions: solar(), shaos(), midpoint()
+      // Functions: solar(), proportional_hours(), midpoint()
       return 'text-purple-600 dark:text-purple-400 font-medium';
 
     case 'primitive':

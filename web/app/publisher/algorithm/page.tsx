@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@clerk/nextjs';
 import { useQuery } from '@tanstack/react-query';
@@ -48,6 +48,8 @@ import {
 } from '@/components/ui/alert-dialog';
 import { MapPin, Search, Plus, Download, Filter, AlertTriangle, ChevronLeft, ChevronRight, Calendar, RotateCcw, Trash2, Loader2, CalendarDays, Flame, Tag, ChevronDown, Library, Copy, Link2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { InfoTooltip, StatusTooltip } from '@/components/shared/InfoTooltip';
+import { ALGORITHM_TOOLTIPS, STATUS_TOOLTIPS } from '@/lib/tooltip-content';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   DropdownMenu,
@@ -55,6 +57,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 // Event zman keys - these are shown in Events tab and Weekly Preview
 // Everyday zmanim are shown in Everyday tab and Live Preview
@@ -118,7 +127,7 @@ function inferTagsFromFormula(formula: string): InferredTag[] {
   }
 
   // Check for calculation method
-  if (formula.includes('shaos(')) {
+  if (formula.includes('proportional_hours(')) {
     tags.push('Proportional Hours');
   }
   if (formula.includes('solar(')) {
@@ -336,10 +345,16 @@ export default function AlgorithmEditorPage() {
   const [citySearch, setCitySearch] = useState('');
   const [searchResults, setSearchResults] = useState<CoverageCity[]>([]);
   const [showCityDropdown, setShowCityDropdown] = useState(false);
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Preview date state (shared with AlgorithmPreview and edit page)
   const [previewDate, setPreviewDate] = useState(() => new Date());
   const [hebrewDate, setHebrewDate] = useState<HebrewDateInfo | null>(null);
+  const [calendarMode, setCalendarMode] = useState<'gregorian' | 'hebrew'>('gregorian');
+
+  // Display language for zman names: 'both' shows Hebrew • English, 'hebrew' shows only Hebrew, 'english' shows only English
+  // This is linked to calendarMode: 'gregorian' = english names, 'hebrew' = hebrew names
+  const displayLanguage = calendarMode === 'hebrew' ? 'hebrew' : 'english';
 
   // Format date as YYYY-MM-DD
   const dateStr = useMemo(() => previewDate.toISOString().split('T')[0], [previewDate]);
@@ -511,29 +526,10 @@ export default function AlgorithmEditorPage() {
     }
   }, [selectedPublisher, loadCoverage]);
 
-  // Search for cities
-  const handleCitySearch = async (query: string) => {
-    setCitySearch(query);
+  // API search for cities (called with debounce)
+  const searchCitiesAPI = useCallback(async (query: string) => {
+    if (query.length < 2) return;
 
-    if (query.length < 2) {
-      setSearchResults([]);
-      setShowCityDropdown(false);
-      return;
-    }
-
-    // First filter from coverage cities
-    const coverageMatches = coverageCities.filter(city =>
-      city.name.toLowerCase().includes(query.toLowerCase())
-    );
-
-    if (coverageMatches.length > 0) {
-      setSearchResults(coverageMatches);
-      setShowCityDropdown(true);
-      return;
-    }
-
-    // Search cities within coverage area only
-    // If we have coverage country codes, limit search to those countries
     try {
       const token = await getToken();
       let url = `${process.env.NEXT_PUBLIC_API_URL || ''}/api/v1/cities?search=${encodeURIComponent(query)}`;
@@ -553,6 +549,7 @@ export default function AlgorithmEditorPage() {
       if (response.ok) {
         const data = await response.json();
         let cities = data.data?.cities || data.cities || [];
+        console.log('[searchCitiesAPI] Got cities:', cities.length, cities.slice(0, 3));
 
         // If we have multiple country codes, filter client-side by country_code field
         if (coverageCountryCodes.length > 1) {
@@ -562,20 +559,56 @@ export default function AlgorithmEditorPage() {
         }
 
         setSearchResults(cities);
-        setShowCityDropdown(true);
+      } else {
+        console.error('[searchCitiesAPI] Response not ok:', response.status);
       }
     } catch (err) {
       console.error('Failed to search cities:', err);
     }
+  }, [getToken, coverageCountryCodes]);
+
+  // Search for cities with debounce for API calls
+  const handleCitySearch = (query: string) => {
+    setCitySearch(query);
+    console.log('[handleCitySearch] Query:', query, 'Coverage cities:', coverageCities.length);
+
+    // Clear any pending API search
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    if (query.length < 2) {
+      setSearchResults([]);
+      return;
+    }
+
+    // First filter from coverage cities (instant, no debounce)
+    const coverageMatches = coverageCities.filter(city =>
+      city.name.toLowerCase().includes(query.toLowerCase())
+    );
+    console.log('[handleCitySearch] Coverage matches:', coverageMatches.length);
+
+    if (coverageMatches.length > 0) {
+      setSearchResults(coverageMatches);
+      return;
+    }
+
+    // Debounce API search to avoid rate limiting
+    searchTimeoutRef.current = setTimeout(() => {
+      console.log('[handleCitySearch] Calling API for:', query);
+      searchCitiesAPI(query);
+    }, 300);
   };
 
   const selectCity = (city: CoverageCity) => {
+    console.log('[selectCity] Called with:', city.name);
     const newLocation = {
       latitude: city.latitude,
       longitude: city.longitude,
       timezone: city.timezone,
       displayName: `${city.name}${city.region ? `, ${city.region}` : ''}, ${city.country}`,
     };
+    console.log('[selectCity] Setting location to:', newLocation.displayName);
     setPreviewLocation(newLocation);
     setCitySearch('');
     setSearchResults([]);
@@ -807,254 +840,380 @@ export default function AlgorithmEditorPage() {
           </div>
         )}
 
-        {/* Location & Date Header */}
-        <Card className="mb-6">
-          <CardContent className="py-4">
-            <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
-              {/* Left: Location */}
-              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 w-full lg:w-auto">
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <MapPin className="h-4 w-4" />
-                  <span className="text-sm font-medium">Preview Location:</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-foreground font-medium">{previewLocation.displayName}</span>
-                </div>
-                <div className="relative w-full sm:w-48">
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <input
-                      type="text"
-                      placeholder="Search for a city..."
-                      value={citySearch}
-                      onChange={(e) => handleCitySearch(e.target.value)}
-                      onFocus={() => citySearch.length >= 2 && setShowCityDropdown(true)}
-                      onBlur={() => setTimeout(() => setShowCityDropdown(false), 200)}
-                      className="bg-background border border-input rounded-md pl-10 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring cursor-text hover:bg-muted/50 w-full"
-                    />
-                  </div>
-                  {showCityDropdown && searchResults.length > 0 && (
-                    <div className="absolute top-full left-0 right-0 mt-1 bg-card border border-border rounded-md shadow-lg z-50 max-h-60 overflow-y-auto">
-                      {searchResults.map((city) => (
-                        <button
-                          key={city.id}
-                          className="w-full px-4 py-2 text-left text-sm hover:bg-muted transition-colors flex items-center gap-2"
-                          onClick={() => selectCity(city)}
-                        >
-                          <MapPin className="h-3 w-3 text-muted-foreground flex-shrink-0" />
-                          <span className="text-foreground">
-                            {city.name}
-                            {city.region && <span className="text-muted-foreground">, {city.region}</span>}
-                            <span className="text-muted-foreground">, {city.country}</span>
+        {/* Two-column layout: Controls on left, Live Preview on right */}
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr,320px] gap-6">
+          {/* Left Column: All controls and zmanim list */}
+          <div className="space-y-6">
+            {/* Location & Date Header - Single Line on Desktop, Stacked on Mobile */}
+            <Card className="overflow-visible">
+              <CardContent className="py-3 px-4 overflow-visible">
+                {/* Desktop: Location left, date right | Mobile: Stacked */}
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 min-w-0">
+                  {/* Row 1 on mobile: Location + Today | Desktop: Just location */}
+                  <div className="flex items-center justify-between sm:justify-start gap-2">
+                    {/* Location Dropdown */}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button className="flex items-center gap-2 px-3 py-2 rounded-md border border-input bg-background hover:bg-muted/50 transition-colors text-left">
+                          <MapPin className="h-4 w-4 text-muted-foreground shrink-0" />
+                          <span className="text-sm font-medium text-foreground truncate max-w-[140px] sm:max-w-[200px]">
+                            {previewLocation.displayName}
                           </span>
-                          {coverageCities.some(c => c.id === city.id) && (
-                            <span className="ml-auto text-xs bg-primary/20 text-primary px-2 py-0.5 rounded">
-                              Coverage
-                            </span>
-                          )}
+                          <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" />
                         </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Right: Date Pickers */}
-              <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
-                {/* Gregorian Date Picker Group */}
-                <div className="flex items-center gap-1.5 bg-muted/30 rounded-lg px-3 py-1.5 border border-border/50">
-                  <span className="text-xs font-medium text-muted-foreground mr-1">Gregorian</span>
-                  <select
-                    value={previewDate.getFullYear()}
-                    onChange={(e) => {
-                      const newDate = new Date(previewDate);
-                      newDate.setFullYear(parseInt(e.target.value));
-                      const maxDay = getDaysInMonth(parseInt(e.target.value), newDate.getMonth());
-                      if (newDate.getDate() > maxDay) newDate.setDate(maxDay);
-                      setPreviewDate(newDate);
-                    }}
-                    className="bg-background border border-input rounded-md px-2 py-1.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer hover:bg-muted/50"
-                  >
-                    {englishYears.map((year) => (
-                      <option key={year} value={year}>{year}</option>
-                    ))}
-                  </select>
-                  <select
-                    value={previewDate.getMonth()}
-                    onChange={(e) => {
-                      const newDate = new Date(previewDate);
-                      const newMonth = parseInt(e.target.value);
-                      const maxDay = getDaysInMonth(newDate.getFullYear(), newMonth);
-                      if (newDate.getDate() > maxDay) newDate.setDate(maxDay);
-                      newDate.setMonth(newMonth);
-                      setPreviewDate(newDate);
-                    }}
-                    className="bg-background border border-input rounded-md px-2 py-1.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer hover:bg-muted/50"
-                  >
-                    {monthNames.map((month, index) => (
-                      <option key={month} value={index}>{month}</option>
-                    ))}
-                  </select>
-                  <select
-                    value={previewDate.getDate()}
-                    onChange={(e) => {
-                      const newDate = new Date(previewDate);
-                      newDate.setDate(parseInt(e.target.value));
-                      setPreviewDate(newDate);
-                    }}
-                    className="bg-background border border-input rounded-md px-2 py-1.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer hover:bg-muted/50"
-                  >
-                    {Array.from(
-                      { length: getDaysInMonth(previewDate.getFullYear(), previewDate.getMonth()) },
-                      (_, i) => i + 1
-                    ).map((day) => (
-                      <option key={day} value={day}>{day}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Hebrew Date Picker Group */}
-                {hebrewDate && hebrewDate.day && hebrewDate.month_num && hebrewDate.year && (
-                  <div className="flex items-center gap-1.5 bg-muted/30 rounded-lg px-3 py-1.5 border border-border/50" dir="rtl">
-                    <span className="text-xs font-medium text-muted-foreground ml-1 font-hebrew">עברי</span>
-                    <select
-                      value={hebrewDate.year}
-                      onChange={(e) => handleHebrewDateChange(parseInt(e.target.value), hebrewDate.month_num, hebrewDate.day)}
-                      className="bg-background border border-input rounded-md px-2 py-1.5 text-sm font-medium font-hebrew focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer hover:bg-muted/50"
+                      </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-80 p-0">
+                      <div className="p-3">
+                        <div className="relative">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                          <input
+                            type="text"
+                            placeholder="Search for a city..."
+                            value={citySearch}
+                            onChange={(e) => handleCitySearch(e.target.value)}
+                            className="w-full bg-background border border-input rounded-md pl-10 pr-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                            onClick={(e) => e.stopPropagation()}
+                            autoFocus
+                          />
+                        </div>
+                      </div>
+                      {searchResults.length > 0 ? (
+                        <div className="max-h-[300px] overflow-y-auto border-t border-border">
+                          {searchResults.map((city) => (
+                            <DropdownMenuItem
+                              key={city.id}
+                              onClick={() => selectCity(city)}
+                              className="flex items-center gap-2 mx-1"
+                            >
+                              <MapPin className="h-3 w-3 text-muted-foreground shrink-0" />
+                              <span className="truncate">
+                                {city.name}
+                                {city.region && <span className="text-muted-foreground">, {city.region}</span>}
+                                <span className="text-muted-foreground">, {city.country}</span>
+                              </span>
+                              {coverageCities.some(c => c.id === city.id) && (
+                                <span className="ml-auto text-xs bg-primary/20 text-primary px-2 py-0.5 rounded shrink-0">
+                                  Coverage
+                                </span>
+                              )}
+                            </DropdownMenuItem>
+                          ))}
+                        </div>
+                      ) : coverageCities.length > 0 && citySearch.length < 2 ? (
+                        <div className="max-h-[300px] overflow-y-auto border-t border-border">
+                          <div className="px-3 py-1.5 text-xs text-muted-foreground font-medium">Coverage Cities</div>
+                          {coverageCities.map((city) => (
+                            <DropdownMenuItem
+                              key={city.id}
+                              onClick={() => selectCity(city)}
+                              className="flex items-center gap-2 mx-1"
+                            >
+                              <MapPin className="h-3 w-3 text-muted-foreground shrink-0" />
+                              <span className="truncate">
+                                {city.name}
+                                {city.region && <span className="text-muted-foreground">, {city.region}</span>}
+                                <span className="text-muted-foreground">, {city.country}</span>
+                              </span>
+                            </DropdownMenuItem>
+                          ))}
+                        </div>
+                      ) : citySearch.length >= 2 ? (
+                        <div className="px-3 py-2 text-sm text-muted-foreground text-center border-t border-border">
+                          No cities found
+                        </div>
+                      ) : (
+                        <div className="px-3 py-2 text-sm text-muted-foreground text-center border-t border-border">
+                          Type to search for cities
+                        </div>
+                      )}
+                    </DropdownMenuContent>
+                    </DropdownMenu>
+                    {/* Today Button - Mobile only in this row */}
+                    <Button
+                      variant={isToday ? "default" : "outline"}
+                      size="sm"
+                      onClick={goToToday}
+                      className="sm:hidden shrink-0 h-7 px-2 text-xs"
                     >
-                      {hebrewYears.map((year) => (
-                        <option key={year} value={year}>{toHebrewYear(year)}</option>
-                      ))}
-                    </select>
-                    <select
-                      value={hebrewDate.month_num}
-                      onChange={(e) => handleHebrewDateChange(hebrewDate.year, parseInt(e.target.value), hebrewDate.day)}
-                      className="bg-background border border-input rounded-md px-2 py-1.5 text-sm font-medium font-hebrew focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer hover:bg-muted/50"
-                    >
-                      {hebrewMonthsWithNum.map((m) => (
-                        <option key={m.num} value={m.num}>{m.heb}</option>
-                      ))}
-                    </select>
-                    <select
-                      value={hebrewDate.day}
-                      onChange={(e) => handleHebrewDateChange(hebrewDate.year, hebrewDate.month_num, parseInt(e.target.value))}
-                      className="bg-background border border-input rounded-md px-2 py-1.5 text-sm font-medium font-hebrew focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer hover:bg-muted/50"
-                    >
-                      {hebrewDays.map((day) => (
-                        <option key={day} value={day}>{toHebrewNumerals(day)}</option>
-                      ))}
-                    </select>
+                      Today
+                    </Button>
                   </div>
-                )}
 
-                {/* Today Button */}
-                <Button
-                  variant={isToday ? "default" : "outline"}
-                  size="sm"
-                  onClick={goToToday}
-                >
-                  Today
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+                  {/* Date Controls - Row 2 on mobile */}
+                  <div className="flex items-center justify-between sm:justify-end gap-1 w-full sm:w-auto min-w-0">
+                    {/* Calendar Mode Toggle - EN/עב */}
+                    <div className="flex rounded-md border border-input overflow-hidden shrink-0">
+                      <button
+                        onClick={() => setCalendarMode('gregorian')}
+                        className={`px-1.5 py-1 text-xs font-medium transition-colors ${
+                          calendarMode === 'gregorian'
+                            ? 'bg-primary text-primary-foreground'
+                            : 'bg-background hover:bg-muted text-muted-foreground'
+                        }`}
+                      >
+                        EN
+                      </button>
+                      <button
+                        onClick={() => setCalendarMode('hebrew')}
+                        className={`px-1.5 py-1 text-xs font-medium font-hebrew transition-colors ${
+                          calendarMode === 'hebrew'
+                            ? 'bg-primary text-primary-foreground'
+                            : 'bg-background hover:bg-muted text-muted-foreground'
+                        }`}
+                      >
+                        עב
+                      </button>
+                    </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Main Editor Panel */}
-          <div className="lg:col-span-2 space-y-6">
+                    {/* Previous Day Arrow */}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={goToPreviousDay}
+                      className="h-5 w-5 sm:h-7 sm:w-7 shrink-0"
+                    >
+                      <ChevronLeft className="h-3 w-3 sm:h-4 sm:w-4" />
+                    </Button>
+
+                    {/* Date Picker - Gregorian or Hebrew based on mode */}
+                    {calendarMode === 'gregorian' ? (
+                      <>
+                        <Select
+                          value={previewDate.getMonth().toString()}
+                          onValueChange={(value) => {
+                            const newDate = new Date(previewDate);
+                            const newMonth = parseInt(value);
+                            const maxDay = getDaysInMonth(newDate.getFullYear(), newMonth);
+                            if (newDate.getDate() > maxDay) newDate.setDate(maxDay);
+                            newDate.setMonth(newMonth);
+                            setPreviewDate(newDate);
+                          }}
+                        >
+                          <SelectTrigger className="h-6 sm:h-7 w-auto px-1 sm:px-2 text-xs font-medium border-input bg-background hover:bg-muted/50 gap-0.5 sm:gap-1 [&>svg]:h-2.5 [&>svg]:w-2.5 sm:[&>svg]:h-3 sm:[&>svg]:w-3">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {monthNames.map((month, index) => (
+                              <SelectItem key={month} value={index.toString()} className="text-xs">{month.slice(0, 3)}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Select
+                          value={previewDate.getDate().toString()}
+                          onValueChange={(value) => {
+                            const newDate = new Date(previewDate);
+                            newDate.setDate(parseInt(value));
+                            setPreviewDate(newDate);
+                          }}
+                        >
+                          <SelectTrigger className="h-6 sm:h-7 w-[42px] sm:w-[52px] px-1 sm:px-2 text-xs font-medium border-input bg-background hover:bg-muted/50 gap-0.5 sm:gap-1 [&>svg]:h-2.5 [&>svg]:w-2.5 sm:[&>svg]:h-3 sm:[&>svg]:w-3">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Array.from(
+                              { length: getDaysInMonth(previewDate.getFullYear(), previewDate.getMonth()) },
+                              (_, i) => i + 1
+                            ).map((day) => (
+                              <SelectItem key={day} value={day.toString()} className="text-xs">{day}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Select
+                          value={previewDate.getFullYear().toString()}
+                          onValueChange={(value) => {
+                            const newDate = new Date(previewDate);
+                            newDate.setFullYear(parseInt(value));
+                            const maxDay = getDaysInMonth(parseInt(value), newDate.getMonth());
+                            if (newDate.getDate() > maxDay) newDate.setDate(maxDay);
+                            setPreviewDate(newDate);
+                          }}
+                        >
+                          <SelectTrigger className="h-6 sm:h-7 w-auto px-1 sm:px-2 text-xs font-medium border-input bg-background hover:bg-muted/50 gap-0.5 sm:gap-1 [&>svg]:h-2.5 [&>svg]:w-2.5 sm:[&>svg]:h-3 sm:[&>svg]:w-3">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {englishYears.map((year) => (
+                              <SelectItem key={year} value={year.toString()} className="text-xs">{year}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </>
+                    ) : hebrewDate && hebrewDate.day && hebrewDate.month_num && hebrewDate.year ? (
+                      <>
+                        <Select
+                          value={hebrewDate.day.toString()}
+                          onValueChange={(value) => handleHebrewDateChange(hebrewDate.year, hebrewDate.month_num, parseInt(value))}
+                        >
+                          <SelectTrigger className="h-6 sm:h-7 w-[42px] sm:w-[52px] px-1 sm:px-2 text-xs font-medium font-hebrew border-input bg-background hover:bg-muted/50 gap-0.5 sm:gap-1 [&>svg]:h-2.5 [&>svg]:w-2.5 sm:[&>svg]:h-3 sm:[&>svg]:w-3" dir="rtl">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {hebrewDays.map((day) => (
+                              <SelectItem key={day} value={day.toString()} className="text-xs font-hebrew">{toHebrewNumerals(day)}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Select
+                          value={hebrewDate.month_num.toString()}
+                          onValueChange={(value) => handleHebrewDateChange(hebrewDate.year, parseInt(value), hebrewDate.day)}
+                        >
+                          <SelectTrigger className="h-6 sm:h-7 w-auto px-1 sm:px-2 text-xs font-medium font-hebrew border-input bg-background hover:bg-muted/50 gap-0.5 sm:gap-1 [&>svg]:h-2.5 [&>svg]:w-2.5 sm:[&>svg]:h-3 sm:[&>svg]:w-3" dir="rtl">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {hebrewMonthsWithNum.map((m) => (
+                              <SelectItem key={m.num} value={m.num.toString()} className="text-xs font-hebrew">{m.heb}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Select
+                          value={hebrewDate.year.toString()}
+                          onValueChange={(value) => handleHebrewDateChange(parseInt(value), hebrewDate.month_num, hebrewDate.day)}
+                        >
+                          <SelectTrigger className="h-6 sm:h-7 w-auto px-1 sm:px-2 text-xs font-medium font-hebrew border-input bg-background hover:bg-muted/50 gap-0.5 sm:gap-1 [&>svg]:h-2.5 [&>svg]:w-2.5 sm:[&>svg]:h-3 sm:[&>svg]:w-3" dir="rtl">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {hebrewYears.map((year) => (
+                              <SelectItem key={year} value={year.toString()} className="text-xs font-hebrew">{toHebrewYear(year)}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">Loading...</span>
+                    )}
+
+                    {/* Next Day Arrow */}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={goToNextDay}
+                      className="h-5 w-5 sm:h-7 sm:w-7 shrink-0"
+                    >
+                      <ChevronRight className="h-3 w-3 sm:h-4 sm:w-4" />
+                    </Button>
+
+                    {/* Today Button - Desktop only (mobile version is in row 1) */}
+                    <Button
+                      variant={isToday ? "default" : "outline"}
+                      size="sm"
+                      onClick={goToToday}
+                      className="hidden sm:inline-flex shrink-0 h-7 px-2 text-xs"
+                    >
+                      Today
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
             {/* Everyday / Events Tabs */}
             <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'everyday' | 'events')}>
               <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="everyday" className="gap-2">
-                  <CalendarDays className="h-4 w-4" />
-                  Everyday Zmanim
-                  <Badge variant="secondary" className="ml-1 text-xs">
-                    {everydayCount}
-                  </Badge>
-                </TabsTrigger>
-                <TabsTrigger value="events" className="gap-2">
-                  <Flame className="h-4 w-4" />
-                  Event Zmanim
-                  <Badge variant="secondary" className="ml-1 text-xs">
-                    {eventCount}
-                  </Badge>
-                </TabsTrigger>
+                <StatusTooltip status="everyday" tooltip={ALGORITHM_TOOLTIPS.everyday_tab}>
+                  <TabsTrigger value="everyday" className="gap-1 sm:gap-2 w-full">
+                    <CalendarDays className="h-4 w-4 hidden sm:block" />
+                    <span className="text-xs sm:text-sm">Everyday</span>
+                    <Badge variant="secondary" className="ml-0.5 sm:ml-1 text-xs">
+                      {everydayCount}
+                    </Badge>
+                  </TabsTrigger>
+                </StatusTooltip>
+                <StatusTooltip status="events" tooltip={ALGORITHM_TOOLTIPS.events_tab}>
+                  <TabsTrigger value="events" className="gap-1 sm:gap-2 w-full">
+                    <Flame className="h-4 w-4 hidden sm:block" />
+                    <span className="text-xs sm:text-sm">Events</span>
+                    <Badge variant="secondary" className="ml-0.5 sm:ml-1 text-xs">
+                      {eventCount}
+                    </Badge>
+                  </TabsTrigger>
+                </StatusTooltip>
               </TabsList>
             </Tabs>
 
             {/* Search, Filter, and Actions Bar */}
             <Card>
               <CardContent className="py-4">
-                <div className="flex flex-col sm:flex-row gap-3 mb-4">
-                  <div className="relative flex-1">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4 w-full">
+                  <div className="relative w-full sm:flex-1 min-w-0">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
-                      placeholder="Search zmanim by name or key..."
+                      placeholder="Search zmanim by name..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="pl-10"
+                      className="pl-10 w-full"
                     />
                   </div>
 
-                  {/* Tag Filter Dropdown */}
-                  {availableTags.length > 0 && (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="outline" className="flex items-center gap-2">
-                          <Tag className="h-4 w-4" />
-                          {tagFilter === 'all' ? 'All Tags' : tagFilter}
-                          <ChevronDown className="h-3 w-3 opacity-50" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem
-                          onClick={() => setTagFilter('all')}
-                          className={tagFilter === 'all' ? 'bg-muted' : ''}
-                        >
-                          All Tags
-                        </DropdownMenuItem>
-                        {availableTags.map(tag => (
+                  <div className="flex flex-wrap items-center justify-center gap-2 w-full sm:w-auto sm:justify-start">
+                    {/* Tag Filter Dropdown */}
+                    {availableTags.length > 0 && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="outline" size="default" className="flex items-center gap-2 whitespace-nowrap">
+                            <Tag className="h-4 w-4" />
+                            {tagFilter === 'all' ? 'All Tags' : tagFilter}
+                            <ChevronDown className="h-3 w-3 opacity-50" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
                           <DropdownMenuItem
-                            key={tag}
-                            onClick={() => setTagFilter(tag)}
-                            className={tagFilter === tag ? 'bg-muted' : ''}
+                            onClick={() => setTagFilter('all')}
+                            className={tagFilter === 'all' ? 'bg-muted' : ''}
                           >
-                            {tag}
+                            All Tags
                           </DropdownMenuItem>
-                        ))}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  )}
+                          {availableTags.map(tag => (
+                            <DropdownMenuItem
+                              key={tag}
+                              onClick={() => setTagFilter(tag)}
+                              className={tagFilter === tag ? 'bg-muted' : ''}
+                            >
+                              {tag}
+                            </DropdownMenuItem>
+                          ))}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
 
-                  <Button
-                    variant="default"
-                    onClick={() => setShowAddZmanModeDialog(true)}
-                    className="flex items-center gap-2"
-                  >
-                    <Plus className="h-4 w-4" />
-                    Add Zman
-                  </Button>
+                    <Button
+                      variant="default"
+                      onClick={() => setShowAddZmanModeDialog(true)}
+                      className="flex items-center gap-2 whitespace-nowrap"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Add Zman
+                    </Button>
+                  </div>
                 </div>
 
                 {/* Filter Tabs */}
                 <Tabs value={filterType} onValueChange={(v) => setFilterType(v as FilterType)}>
-                  <TabsList className="flex-wrap h-auto">
+                  <div className="overflow-x-auto -mx-4 px-4 sm:overflow-visible sm:mx-0 sm:px-0 scrollbar-hide">
+                  <TabsList className="w-max sm:w-full h-auto justify-start gap-1">
                     <TabsTrigger value="all">
                       All ({currentViewCount})
                     </TabsTrigger>
-                    <TabsTrigger value="published">
-                      Published ({currentViewPublishedCount})
-                    </TabsTrigger>
-                    <TabsTrigger value="draft">
-                      Draft ({currentViewDraftCount})
-                    </TabsTrigger>
-                    <TabsTrigger value="essential">
-                      Core ({currentViewEssentialCount})
-                    </TabsTrigger>
-                    <TabsTrigger value="optional">
-                      Optional ({currentViewOptionalCount})
-                    </TabsTrigger>
+                    <StatusTooltip status="published" tooltip={STATUS_TOOLTIPS.published}>
+                      <TabsTrigger value="published">
+                        Published ({currentViewPublishedCount})
+                      </TabsTrigger>
+                    </StatusTooltip>
+                    <StatusTooltip status="draft" tooltip={STATUS_TOOLTIPS.draft}>
+                      <TabsTrigger value="draft">
+                        Draft ({currentViewDraftCount})
+                      </TabsTrigger>
+                    </StatusTooltip>
+                    <StatusTooltip status="core" tooltip={ALGORITHM_TOOLTIPS.core_zman}>
+                      <TabsTrigger value="essential">
+                        Core ({currentViewEssentialCount})
+                      </TabsTrigger>
+                    </StatusTooltip>
+                    <StatusTooltip status="optional" tooltip={ALGORITHM_TOOLTIPS.optional_zman}>
+                      <TabsTrigger value="optional">
+                        Optional ({currentViewOptionalCount})
+                      </TabsTrigger>
+                    </StatusTooltip>
                     {currentViewHiddenCount > 0 && (
                       <TabsTrigger value="hidden" className="text-muted-foreground">
                         Hidden ({currentViewHiddenCount})
@@ -1066,6 +1225,7 @@ export default function AlgorithmEditorPage() {
                       </TabsTrigger>
                     )}
                   </TabsList>
+                  </div>
                 </Tabs>
               </CardContent>
             </Card>
@@ -1160,20 +1320,34 @@ export default function AlgorithmEditorPage() {
                     zmanim={filteredZmanim}
                     category="optional" // This is just for styling, actual category comes from zman
                     onEdit={handleEditZman}
+                    displayLanguage={displayLanguage}
                   />
                 )}
               </CardContent>
             </Card>
           </div>
 
-          {/* Preview Panel - Shows only everyday zmanim for daily preview */}
-          <div className="space-y-6">
-            <AlgorithmPreview
-              zmanim={everydayZmanim}
-              location={previewLocation}
-              selectedDate={previewDate}
-            />
+          {/* Right Column: Live Preview (sticky) */}
+          <div className="hidden lg:block">
+            <div className="sticky top-6">
+              <AlgorithmPreview
+                zmanim={everydayZmanim}
+                location={previewLocation}
+                selectedDate={previewDate}
+                displayLanguage={displayLanguage}
+              />
+            </div>
           </div>
+        </div>
+
+        {/* Mobile Live Preview (shown below content on small screens) */}
+        <div className="lg:hidden mt-6">
+          <AlgorithmPreview
+            zmanim={everydayZmanim}
+            location={previewLocation}
+            selectedDate={previewDate}
+            displayLanguage={displayLanguage}
+          />
         </div>
 
         {/* Week View Dialog - Shows all zmanim (event zmanim filtered by day) */}

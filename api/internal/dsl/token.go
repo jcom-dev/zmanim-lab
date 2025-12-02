@@ -17,7 +17,7 @@ const (
 	TOKEN_PRIMITIVE // sunrise, sunset, solar_noon, etc.
 
 	// Functions
-	TOKEN_FUNCTION // solar, shaos, midpoint
+	TOKEN_FUNCTION // solar, proportional_hours, midpoint
 
 	// Keywords
 	TOKEN_IF
@@ -26,7 +26,7 @@ const (
 	// Direction keywords for solar function
 	TOKEN_DIRECTION // before_sunrise, after_sunset, before_noon, after_noon
 
-	// Base keywords for shaos function
+	// Base keywords for proportional_hours function
 	TOKEN_BASE // gra, mga, mga_90, mga_120, custom
 
 	// Condition keywords
@@ -155,9 +155,9 @@ var Primitives = map[string]bool{
 
 // Functions are built-in DSL functions
 var Functions = map[string]bool{
-	"solar":    true,
-	"shaos":    true,
-	"midpoint": true,
+	"solar":             true,
+	"proportional_hours": true,
+	"midpoint":          true,
 }
 
 // Directions are valid direction parameters for the solar function
@@ -168,7 +168,7 @@ var Directions = map[string]bool{
 	"after_noon":     true,
 }
 
-// Bases are valid base parameters for the shaos function
+// Bases are valid base parameters for the proportional_hours function
 var Bases = map[string]bool{
 	"gra":     true,
 	"mga":     true,

@@ -78,7 +78,7 @@ Primitives: sunrise, sunset, solar_noon, midnight, civil_dawn, civil_dusk, alos_
 
 Functions:
 - solar(degrees, direction) - Solar angle calculation. Direction: before_sunrise or after_sunset
-- shaos(hours, base) - Proportional hours. Base: gra (sunrise to sunset) or mga (dawn to nightfall)
+- proportional_hours(hours, base) - Proportional hours. Base: gra (sunrise to sunset) or mga (dawn to nightfall)
 - midpoint(time1, time2) - Middle point between two times
 
 Operators: + and - for adding/subtracting durations (e.g., sunrise - 72min)
@@ -108,7 +108,7 @@ solar(16.1, before_sunrise)
 
 Request: "3 proportional hours after sunrise using GRA"
 Response: ` + "```" + `
-shaos(3, gra)
+proportional_hours(3, gra)
 ` + "```" + ``
 
 // GenerateFormula generates a DSL formula from a natural language description

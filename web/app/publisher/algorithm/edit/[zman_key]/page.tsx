@@ -364,7 +364,7 @@ export default function ZmanEditorPage() {
           </h1>
           {zman?.category && (
             <Badge variant={zman.category === 'essential' ? 'default' : 'secondary'}>
-              {zman.category}
+              {zman.category === 'essential' ? 'Core' : 'Optional'}
             </Badge>
           )}
           {/* Preview Week - Prominent Position */}

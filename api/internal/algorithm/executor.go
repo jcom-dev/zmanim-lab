@@ -196,7 +196,7 @@ func (e *Executor) calculateFixedMinutes(config *ZmanConfig) (time.Time, error) 
 	return astro.AddMinutes(baseTime, minutes), nil
 }
 
-// calculateProportional calculates proportional hours (shaos zmaniyos)
+// calculateProportional calculates proportional hours
 func (e *Executor) calculateProportional(config *ZmanConfig) (time.Time, error) {
 	hours := getFloat(config.Params, "hours", 0)
 	base := getString(config.Params, "base", "gra")

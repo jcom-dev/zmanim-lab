@@ -20,11 +20,20 @@ type ZmanimRequestParams struct {
 
 // ZmanimWithFormulaResponse represents the enhanced zmanim response
 type ZmanimWithFormulaResponse struct {
-	Date     string                    `json:"date"`
-	Location ZmanimLocationInfo        `json:"location"`
-	Zmanim   []ZmanWithFormula         `json:"zmanim"`
-	Cached   bool                      `json:"cached"`
-	CachedAt *time.Time                `json:"cached_at,omitempty"`
+	Date      string                    `json:"date"`
+	Location  ZmanimLocationInfo        `json:"location"`
+	Publisher *ZmanimPublisherInfo      `json:"publisher,omitempty"`
+	Zmanim    []ZmanWithFormula         `json:"zmanim"`
+	Cached    bool                      `json:"cached"`
+	CachedAt  *time.Time                `json:"cached_at,omitempty"`
+}
+
+// ZmanimPublisherInfo contains publisher details for the response
+type ZmanimPublisherInfo struct {
+	ID           string  `json:"id"`
+	Name         string  `json:"name"`
+	Organization *string `json:"organization,omitempty"`
+	LogoURL      *string `json:"logo_url,omitempty"`
 }
 
 // ZmanimLocationInfo contains location details for the response
@@ -132,15 +141,29 @@ func (h *Handlers) GetZmanimForCity(w http.ResponseWriter, r *http.Request) {
 		timezone = "UTC"
 	}
 
-	// Get algorithm configuration
+	// Get algorithm configuration and publisher info
 	var algorithmConfig *algorithm.AlgorithmConfig
+	var publisherInfo *ZmanimPublisherInfo
 	if publisherID != "" {
+		// First, get publisher info
+		pubQuery := `SELECT name, organization, logo_url FROM publishers WHERE id = $1`
+		var pubName string
+		var pubOrg, pubLogo *string
+		err = h.db.Pool.QueryRow(ctx, pubQuery, publisherID).Scan(&pubName, &pubOrg, &pubLogo)
+		if err == nil {
+			publisherInfo = &ZmanimPublisherInfo{
+				ID:           publisherID,
+				Name:         pubName,
+				Organization: pubOrg,
+				LogoURL:      pubLogo,
+			}
+		}
+
 		// Try to get publisher's algorithm
 		algQuery := `
-			SELECT a.configuration
-			FROM algorithms a
-			JOIN publishers p ON a.publisher_id = p.id
-			WHERE p.id = $1 AND a.is_active = true
+			SELECT configuration
+			FROM algorithms
+			WHERE publisher_id = $1 AND status = 'published'
 			LIMIT 1
 		`
 		var configJSON []byte
@@ -175,8 +198,9 @@ func (h *Handlers) GetZmanimForCity(w http.ResponseWriter, r *http.Request) {
 			Longitude: longitude,
 			Timezone:  timezone,
 		},
-		Zmanim: make([]ZmanWithFormula, 0, len(results.Zmanim)),
-		Cached: false,
+		Publisher: publisherInfo,
+		Zmanim:    make([]ZmanWithFormula, 0, len(results.Zmanim)),
+		Cached:    false,
 	}
 
 	for _, zman := range results.Zmanim {

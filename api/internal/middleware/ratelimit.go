@@ -18,8 +18,8 @@ type RateLimiterConfig struct {
 // DefaultRateLimiterConfig returns default rate limiter configuration
 func DefaultRateLimiterConfig() RateLimiterConfig {
 	return RateLimiterConfig{
-		AnonymousRequestsPerHour:    100,  // AC: 100 requests/hour for anonymous
-		AuthenticatedRequestsPerHour: 1000, // Higher limit for authenticated
+		AnonymousRequestsPerHour:    10000, // AC: 10000 requests/hour for anonymous (increased for dev)
+		AuthenticatedRequestsPerHour: 100000, // Higher limit for authenticated (increased for dev)
 		CleanupInterval:             5 * time.Minute,
 	}
 }

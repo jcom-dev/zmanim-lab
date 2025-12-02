@@ -162,16 +162,16 @@ INSERT INTO zmanim_templates (zman_key, hebrew_name, english_name, formula_dsl, 
     ('alos_hashachar', 'עלות השחר', 'Alos Hashachar (Dawn)', 'solar(16.1, before_sunrise)', 'essential', true, 1),
     ('misheyakir', 'משיכיר', 'Misheyakir', 'solar(11.5, before_sunrise)', 'essential', true, 2),
     ('sunrise', 'הנץ החמה', 'Sunrise', 'sunrise', 'essential', true, 3),
-    ('sof_zman_shma_gra', 'סוף זמן ק"ש גר"א', 'Latest Shema (GRA)', 'shaos(3, gra)', 'essential', true, 4),
-    ('sof_zman_shma_mga', 'סוף זמן ק"ש מג"א', 'Latest Shema (MGA)', 'shaos(3, mga)', 'essential', true, 5),
-    ('sof_zman_tfila_gra', 'סוף זמן תפילה גר"א', 'Latest Shacharit (GRA)', 'shaos(4, gra)', 'essential', true, 6),
+    ('sof_zman_shma_gra', 'סוף זמן ק"ש גר"א', 'Latest Shema (GRA)', 'proportional_hours(3, gra)', 'essential', true, 4),
+    ('sof_zman_shma_mga', 'סוף זמן ק"ש מג"א', 'Latest Shema (MGA)', 'proportional_hours(3, mga)', 'essential', true, 5),
+    ('sof_zman_tfila_gra', 'סוף זמן תפילה גר"א', 'Latest Shacharit (GRA)', 'proportional_hours(4, gra)', 'essential', true, 6),
     ('chatzos', 'חצות היום', 'Chatzos (Midday)', 'solar_noon', 'essential', true, 7),
     ('mincha_gedola', 'מנחה גדולה', 'Mincha Gedola', 'solar_noon + 30min', 'essential', true, 8),
-    ('mincha_ketana', 'מנחה קטנה', 'Mincha Ketana', 'shaos(9.5, gra)', 'essential', true, 9),
-    ('plag_hamincha', 'פלג המנחה', 'Plag HaMincha', 'shaos(10.75, gra)', 'essential', true, 10),
+    ('mincha_ketana', 'מנחה קטנה', 'Mincha Ketana', 'proportional_hours(9.5, gra)', 'essential', true, 9),
+    ('plag_hamincha', 'פלג המנחה', 'Plag HaMincha', 'proportional_hours(10.75, gra)', 'essential', true, 10),
     ('sunset', 'שקיעה', 'Sunset', 'sunset', 'essential', true, 11),
     ('tzais', 'צאת הכוכבים', 'Tzais (Nightfall)', 'solar(8.5, after_sunset)', 'essential', true, 12),
-    ('sof_zman_tfila_mga', 'סוף זמן תפילה מג"א', 'Latest Shacharit (MGA)', 'shaos(4, mga)', 'optional', false, 20),
+    ('sof_zman_tfila_mga', 'סוף זמן תפילה מג"א', 'Latest Shacharit (MGA)', 'proportional_hours(4, mga)', 'optional', false, 20),
     ('alos_72', 'עלות 72 דקות', 'Alos 72 Minutes', 'sunrise - 72min', 'optional', false, 21),
     ('alos_90', 'עלות 90 דקות', 'Alos 90 Minutes', 'sunrise - 90min', 'optional', false, 22),
     ('alos_120', 'עלות 120 דקות', 'Alos 120 Minutes', 'sunrise - 120min', 'optional', false, 23),
@@ -184,7 +184,7 @@ INSERT INTO zmanim_templates (zman_key, hebrew_name, english_name, formula_dsl, 
     ('candle_lighting_40', 'הדלקת נרות (40 דקות)', 'Candle Lighting (40 min)', 'sunset - 40min', 'optional', false, 30),
     ('shkia_amitis', 'שקיעה אמיתית', 'True Sunset', 'sunset', 'optional', false, 31),
     ('chatzos_layla', 'חצות לילה', 'Chatzos Layla (Midnight)', 'solar_noon + 12hr', 'optional', false, 32),
-    ('samuch_lmincha', 'סמוך למנחה קטנה', 'Samuch L''Mincha Ketana', 'shaos(9, gra)', 'optional', false, 33),
+    ('samuch_lmincha', 'סמוך למנחה קטנה', 'Samuch L''Mincha Ketana', 'proportional_hours(9, gra)', 'optional', false, 33),
     ('bein_hashmashos', 'בין השמשות', 'Bein Hashmashos', 'sunset', 'optional', false, 34),
     ('kiddush_levana_earliest', 'קידוש לבנה מוקדם', 'Earliest Kiddush Levana', 'sunset + 72min', 'optional', false, 40),
     ('kiddush_levana_latest', 'סוף קידוש לבנה', 'Latest Kiddush Levana', 'sunset', 'optional', false, 41)
@@ -227,38 +227,38 @@ INSERT INTO master_zmanim_registry (zman_key, canonical_hebrew_name, canonical_e
     -- ============================================
     -- MORNING (בוקר) - Time Category: morning
     -- ============================================
-    ('sof_zman_shma_gra', 'סוף זמן ק"ש גר"א', 'Latest Shema (GRA)', 'Sof Zman Shma GRA', 'morning', 'shaos(3, gra)', true, 300, 'Latest time for Shema - 3 proportional hours (GRA)'),
-    ('sof_zman_shma_mga', 'סוף זמן ק"ש מג"א', 'Latest Shema (MGA)', 'Sof Zman Shma MGA', 'morning', 'shaos(3, mga)', false, 301, 'Latest time for Shema - 3 proportional hours (MGA from 72min dawn)'),
-    ('sof_zman_shma_mga_90', 'סוף זמן ק"ש מג"א 90', 'Latest Shema (MGA 90)', 'Sof Zman Shma MGA 90', 'morning', 'shaos(3, mga_90)', false, 302, 'Latest time for Shema (MGA from 90min dawn)'),
-    ('sof_zman_shma_mga_120', 'סוף זמן ק"ש מג"א 120', 'Latest Shema (MGA 120)', 'Sof Zman Shma MGA 120', 'morning', 'shaos(3, mga_120)', false, 303, 'Latest time for Shema (MGA from 120min dawn)'),
-    ('sof_zman_shma_16_1', 'סוף זמן ק"ש 16.1°', 'Latest Shema (16.1°)', 'Sof Zman Shma 16.1', 'morning', 'shaos(3, alos_16_1)', false, 304, 'Latest Shema based on 16.1° alos'),
-    ('sof_zman_tfila_gra', 'סוף זמן תפילה גר"א', 'Latest Shacharit (GRA)', 'Sof Zman Tefilla GRA', 'morning', 'shaos(4, gra)', true, 310, 'Latest time for Shacharit - 4 proportional hours (GRA)'),
-    ('sof_zman_tfila_mga', 'סוף זמן תפילה מג"א', 'Latest Shacharit (MGA)', 'Sof Zman Tefilla MGA', 'morning', 'shaos(4, mga)', false, 311, 'Latest time for Shacharit - 4 proportional hours (MGA)'),
-    ('sof_zman_tfila_mga_90', 'סוף זמן תפילה מג"א 90', 'Latest Shacharit (MGA 90)', 'Sof Zman Tefilla MGA 90', 'morning', 'shaos(4, mga_90)', false, 312, 'Latest Shacharit (MGA from 90min dawn)'),
-    ('sof_zman_tfila_mga_120', 'סוף זמן תפילה מג"א 120', 'Latest Shacharit (MGA 120)', 'Sof Zman Tefilla MGA 120', 'morning', 'shaos(4, mga_120)', false, 313, 'Latest Shacharit (MGA from 120min dawn)'),
-    ('sof_zman_achilas_chametz_gra', 'סוף זמן אכילת חמץ גר"א', 'Latest Eating Chametz (GRA)', 'Sof Achilat Chametz GRA', 'morning', 'shaos(4, gra)', false, 320, 'Latest time to eat chametz on Erev Pesach (GRA)'),
-    ('sof_zman_achilas_chametz_mga', 'סוף זמן אכילת חמץ מג"א', 'Latest Eating Chametz (MGA)', 'Sof Achilat Chametz MGA', 'morning', 'shaos(4, mga)', false, 321, 'Latest time to eat chametz on Erev Pesach (MGA)'),
-    ('sof_zman_biur_chametz_gra', 'סוף זמן ביעור חמץ גר"א', 'Latest Burning Chametz (GRA)', 'Sof Biur Chametz GRA', 'morning', 'shaos(5, gra)', false, 322, 'Latest time to burn chametz on Erev Pesach (GRA)'),
-    ('sof_zman_biur_chametz_mga', 'סוף זמן ביעור חמץ מג"א', 'Latest Burning Chametz (MGA)', 'Sof Biur Chametz MGA', 'morning', 'shaos(5, mga)', false, 323, 'Latest time to burn chametz on Erev Pesach (MGA)'),
+    ('sof_zman_shma_gra', 'סוף זמן ק"ש גר"א', 'Latest Shema (GRA)', 'Sof Zman Shma GRA', 'morning', 'proportional_hours(3, gra)', true, 300, 'Latest time for Shema - 3 proportional hours (GRA)'),
+    ('sof_zman_shma_mga', 'סוף זמן ק"ש מג"א', 'Latest Shema (MGA)', 'Sof Zman Shma MGA', 'morning', 'proportional_hours(3, mga)', false, 301, 'Latest time for Shema - 3 proportional hours (MGA from 72min dawn)'),
+    ('sof_zman_shma_mga_90', 'סוף זמן ק"ש מג"א 90', 'Latest Shema (MGA 90)', 'Sof Zman Shma MGA 90', 'morning', 'proportional_hours(3, mga_90)', false, 302, 'Latest time for Shema (MGA from 90min dawn)'),
+    ('sof_zman_shma_mga_120', 'סוף זמן ק"ש מג"א 120', 'Latest Shema (MGA 120)', 'Sof Zman Shma MGA 120', 'morning', 'proportional_hours(3, mga_120)', false, 303, 'Latest time for Shema (MGA from 120min dawn)'),
+    ('sof_zman_shma_16_1', 'סוף זמן ק"ש 16.1°', 'Latest Shema (16.1°)', 'Sof Zman Shma 16.1', 'morning', 'proportional_hours(3, alos_16_1)', false, 304, 'Latest Shema based on 16.1° alos'),
+    ('sof_zman_tfila_gra', 'סוף זמן תפילה גר"א', 'Latest Shacharit (GRA)', 'Sof Zman Tefilla GRA', 'morning', 'proportional_hours(4, gra)', true, 310, 'Latest time for Shacharit - 4 proportional hours (GRA)'),
+    ('sof_zman_tfila_mga', 'סוף זמן תפילה מג"א', 'Latest Shacharit (MGA)', 'Sof Zman Tefilla MGA', 'morning', 'proportional_hours(4, mga)', false, 311, 'Latest time for Shacharit - 4 proportional hours (MGA)'),
+    ('sof_zman_tfila_mga_90', 'סוף זמן תפילה מג"א 90', 'Latest Shacharit (MGA 90)', 'Sof Zman Tefilla MGA 90', 'morning', 'proportional_hours(4, mga_90)', false, 312, 'Latest Shacharit (MGA from 90min dawn)'),
+    ('sof_zman_tfila_mga_120', 'סוף זמן תפילה מג"א 120', 'Latest Shacharit (MGA 120)', 'Sof Zman Tefilla MGA 120', 'morning', 'proportional_hours(4, mga_120)', false, 313, 'Latest Shacharit (MGA from 120min dawn)'),
+    ('sof_zman_achilas_chametz_gra', 'סוף זמן אכילת חמץ גר"א', 'Latest Eating Chametz (GRA)', 'Sof Achilat Chametz GRA', 'morning', 'proportional_hours(4, gra)', false, 320, 'Latest time to eat chametz on Erev Pesach (GRA)'),
+    ('sof_zman_achilas_chametz_mga', 'סוף זמן אכילת חמץ מג"א', 'Latest Eating Chametz (MGA)', 'Sof Achilat Chametz MGA', 'morning', 'proportional_hours(4, mga)', false, 321, 'Latest time to eat chametz on Erev Pesach (MGA)'),
+    ('sof_zman_biur_chametz_gra', 'סוף זמן ביעור חמץ גר"א', 'Latest Burning Chametz (GRA)', 'Sof Biur Chametz GRA', 'morning', 'proportional_hours(5, gra)', false, 322, 'Latest time to burn chametz on Erev Pesach (GRA)'),
+    ('sof_zman_biur_chametz_mga', 'סוף זמן ביעור חמץ מג"א', 'Latest Burning Chametz (MGA)', 'Sof Biur Chametz MGA', 'morning', 'proportional_hours(5, mga)', false, 323, 'Latest time to burn chametz on Erev Pesach (MGA)'),
 
     -- ============================================
     -- MIDDAY (חצות) - Time Category: midday
     -- ============================================
     ('chatzos', 'חצות היום', 'Midday (Chatzos)', 'Chatzos', 'midday', 'solar_noon', true, 400, 'Solar noon - midpoint between sunrise and sunset'),
     ('mincha_gedola', 'מנחה גדולה', 'Earliest Mincha', 'Mincha Gedola', 'midday', 'solar_noon + 30min', true, 410, 'Earliest time for Mincha - 30 minutes after chatzos'),
-    ('mincha_gedola_16_1', 'מנחה גדולה 16.1°', 'Earliest Mincha (16.1°)', 'Mincha Gedola 16.1', 'midday', 'shaos(6.5, alos_16_1)', false, 411, 'Earliest Mincha based on 16.1° calculation'),
+    ('mincha_gedola_16_1', 'מנחה גדולה 16.1°', 'Earliest Mincha (16.1°)', 'Mincha Gedola 16.1', 'midday', 'proportional_hours(6.5, alos_16_1)', false, 411, 'Earliest Mincha based on 16.1° calculation'),
     ('mincha_gedola_30', 'מנחה גדולה 30 דקות', 'Earliest Mincha (30 min)', 'Mincha Gedola 30', 'midday', 'solar_noon + 30min', false, 412, 'Earliest Mincha - exactly 30 minutes after chatzos'),
 
     -- ============================================
     -- AFTERNOON (אחר הצהריים) - Time Category: afternoon
     -- ============================================
-    ('mincha_ketana', 'מנחה קטנה', 'Mincha Ketana', 'Mincha Ketana', 'afternoon', 'shaos(9.5, gra)', true, 500, 'Mincha Ketana - 9.5 proportional hours'),
-    ('mincha_ketana_16_1', 'מנחה קטנה 16.1°', 'Mincha Ketana (16.1°)', 'Mincha Ketana 16.1', 'afternoon', 'shaos(9.5, alos_16_1)', false, 501, 'Mincha Ketana based on 16.1° calculation'),
-    ('mincha_ketana_72', 'מנחה קטנה 72 דקות', 'Mincha Ketana (72 min)', 'Mincha Ketana 72', 'afternoon', 'shaos(9.5, mga)', false, 502, 'Mincha Ketana (MGA 72 minute day)'),
-    ('samuch_lmincha_ketana', 'סמוך למנחה קטנה', 'Samuch L''Mincha Ketana', 'Samuch LMincha', 'afternoon', 'shaos(9, gra)', false, 505, 'Half hour before Mincha Ketana'),
-    ('plag_hamincha', 'פלג המנחה', 'Plag HaMincha', 'Plag Hamincha', 'afternoon', 'shaos(10.75, gra)', true, 510, 'Plag HaMincha - 10.75 proportional hours (1.25 hours before sunset)'),
-    ('plag_hamincha_16_1', 'פלג המנחה 16.1°', 'Plag HaMincha (16.1°)', 'Plag Hamincha 16.1', 'afternoon', 'shaos(10.75, alos_16_1)', false, 511, 'Plag HaMincha based on 16.1° calculation'),
-    ('plag_hamincha_72', 'פלג המנחה 72 דקות', 'Plag HaMincha (72 min)', 'Plag Hamincha 72', 'afternoon', 'shaos(10.75, mga)', false, 512, 'Plag HaMincha (MGA 72 minute day)'),
+    ('mincha_ketana', 'מנחה קטנה', 'Mincha Ketana', 'Mincha Ketana', 'afternoon', 'proportional_hours(9.5, gra)', true, 500, 'Mincha Ketana - 9.5 proportional hours'),
+    ('mincha_ketana_16_1', 'מנחה קטנה 16.1°', 'Mincha Ketana (16.1°)', 'Mincha Ketana 16.1', 'afternoon', 'proportional_hours(9.5, alos_16_1)', false, 501, 'Mincha Ketana based on 16.1° calculation'),
+    ('mincha_ketana_72', 'מנחה קטנה 72 דקות', 'Mincha Ketana (72 min)', 'Mincha Ketana 72', 'afternoon', 'proportional_hours(9.5, mga)', false, 502, 'Mincha Ketana (MGA 72 minute day)'),
+    ('samuch_lmincha_ketana', 'סמוך למנחה קטנה', 'Samuch L''Mincha Ketana', 'Samuch LMincha', 'afternoon', 'proportional_hours(9, gra)', false, 505, 'Half hour before Mincha Ketana'),
+    ('plag_hamincha', 'פלג המנחה', 'Plag HaMincha', 'Plag Hamincha', 'afternoon', 'proportional_hours(10.75, gra)', true, 510, 'Plag HaMincha - 10.75 proportional hours (1.25 hours before sunset)'),
+    ('plag_hamincha_16_1', 'פלג המנחה 16.1°', 'Plag HaMincha (16.1°)', 'Plag Hamincha 16.1', 'afternoon', 'proportional_hours(10.75, alos_16_1)', false, 511, 'Plag HaMincha based on 16.1° calculation'),
+    ('plag_hamincha_72', 'פלג המנחה 72 דקות', 'Plag HaMincha (72 min)', 'Plag Hamincha 72', 'afternoon', 'proportional_hours(10.75, mga)', false, 512, 'Plag HaMincha (MGA 72 minute day)'),
 
     -- ============================================
     -- SUNSET (שקיעה) - Time Category: sunset
@@ -393,5 +393,5 @@ INSERT INTO master_zman_tags (master_zman_id, tag_id)
 SELECT mr.id, t.id
 FROM master_zmanim_registry mr, zman_tags t
 WHERE t.name = 'proportional_hours'
-AND mr.default_formula_dsl LIKE 'shaos(%'
+AND mr.default_formula_dsl LIKE 'proportional_hours(%'
 ON CONFLICT DO NOTHING;

@@ -15,7 +15,7 @@ interface FormulaPreviewProps {
 // Simple syntax highlighting for DSL formulas
 function highlightFormula(formula: string): React.ReactNode {
   // Keywords
-  const keywords = ['solar', 'shaos', 'midpoint', 'gra', 'mga', 'custom', 'before_sunrise', 'after_sunset'];
+  const keywords = ['solar', 'proportional_hours', 'midpoint', 'gra', 'mga', 'custom', 'before_sunrise', 'after_sunset'];
   // Primitives
   const primitives = ['sunrise', 'sunset', 'solar_noon', 'midnight', 'alos_hashachar', 'tzeis_hakochavim'];
 

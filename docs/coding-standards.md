@@ -1824,12 +1824,129 @@ docs(readme): update deployment instructions
 
 ---
 
-_Last Updated: 2025-11-30_
-_Based on: Story 3.2 Codebase Audit, Epic 1-4 Implementation, Production Refactoring, Architect Review_
+## Technical Debt Audit - 2025-12-02
+
+This section documents current violations and tracks remediation progress. **Risk-based prioritization**: Fix high-impact violations first.
+
+### Current Violation Counts
+
+| Category | Count | Severity | Target | Status |
+|----------|-------|----------|--------|--------|
+| Raw `fetch()` in .tsx files | 73 | 🔴 CRITICAL | 0 | ❌ Active Debt |
+| `log.Printf/fmt.Printf` in Go | ~100 | 🟠 HIGH | 0 (cmd/ exempt) | ❌ Active Debt |
+| `waitForTimeout` in tests | 52 | 🟠 HIGH | 0 | ❌ Active Debt |
+| Double-wrapped API responses | 80+ | 🟡 MEDIUM | 0 | ❌ Active Debt |
+| Test files missing parallel mode | 23/29 | 🟡 MEDIUM | 0 | ❌ Active Debt |
+| Naked `return nil, err` | ~90 | 🟡 MEDIUM | 0 | ❌ Active Debt |
+
+### Violation Detection Rules
+
+**CRITICAL - Block PRs:**
+```bash
+# No raw fetch in components (must use useApi hook)
+grep -r "await fetch\(" web/app web/components --include="*.tsx" | wc -l  # Should be 0
+
+# No log.Printf in handlers/services (must use slog)
+grep -rE "log\.Printf|fmt\.Printf|fmt\.Println" api/internal/handlers api/internal/services --include="*.go" | wc -l  # Should be 0
+
+# No waitForTimeout in tests (must use deterministic waits)
+grep -r "waitForTimeout" tests/e2e --include="*.ts" | wc -l  # Should be 0
+```
+
+**HIGH - Fix within sprint:**
+```bash
+# All test files should have parallel mode
+# Check each spec file for: test.describe.configure({ mode: 'parallel' })
+
+# API responses should not double-wrap
+# Pattern: RespondJSON(w, r, status, map[string]interface{}{"key": data})
+# Should be: RespondJSON(w, r, status, data)
+```
+
+### Exemptions
+
+The following locations are EXEMPT from standards (CLI tools, seed scripts):
+- `api/cmd/` - CLI tools can use log.Printf for user feedback
+- `api/internal/db/sqlcgen/` - Auto-generated code
+
+### Remediation Priority
+
+**Phase 1 - Critical (Epic 5.11):**
+1. Migrate remaining raw `fetch()` to `useApi()` hook
+2. Replace `log.Printf` with `slog` in handlers/services
+3. Replace `waitForTimeout` with deterministic waits
+
+**Phase 2 - High (Next Sprint):**
+4. Add parallel mode to all test files
+5. Fix double-wrapped API responses
+6. Add error context to naked returns
+
+---
+
+## Enforcement Mechanisms
+
+### Pre-commit Hooks (Recommended)
+
+Add to `.husky/pre-commit`:
+```bash
+#!/bin/sh
+
+# Block raw fetch in components
+if grep -rq "await fetch\(" web/app web/components --include="*.tsx" 2>/dev/null; then
+  echo "❌ ERROR: Raw fetch() found. Use useApi() hook instead."
+  exit 1
+fi
+
+# Block log.Printf in handlers (allow cmd/)
+if grep -rEq "log\.Printf|fmt\.Printf" api/internal/handlers api/internal/services --include="*.go" 2>/dev/null; then
+  echo "❌ ERROR: log.Printf found. Use slog instead."
+  exit 1
+fi
+
+echo "✅ Coding standards check passed"
+```
+
+### CI Linting (Required for PRs)
+
+Add GitHub Action step:
+```yaml
+- name: Coding Standards Check
+  run: |
+    FETCH_COUNT=$(grep -r "await fetch(" web/app web/components --include="*.tsx" 2>/dev/null | wc -l)
+    if [ "$FETCH_COUNT" -gt 0 ]; then
+      echo "::error::Found $FETCH_COUNT raw fetch() calls. Use useApi() hook."
+      exit 1
+    fi
+```
+
+### IDE Integration
+
+For VSCode, add to `.vscode/settings.json`:
+```json
+{
+  "editor.rulers": [100],
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/sqlcgen": true
+  }
+}
+```
+
+---
+
+_Last Updated: 2025-12-02_
+_Based on: Story 3.2 Codebase Audit, Epic 1-4 Implementation, Production Refactoring, Architect Review, Test Architect Audit_
 
 ---
 
 ## Changelog
+
+### 2025-12-02 - Test Architect Compliance Audit
+- Added **Technical Debt Audit** section with current violation counts
+- Added **Violation Detection Rules** with CLI commands
+- Added **Enforcement Mechanisms** section (pre-commit hooks, CI linting)
+- Identified 73 raw fetch() violations, 100 log.Printf violations, 52 waitForTimeout violations
+- Created remediation priority plan for Epic 5.11
 
 ### 2025-11-30 - Architect Review Updates
 - Added **Error Handling Standards** section with backend/frontend patterns

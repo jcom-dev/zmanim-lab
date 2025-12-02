@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { User, MapPin, Code, BarChart3, AlertTriangle, Clock, Loader2, Plus, CheckCircle } from 'lucide-react';
 import { usePublisherContext } from '@/providers/PublisherContext';
 import { useApi } from '@/lib/api-client';
+import { StatusTooltip } from '@/components/shared/InfoTooltip';
+import { STATUS_TOOLTIPS, ALGORITHM_TOOLTIPS, ADMIN_TOOLTIPS } from '@/lib/tooltip-content';
 
 interface DashboardSummary {
   profile: {
@@ -127,10 +129,22 @@ export default function PublisherDashboardPage() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'verified':
-        return <span className="flex items-center gap-1 text-green-600 dark:text-green-400 text-sm"><CheckCircle className="w-4 h-4" /> Verified</span>;
+        return (
+          <StatusTooltip status={status} tooltip={STATUS_TOOLTIPS.verified}>
+            <span className="flex items-center gap-1 text-green-600 dark:text-green-400 text-sm">
+              <CheckCircle className="w-4 h-4" /> Verified
+            </span>
+          </StatusTooltip>
+        );
       case 'pending':
       case 'pending_verification':
-        return <span className="flex items-center gap-1 text-yellow-600 dark:text-yellow-400 text-sm"><Clock className="w-4 h-4" /> Pending</span>;
+        return (
+          <StatusTooltip status={status} tooltip={STATUS_TOOLTIPS.pending}>
+            <span className="flex items-center gap-1 text-yellow-600 dark:text-yellow-400 text-sm">
+              <Clock className="w-4 h-4" /> Pending
+            </span>
+          </StatusTooltip>
+        );
       default:
         return <span className="text-muted-foreground text-sm">{status}</span>;
     }
@@ -140,12 +154,20 @@ export default function PublisherDashboardPage() {
     if (!summary) return null;
     switch (summary.algorithm.status) {
       case 'published':
-        return <span className="flex items-center gap-1 text-green-600 dark:text-green-400 text-sm"><CheckCircle className="w-4 h-4" /> Published</span>;
+        return (
+          <StatusTooltip status="published" tooltip={STATUS_TOOLTIPS.published}>
+            <span className="flex items-center gap-1 text-green-600 dark:text-green-400 text-sm">
+              <CheckCircle className="w-4 h-4" /> Published
+            </span>
+          </StatusTooltip>
+        );
       case 'draft':
         return (
-          <span className="flex items-center gap-1 text-yellow-600 dark:text-yellow-400 text-sm">
-            <AlertTriangle className="w-4 h-4" /> Draft
-          </span>
+          <StatusTooltip status="draft" tooltip={STATUS_TOOLTIPS.draft}>
+            <span className="flex items-center gap-1 text-yellow-600 dark:text-yellow-400 text-sm">
+              <AlertTriangle className="w-4 h-4" /> Draft
+            </span>
+          </StatusTooltip>
         );
       case 'none':
         return <span className="text-muted-foreground text-sm">Not configured</span>;
@@ -252,7 +274,9 @@ export default function PublisherDashboardPage() {
                 <p className="text-3xl font-bold text-foreground">
                   {summary.analytics.calculations_this_month.toLocaleString()}
                 </p>
-                <p className="text-muted-foreground text-sm">calculations this month</p>
+                <StatusTooltip status="calculations" tooltip={ADMIN_TOOLTIPS.calculations_this_month}>
+                  <p className="text-muted-foreground text-sm">calculations this month</p>
+                </StatusTooltip>
               </>
             )}
             <p className="text-muted-foreground/70 text-xs mt-2">Coming soon in a future update</p>

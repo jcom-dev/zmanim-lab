@@ -87,6 +87,7 @@ type AstronomicalPrimitive struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
+// Cities table - use idx_cities_name_trgm for ILIKE searches, idx_cities_country_population for country listings
 type City struct {
 	ID              string             `json:"id"`
 	Name            string             `json:"name"`
@@ -230,7 +231,7 @@ type MasterZmanTag struct {
 	CreatedAt    time.Time `json:"created_at"`
 }
 
-// Canonical list of all zmanim - publishers must select from this registry
+// Master zmanim registry - trigram indexes available for fuzzy Hebrew/English/transliteration searches
 type MasterZmanimRegistry struct {
 	ID string `json:"id"`
 	// Unique identifier for this zman type
@@ -328,10 +329,11 @@ type PublisherCoverage struct {
 	Region        *string     `json:"region"`
 	CityID        pgtype.UUID `json:"city_id"`
 	// Priority for this coverage (1-10, higher = more prominent)
-	Priority  *int32             `json:"priority"`
-	IsActive  *bool              `json:"is_active"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+	Priority      *int32             `json:"priority"`
+	IsActive      *bool              `json:"is_active"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+	ContinentCode *string            `json:"continent_code"`
 }
 
 // DEPRECATED: This table is no longer used. User management now creates users directly via Clerk instead of using invitations. Table kept for historical reference but will be empty.
@@ -406,14 +408,14 @@ type PublisherZmanVersion struct {
 	CreatedAt       time.Time `json:"created_at"`
 }
 
-// Individual zmanim formulas for each publisher using DSL syntax
+// Publisher zmanim - filtered queries should use publisher_id + deleted_at + is_enabled for best performance
 type PublisherZmanim struct {
 	ID          string `json:"id"`
 	PublisherID string `json:"publisher_id"`
 	ZmanKey     string `json:"zman_key"`
 	HebrewName  string `json:"hebrew_name"`
 	EnglishName string `json:"english_name"`
-	// DSL formula string. Examples: "shaos(3, gra)" for 3 hours after sunrise, "solar(16.1, before_sunrise)" for dawn
+	// DSL formula string. Examples: "proportional_hours(3, gra)" for 3 hours after sunrise, "solar(16.1, before_sunrise)" for dawn
 	FormulaDsl       string  `json:"formula_dsl"`
 	AiExplanation    *string `json:"ai_explanation"`
 	PublisherComment *string `json:"publisher_comment"`
@@ -559,9 +561,10 @@ type ZmanRegistryRequest struct {
 	CreatedAt            time.Time          `json:"created_at"`
 }
 
-// Tags for categorizing zmanim by shita or calculation method
+// Tags for categorizing zmanim by event type, timing, and behavior
 type ZmanTag struct {
-	ID                 string    `json:"id"`
+	ID string `json:"id"`
+	// Unique key identifier for the tag (e.g., shabbos, yom_tov)
 	TagKey             string    `json:"tag_key"`
 	Name               string    `json:"name"`
 	DisplayNameHebrew  string    `json:"display_name_hebrew"`
@@ -579,7 +582,7 @@ type ZmanimTemplate struct {
 	ZmanKey     string `json:"zman_key"`
 	HebrewName  string `json:"hebrew_name"`
 	EnglishName string `json:"english_name"`
-	// DSL formula string. shaos(N, gra) returns absolute time N hours after sunrise. shaos(N, mga) returns N hours after dawn (72min before sunrise).
+	// DSL formula string. proportional_hours(N, gra) returns absolute time N hours after sunrise. proportional_hours(N, mga) returns N hours after dawn (72min before sunrise).
 	FormulaDsl  string    `json:"formula_dsl"`
 	Category    string    `json:"category"`
 	Description *string   `json:"description"`

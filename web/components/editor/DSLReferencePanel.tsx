@@ -221,9 +221,9 @@ export function DSLReferencePanel({
           searchQuery={searchQuery}
         />
 
-        {/* Shaos Bases */}
+        {/* Proportional Hours */}
         <Category
-          title="Shaos Bases"
+          title="Proportional Hours"
           count={DSL_SHAOS_BASES.length}
           items={DSL_SHAOS_BASES}
           currentFormula={currentFormula}

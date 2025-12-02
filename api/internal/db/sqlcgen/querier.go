@@ -37,7 +37,7 @@ type Querier interface {
 	CountPublishers(ctx context.Context, dollar_1 string) (int64, error)
 	// Create or update algorithm --
 	CreateAlgorithm(ctx context.Context, arg CreateAlgorithmParams) (CreateAlgorithmRow, error)
-	CreateCoverage(ctx context.Context, arg CreateCoverageParams) (PublisherCoverage, error)
+	CreateCoverage(ctx context.Context, arg CreateCoverageParams) (CreateCoverageRow, error)
 	CreateInvitation(ctx context.Context, arg CreateInvitationParams) (string, error)
 	CreateOnboardingState(ctx context.Context, publisherID string) (PublisherOnboarding, error)
 	CreatePublisher(ctx context.Context, arg CreatePublisherParams) (CreatePublisherRow, error)
@@ -108,8 +108,8 @@ type Querier interface {
 	GetPublisherByID(ctx context.Context, id string) (GetPublisherByIDRow, error)
 	// Coverage SQL Queries
 	// SQLc will generate type-safe Go code from these queries
-	GetPublisherCoverage(ctx context.Context, publisherID string) ([]PublisherCoverage, error)
-	GetPublisherCoverageByID(ctx context.Context, id string) (PublisherCoverage, error)
+	GetPublisherCoverage(ctx context.Context, publisherID string) ([]GetPublisherCoverageRow, error)
+	GetPublisherCoverageByID(ctx context.Context, id string) (GetPublisherCoverageByIDRow, error)
 	GetPublisherCoverageCount(ctx context.Context, publisherID string) (int64, error)
 	GetPublisherDashboardSummary(ctx context.Context, id string) (GetPublisherDashboardSummaryRow, error)
 	// Algorithms SQL Queries
@@ -187,7 +187,7 @@ type Querier interface {
 	UnpublishZmanimByKeys(ctx context.Context, arg UnpublishZmanimByKeysParams) error
 	UpdateAlgorithmDraft(ctx context.Context, arg UpdateAlgorithmDraftParams) (UpdateAlgorithmDraftRow, error)
 	UpdateCityFKs(ctx context.Context, arg UpdateCityFKsParams) error
-	UpdateCoverage(ctx context.Context, arg UpdateCoverageParams) (PublisherCoverage, error)
+	UpdateCoverage(ctx context.Context, arg UpdateCoverageParams) (UpdateCoverageRow, error)
 	UpdateInvitationToken(ctx context.Context, arg UpdateInvitationTokenParams) error
 	UpdateOnboardingState(ctx context.Context, arg UpdateOnboardingStateParams) (PublisherOnboarding, error)
 	UpdatePublisherLogo(ctx context.Context, arg UpdatePublisherLogoParams) (UpdatePublisherLogoRow, error)

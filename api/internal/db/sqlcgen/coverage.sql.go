@@ -28,7 +28,20 @@ type CreateCoverageParams struct {
 	IsActive      *bool       `json:"is_active"`
 }
 
-func (q *Queries) CreateCoverage(ctx context.Context, arg CreateCoverageParams) (PublisherCoverage, error) {
+type CreateCoverageRow struct {
+	ID            string             `json:"id"`
+	PublisherID   string             `json:"publisher_id"`
+	CoverageLevel string             `json:"coverage_level"`
+	CountryCode   *string            `json:"country_code"`
+	Region        *string            `json:"region"`
+	CityID        pgtype.UUID        `json:"city_id"`
+	Priority      *int32             `json:"priority"`
+	IsActive      *bool              `json:"is_active"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) CreateCoverage(ctx context.Context, arg CreateCoverageParams) (CreateCoverageRow, error) {
 	row := q.db.QueryRow(ctx, createCoverage,
 		arg.PublisherID,
 		arg.CoverageLevel,
@@ -38,7 +51,7 @@ func (q *Queries) CreateCoverage(ctx context.Context, arg CreateCoverageParams) 
 		arg.Priority,
 		arg.IsActive,
 	)
-	var i PublisherCoverage
+	var i CreateCoverageRow
 	err := row.Scan(
 		&i.ID,
 		&i.PublisherID,
@@ -125,17 +138,30 @@ WHERE publisher_id = $1 AND is_active = true
 ORDER BY priority DESC, created_at DESC
 `
 
+type GetPublisherCoverageRow struct {
+	ID            string             `json:"id"`
+	PublisherID   string             `json:"publisher_id"`
+	CoverageLevel string             `json:"coverage_level"`
+	CountryCode   *string            `json:"country_code"`
+	Region        *string            `json:"region"`
+	CityID        pgtype.UUID        `json:"city_id"`
+	Priority      *int32             `json:"priority"`
+	IsActive      *bool              `json:"is_active"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+}
+
 // Coverage SQL Queries
 // SQLc will generate type-safe Go code from these queries
-func (q *Queries) GetPublisherCoverage(ctx context.Context, publisherID string) ([]PublisherCoverage, error) {
+func (q *Queries) GetPublisherCoverage(ctx context.Context, publisherID string) ([]GetPublisherCoverageRow, error) {
 	rows, err := q.db.Query(ctx, getPublisherCoverage, publisherID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []PublisherCoverage{}
+	items := []GetPublisherCoverageRow{}
 	for rows.Next() {
-		var i PublisherCoverage
+		var i GetPublisherCoverageRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.PublisherID,
@@ -165,9 +191,22 @@ FROM publisher_coverage
 WHERE id = $1
 `
 
-func (q *Queries) GetPublisherCoverageByID(ctx context.Context, id string) (PublisherCoverage, error) {
+type GetPublisherCoverageByIDRow struct {
+	ID            string             `json:"id"`
+	PublisherID   string             `json:"publisher_id"`
+	CoverageLevel string             `json:"coverage_level"`
+	CountryCode   *string            `json:"country_code"`
+	Region        *string            `json:"region"`
+	CityID        pgtype.UUID        `json:"city_id"`
+	Priority      *int32             `json:"priority"`
+	IsActive      *bool              `json:"is_active"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) GetPublisherCoverageByID(ctx context.Context, id string) (GetPublisherCoverageByIDRow, error) {
 	row := q.db.QueryRow(ctx, getPublisherCoverageByID, id)
-	var i PublisherCoverage
+	var i GetPublisherCoverageByIDRow
 	err := row.Scan(
 		&i.ID,
 		&i.PublisherID,
@@ -207,7 +246,20 @@ type UpdateCoverageParams struct {
 	IsActive      *bool       `json:"is_active"`
 }
 
-func (q *Queries) UpdateCoverage(ctx context.Context, arg UpdateCoverageParams) (PublisherCoverage, error) {
+type UpdateCoverageRow struct {
+	ID            string             `json:"id"`
+	PublisherID   string             `json:"publisher_id"`
+	CoverageLevel string             `json:"coverage_level"`
+	CountryCode   *string            `json:"country_code"`
+	Region        *string            `json:"region"`
+	CityID        pgtype.UUID        `json:"city_id"`
+	Priority      *int32             `json:"priority"`
+	IsActive      *bool              `json:"is_active"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) UpdateCoverage(ctx context.Context, arg UpdateCoverageParams) (UpdateCoverageRow, error) {
 	row := q.db.QueryRow(ctx, updateCoverage,
 		arg.ID,
 		arg.CoverageLevel,
@@ -217,7 +269,7 @@ func (q *Queries) UpdateCoverage(ctx context.Context, arg UpdateCoverageParams) 
 		arg.Priority,
 		arg.IsActive,
 	)
-	var i PublisherCoverage
+	var i UpdateCoverageRow
 	err := row.Scan(
 		&i.ID,
 		&i.PublisherID,

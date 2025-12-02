@@ -173,7 +173,7 @@ func (e *Executor) executeNode(node Node) Value {
 	case *DirectionNode:
 		return Value{Type: ValueTypeString, String: n.Direction}
 	case *BaseNode:
-		// BaseNode is handled within executeFunction for shaos
+		// BaseNode is handled within executeFunction for proportional_hours
 		return Value{Type: ValueTypeString, String: n.Base}
 	default:
 		e.addError("unknown node type: %T", node)
@@ -237,13 +237,13 @@ func (e *Executor) executePrimitive(n *PrimitiveNode) Value {
 	return Value{Type: ValueTypeTime, Time: t}
 }
 
-// executeFunction evaluates a function call (solar, shaos, midpoint)
+// executeFunction evaluates a function call (solar, proportional_hours, midpoint)
 func (e *Executor) executeFunction(n *FunctionNode) Value {
 	switch n.Name {
 	case "solar":
 		return e.executeSolar(n)
-	case "shaos":
-		return e.executeShaos(n)
+	case "proportional_hours":
+		return e.executeProportionalHours(n)
 	case "midpoint":
 		return e.executeMidpoint(n)
 	default:
@@ -313,17 +313,17 @@ func (e *Executor) executeSolar(n *FunctionNode) Value {
 	return Value{Type: ValueTypeTime, Time: t}
 }
 
-// executeShaos evaluates shaos(hours, base)
-func (e *Executor) executeShaos(n *FunctionNode) Value {
+// executeProportionalHours evaluates proportional_hours(hours, base)
+func (e *Executor) executeProportionalHours(n *FunctionNode) Value {
 	if len(n.Args) != 2 {
-		e.addError("shaos() requires 2 arguments")
+		e.addError("proportional_hours() requires 2 arguments")
 		return Value{}
 	}
 
 	// Get hours
 	hoursVal := e.executeNode(n.Args[0])
 	if hoursVal.Type != ValueTypeNumber {
-		e.addError("shaos() first argument must be a number (hours)")
+		e.addError("proportional_hours() first argument must be a number (hours)")
 		return Value{}
 	}
 	hours := hoursVal.Number
@@ -331,7 +331,7 @@ func (e *Executor) executeShaos(n *FunctionNode) Value {
 	// Get base
 	baseNode, ok := n.Args[1].(*BaseNode)
 	if !ok {
-		e.addError("shaos() second argument must be a base (gra, mga, etc.)")
+		e.addError("proportional_hours() second argument must be a base (gra, mga, etc.)")
 		return Value{}
 	}
 
@@ -380,7 +380,7 @@ func (e *Executor) executeShaos(n *FunctionNode) Value {
 	}
 
 	// Cache the result
-	stepName := fmt.Sprintf("shaos(%.2f, %s)", hours, baseNode.Base)
+	stepName := fmt.Sprintf("proportional_hours(%.2f, %s)", hours, baseNode.Base)
 	e.ctx.ZmanimCache[stepName] = t
 
 	return Value{Type: ValueTypeTime, Time: t}

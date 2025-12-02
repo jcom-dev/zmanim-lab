@@ -135,9 +135,9 @@ export function generateFormula(state: FormulaBuilderState): string {
 
     case 'proportional':
       if (state.shaosBase === 'custom' && state.customStart && state.customEnd) {
-        return `shaos(${state.shaosHours}, custom(@${state.customStart}, @${state.customEnd}))`;
+        return `proportional_hours(${state.shaosHours}, custom(@${state.customStart}, @${state.customEnd}))`;
       }
-      return `shaos(${state.shaosHours}, ${state.shaosBase})`;
+      return `proportional_hours(${state.shaosHours}, ${state.shaosBase})`;
 
     case 'fixed_zman':
       return state.selectedFixedZman;
@@ -177,30 +177,30 @@ export function parseFormula(formula: string): ParseResult {
     };
   }
 
-  // 2. Check for proportional hours: shaos(hours, base) or shaos(hours, custom(...))
-  const shaosMatch = trimmed.match(/^shaos\s*\(\s*([\d.]+)\s*,\s*(gra|mga)\s*\)$/);
-  if (shaosMatch) {
+  // 2. Check for proportional hours: proportional_hours(hours, base)
+  const proportionalMatch = trimmed.match(/^proportional_hours\s*\(\s*([\d.]+)\s*,\s*(gra|mga)\s*\)$/);
+  if (proportionalMatch) {
     return {
       success: true,
       state: {
         method: 'proportional',
-        shaosHours: parseFloat(shaosMatch[1]),
-        shaosBase: shaosMatch[2] as ShaosBase,
+        shaosHours: parseFloat(proportionalMatch[1]),
+        shaosBase: proportionalMatch[2] as ShaosBase,
       },
     };
   }
 
-  // Check for custom shaos: shaos(hours, custom(@start, @end))
-  const shaosCustomMatch = trimmed.match(/^shaos\s*\(\s*([\d.]+)\s*,\s*custom\s*\(\s*@([a-z_][a-z0-9_]*)\s*,\s*@([a-z_][a-z0-9_]*)\s*\)\s*\)$/i);
-  if (shaosCustomMatch) {
+  // Check for custom proportional_hours: proportional_hours(hours, custom(@start, @end))
+  const proportionalCustomMatch = trimmed.match(/^proportional_hours\s*\(\s*([\d.]+)\s*,\s*custom\s*\(\s*@([a-z_][a-z0-9_]*)\s*,\s*@([a-z_][a-z0-9_]*)\s*\)\s*\)$/i);
+  if (proportionalCustomMatch) {
     return {
       success: true,
       state: {
         method: 'proportional',
-        shaosHours: parseFloat(shaosCustomMatch[1]),
+        shaosHours: parseFloat(proportionalCustomMatch[1]),
         shaosBase: 'custom',
-        customStart: shaosCustomMatch[2],
-        customEnd: shaosCustomMatch[3],
+        customStart: proportionalCustomMatch[2],
+        customEnd: proportionalCustomMatch[3],
       },
     };
   }
@@ -271,10 +271,10 @@ export function parseFormula(formula: string): ParseResult {
     };
   }
 
-  // Check for unknown functions (functions other than solar, shaos, custom)
+  // Check for unknown functions (functions other than solar, proportional_hours, custom)
   const functionMatches = trimmed.match(/\b([a-z_][a-z0-9_]*)\s*\(/gi);
   if (functionMatches) {
-    const knownFunctions = ['solar', 'shaos', 'custom'];
+    const knownFunctions = ['solar', 'proportional_hours', 'custom'];
     for (const match of functionMatches) {
       const funcName = match.replace(/\s*\($/, '').toLowerCase();
       if (!knownFunctions.includes(funcName)) {

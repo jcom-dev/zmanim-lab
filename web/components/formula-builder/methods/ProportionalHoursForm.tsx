@@ -48,7 +48,7 @@ export function ProportionalHoursForm({
       {/* Hours slider */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <label className="text-sm font-medium">Proportional Hours (Shaos Zmanios)</label>
+          <label className="text-sm font-medium">Proportional Hours</label>
           <span className="text-sm font-mono bg-muted px-2 py-1 rounded">
             {hours} hours
           </span>

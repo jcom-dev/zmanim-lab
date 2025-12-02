@@ -48,8 +48,8 @@ func TestLexer(t *testing.T) {
 			expected: []TokenType{TOKEN_IF, TOKEN_LPAREN, TOKEN_LATITUDE, TOKEN_GT, TOKEN_NUMBER, TOKEN_RPAREN, TOKEN_LBRACE, TOKEN_PRIMITIVE, TOKEN_RBRACE, TOKEN_ELSE, TOKEN_LBRACE, TOKEN_PRIMITIVE, TOKEN_RBRACE, TOKEN_EOF},
 		},
 		{
-			name:     "shaos function",
-			input:    "shaos(3, gra)",
+			name:     "proportional_hours function",
+			input:    "proportional_hours(3, gra)",
 			expected: []TokenType{TOKEN_FUNCTION, TOKEN_LPAREN, TOKEN_NUMBER, TOKEN_COMMA, TOKEN_BASE, TOKEN_RPAREN, TOKEN_EOF},
 		},
 		{
@@ -128,14 +128,14 @@ func TestParser(t *testing.T) {
 		{"primitive with offset", "sunrise + 72min", false},
 		{"negative offset", "sunset - 18min", false},
 		{"solar function", "solar(16.1, before_sunrise)", false},
-		{"shaos function", "shaos(3, gra)", false},
+		{"proportional_hours function", "proportional_hours(3, gra)", false},
 		{"midpoint function", "midpoint(sunrise, sunset)", false},
 		{"reference", "@alos_hashachar", false},
 		{"conditional simple", "if (latitude > 60) { sunrise }", false},
 		{"conditional with else", "if (latitude > 60) { sunrise } else { sunset }", false},
 		{"nested expression", "sunrise + (sunset - sunrise) / 2", false},
-		{"custom base", "shaos(3, custom(sunrise, sunset))", false},
-		{"multiplication", "shaos(3, gra) + 72min * 2", false},
+		{"custom base", "proportional_hours(3, custom(sunrise, sunset))", false},
+		{"multiplication", "proportional_hours(3, gra) + 72min * 2", false},
 		{"invalid syntax", "sunrise +", true},
 		{"unclosed paren", "solar(16.1, before_sunrise", true},
 	}
@@ -161,8 +161,8 @@ func TestValidator(t *testing.T) {
 		{"valid primitive", "sunrise", nil, true},
 		{"valid solar", "solar(16.1, before_sunrise)", nil, true},
 		{"invalid solar degrees", "solar(100, before_sunrise)", nil, false},
-		{"valid shaos", "shaos(3, gra)", nil, true},
-		{"invalid shaos hours", "shaos(15, gra)", nil, false},
+		{"valid proportional_hours", "proportional_hours(3, gra)", nil, true},
+		{"invalid proportional_hours hours", "proportional_hours(15, gra)", nil, false},
 		{"valid reference", "@alos", []string{"alos"}, true},
 		{"undefined reference", "@undefined", []string{"alos"}, false},
 		{"time addition error", "sunrise + sunset", nil, false},
@@ -202,8 +202,8 @@ func TestExecutor(t *testing.T) {
 		{"sunrise + offset", "sunrise + 72min", false},
 		{"sunset - offset", "sunset - 18min", false},
 		{"solar function", "solar(16.1, before_sunrise)", false},
-		{"shaos gra", "shaos(3, gra)", false},
-		{"shaos mga", "shaos(3, mga)", false},
+		{"proportional_hours gra", "proportional_hours(3, gra)", false},
+		{"proportional_hours mga", "proportional_hours(3, mga)", false},
 		{"midpoint", "midpoint(sunrise, sunset)", false},
 		{"conditional true", "if (latitude > 30) { sunrise } else { sunset }", false},
 		{"conditional false", "if (latitude > 40) { sunrise } else { sunset }", false},
@@ -260,8 +260,8 @@ func TestExecutorResults(t *testing.T) {
 	}
 }
 
-// TestShaosZmaniyos tests proportional hour calculations
-func TestShaosZmaniyos(t *testing.T) {
+// TestProportionalHours tests proportional hour calculations
+func TestProportionalHours(t *testing.T) {
 	loc, _ := time.LoadLocation("Asia/Jerusalem")
 	date := time.Date(2024, 6, 21, 0, 0, 0, 0, loc) // Summer solstice - long day
 	ctx := NewExecutionContext(date, 31.7683, 35.2137, 0, loc)
@@ -270,24 +270,24 @@ func TestShaosZmaniyos(t *testing.T) {
 	sunrise, _ := ExecuteFormula("sunrise", ctx)
 	sunset, _ := ExecuteFormula("sunset", ctx)
 
-	// shaos(3, gra) should be 3 proportional hours after sunrise
-	sofZmanShma, _ := ExecuteFormula("shaos(3, gra)", ctx)
+	// proportional_hours(3, gra) should be 3 proportional hours after sunrise
+	sofZmanShma, _ := ExecuteFormula("proportional_hours(3, gra)", ctx)
 
 	// It should be after sunrise
 	if !sofZmanShma.After(sunrise) {
-		t.Error("shaos(3, gra) should be after sunrise")
+		t.Error("proportional_hours(3, gra) should be after sunrise")
 	}
 
 	// It should be before solar noon (which is at ~6 hours)
 	solarNoon, _ := ExecuteFormula("solar_noon", ctx)
 	if !sofZmanShma.Before(solarNoon) {
-		t.Error("shaos(3, gra) should be before solar noon")
+		t.Error("proportional_hours(3, gra) should be before solar noon")
 	}
 
-	// shaos(4, gra) for tefila should be after shma
-	sofZmanTefila, _ := ExecuteFormula("shaos(4, gra)", ctx)
+	// proportional_hours(4, gra) for tefila should be after shma
+	sofZmanTefila, _ := ExecuteFormula("proportional_hours(4, gra)", ctx)
 	if !sofZmanTefila.After(sofZmanShma) {
-		t.Error("shaos(4, gra) should be after shaos(3, gra)")
+		t.Error("proportional_hours(4, gra) should be after proportional_hours(3, gra)")
 	}
 
 	// Verify proportional hours calculation
@@ -298,7 +298,7 @@ func TestShaosZmaniyos(t *testing.T) {
 	// Should be within 1 minute
 	diff := sofZmanShma.Sub(expectedShma).Abs()
 	if diff > time.Minute {
-		t.Errorf("shaos(3, gra) should match manual calculation, diff = %v", diff)
+		t.Errorf("proportional_hours(3, gra) should match manual calculation, diff = %v", diff)
 	}
 }
 
@@ -386,13 +386,13 @@ func TestRealWorldFormulas(t *testing.T) {
 		{"Alos Hashachar (72 min)", "sunrise - 72min"},
 		{"Alos Hashachar (16.1°)", "solar(16.1, before_sunrise)"},
 		{"Misheyakir (10.2°)", "solar(10.2, before_sunrise)"},
-		{"Sof Zman Shma GRA", "shaos(3, gra)"},
-		{"Sof Zman Shma MGA", "shaos(3, mga)"},
-		{"Sof Zman Tefila GRA", "shaos(4, gra)"},
+		{"Sof Zman Shma GRA", "proportional_hours(3, gra)"},
+		{"Sof Zman Shma MGA", "proportional_hours(3, mga)"},
+		{"Sof Zman Tefila GRA", "proportional_hours(4, gra)"},
 		{"Chatzos", "midpoint(sunrise, sunset)"},
-		{"Mincha Gedola", "shaos(6.5, gra)"},
-		{"Mincha Ketana", "shaos(9.5, gra)"},
-		{"Plag HaMincha", "shaos(10.75, gra)"},
+		{"Mincha Gedola", "proportional_hours(6.5, gra)"},
+		{"Mincha Ketana", "proportional_hours(9.5, gra)"},
+		{"Plag HaMincha", "proportional_hours(10.75, gra)"},
 		{"Tzeis 8.5°", "solar(8.5, after_sunset)"},
 		{"Tzeis 72 min", "sunset + 72min"},
 	}
@@ -422,7 +422,7 @@ func TestExecuteFormulaSet(t *testing.T) {
 	formulas := map[string]string{
 		"alos_72":   "sunrise - 72min",
 		"sunrise":   "sunrise",
-		"shma_gra":  "shaos(3, gra)",
+		"shma_gra":  "proportional_hours(3, gra)",
 		"chatzos":   "midpoint(sunrise, sunset)",
 		"sunset":    "sunset",
 		"tzeis_72":  "sunset + 72min",

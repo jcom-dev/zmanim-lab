@@ -14,7 +14,8 @@ export interface PreviewLocation {
 
 interface PreviewResult {
   key: string;
-  name: string;
+  english_name: string;
+  hebrew_name: string;
   time: string | null;
   error?: string;
 }
@@ -23,9 +24,10 @@ interface AlgorithmPreviewProps {
   zmanim: PublisherZman[];
   location: PreviewLocation;
   selectedDate: Date;
+  displayLanguage?: 'hebrew' | 'english' | 'both';
 }
 
-export function AlgorithmPreview({ zmanim, location, selectedDate }: AlgorithmPreviewProps) {
+export function AlgorithmPreview({ zmanim, location, selectedDate, displayLanguage = 'both' }: AlgorithmPreviewProps) {
   const api = useApi();
   const [preview, setPreview] = useState<PreviewResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -64,7 +66,8 @@ export function AlgorithmPreview({ zmanim, location, selectedDate }: AlgorithmPr
           });
           return {
             key: zman.zman_key,
-            name: zman.english_name,
+            english_name: zman.english_name,
+            hebrew_name: zman.hebrew_name,
             time: result.result || result.time || null,
           };
         })
@@ -76,7 +79,8 @@ export function AlgorithmPreview({ zmanim, location, selectedDate }: AlgorithmPr
         } else {
           return {
             key: enabledZmanim[index].zman_key,
-            name: enabledZmanim[index].english_name,
+            english_name: enabledZmanim[index].english_name,
+            hebrew_name: enabledZmanim[index].hebrew_name,
             time: null,
             error: result.reason?.message || 'Error',
           };
@@ -116,14 +120,14 @@ export function AlgorithmPreview({ zmanim, location, selectedDate }: AlgorithmPr
   return (
     <Card data-testid="algorithm-preview">
       <CardHeader className="pb-2">
-        <CardTitle className="text-base">Live Preview</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {/* Location info */}
-        <div className="text-xs text-muted-foreground">
-          {location.displayName}
+        <div className="flex items-center justify-between gap-4">
+          <CardTitle className="text-base shrink-0">Live Preview</CardTitle>
+          <div className="text-sm text-muted-foreground text-right truncate min-w-0">
+            {location.displayName}
+          </div>
         </div>
-
+      </CardHeader>
+      <CardContent>
         {loading && (
           <div className="text-center py-4 text-muted-foreground">
             Calculating...
@@ -145,28 +149,32 @@ export function AlgorithmPreview({ zmanim, location, selectedDate }: AlgorithmPr
         )}
 
         {!loading && !error && preview.length > 0 && (
-          <div className="space-y-3">
-            {preview.map((item) => (
-              <div
-                key={item.key}
-                className="flex justify-between items-center py-2 border-b border-border last:border-0"
-                data-testid={`preview-${item.key}`}
-              >
-                <div className="font-medium text-foreground text-sm truncate max-w-[60%]">
-                  {item.name}
-                </div>
-                {item.error ? (
-                  <div className="text-sm text-destructive">Error</div>
-                ) : item.time ? (
-                  <div className="text-lg font-mono text-primary">
-                    {formatTime(item.time)}
-                  </div>
-                ) : (
-                  <div className="text-sm text-muted-foreground">--:--</div>
-                )}
-              </div>
-            ))}
-          </div>
+          <table className="w-full">
+            <tbody>
+              {preview.map((item) => (
+                <tr
+                  key={item.key}
+                  className="border-b border-border last:border-0"
+                  data-testid={`preview-${item.key}`}
+                >
+                  <td className={`py-2 pr-4 font-medium text-foreground text-sm ${displayLanguage === 'hebrew' ? 'font-hebrew text-right' : ''}`}>
+                    {displayLanguage === 'hebrew' ? item.hebrew_name : item.english_name}
+                  </td>
+                  <td className="py-2 text-right whitespace-nowrap">
+                    {item.error ? (
+                      <span className="text-sm text-destructive">Error</span>
+                    ) : item.time ? (
+                      <span className="text-lg font-mono text-primary">
+                        {formatTime(item.time)}
+                      </span>
+                    ) : (
+                      <span className="text-sm text-muted-foreground">--:--</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         )}
       </CardContent>
     </Card>

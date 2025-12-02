@@ -526,7 +526,7 @@ func (h *Handlers) GetZmanMethods(w http.ResponseWriter, r *http.Request) {
 		{
 			"id":          "proportional",
 			"name":        "Proportional Hours",
-			"description": "Calculated based on shaos zmaniyos (proportional hours of the day)",
+			"description": "Calculated based on proportional hours of the day",
 			"parameters": []map[string]interface{}{
 				{
 					"name":        "hours",

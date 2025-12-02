@@ -27,7 +27,8 @@ Single epic delivering complete Zmanim Lab MVP - a multi-publisher platform for 
 | **Epic 1: Zmanim Lab MVP** | 11 | FR1-FR42 | COMPLETED |
 | **Epic 2: Publisher User Management** | 13 | FR43-FR66 | COMPLETED |
 | **Epic 3: Consolidation & Quality** | 5 | Internal (0 FRs) | COMPLETED |
-| **Epic 4: Algorithm Editor + AI** | 14 | FR67-FR95+ | CURRENT |
+| **Epic 4: Algorithm Editor + AI** | 14 | FR67-FR95+ | COMPLETED |
+| **Epic 5: DSL Editor Experience & Zman Management** | 11 | FR96-FR113 | CURRENT |
 
 ---
 
@@ -809,7 +810,7 @@ See: [epic-3-consolidation-quality.md](epic-3-consolidation-quality.md)
 
 ## Epic 4: Intuitive Zmanim Algorithm Editor with AI-Powered DSL
 
-**Status:** CURRENT SPRINT
+**Status:** COMPLETED (2025-12-02)
 **Stories:** 14 (4.0 - 4.13)
 **FRs:** FR67-FR95+ (Algorithm Editor Enhancement)
 
@@ -892,5 +893,762 @@ See detailed specifications:
 
 ---
 
+## Epic 5: DSL Editor Experience & Zman Management
+
+**Status:** CURRENT SPRINT
+**Stories:** 11 (5.0 - 5.10)
+**FRs:** FR96-FR113 (Editor Experience & Zman Management)
+
+**Goal:** Deliver a "hand-holding" DSL editor experience for non-technical users, plus publisher zman customization and new zman request workflow.
+
+**User Value:** A rabbi who knows halacha but not programming can define formulas in under 30 seconds with zero confusion. Publishers can customize zman names and request new zmanim, creating a community-driven master registry.
+
+See detailed specifications:
+- [ux-dsl-editor-inline-guidance.md](ux-dsl-editor-inline-guidance.md)
+
+---
+
+### Story 5.0: Database Schema for Publisher Aliases & Zman Requests
+
+**As a** developer,
+**I want** the database schema extended for publisher zman aliases and enhanced zman requests,
+**So that** we have the data layer for all Epic 5 features.
+
+**Acceptance Criteria:**
+
+**Given** the migration is applied
+**When** I query the database
+**Then** the `publisher_zman_aliases` table exists with:
+- `id` (UUID, PK)
+- `publisher_id` (FK to publishers)
+- `publisher_zman_id` (FK to publisher_zmanim)
+- `custom_hebrew_name` (TEXT, required)
+- `custom_english_name` (TEXT, required)
+- `custom_transliteration` (TEXT, optional)
+- `is_active` (BOOLEAN, default true)
+- `created_at`, `updated_at` (TIMESTAMPTZ)
+- UNIQUE constraint on (publisher_id, publisher_zman_id)
+
+**And** the `zman_registry_requests` table is enhanced with:
+- `transliteration` (TEXT)
+- `description` (TEXT)
+- `halachic_notes` (TEXT)
+- `halachic_source` (TEXT)
+- `publisher_email` (TEXT)
+- `publisher_name` (TEXT)
+- `auto_add_on_approval` (BOOLEAN, default true)
+
+**And** the `zman_request_tags` table exists with:
+- `id` (UUID, PK)
+- `request_id` (FK to zman_registry_requests)
+- `tag_id` (FK to zman_tags, nullable for new tag requests)
+- `requested_tag_name` (TEXT, for new tag requests)
+- `requested_tag_type` (TEXT, constrained to valid types)
+- `is_new_tag_request` (BOOLEAN)
+- CHECK constraint ensuring either tag_id or requested_tag_name is set
+
+**Prerequisites:** None (first story of Epic 5)
+
+**Technical Notes:**
+- Create migration `00000000000023_publisher_zman_aliases.sql`
+- Create migration `00000000000024_enhance_zman_registry_requests.sql`
+- Regenerate SQLc code after migrations
+- Add appropriate indexes for query performance
+
+**FRs:** Infrastructure for FR96-FR115
+
+---
+
+### Story 5.1: Human-Friendly Error Messages
+
+**As a** non-technical publisher,
+**I want** error messages that explain what's wrong in plain language,
+**So that** I can fix formula errors without understanding programming jargon.
+
+**Acceptance Criteria:**
+
+**Given** I type an invalid formula like `sunrise solar 11 before`
+**When** the validation runs
+**Then** I see a friendly error like:
+- Headline: "Oops! `solar` needs parentheses to work."
+- Suggestion: "Try: `solar(16.1, before_sunrise)`"
+- An "Insert this example" button
+
+**Given** I type `solar(120, before_sunrise)` (degrees too high)
+**When** the validation runs
+**Then** I see:
+- Headline: "120° is too high."
+- Explanation: "The sun can only be 0-90° below the horizon."
+- Suggestion: "Common values: 8.5° (tzeis), 16.1° (alos), 18° (astronomical)"
+
+**Given** I type `solar(16.1)` (missing argument)
+**When** the validation runs
+**Then** I see:
+- Headline: "Almost there! `solar()` needs two things."
+- Explanation: "A number for degrees AND a direction."
+- Example with parameter breakdown
+
+**Given** I type an unknown primitive like `sunrise2`
+**When** the validation runs
+**Then** I see:
+- Headline: "I don't recognize 'sunrise2'."
+- Suggestion: "Did you mean `sunrise`?"
+
+**Given** the backend returns an error with a suggestion
+**When** the frontend displays it
+**Then** the backend suggestion is shown (not overridden by frontend mapping)
+
+**Prerequisites:** Story 5.0
+
+**Technical Notes:**
+- Create `web/lib/error-humanizer.ts` with pattern matching
+- Modify backend validator to include error codes
+- Create `HumanErrorDisplay.tsx` component
+- Integrate with existing error display in CodeMirrorDSLEditor
+- Map all common errors per UX spec Appendix A
+
+**FRs:** FR96 (Human-friendly validation feedback)
+
+---
+
+### Story 5.2: Contextual Tooltips in DSL Editor
+
+**As a** non-technical publisher,
+**I want** helpful hints that appear exactly where my cursor is,
+**So that** I know what values to type without looking at documentation.
+
+**Acceptance Criteria:**
+
+**Given** my cursor is inside `solar(` after the opening parenthesis
+**When** I pause for 100ms
+**Then** a tooltip appears showing:
+- Title: "📐 Degrees: Sun angle below horizon (0-90)"
+- Common values: 8.5° (tzeis), 11° (misheyakir), 16.1° (alos), 18° (astronomical)
+- "Type a number, e.g., 16.1"
+
+**Given** my cursor is after the first comma in `solar(16.1,`
+**When** I pause for 100ms
+**Then** a tooltip appears showing:
+- Title: "🧭 Direction: When does this angle occur?"
+- Clickable buttons: before_sunrise, after_sunset, before_noon, after_noon
+- Clicking a button inserts that value
+
+**Given** my cursor is inside `proportional_hours(`
+**When** I pause for 100ms
+**Then** a tooltip appears showing hour values (3, 4, 6, 9.5, 10.75) with their meanings
+
+**Given** I press Escape or click outside the tooltip
+**When** the tooltip is visible
+**Then** the tooltip dismisses
+
+**Given** I click an option in the tooltip
+**When** it inserts the value
+**Then** the tooltip dismisses and cursor advances
+
+**Given** I'm on mobile (touch interface)
+**When** I tap in a parameter position
+**Then** the tooltip appears and I can tap options to insert
+
+**Prerequisites:** Story 5.1
+
+**Technical Notes:**
+- Create `web/lib/dsl-context-helper.ts` to parse cursor position context
+- Create `web/components/editor/ContextualTooltip.tsx`
+- Use CodeMirror `EditorView.updateListener` for cursor tracking
+- Position tooltip relative to cursor coordinates
+- Leverage existing `halachic-glossary.ts` for content
+- Ensure keyboard accessibility (arrow key navigation)
+
+**FRs:** FR97 (Contextual inline guidance)
+
+---
+
+### Story 5.3: Smart Placeholders with Real Examples
+
+**As a** non-technical publisher,
+**I want** function templates to show real examples instead of abstract placeholders,
+**So that** I can immediately understand the correct format.
+
+**Acceptance Criteria:**
+
+**Given** I click "solar()" in the reference panel
+**When** the function is inserted
+**Then** the editor shows `solar(16.1, before_sunrise)` (not `solar(degrees, direction)`)
+**And** the `16.1` is selected/highlighted so I can immediately type my value
+
+**Given** I click "proportional_hours()" in the reference panel
+**When** the function is inserted
+**Then** the editor shows `proportional_hours(4, gra)` (not `proportional_hours(hours, base)`)
+**And** the `4` is selected
+
+**Given** I have inserted a function with example values
+**When** I press Tab
+**Then** the cursor moves to the next parameter (e.g., from degrees to direction)
+**And** the contextual tooltip appears for that parameter
+
+**Given** I hover over a function in the reference panel
+**When** the info appears
+**Then** I see "Quick insert:" with clickable chips for common values (e.g., [8.5°] [11°] [16.1°] [18°])
+
+**Prerequisites:** Story 5.2
+
+**Technical Notes:**
+- Modify `web/lib/dsl-reference-data.ts` to include `realWorldExample` property
+- Update reference panel insert behavior to use examples
+- Implement Tab-to-next-parameter using CodeMirror field markers
+- Add quick-insert chips to reference panel entries
+
+**FRs:** FR98 (Smart placeholders with examples)
+
+---
+
+### Story 5.4: Publisher Zman Alias API
+
+**As a** publisher,
+**I want** to create custom names for zmanim in my algorithm,
+**So that** my community sees familiar terminology while the system maintains canonical references.
+
+**Acceptance Criteria:**
+
+**Given** I am an authenticated publisher with a published zman
+**When** I call `PUT /api/v1/publisher/zmanim/{zmanKey}/alias` with:
+```json
+{
+  "custom_hebrew_name": "עמוד השחר",
+  "custom_english_name": "Dawn Column",
+  "custom_transliteration": "Amud HaShachar"
+}
+```
+**Then** the alias is created/updated
+**And** I receive a 200 response with the alias details including canonical names
+
+**Given** I have an alias for a zman
+**When** I call `GET /api/v1/publisher/zmanim/{zmanKey}/alias`
+**Then** I receive both my custom name AND the canonical master registry name
+
+**Given** I have an alias for a zman
+**When** I call `DELETE /api/v1/publisher/zmanim/{zmanKey}/alias`
+**Then** the alias is removed
+**And** the zman reverts to showing canonical names
+
+**Given** I have multiple aliases
+**When** I call `GET /api/v1/publisher/zmanim/aliases`
+**Then** I receive all my aliases with both custom and canonical names
+
+**Given** a user views my zmanim
+**When** the API returns zman data
+**Then** both the custom name (if exists) and canonical name are included
+
+**Prerequisites:** Story 5.0
+
+**Technical Notes:**
+- Create `api/internal/handlers/publisher_aliases.go`
+- Add SQLc queries for alias CRUD operations
+- Include canonical names in responses from `master_zmanim_registry`
+- Register routes in publisher router
+
+**FRs:** FR99 (Publisher zman custom naming), FR100 (Canonical name visibility)
+
+---
+
+### Story 5.5: Publisher Zman Alias UI
+
+**As a** publisher,
+**I want** to rename zmanim in the Advanced DSL editor,
+**So that** I can customize display names while seeing the original canonical name.
+
+**Acceptance Criteria:**
+
+**Given** I am editing a zman in Advanced DSL mode
+**When** I view the zman settings
+**Then** I see a "Custom Display Name" section (not visible in Guided Builder)
+
+**Given** I am in the Custom Display Name section
+**When** I see the current state
+**Then** I see the canonical name from master registry displayed as "Original: [name]"
+
+**Given** I want to rename a zman
+**When** I enter custom Hebrew name, English name, and transliteration
+**Then** I can save the alias
+**And** the canonical name remains visible in a subtle "Original: X" label
+
+**Given** I have a custom name set
+**When** I view the zman card in my algorithm list
+**Then** I see my custom name prominently with canonical name in parentheses or subtitle
+
+**Given** I want to revert to canonical naming
+**When** I click "Remove Custom Name" or clear all fields
+**Then** the alias is deleted and canonical names are used
+
+**Prerequisites:** Story 5.4
+
+**Technical Notes:**
+- Create `web/components/publisher/ZmanAliasEditor.tsx`
+- Modify `web/app/publisher/algorithm/edit/[zman_key]/page.tsx` to include alias editor
+- Only show in Advanced DSL mode (check for mode flag)
+- Show clear visual distinction between custom and canonical names
+
+**FRs:** FR99, FR100
+
+---
+
+### Story 5.6: Request New Zman API & Email Notifications
+
+**As a** publisher,
+**I want** to submit a request for a new zman to be added to the master registry,
+**So that** I can use zmanim not currently in the system.
+
+**Acceptance Criteria:**
+
+**Given** I am an authenticated publisher
+**When** I call `POST /api/v1/publisher/zmanim/request` with:
+```json
+{
+  "hebrew_name": "שקיעת החמה המאוחרת",
+  "english_name": "Late Sunset",
+  "time_category": "evening",
+  "justification": "Needed for Rabbeinu Tam calculations",
+  "existing_tag_ids": ["uuid-1", "uuid-2"],
+  "new_tag_requests": [
+    {"name": "Rabbeinu Tam", "tag_type": "shita", "description": "72 minutes method"}
+  ],
+  "formula_dsl": "sunset + 72min",
+  "auto_add_on_approval": true
+}
+```
+**Then** the request is created with status "pending"
+**And** I receive a confirmation email
+**And** admin receives a notification email with review link
+
+**Given** I submit a request with formula_dsl
+**When** the backend processes it
+**Then** the formula is validated
+**And** validation errors are returned if invalid (request still created but flagged)
+
+**Given** a request only requires hebrew_name, english_name, and justification
+**When** I submit with minimal fields
+**Then** the request is accepted (most fields optional)
+
+**Given** I want to see my pending requests
+**When** I call `GET /api/v1/publisher/zmanim/requests`
+**Then** I receive a list of my requests with status
+
+**Prerequisites:** Story 5.0
+
+**Technical Notes:**
+- Create `api/internal/handlers/zman_requests.go`
+- Add SQLc queries for request CRUD
+- Extend `email_service.go` with new templates:
+  - `TemplateZmanRequestSubmitted` (to publisher)
+  - `TemplateAdminNewZmanRequest` (to admin)
+- Validate formula_dsl if provided (but allow request even if invalid)
+
+**FRs:** FR101 (Request new zman), FR102 (Guided tag selection), FR103 (Optional formula), FR104 (Email on submission)
+
+---
+
+### Story 5.7: Request New Zman UI
+
+**As a** publisher,
+**I want** a guided form to request new zmanim,
+**So that** I can submit complete requests with proper tags and optional formulas.
+
+**Acceptance Criteria:**
+
+**Given** I navigate to `/publisher/zmanim/request`
+**When** the page loads
+**Then** I see a multi-step form with progress indicator
+
+**Given** I am on Step 1 (Names)
+**When** I fill in the form
+**Then** Hebrew Name and English Name are required (marked with *)
+**And** Transliteration is optional
+
+**Given** I am on Step 2 (Classification)
+**When** I see the tag selection
+**Then** I can browse existing tags by category (event, timing, behavior, shita, method)
+**And** I can multi-select tags
+**And** I see a "Request New Tag" button
+
+**Given** I click "Request New Tag"
+**When** the dialog opens
+**Then** I can enter: tag name, tag type (dropdown), description
+**And** the new tag request is attached to my zman request
+
+**Given** I am on Step 3 (Formula - Optional)
+**When** I see the formula input
+**Then** it's clearly marked as optional
+**And** I see a simplified DSL editor (same as advanced mode but smaller)
+**And** validation runs but doesn't block submission
+
+**Given** I am on Step 4 (Review & Submit)
+**When** I review my request
+**Then** I see all entered data formatted nicely
+**And** I must provide a Justification (required)
+**And** I see "Auto-add to my zmanim on approval" checkbox (default checked)
+
+**Given** I submit the request
+**When** the API responds successfully
+**Then** I see a success message with confirmation email notice
+**And** I'm redirected to my requests list
+
+**Prerequisites:** Story 5.6
+
+**Technical Notes:**
+- Create `web/app/publisher/zmanim/request/page.tsx`
+- Create `web/components/publisher/ZmanRequestForm.tsx` (multi-step)
+- Create `web/components/shared/TagSelector.tsx`
+- Use shadcn/ui Stepper pattern for multi-step
+- Reuse CodeMirror editor for formula input
+
+**FRs:** FR101-FR104
+
+---
+
+### Story 5.8: Admin Zman Request Review Page
+
+**As an** admin,
+**I want** a page to review and manage zman requests,
+**So that** I can approve or reject publisher submissions.
+
+**Acceptance Criteria:**
+
+**Given** I am logged in as admin
+**When** I navigate to `/admin/zmanim/requests`
+**Then** I see a table of zman requests with columns:
+- Publisher Name
+- Hebrew Name / English Name
+- Time Category
+- Status (pending/approved/rejected)
+- Submitted Date
+- Actions
+
+**Given** I view the requests table
+**When** I want to filter
+**Then** I can filter by status (pending, approved, rejected, all)
+**And** I can search by publisher name or zman name
+
+**Given** I click on a request row
+**When** the detail panel opens
+**Then** I see:
+- All submitted fields
+- Formula (if provided) with validation status
+- Requested tags (existing + new tag requests)
+- Justification
+
+**Given** I click "Approve"
+**When** the approval dialog opens
+**Then** I must set:
+- `zman_key` (admin-defined, unique identifier)
+- Sort order (where it appears in lists)
+- Whether to create requested new tags
+- Which tags to apply
+- Optional admin notes
+
+**Given** I submit approval
+**When** the backend processes it
+**Then** the zman is added to master registry
+**And** if auto_add_on_approval was true, it's added to publisher's zmanim
+**And** publisher receives approval email with zman details
+
+**Given** I click "Reject"
+**When** the rejection dialog opens
+**Then** I must provide a rejection reason
+**And** publisher receives rejection email with reason
+
+**Prerequisites:** Story 5.6
+
+**Technical Notes:**
+- Create `web/app/admin/zmanim/requests/page.tsx`
+- Create `web/components/admin/ZmanRequestReview.tsx`
+- Add admin API endpoints for approve/reject
+- Extend email_service with approval/rejection templates
+- Follow table patterns from existing admin pages
+
+**FRs:** FR105 (Admin review page), FR106 (Approval workflow), FR107 (Rejection with reason), FR108 (Email on decision)
+
+---
+
+### Story 5.9: Reference Panel Contextual Enhancements
+
+**As a** non-technical publisher,
+**I want** the reference panel to highlight where I am in my formula,
+**So that** I always know what documentation is relevant.
+
+**Acceptance Criteria:**
+
+**Given** my cursor is inside `solar(16.1, before_sunrise)`
+**When** I look at the reference panel
+**Then** the `solar()` function entry is highlighted
+**And** I see a "YOU ARE HERE" indicator on the current parameter
+
+**Given** my cursor is at the degrees position
+**When** I look at the highlighted solar() entry
+**Then** the degrees parameter is expanded with:
+- Description: "0-90 (sun angle below horizon)"
+- Quick-insert chips: [8.5°] [11°] [16.1°] [18°]
+
+**Given** I click a quick-insert chip like [16.1°]
+**When** the value is inserted
+**Then** it replaces the current parameter value in my formula
+**And** cursor moves to next parameter
+
+**Given** my cursor is not inside any function
+**When** I look at the reference panel
+**Then** no function is specially highlighted (normal state)
+
+**Prerequisites:** Story 5.3
+
+**Technical Notes:**
+- Modify `web/components/editor/DSLReferencePanel.tsx`
+- Use cursor context from `dsl-context-helper.ts`
+- Add highlighting state and "YOU ARE HERE" indicator
+- Add quick-insert chips to parameter descriptions
+- Wire chip clicks to editor insert behavior
+
+**FRs:** FR109 (Reference panel contextual highlighting)
+
+---
+
+### Story 5.10: Mandatory Publisher Logo with Image Editor
+
+**As a** publisher,
+**I want** a proper logo upload experience with cropping and sizing tools,
+**So that** my logo looks professional and consistent across the platform.
+
+**Acceptance Criteria:**
+
+**Given** I am creating or editing my publisher profile
+**When** I view the logo section
+**Then** logo upload is REQUIRED (marked with *)
+**And** I cannot save my profile without a logo
+
+**Given** I don't have a logo image
+**When** I click "Generate from Initials"
+**Then** the system creates a logo using my publisher name initials
+**And** I can customize the background color
+**And** the generated logo is displayed in preview
+
+**Given** I upload an image
+**When** the image loads
+**Then** I see an image editor with:
+- Crop selection box (drag to resize/reposition)
+- Zoom in/out controls (+/- buttons or slider)
+- Pan/drag the image within the crop area
+- Aspect ratio locked to 1:1 (square)
+- Preview of final result at actual display size
+
+**Given** I have positioned the crop area
+**When** I click "Apply"
+**Then** the image is cropped and resized to 200x200px (or defined standard size)
+**And** the preview updates to show the final logo
+
+**Given** the publisher name field exists
+**When** I view the field label
+**Then** it reads "Publisher Name" (not "Name")
+**And** helper text says "Organization or publication name (not personal name)"
+
+**Given** I try to enter what looks like a personal name (e.g., "Rabbi David Cohen")
+**When** I focus out of the field
+**Then** I see a warning: "This appears to be a personal name. Publisher names should be organization names like 'Beth Israel Congregation' or 'Chicago Rabbinical Council'"
+
+**Given** a publisher is displayed anywhere in the app
+**When** I see the publisher reference
+**Then** it uses "Publisher Name" terminology consistently (not just "Name")
+
+**Prerequisites:** None (can be done in parallel with other Epic 5 stories)
+
+**Technical Notes:**
+- Make `logo_url` required in publisher profile validation
+- Create `web/components/publisher/LogoEditor.tsx` using:
+  - react-image-crop or react-easy-crop library
+  - Canvas API for final crop/resize
+- Create `web/components/publisher/InitialsLogoGenerator.tsx`
+  - Generate SVG or canvas-based logo from initials
+  - Color picker for background
+- Standard logo size: 200x200px (stored), displayed at various sizes via CSS
+- Update all UI text from "Name" to "Publisher Name" where appropriate
+- Add name validation regex to detect likely personal names
+- Store cropped image to Supabase Storage or existing CDN
+
+**FRs:** FR110 (Mandatory logo), FR111 (Logo image editor), FR112 (Initials generator), FR113 (Publisher name not personal name)
+
+---
+
+### Story 5.11: Codebase Standards Enforcement & Technical Debt Reduction
+
+**As a** developer,
+**I want** the codebase to consistently follow established coding standards,
+**So that** the code is maintainable, debuggable, and new features don't introduce technical debt.
+
+**Risk Assessment:**
+- **Severity:** 🔴 HIGH - Technical debt compounds with every new feature
+- **Current Violations:** 225+ identified patterns violating standards
+- **Impact:** Auth inconsistencies, flaky tests, poor debugging, CI slowdowns
+
+**Acceptance Criteria:**
+
+**Given** the codebase has 73 raw `fetch()` calls in .tsx files
+**When** Story 5.11 Phase 1 is complete
+**Then** all `fetch()` calls use `useApi()` hook instead
+**And** running `grep -r "await fetch(" web/app web/components --include="*.tsx"` returns 0 results
+
+**Given** the codebase has ~100 `log.Printf/fmt.Printf` calls in handlers/services
+**When** Story 5.11 Phase 1 is complete
+**Then** all logging uses `slog` with structured context
+**And** running `grep -rE "log.Printf|fmt.Printf" api/internal/handlers api/internal/services --include="*.go"` returns 0 results
+
+**Given** the test suite has 52 `waitForTimeout` hard waits
+**When** Story 5.11 Phase 1 is complete
+**Then** all waits use deterministic strategies (waitForResponse, waitForSelector, waitForLoadState)
+**And** running `grep -r "waitForTimeout" tests/e2e --include="*.ts"` returns 0 results
+
+**Given** only 6/29 test files have parallel mode configured
+**When** Story 5.11 Phase 2 is complete
+**Then** all spec files include `test.describe.configure({ mode: 'parallel' })`
+
+**Given** ~80 handlers double-wrap API responses
+**When** Story 5.11 Phase 2 is complete
+**Then** handlers pass data directly to `RespondJSON()` (not wrapped in `map[string]interface{}`)
+
+**Given** no pre-commit hooks exist for standards enforcement
+**When** Story 5.11 Phase 3 is complete
+**Then** husky pre-commit hooks block commits with violations
+**And** CI pipeline includes standards check step
+
+**Prerequisites:** None (can run in parallel with other Epic 5 stories)
+
+**Technical Notes:**
+
+**Phase 1 - Critical Violations (8 points):**
+
+1. **Frontend: Migrate raw fetch() to useApi() (73 files)**
+   - Files to update: See grep output in coding-standards.md
+   - Pattern: Replace `await fetch(\`${API_BASE}...)` with `await api.get/post/put/delete(...)`
+   - Import: `import { useApi } from '@/lib/api-client';`
+   - Note: The hook handles auth headers and response unwrapping
+
+2. **Backend: Replace log.Printf with slog (handlers/services)**
+   - Files: `api/internal/handlers/*.go`, `api/internal/services/*.go`
+   - Pattern: Replace `log.Printf("msg: %v", err)` with `slog.Error("msg", "error", err, "context_key", contextValue)`
+   - Exempt: `api/cmd/*` (CLI tools can use log.Printf)
+
+3. **Tests: Replace waitForTimeout with deterministic waits (52 instances)**
+   - Pattern: Replace `await page.waitForTimeout(1000)` with:
+     - `await page.waitForLoadState('networkidle')` - wait for network
+     - `await page.waitForResponse(/api\/endpoint/)` - wait for specific API
+     - `await expect(page.getByText('...')).toBeVisible()` - wait for element
+   - Reference: `tests/e2e/utils/wait-helpers.ts` has utility functions
+
+**Phase 2 - High Priority (5 points):**
+
+4. **Tests: Add parallel mode to all spec files (23 files)**
+   - Add to top of each describe block: `test.describe.configure({ mode: 'parallel' });`
+   - Files missing: See glob output in audit
+
+5. **Backend: Fix double-wrapped responses (~80 handlers)**
+   - Pattern: Change `RespondJSON(w, r, status, map[string]interface{}{"key": data})`
+   - To: `RespondJSON(w, r, status, data)`
+   - The `RespondJSON` helper already wraps in `{data: ..., meta: ...}`
+
+**Phase 3 - Enforcement (3 points):**
+
+6. **Add pre-commit hooks**
+   - Install husky: `cd web && npm install husky --save-dev`
+   - Create `.husky/pre-commit` with standards checks
+   - See pattern in coding-standards.md
+
+7. **Add CI check**
+   - Add GitHub Actions step for standards validation
+   - Block PRs that introduce new violations
+
+**Validation Commands:**
+```bash
+# After Phase 1:
+grep -r "await fetch(" web/app web/components --include="*.tsx" | wc -l  # Should be 0
+grep -rE "log.Printf|fmt.Printf" api/internal/handlers api/internal/services --include="*.go" | wc -l  # Should be 0
+grep -r "waitForTimeout" tests/e2e --include="*.ts" | wc -l  # Should be 0
+
+# After Phase 2:
+# Check each spec file has parallel mode
+# Check handlers don't double-wrap responses
+
+# After Phase 3:
+# Verify pre-commit hooks run on commit
+# Verify CI blocks violating PRs
+```
+
+**FRs:** FR114 (Standards enforcement), FR115 (Technical debt reduction), FR116 (CI quality gates)
+
+---
+
+## Epic 5 FR Coverage Matrix
+
+| FR | Description | Story |
+|----|-------------|-------|
+| FR96 | Human-friendly validation error messages | 5.1 |
+| FR97 | Contextual inline tooltips | 5.2 |
+| FR98 | Smart placeholders with real examples | 5.3 |
+| FR99 | Publisher zman custom naming | 5.4, 5.5 |
+| FR100 | Canonical name always visible | 5.4, 5.5 |
+| FR101 | Request new zman feature | 5.6, 5.7 |
+| FR102 | Guided tag selection with new tag requests | 5.6, 5.7 |
+| FR103 | Optional formula with validation | 5.6, 5.7 |
+| FR104 | Email notifications (submit, to admin) | 5.6 |
+| FR105 | Admin zman request review page | 5.8 |
+| FR106 | Approval workflow with auto-add | 5.8 |
+| FR107 | Rejection with reason | 5.8 |
+| FR108 | Email notifications (approve/reject) | 5.8 |
+| FR109 | Reference panel contextual highlighting | 5.9 |
+| FR110 | Mandatory publisher logo | 5.10 |
+| FR111 | Logo image editor with crop/zoom | 5.10 |
+| FR112 | Generate logo from initials | 5.10 |
+| FR113 | Publisher name (not personal name) enforcement | 5.10 |
+| FR114 | Standards enforcement (useApi, slog, deterministic waits) | 5.11 |
+| FR115 | Technical debt reduction (225+ violations) | 5.11 |
+| FR116 | CI quality gates and pre-commit hooks | 5.11 |
+
+---
+
+## Epic 5 Dependency Chain
+
+```
+5.0 Database Schema (foundation)
+ ├── 5.1 Human Error Messages
+ │    └── 5.2 Contextual Tooltips
+ │         └── 5.3 Smart Placeholders
+ │              └── 5.9 Reference Panel Enhancements
+ ├── 5.4 Alias API
+ │    └── 5.5 Alias UI
+ ├── 5.6 Request API & Email
+ │    └── 5.7 Request UI
+ │         └── 5.8 Admin Review Page
+ ├── 5.10 Publisher Logo Editor (parallel track)
+ └── 5.11 Standards Enforcement (parallel track - no dependencies)
+```
+
+---
+
+## Epic 5 Summary
+
+**Epic 5: DSL Editor Experience & Zman Management**
+- **Stories:** 12
+- **FRs Covered:** FR96-FR116 (21 FRs)
+- **Sequence:** Schema → Error Messages → Tooltips → Placeholders → Aliases → Requests → Admin → Logo Editor + Standards (parallel)
+
+**After Epic 5 Completion:**
+- Non-technical publishers can write formulas with zero confusion (< 30 seconds to valid formula)
+- Publishers can customize zman names while preserving canonical references
+- Publishers can request new zmanim with guided tag selection
+- Admins can efficiently review and approve zman requests
+- The platform becomes community-driven with publisher contributions
+- All publishers have professional logos (mandatory with crop/zoom editor or initials generator)
+- Publisher names are organization names, not personal names
+- **Codebase follows established standards** (0 violations, enforced via pre-commit hooks and CI)
+- **Technical debt reduced** (225+ violations remediated)
+- **Test suite is deterministic** (no hard waits, all tests parallel-safe)
+
+---
+
 _Generated by BMAD Epic Workflow v1.0_
-_Last Updated: 2025-11-28_
+_Last Updated: 2025-12-02 (Test Architect Compliance Audit)_

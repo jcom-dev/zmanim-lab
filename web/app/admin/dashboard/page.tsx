@@ -7,6 +7,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import Link from 'next/link';
 
 import { API_BASE } from '@/lib/api';
+import { InfoTooltip } from '@/components/shared/InfoTooltip';
+import { ADMIN_TOOLTIPS } from '@/lib/tooltip-content';
 
 interface AdminStats {
   publishers: {
@@ -64,14 +66,19 @@ export default function AdminDashboardPage() {
     title,
     value,
     description,
+    tooltip,
   }: {
     title: string;
     value: string | number;
     description?: string;
+    tooltip?: string;
   }) => (
     <Card>
       <CardHeader className="pb-3">
-        <CardDescription>{title}</CardDescription>
+        <CardDescription className="flex items-center gap-1.5">
+          {title}
+          {tooltip && <InfoTooltip content={tooltip} side="top" />}
+        </CardDescription>
         <CardTitle className="text-3xl">{value}</CardTitle>
       </CardHeader>
       {description && (
@@ -147,16 +154,19 @@ export default function AdminDashboardPage() {
             title="Active Publishers"
             value={stats?.publishers.active ?? 0}
             description="Verified and publishing"
+            tooltip={ADMIN_TOOLTIPS.active_publishers}
           />
           <StatCard
             title="Pending Approval"
             value={stats?.publishers.pending ?? 0}
             description="Awaiting verification"
+            tooltip={ADMIN_TOOLTIPS.pending_approval}
           />
           <StatCard
             title="Suspended"
             value={stats?.publishers.suspended ?? 0}
             description="Currently suspended"
+            tooltip={ADMIN_TOOLTIPS.suspended_count}
           />
         </div>
       </div>
@@ -169,11 +179,13 @@ export default function AdminDashboardPage() {
             title="Total Calculations"
             value={stats?.calculations.total ?? 0}
             description="Zmanim calculations performed"
+            tooltip={ADMIN_TOOLTIPS.total_calculations}
           />
           <StatCard
             title="Cache Hit Ratio"
             value={`${((stats?.calculations.cache_hit_ratio ?? 0) * 100).toFixed(1)}%`}
             description="Percentage of cached responses"
+            tooltip={ADMIN_TOOLTIPS.cache_hit_ratio}
           />
         </div>
       </div>

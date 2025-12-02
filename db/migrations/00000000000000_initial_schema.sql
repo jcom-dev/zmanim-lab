@@ -390,7 +390,7 @@ CREATE INDEX idx_zmanim_templates_category ON zmanim_templates(category);
 CREATE INDEX idx_zmanim_templates_sort ON zmanim_templates(sort_order);
 
 COMMENT ON TABLE zmanim_templates IS 'System-wide default zmanim formulas that publishers can copy from';
-COMMENT ON COLUMN zmanim_templates.formula_dsl IS 'DSL formula string. shaos(N, gra) returns absolute time N hours after sunrise. shaos(N, mga) returns N hours after dawn (72min before sunrise).';
+COMMENT ON COLUMN zmanim_templates.formula_dsl IS 'DSL formula string. proportional_hours(N, gra) returns absolute time N hours after sunrise. proportional_hours(N, mga) returns N hours after dawn (72min before sunrise).';
 
 -- ============================================
 -- PART 7: PUBLISHER ZMANIM
@@ -445,7 +445,7 @@ CREATE TRIGGER publisher_zmanim_updated_at
     EXECUTE FUNCTION update_publisher_zmanim_updated_at();
 
 COMMENT ON TABLE publisher_zmanim IS 'Individual zmanim formulas for each publisher using DSL syntax';
-COMMENT ON COLUMN publisher_zmanim.formula_dsl IS 'DSL formula string. Examples: "shaos(3, gra)" for 3 hours after sunrise, "solar(16.1, before_sunrise)" for dawn';
+COMMENT ON COLUMN publisher_zmanim.formula_dsl IS 'DSL formula string. Examples: "proportional_hours(3, gra)" for 3 hours after sunrise, "solar(16.1, before_sunrise)" for dawn';
 COMMENT ON COLUMN publisher_zmanim.dependencies IS 'Auto-extracted @references from formula_dsl';
 COMMENT ON COLUMN publisher_zmanim.category IS 'essential = always enabled, optional = can toggle, custom = user created';
 COMMENT ON COLUMN publisher_zmanim.is_enabled IS 'Whether this zman is active in the algorithm (for preview/calculation)';

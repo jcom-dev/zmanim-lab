@@ -9,6 +9,8 @@ import Link from 'next/link';
 
 import { API_BASE } from '@/lib/api';
 import { getStatusBadgeClasses } from '@/lib/badge-colors';
+import { StatusTooltip } from '@/components/shared/InfoTooltip';
+import { STATUS_TOOLTIPS, ADMIN_TOOLTIPS } from '@/lib/tooltip-content';
 
 interface Publisher {
   id: string;
@@ -221,13 +223,23 @@ export default function AdminPublishersPage() {
                         </a>
                       </td>
                       <td className="py-4">
-                        <span
-                          className={`inline-block px-3 py-1 rounded-full text-xs font-semibold border ${getStatusBadgeClasses(
-                            publisher.status
-                          )}`}
+                        <StatusTooltip
+                          status={publisher.status}
+                          tooltip={
+                            publisher.status === 'verified' ? STATUS_TOOLTIPS.verified :
+                            publisher.status === 'pending' || publisher.status === 'pending_verification' ? STATUS_TOOLTIPS.pending_verification :
+                            publisher.status === 'suspended' ? STATUS_TOOLTIPS.suspended :
+                            ''
+                          }
                         >
-                          {publisher.status}
-                        </span>
+                          <span
+                            className={`inline-block px-3 py-1 rounded-full text-xs font-semibold border ${getStatusBadgeClasses(
+                              publisher.status
+                            )}`}
+                          >
+                            {publisher.status}
+                          </span>
+                        </StatusTooltip>
                       </td>
                       <td className="py-4 text-sm text-muted-foreground">
                         {new Date(publisher.created_at).toLocaleDateString()}
@@ -240,31 +252,37 @@ export default function AdminPublishersPage() {
                             </Button>
                           </Link>
                           {(publisher.status === 'pending' || publisher.status === 'pending_verification') && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleStatusChange(publisher.id, 'verify')}
-                            >
-                              Verify
-                            </Button>
+                            <StatusTooltip status="verify" tooltip={ADMIN_TOOLTIPS.verify_action}>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleStatusChange(publisher.id, 'verify')}
+                              >
+                                Verify
+                              </Button>
+                            </StatusTooltip>
                           )}
                           {publisher.status === 'verified' && (
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              onClick={() => handleStatusChange(publisher.id, 'suspend')}
-                            >
-                              Suspend
-                            </Button>
+                            <StatusTooltip status="suspend" tooltip={ADMIN_TOOLTIPS.suspend_action}>
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                onClick={() => handleStatusChange(publisher.id, 'suspend')}
+                              >
+                                Suspend
+                              </Button>
+                            </StatusTooltip>
                           )}
                           {publisher.status === 'suspended' && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleStatusChange(publisher.id, 'reactivate')}
-                            >
-                              Reactivate
-                            </Button>
+                            <StatusTooltip status="reactivate" tooltip={ADMIN_TOOLTIPS.reactivate_action}>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleStatusChange(publisher.id, 'reactivate')}
+                              >
+                                Reactivate
+                              </Button>
+                            </StatusTooltip>
                           )}
                         </div>
                       </td>
