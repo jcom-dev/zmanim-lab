@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"regexp"
 	"strings"
@@ -123,7 +123,7 @@ func (h *Handlers) GetPublisherZmanim(w http.ResponseWriter, r *http.Request) {
 	publisherID := pc.PublisherID
 
 	// Log the publisher ID being queried
-	log.Printf("INFO fetching zmanim publisher_id=%s", publisherID)
+	slog.Info("fetching zmanim", "publisher_id", publisherID)
 
 	// Query with linked zmanim resolution
 	query := `
@@ -166,7 +166,7 @@ func (h *Handlers) GetPublisherZmanim(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := h.db.Pool.Query(ctx, query, publisherID)
 	if err != nil {
-		log.Printf("ERROR failed to fetch zmanim error=%v publisher_id=%s", err, publisherID)
+		slog.Error("failed to fetch zmanim", "error", err, "publisher_id", publisherID)
 		RespondInternalError(w, r, "Failed to fetch zmanim")
 		return
 	}
@@ -185,7 +185,7 @@ func (h *Handlers) GetPublisherZmanim(w http.ResponseWriter, r *http.Request) {
 			&z.IsEventZman, &tagsJSON, &z.IsLinked, &z.LinkedSourcePublisherName, &z.LinkedSourceIsDeleted,
 		)
 		if err != nil {
-			log.Printf("ERROR failed to scan zman error=%v publisher_id=%s", err, publisherID)
+			slog.Error("failed to scan zman", "error", err, "publisher_id", publisherID)
 			RespondInternalError(w, r, "Failed to fetch zmanim")
 			return
 		}
@@ -202,7 +202,7 @@ func (h *Handlers) GetPublisherZmanim(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Log the result count
-	log.Printf("INFO fetched zmanim count=%d publisher_id=%s", len(zmanim), publisherID)
+	slog.Info("fetched zmanim", "count", len(zmanim), "publisher_id", publisherID)
 
 	RespondJSON(w, r, http.StatusOK, zmanim)
 }
@@ -497,28 +497,28 @@ func (h *Handlers) UpdatePublisherZman(w http.ResponseWriter, r *http.Request) {
 	// Read and log the raw body for debugging
 	bodyBytes, readErr := io.ReadAll(r.Body)
 	if readErr != nil {
-		log.Printf("ERROR [UpdatePublisherZman] Failed to read body: %v", readErr)
+		slog.Error("UpdatePublisherZman: failed to read body", "error", readErr)
 		RespondBadRequest(w, r, "Failed to read request body")
 		return
 	}
-	log.Printf("DEBUG [UpdatePublisherZman] Raw body for zman %s: %s", zmanKey, string(bodyBytes))
+	slog.Debug("UpdatePublisherZman: raw body", "zman_key", zmanKey, "body", string(bodyBytes))
 
 	var req UpdateZmanRequest
 	if err := json.Unmarshal(bodyBytes, &req); err != nil {
-		log.Printf("ERROR [UpdatePublisherZman] Failed to decode body: %v", err)
+		slog.Error("UpdatePublisherZman: failed to decode body", "error", err)
 		RespondBadRequest(w, r, "Invalid request body")
 		return
 	}
 
-	log.Printf("INFO [UpdatePublisherZman] Request for zman %s: Category=%v, IsEnabled=%v, IsPublished=%v",
-		zmanKey, req.Category, req.IsEnabled, req.IsPublished)
+	slog.Info("UpdatePublisherZman: request",
+		"zman_key", zmanKey, "category", req.Category, "is_enabled", req.IsEnabled, "is_published", req.IsPublished)
 
 	// At least one field must be provided
 	if req.HebrewName == nil && req.EnglishName == nil && req.FormulaDSL == nil &&
 		req.AIExplanation == nil && req.PublisherComment == nil &&
 		req.IsEnabled == nil && req.IsVisible == nil && req.IsPublished == nil &&
 		req.Category == nil && req.SortOrder == nil {
-		log.Printf("ERROR [UpdatePublisherZman] No fields to update")
+		slog.Error("UpdatePublisherZman: no fields to update")
 		RespondBadRequest(w, r, "No fields to update")
 		return
 	}
@@ -920,7 +920,7 @@ func (h *Handlers) GetVerifiedPublishers(w http.ResponseWriter, r *http.Request)
 
 	rows, err := h.db.Pool.Query(ctx, query, publisherID)
 	if err != nil {
-		log.Printf("ERROR failed to fetch verified publishers error=%v", err)
+		slog.Error("failed to fetch verified publishers", "error", err)
 		RespondInternalError(w, r, "Failed to fetch publishers")
 		return
 	}
@@ -931,7 +931,7 @@ func (h *Handlers) GetVerifiedPublishers(w http.ResponseWriter, r *http.Request)
 		var p VerifiedPublisher
 		err := rows.Scan(&p.ID, &p.Name, &p.Organization, &p.LogoURL, &p.ZmanimCount)
 		if err != nil {
-			log.Printf("ERROR failed to scan publisher error=%v", err)
+			slog.Error("failed to scan publisher", "error", err)
 			RespondInternalError(w, r, "Failed to fetch publishers")
 			return
 		}
@@ -998,7 +998,7 @@ func (h *Handlers) GetPublisherZmanimForLinking(w http.ResponseWriter, r *http.R
 
 	rows, err := h.db.Pool.Query(ctx, query, sourcePublisherID, currentPublisherID)
 	if err != nil {
-		log.Printf("ERROR failed to fetch zmanim for linking error=%v", err)
+		slog.Error("failed to fetch zmanim for linking", "error", err)
 		RespondInternalError(w, r, "Failed to fetch zmanim")
 		return
 	}
@@ -1010,7 +1010,7 @@ func (h *Handlers) GetPublisherZmanimForLinking(w http.ResponseWriter, r *http.R
 		err := rows.Scan(&z.ID, &z.PublisherID, &z.ZmanKey, &z.HebrewName, &z.EnglishName,
 			&z.FormulaDSL, &z.Category, &z.SourceType, &z.PublisherName)
 		if err != nil {
-			log.Printf("ERROR failed to scan zman error=%v", err)
+			slog.Error("failed to scan zman", "error", err)
 			RespondInternalError(w, r, "Failed to fetch zmanim")
 			return
 		}
@@ -1081,7 +1081,7 @@ func (h *Handlers) CreateZmanFromPublisher(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	if err != nil {
-		log.Printf("ERROR failed to fetch source zman error=%v", err)
+		slog.Error("failed to fetch source zman", "error", err)
 		RespondInternalError(w, r, "Failed to fetch source zman")
 		return
 	}
@@ -1146,7 +1146,7 @@ func (h *Handlers) CreateZmanFromPublisher(w http.ResponseWriter, r *http.Reques
 			RespondBadRequest(w, r, fmt.Sprintf("Zman with key '%s' already exists", sourceZman.ZmanKey))
 			return
 		}
-		log.Printf("ERROR failed to create zman from publisher error=%v", err)
+		slog.Error("failed to create zman from publisher", "error", err)
 		RespondInternalError(w, r, "Failed to create zman")
 		return
 	}
