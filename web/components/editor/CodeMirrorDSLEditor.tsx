@@ -10,6 +10,10 @@ import { linter, Diagnostic } from '@codemirror/lint';
 import { AlertCircle, CheckCircle2, Code2, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { dslLanguage, dslHighlighting, DSL_PRIMITIVES, DSL_FUNCTIONS, DSL_KEYWORDS } from '@/lib/codemirror/dsl-language';
+import { humanizeError, type HumanError } from '@/lib/error-humanizer';
+import { getDSLContext, getTooltipData, type DSLContext } from '@/lib/dsl-context-helper';
+import { HumanErrorDisplay } from './HumanErrorDisplay';
+import { ContextualTooltip } from './ContextualTooltip';
 
 // Types
 export interface CodeMirrorDSLEditorRef {
@@ -35,6 +39,7 @@ interface CodeMirrorDSLEditorProps {
   zmanimKeys?: string[];
   disabled?: boolean;
   className?: string;
+  onNavigateToReference?: (section: string) => void;
 }
 
 // Custom completions for DSL
@@ -375,7 +380,7 @@ const editorThemeLight = EditorView.theme({
 
 export const CodeMirrorDSLEditor = forwardRef<CodeMirrorDSLEditorRef, CodeMirrorDSLEditorProps>(
   function CodeMirrorDSLEditor(
-    { value, onChange, onValidate, zmanimKeys = [], disabled = false, className },
+    { value, onChange, onValidate, zmanimKeys = [], disabled = false, className, onNavigateToReference },
     ref
   ) {
     const editorContainerRef = useRef<HTMLDivElement>(null);
@@ -384,7 +389,17 @@ export const CodeMirrorDSLEditor = forwardRef<CodeMirrorDSLEditorRef, CodeMirror
       valid: boolean;
       errors: ValidationError[];
       loading: boolean;
+      humanError?: HumanError;
     }>({ valid: true, errors: [], loading: false });
+
+    // Contextual tooltip state
+    const [tooltipState, setTooltipState] = useState<{
+      context: DSLContext;
+      position: { x: number; y: number } | null;
+      visible: boolean;
+    }>({ context: { type: 'unknown' }, position: null, visible: false });
+    const tooltipDebounceRef = useRef<NodeJS.Timeout | null>(null);
+    const emptyEditorTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     // Create linter that uses external validation
     const createLinter = useCallback(() => {
@@ -474,6 +489,53 @@ export const CodeMirrorDSLEditor = forwardRef<CodeMirrorDSLEditorRef, CodeMirror
         if (update.docChanged) {
           const newValue = update.state.doc.toString();
           onChangeRef.current(newValue);
+        }
+
+        // Handle cursor position changes for contextual tooltip
+        if (update.selectionSet || update.docChanged) {
+          // Clear any pending debounce
+          if (tooltipDebounceRef.current) {
+            clearTimeout(tooltipDebounceRef.current);
+          }
+          if (emptyEditorTimeoutRef.current) {
+            clearTimeout(emptyEditorTimeoutRef.current);
+          }
+
+          const pos = update.state.selection.main.head;
+          const doc = update.state.doc.toString();
+          const context = getDSLContext(doc, pos);
+
+          // Check if this context has tooltip data
+          const tooltipData = getTooltipData(context);
+
+          if (context.type === 'empty_editor') {
+            // Delay showing empty editor tooltip by 2 seconds
+            emptyEditorTimeoutRef.current = setTimeout(() => {
+              const coords = update.view.coordsAtPos(pos);
+              if (coords) {
+                setTooltipState({
+                  context,
+                  position: { x: coords.left, y: coords.top },
+                  visible: true,
+                });
+              }
+            }, 2000);
+          } else if (tooltipData) {
+            // Debounce tooltip appearance by 100ms
+            tooltipDebounceRef.current = setTimeout(() => {
+              const coords = update.view.coordsAtPos(pos);
+              if (coords) {
+                setTooltipState({
+                  context,
+                  position: { x: coords.left, y: coords.top },
+                  visible: true,
+                });
+              }
+            }, 100);
+          } else {
+            // Hide tooltip for unknown/operator contexts
+            setTooltipState(prev => ({ ...prev, visible: false }));
+          }
         }
       });
 
@@ -580,7 +642,7 @@ export const CodeMirrorDSLEditor = forwardRef<CodeMirrorDSLEditorRef, CodeMirror
     // Run validation separately for status display
     useEffect(() => {
       if (!onValidateRef.current || !value.trim()) {
-        setValidationState({ valid: true, errors: [], loading: false });
+        setValidationState({ valid: true, errors: [], loading: false, humanError: undefined });
         return;
       }
 
@@ -589,9 +651,14 @@ export const CodeMirrorDSLEditor = forwardRef<CodeMirrorDSLEditorRef, CodeMirror
       const timeout = setTimeout(async () => {
         try {
           const result = await onValidateRef.current!(value);
-          setValidationState({ ...result, loading: false });
+          // If there are errors, humanize the first one
+          const humanError = result.errors.length > 0
+            ? humanizeError(result.errors[0].message, value)
+            : undefined;
+          setValidationState({ ...result, loading: false, humanError });
         } catch {
-          setValidationState({ valid: false, errors: [{ message: 'Validation failed' }], loading: false });
+          const humanError = humanizeError('Validation failed', value);
+          setValidationState({ valid: false, errors: [{ message: 'Validation failed' }], loading: false, humanError });
         }
       }, 500);
 
@@ -638,23 +705,42 @@ export const CodeMirrorDSLEditor = forwardRef<CodeMirrorDSLEditorRef, CodeMirror
           )}
         />
 
-        {/* Error messages */}
-        {!validationState.valid && validationState.errors.length > 0 && (
-          <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 animate-in fade-in-0 slide-in-from-top-2 duration-200">
-            <h4 className="text-sm font-semibold text-destructive mb-2 flex items-center gap-2">
-              <AlertCircle className="h-4 w-4" />
-              Validation Errors
-            </h4>
-            <ul className="space-y-1.5">
-              {validationState.errors.map((error, i) => (
-                <li key={i} className="text-sm text-destructive/90 flex items-start gap-2 pl-6">
-                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-destructive mt-1.5 flex-shrink-0" />
-                  {error.message}
-                </li>
-              ))}
-            </ul>
-          </div>
+        {/* Human-friendly error display */}
+        {!validationState.valid && validationState.humanError && (
+          <HumanErrorDisplay
+            error={validationState.humanError}
+            onInsertExample={(code) => {
+              const view = editorViewRef.current;
+              if (view) {
+                view.dispatch({
+                  changes: { from: 0, to: view.state.doc.length, insert: code },
+                });
+                view.focus();
+              }
+            }}
+            onNavigateToReference={onNavigateToReference}
+          />
         )}
+
+        {/* Contextual tooltip */}
+        <ContextualTooltip
+          context={tooltipState.context}
+          position={tooltipState.position}
+          visible={tooltipState.visible}
+          onInsert={(value) => {
+            const view = editorViewRef.current;
+            if (view) {
+              const { from, to } = view.state.selection.main;
+              view.dispatch({
+                changes: { from, to, insert: value },
+                selection: { anchor: from + value.length },
+              });
+              view.focus();
+            }
+            setTooltipState(prev => ({ ...prev, visible: false }));
+          }}
+          onDismiss={() => setTooltipState(prev => ({ ...prev, visible: false }))}
+        />
 
         {/* Keyboard shortcuts hint */}
         <div className="flex items-center gap-4 text-xs text-muted-foreground">

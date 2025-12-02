@@ -13,6 +13,10 @@ import (
 type Querier interface {
 	AcceptInvitation(ctx context.Context, id string) error
 	AddMasterZmanFromRequest(ctx context.Context, id string) (AddMasterZmanFromRequestRow, error)
+	// Request a new tag for a zman request
+	AddZmanRequestNewTag(ctx context.Context, arg AddZmanRequestNewTagParams) (AddZmanRequestNewTagRow, error)
+	// Add an existing tag to a zman request
+	AddZmanRequestTag(ctx context.Context, arg AddZmanRequestTagParams) (AddZmanRequestTagRow, error)
 	AdminCountAlgorithms(ctx context.Context, dollar_1 string) (int64, error)
 	AdminCountPublishers(ctx context.Context, dollar_1 string) (int64, error)
 	AdminDeletePublisher(ctx context.Context, id string) error
@@ -26,6 +30,8 @@ type Querier interface {
 	// Admin Publisher Management --
 	AdminListPublishers(ctx context.Context, arg AdminListPublishersParams) ([]AdminListPublishersRow, error)
 	AdminUpdatePublisherStatus(ctx context.Context, arg AdminUpdatePublisherStatusParams) (AdminUpdatePublisherStatusRow, error)
+	// Approve a zman request
+	ApproveZmanRequest(ctx context.Context, arg ApproveZmanRequestParams) (ApproveZmanRequestRow, error)
 	// Publish algorithm --
 	ArchiveActiveAlgorithms(ctx context.Context, publisherID string) error
 	// Browse public zmanim --
@@ -47,6 +53,10 @@ type Querier interface {
 	// ZMAN REGISTRY REQUESTS
 	// ============================================
 	CreateZmanRegistryRequest(ctx context.Context, arg CreateZmanRegistryRequestParams) (CreateZmanRegistryRequestRow, error)
+	// Zman Request Queries
+	// Epic 5, Story 5.0: Enhanced Zman Registry Requests
+	// Create a new zman request from a publisher
+	CreateZmanRequest(ctx context.Context, arg CreateZmanRequestParams) (CreateZmanRequestRow, error)
 	CreateZmanVersion(ctx context.Context, arg CreateZmanVersionParams) (PublisherZmanVersion, error)
 	DeleteAllCities(ctx context.Context) error
 	DeleteCoverage(ctx context.Context, id string) error
@@ -54,6 +64,10 @@ type Querier interface {
 	DeleteInvitation(ctx context.Context, id string) error
 	DeletePublisher(ctx context.Context, id string) error
 	DeletePublisherZman(ctx context.Context, arg DeletePublisherZmanParams) (string, error)
+	// Delete an alias by publisher_id and zman_key
+	DeletePublisherZmanAlias(ctx context.Context, arg DeletePublisherZmanAliasParams) error
+	// Delete all tags for a zman request (used when updating request)
+	DeleteZmanRequestTags(ctx context.Context, requestID string) error
 	DeprecateAlgorithmVersion(ctx context.Context, arg DeprecateAlgorithmVersionParams) (int64, error)
 	ExpireInvitation(ctx context.Context, id string) error
 	GetAlgorithmByID(ctx context.Context, arg GetAlgorithmByIDParams) (GetAlgorithmByIDRow, error)
@@ -69,10 +83,14 @@ type Querier interface {
 	// MASTER REGISTRY QUERIES
 	// ============================================
 	GetAllMasterZmanim(ctx context.Context) ([]GetAllMasterZmanimRow, error)
+	// Get all active aliases for a publisher with canonical names included
+	GetAllPublisherZmanAliases(ctx context.Context, publisherID string) ([]GetAllPublisherZmanAliasesRow, error)
 	// ============================================
 	// TAG QUERIES
 	// ============================================
 	GetAllTags(ctx context.Context) ([]GetAllTagsRow, error)
+	// Get all zman requests (for admin) with optional status filter
+	GetAllZmanRequests(ctx context.Context, dollar_1 string) ([]GetAllZmanRequestsRow, error)
 	GetAstronomicalPrimitiveByName(ctx context.Context, variableName string) (AstronomicalPrimitive, error)
 	GetAstronomicalPrimitivesByCategory(ctx context.Context, category string) ([]AstronomicalPrimitive, error)
 	// Returns primitives with category for grouping in UI
@@ -98,6 +116,8 @@ type Querier interface {
 	GetOnboardingState(ctx context.Context, publisherID string) (PublisherOnboarding, error)
 	// Publisher Invitations --
 	GetPendingInvitations(ctx context.Context, publisherID pgtype.UUID) ([]GetPendingInvitationsRow, error)
+	// Get count of pending zman requests (for admin dashboard)
+	GetPendingZmanRequestCount(ctx context.Context) (int64, error)
 	GetPublisherActiveAlgorithm(ctx context.Context, publisherID string) (GetPublisherActiveAlgorithmRow, error)
 	GetPublisherAlgorithmSummary(ctx context.Context, publisherID string) (GetPublisherAlgorithmSummaryRow, error)
 	GetPublisherBasic(ctx context.Context, id string) (GetPublisherBasicRow, error)
@@ -119,9 +139,15 @@ type Querier interface {
 	GetPublisherFullByClerkUserID(ctx context.Context, clerkUserID *string) (GetPublisherFullByClerkUserIDRow, error)
 	// Team Management --
 	GetPublisherOwner(ctx context.Context, id string) (*string, error)
+	// Alias CRUD Queries
+	// Epic 5, Story 5.0: Publisher Zman Aliases
+	// Get a specific alias for a publisher's zman by zman_key
+	GetPublisherZmanAlias(ctx context.Context, arg GetPublisherZmanAliasParams) (GetPublisherZmanAliasRow, error)
 	// Get a specific zman by ID (for linking validation)
 	GetPublisherZmanByID(ctx context.Context, id string) (GetPublisherZmanByIDRow, error)
 	GetPublisherZmanByKey(ctx context.Context, arg GetPublisherZmanByKeyParams) (GetPublisherZmanByKeyRow, error)
+	// Get all zman requests for a specific publisher
+	GetPublisherZmanRequests(ctx context.Context, publisherID string) ([]GetPublisherZmanRequestsRow, error)
 	GetPublisherZmanWithRegistry(ctx context.Context, arg GetPublisherZmanWithRegistryParams) (GetPublisherZmanWithRegistryRow, error)
 	// Zmanim SQL Queries
 	// SQLc will generate type-safe Go code from these queries
@@ -144,8 +170,12 @@ type Querier interface {
 	GetZmanDefinitionByKey(ctx context.Context, key string) (GetZmanDefinitionByKeyRow, error)
 	// Zman Definitions (Global) --
 	GetZmanDefinitions(ctx context.Context) ([]GetZmanDefinitionsRow, error)
-	GetZmanRegistryRequestByID(ctx context.Context, id string) (ZmanRegistryRequest, error)
-	GetZmanRegistryRequests(ctx context.Context, status *string) ([]ZmanRegistryRequest, error)
+	GetZmanRegistryRequestByID(ctx context.Context, id string) (GetZmanRegistryRequestByIDRow, error)
+	GetZmanRegistryRequests(ctx context.Context, status *string) ([]GetZmanRegistryRequestsRow, error)
+	// Get a specific zman request by ID
+	GetZmanRequest(ctx context.Context, id string) (GetZmanRequestRow, error)
+	// Get all tags (existing and requested) for a zman request
+	GetZmanRequestTags(ctx context.Context, requestID string) ([]GetZmanRequestTagsRow, error)
 	GetZmanVersion(ctx context.Context, arg GetZmanVersionParams) (PublisherZmanVersion, error)
 	// ============================================
 	// VERSION HISTORY QUERIES
@@ -155,6 +185,8 @@ type Querier interface {
 	// Zmanim Templates --
 	GetZmanimTemplates(ctx context.Context) ([]ZmanimTemplate, error)
 	GetZmanimTemplatesByKeys(ctx context.Context, dollar_1 []string) ([]ZmanimTemplate, error)
+	// Get all of a publisher's zmanim with their aliases (if any)
+	GetZmanimWithAliases(ctx context.Context, publisherID string) ([]GetZmanimWithAliasesRow, error)
 	ImportZmanimFromRegistryByKeys(ctx context.Context, arg ImportZmanimFromRegistryByKeysParams) ([]ImportZmanimFromRegistryByKeysRow, error)
 	// Import from templates to publisher --
 	ImportZmanimFromTemplates(ctx context.Context, publisherID string) ([]ImportZmanimFromTemplatesRow, error)
@@ -171,6 +203,8 @@ type Querier interface {
 	// Bulk publish/unpublish zmanim --
 	PublishAllZmanim(ctx context.Context, publisherID string) error
 	PublishZmanimByKeys(ctx context.Context, arg PublishZmanimByKeysParams) error
+	// Reject a zman request
+	RejectZmanRequest(ctx context.Context, arg RejectZmanRequestParams) (RejectZmanRequestRow, error)
 	RestorePublisherZman(ctx context.Context, arg RestorePublisherZmanParams) (RestorePublisherZmanRow, error)
 	RollbackZmanToVersion(ctx context.Context, arg RollbackZmanToVersionParams) (RollbackZmanToVersionRow, error)
 	// Cities SQL Queries (Normalized Schema)
@@ -196,7 +230,9 @@ type Querier interface {
 	UpdatePublisherStatus(ctx context.Context, arg UpdatePublisherStatusParams) (UpdatePublisherStatusRow, error)
 	UpdatePublisherZman(ctx context.Context, arg UpdatePublisherZmanParams) (UpdatePublisherZmanRow, error)
 	UpdateZmanCurrentVersion(ctx context.Context, arg UpdateZmanCurrentVersionParams) error
-	UpdateZmanRegistryRequestStatus(ctx context.Context, arg UpdateZmanRegistryRequestStatusParams) (ZmanRegistryRequest, error)
+	UpdateZmanRegistryRequestStatus(ctx context.Context, arg UpdateZmanRegistryRequestStatusParams) (UpdateZmanRegistryRequestStatusRow, error)
+	// Create or update an alias for a publisher's zman
+	UpsertPublisherZmanAlias(ctx context.Context, arg UpsertPublisherZmanAliasParams) (PublisherZmanAlias, error)
 }
 
 var _ Querier = (*Queries)(nil)

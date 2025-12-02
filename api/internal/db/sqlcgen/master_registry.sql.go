@@ -1283,9 +1283,25 @@ FROM zman_registry_requests
 WHERE id = $1
 `
 
-func (q *Queries) GetZmanRegistryRequestByID(ctx context.Context, id string) (ZmanRegistryRequest, error) {
+type GetZmanRegistryRequestByIDRow struct {
+	ID                   string             `json:"id"`
+	PublisherID          string             `json:"publisher_id"`
+	RequestedKey         string             `json:"requested_key"`
+	RequestedHebrewName  string             `json:"requested_hebrew_name"`
+	RequestedEnglishName string             `json:"requested_english_name"`
+	RequestedFormulaDsl  *string            `json:"requested_formula_dsl"`
+	TimeCategory         string             `json:"time_category"`
+	Justification        string             `json:"justification"`
+	Status               string             `json:"status"`
+	ReviewedBy           *string            `json:"reviewed_by"`
+	ReviewedAt           pgtype.Timestamptz `json:"reviewed_at"`
+	ReviewerNotes        *string            `json:"reviewer_notes"`
+	CreatedAt            time.Time          `json:"created_at"`
+}
+
+func (q *Queries) GetZmanRegistryRequestByID(ctx context.Context, id string) (GetZmanRegistryRequestByIDRow, error) {
 	row := q.db.QueryRow(ctx, getZmanRegistryRequestByID, id)
-	var i ZmanRegistryRequest
+	var i GetZmanRegistryRequestByIDRow
 	err := row.Scan(
 		&i.ID,
 		&i.PublisherID,
@@ -1314,15 +1330,31 @@ WHERE status = COALESCE($1, status)
 ORDER BY created_at DESC
 `
 
-func (q *Queries) GetZmanRegistryRequests(ctx context.Context, status *string) ([]ZmanRegistryRequest, error) {
+type GetZmanRegistryRequestsRow struct {
+	ID                   string             `json:"id"`
+	PublisherID          string             `json:"publisher_id"`
+	RequestedKey         string             `json:"requested_key"`
+	RequestedHebrewName  string             `json:"requested_hebrew_name"`
+	RequestedEnglishName string             `json:"requested_english_name"`
+	RequestedFormulaDsl  *string            `json:"requested_formula_dsl"`
+	TimeCategory         string             `json:"time_category"`
+	Justification        string             `json:"justification"`
+	Status               string             `json:"status"`
+	ReviewedBy           *string            `json:"reviewed_by"`
+	ReviewedAt           pgtype.Timestamptz `json:"reviewed_at"`
+	ReviewerNotes        *string            `json:"reviewer_notes"`
+	CreatedAt            time.Time          `json:"created_at"`
+}
+
+func (q *Queries) GetZmanRegistryRequests(ctx context.Context, status *string) ([]GetZmanRegistryRequestsRow, error) {
 	rows, err := q.db.Query(ctx, getZmanRegistryRequests, status)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ZmanRegistryRequest{}
+	items := []GetZmanRegistryRequestsRow{}
 	for rows.Next() {
-		var i ZmanRegistryRequest
+		var i GetZmanRegistryRequestsRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.PublisherID,
@@ -1802,14 +1834,30 @@ type UpdateZmanRegistryRequestStatusParams struct {
 	ReviewerNotes *string `json:"reviewer_notes"`
 }
 
-func (q *Queries) UpdateZmanRegistryRequestStatus(ctx context.Context, arg UpdateZmanRegistryRequestStatusParams) (ZmanRegistryRequest, error) {
+type UpdateZmanRegistryRequestStatusRow struct {
+	ID                   string             `json:"id"`
+	PublisherID          string             `json:"publisher_id"`
+	RequestedKey         string             `json:"requested_key"`
+	RequestedHebrewName  string             `json:"requested_hebrew_name"`
+	RequestedEnglishName string             `json:"requested_english_name"`
+	RequestedFormulaDsl  *string            `json:"requested_formula_dsl"`
+	TimeCategory         string             `json:"time_category"`
+	Justification        string             `json:"justification"`
+	Status               string             `json:"status"`
+	ReviewedBy           *string            `json:"reviewed_by"`
+	ReviewedAt           pgtype.Timestamptz `json:"reviewed_at"`
+	ReviewerNotes        *string            `json:"reviewer_notes"`
+	CreatedAt            time.Time          `json:"created_at"`
+}
+
+func (q *Queries) UpdateZmanRegistryRequestStatus(ctx context.Context, arg UpdateZmanRegistryRequestStatusParams) (UpdateZmanRegistryRequestStatusRow, error) {
 	row := q.db.QueryRow(ctx, updateZmanRegistryRequestStatus,
 		arg.ID,
 		arg.Status,
 		arg.ReviewedBy,
 		arg.ReviewerNotes,
 	)
-	var i ZmanRegistryRequest
+	var i UpdateZmanRegistryRequestStatusRow
 	err := row.Scan(
 		&i.ID,
 		&i.PublisherID,

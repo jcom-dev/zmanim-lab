@@ -378,6 +378,23 @@ type PublisherRequest struct {
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 }
 
+// Custom display names for zmanim per publisher. Original master registry names remain accessible via master_zmanim_registry.
+type PublisherZmanAlias struct {
+	ID              string `json:"id"`
+	PublisherID     string `json:"publisher_id"`
+	PublisherZmanID string `json:"publisher_zman_id"`
+	// Publisher-specific Hebrew display name
+	CustomHebrewName string `json:"custom_hebrew_name"`
+	// Publisher-specific English display name
+	CustomEnglishName string `json:"custom_english_name"`
+	// Optional publisher-specific transliteration
+	CustomTransliteration *string `json:"custom_transliteration"`
+	// Whether this alias is currently in use
+	IsActive  bool      `json:"is_active"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
 // DEPRECATED: Use publisher_zman_events instead.
 type PublisherZmanDayType struct {
 	PublisherZmanID string    `json:"publisher_zman_id"`
@@ -559,6 +576,35 @@ type ZmanRegistryRequest struct {
 	ReviewedAt           pgtype.Timestamptz `json:"reviewed_at"`
 	ReviewerNotes        *string            `json:"reviewer_notes"`
 	CreatedAt            time.Time          `json:"created_at"`
+	// Transliteration of the Hebrew name
+	Transliteration *string `json:"transliteration"`
+	// Brief description of the zman
+	Description *string `json:"description"`
+	// Halachic context or notes
+	HalachicNotes *string `json:"halachic_notes"`
+	// Source references (seforim, poskim)
+	HalachicSource *string `json:"halachic_source"`
+	// Contact email for the requesting publisher
+	PublisherEmail *string `json:"publisher_email"`
+	// Display name of the requesting publisher
+	PublisherName *string `json:"publisher_name"`
+	// If true, automatically add this zman to publisher's list when approved
+	AutoAddOnApproval *bool `json:"auto_add_on_approval"`
+}
+
+// Tags associated with zman registry requests. Supports both existing tag references and new tag requests.
+type ZmanRequestTag struct {
+	ID        string `json:"id"`
+	RequestID string `json:"request_id"`
+	// Reference to existing tag (if using existing tag)
+	TagID pgtype.UUID `json:"tag_id"`
+	// Name of requested new tag (if requesting new tag)
+	RequestedTagName *string `json:"requested_tag_name"`
+	// Type of requested new tag: event, timing, behavior, shita, method
+	RequestedTagType *string `json:"requested_tag_type"`
+	// True if this is a request for a new tag to be created
+	IsNewTagRequest bool      `json:"is_new_tag_request"`
+	CreatedAt       time.Time `json:"created_at"`
 }
 
 // Tags for categorizing zmanim by event type, timing, and behavior
