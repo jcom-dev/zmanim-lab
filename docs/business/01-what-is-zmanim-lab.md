@@ -113,10 +113,7 @@ Zmanim Lab solves this through **two-sided transparency**:
 ### Primary Users: Publishers (Halachic Authorities)
 
 **Who:**
-- Orthodox rabbis
 - Batei din (rabbinical courts)
-- Synagogues
-- Yeshivot
 - Jewish community organizations
 - Kashrus organizations
 
