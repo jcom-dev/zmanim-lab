@@ -288,8 +288,7 @@ func main() {
 			r.Get("/zmanim/{zmanKey}/alias", h.GetAlias)
 			r.Put("/zmanim/{zmanKey}/alias", h.CreateOrUpdateAlias)
 			r.Delete("/zmanim/{zmanKey}/alias", h.DeleteAlias)
-			// Zman registry requests (edge case)
-			r.Post("/registry/zmanim/request", h.CreateZmanRegistryRequest)
+			// Zman registry requests (Story 5.6 - uses existing CreateZmanRegistryRequest handler)
 			r.Post("/algorithm/publish", h.PublishAlgorithm)
 			r.Get("/algorithm/versions", h.GetAlgorithmVersions)
 			r.Get("/algorithm/versions/{id}", h.GetAlgorithmVersion)
@@ -368,9 +367,9 @@ func main() {
 			r.Post("/ai/reindex", h.TriggerReindex)
 			r.Get("/ai/audit", h.GetAIAuditLogs)
 
-			// Zman registry request management
-			r.Get("/registry/requests", h.AdminGetZmanRegistryRequests)
-			r.Put("/registry/requests/{id}", h.AdminReviewZmanRegistryRequest)
+			// Zman registry request management (Story 5.8 - uses existing AdminGetZmanRegistryRequests, AdminReviewZmanRegistryRequest)
+			r.Get("/zman-requests", h.AdminGetZmanRegistryRequests)
+			r.Put("/zman-requests/{id}", h.AdminReviewZmanRegistryRequest)
 
 			// Master Zmanim Registry CRUD (admin)
 			r.Get("/registry/zmanim", h.AdminGetMasterZmanim)
