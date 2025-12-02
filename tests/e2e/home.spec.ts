@@ -10,6 +10,9 @@ import { pages, selectors, TIMEOUTS } from './helpers/mcp-playwright';
  * - Navigation works
  */
 
+// Enable parallel execution (Story 5.14)
+test.describe.configure({ mode: 'parallel' });
+
 test.describe('Home Page', () => {
   test.beforeEach(async ({ page }) => {
     // Navigate to home page before each test

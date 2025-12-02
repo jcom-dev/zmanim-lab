@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useUser, useClerk, useAuth } from '@clerk/nextjs';
+import { useUser, useClerk } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -14,7 +14,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { API_BASE } from '@/lib/api';
+import { useApi } from '@/lib/api-client';
 import type { ClerkPublicMetadata } from '@/types/clerk';
 
 interface Publisher {
@@ -25,7 +25,7 @@ interface Publisher {
 export function ProfileDropdown() {
   const { user, isLoaded } = useUser();
   const { signOut } = useClerk();
-  const { getToken } = useAuth();
+  const api = useApi();
   const router = useRouter();
   const [publishers, setPublishers] = useState<Publisher[]>([]);
   const [isResettingPassword, setIsResettingPassword] = useState(false);
@@ -41,15 +41,12 @@ export function ProfileDropdown() {
     }
 
     try {
-      const response = await fetch(`${API_BASE}/api/v1/publishers/names?ids=${ids.join(',')}`);
-      if (response.ok) {
-        const data = await response.json();
-        setPublishers(data.data?.publishers || data.publishers || []);
-      }
+      const data = await api.public.get<{ publishers: Publisher[] }>(`/publishers/names?ids=${ids.join(',')}`);
+      setPublishers(data?.publishers || []);
     } catch {
       // Silently fail - publisher names are optional UI enhancement
     }
-  }, []);
+  }, [api]);
 
   useEffect(() => {
     if (publisherAccessList.length > 0) {
@@ -62,21 +59,10 @@ export function ProfileDropdown() {
 
     setIsResettingPassword(true);
     try {
-      const token = await getToken();
-      const response = await fetch(`${API_BASE}/api/v1/user/request-password-reset`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token && { 'Authorization': `Bearer ${token}` }),
-        },
+      await api.post('/user/request-password-reset', {
         body: JSON.stringify({ email: user.primaryEmailAddress.emailAddress }),
       });
-
-      if (response.ok) {
-        alert('Password reset email sent! Check your inbox.');
-      } else {
-        alert('Failed to send password reset email. Please try again.');
-      }
+      alert('Password reset email sent! Check your inbox.');
     } catch {
       alert('Failed to send password reset email. Please try again.');
     } finally {

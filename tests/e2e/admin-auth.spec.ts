@@ -9,6 +9,9 @@ import { BASE_URL, TIMEOUTS } from './helpers/mcp-playwright';
  * and require authentication + admin role.
  */
 
+// Enable parallel execution (Story 5.14)
+test.describe.configure({ mode: 'parallel' });
+
 test.describe('Admin Route Protection', () => {
   const adminRoutes = [
     '/admin/publishers',

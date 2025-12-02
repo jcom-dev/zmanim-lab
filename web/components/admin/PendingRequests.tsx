@@ -1,8 +1,6 @@
 'use client';
-import { API_BASE } from '@/lib/api';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useAuth } from '@clerk/nextjs';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -13,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { useAdminApi } from '@/lib/api-client';
 
 
 
@@ -32,7 +31,7 @@ interface PendingRequestsProps {
 }
 
 export function PendingRequests({ onApprove }: PendingRequestsProps) {
-  const { getToken } = useAuth();
+  const api = useAdminApi();
   const [requests, setRequests] = useState<PublisherRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [pendingCount, setPendingCount] = useState(0);
@@ -45,28 +44,15 @@ export function PendingRequests({ onApprove }: PendingRequestsProps) {
   const fetchRequests = useCallback(async () => {
     try {
       setLoading(true);
-      const token = await getToken();
-
-      const response = await fetch(`${API_BASE}/api/v1/admin/publisher-requests?status=pending`, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch requests');
-      }
-
-      const data = await response.json();
-      setRequests(data.data || []);
-      setPendingCount(data.meta?.pending || 0);
+      const data = await api.get<{ data: PublisherRequest[]; meta: { pending: number } }>('/admin/publisher-requests?status=pending');
+      setRequests(data?.data || []);
+      setPendingCount(data?.meta?.pending || 0);
     } catch (err) {
       console.error('Error fetching requests:', err);
     } finally {
       setLoading(false);
     }
-  }, [getToken]);
+  }, [api]);
 
   useEffect(() => {
     fetchRequests();
@@ -75,21 +61,7 @@ export function PendingRequests({ onApprove }: PendingRequestsProps) {
   const handleApprove = async (request: PublisherRequest) => {
     setActionLoading(true);
     try {
-      const token = await getToken();
-
-      const response = await fetch(`${API_BASE}/api/v1/admin/publisher-requests/${request.id}/approve`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.message || 'Failed to approve request');
-      }
-
+      await api.post(`/admin/publisher-requests/${request.id}/approve`, {});
       setSelectedRequest(null);
       fetchRequests();
       onApprove?.();
@@ -105,22 +77,9 @@ export function PendingRequests({ onApprove }: PendingRequestsProps) {
 
     setActionLoading(true);
     try {
-      const token = await getToken();
-
-      const response = await fetch(`${API_BASE}/api/v1/admin/publisher-requests/${selectedRequest.id}/reject`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
+      await api.post(`/admin/publisher-requests/${selectedRequest.id}/reject`, {
         body: JSON.stringify({ reason: rejectReason }),
       });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.message || 'Failed to reject request');
-      }
-
       setShowRejectDialog(false);
       setSelectedRequest(null);
       setRejectReason('');

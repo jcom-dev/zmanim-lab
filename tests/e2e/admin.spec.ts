@@ -14,6 +14,9 @@ import { loginAsAdmin } from './utils';
  * - System configuration management
  */
 
+// Enable parallel execution (Story 5.14)
+test.describe.configure({ mode: 'parallel' });
+
 test.describe('Admin Publisher Management', () => {
   test.beforeEach(async ({ page }) => {
     await loginAsAdmin(page);

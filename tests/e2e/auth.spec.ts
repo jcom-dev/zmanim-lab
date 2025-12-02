@@ -10,6 +10,9 @@ import { pages, TIMEOUTS, testData } from './helpers/mcp-playwright';
  * - Protected routes
  */
 
+// Enable parallel execution (Story 5.14)
+test.describe.configure({ mode: 'parallel' });
+
 test.describe('Authentication - Sign In', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto(pages.signIn);

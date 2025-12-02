@@ -16,6 +16,9 @@ import { BASE_URL, TIMEOUTS } from './helpers/mcp-playwright';
  * - AC8: Unsaved changes trigger navigation warning
  */
 
+// Enable parallel execution (Story 5.14)
+test.describe.configure({ mode: 'parallel' });
+
 test.describe('Algorithm Editor', () => {
   // NOTE: These tests require publisher authentication
   // For now, testing auth protection and page structure
