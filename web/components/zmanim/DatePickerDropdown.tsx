@@ -99,16 +99,17 @@ export function DatePickerDropdown({
         <Calendar className="w-4 h-4 text-stone-500 dark:text-zinc-500" />
         <div className="text-center">
           {showHebrew ? (
-            <div className="flex flex-col items-start">
-              <span className="text-base sm:text-lg font-bold text-stone-800 dark:text-zinc-100 font-hebrew" dir="rtl">
-                {hebrewDate.formattedWithDayOfWeek}
+            <div className="flex items-center gap-2">
+              <span className="text-base sm:text-lg font-semibold text-stone-800 dark:text-zinc-100 font-hebrew" dir="rtl">
+                {hebrewDate.formatted}
               </span>
-              <span className="text-xs text-stone-500 dark:text-zinc-400">
-                {selectedDate.toFormat('MMMM d, yyyy')}
+              <span className="text-stone-300 dark:text-zinc-600">•</span>
+              <span className="text-sm text-stone-500 dark:text-zinc-400">
+                {selectedDate.toFormat('MMM d')}
               </span>
             </div>
           ) : (
-            <span className="text-base sm:text-lg font-bold text-stone-800 dark:text-zinc-100">
+            <span className="text-base sm:text-lg font-semibold text-stone-800 dark:text-zinc-100">
               {selectedDate.toFormat('EEEE, MMMM d, yyyy')}
             </span>
           )}
