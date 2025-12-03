@@ -7,7 +7,6 @@ package sqlcgen
 
 import (
 	"context"
-	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -299,11 +298,11 @@ RETURNING id
 `
 
 type CreateInvitationParams struct {
-	PublisherID pgtype.UUID `json:"publisher_id"`
-	Email       string      `json:"email"`
-	Token       string      `json:"token"`
-	InvitedBy   string      `json:"invited_by"`
-	ExpiresAt   time.Time   `json:"expires_at"`
+	PublisherID pgtype.UUID        `json:"publisher_id"`
+	Email       string             `json:"email"`
+	Token       string             `json:"token"`
+	InvitedBy   string             `json:"invited_by"`
+	ExpiresAt   pgtype.Timestamptz `json:"expires_at"`
 }
 
 func (q *Queries) CreateInvitation(ctx context.Context, arg CreateInvitationParams) (string, error) {
@@ -348,12 +347,12 @@ WHERE pi.token = $1
 `
 
 type GetInvitationByTokenRow struct {
-	ID            string      `json:"id"`
-	PublisherID   pgtype.UUID `json:"publisher_id"`
-	Email         string      `json:"email"`
-	Status        string      `json:"status"`
-	ExpiresAt     time.Time   `json:"expires_at"`
-	PublisherName string      `json:"publisher_name"`
+	ID            string             `json:"id"`
+	PublisherID   pgtype.UUID        `json:"publisher_id"`
+	Email         string             `json:"email"`
+	Status        string             `json:"status"`
+	ExpiresAt     pgtype.Timestamptz `json:"expires_at"`
+	PublisherName string             `json:"publisher_name"`
 }
 
 func (q *Queries) GetInvitationByToken(ctx context.Context, token string) (GetInvitationByTokenRow, error) {
@@ -382,7 +381,7 @@ type GetPendingInvitationsRow struct {
 	ID        string             `json:"id"`
 	Email     string             `json:"email"`
 	Status    string             `json:"status"`
-	ExpiresAt time.Time          `json:"expires_at"`
+	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
@@ -426,97 +425,6 @@ func (q *Queries) GetPublisherOwner(ctx context.Context, id string) (*string, er
 	return clerk_user_id, err
 }
 
-const getZmanDefinitionByKey = `-- name: GetZmanDefinitionByKey :one
-SELECT id, key, name_hebrew, name_english, transliteration, category, sort_order,
-       is_standard, created_at, updated_at
-FROM zman_definitions
-WHERE key = $1
-`
-
-type GetZmanDefinitionByKeyRow struct {
-	ID              string             `json:"id"`
-	Key             string             `json:"key"`
-	NameHebrew      string             `json:"name_hebrew"`
-	NameEnglish     string             `json:"name_english"`
-	Transliteration *string            `json:"transliteration"`
-	Category        string             `json:"category"`
-	SortOrder       *int32             `json:"sort_order"`
-	IsStandard      *bool              `json:"is_standard"`
-	CreatedAt       pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
-}
-
-func (q *Queries) GetZmanDefinitionByKey(ctx context.Context, key string) (GetZmanDefinitionByKeyRow, error) {
-	row := q.db.QueryRow(ctx, getZmanDefinitionByKey, key)
-	var i GetZmanDefinitionByKeyRow
-	err := row.Scan(
-		&i.ID,
-		&i.Key,
-		&i.NameHebrew,
-		&i.NameEnglish,
-		&i.Transliteration,
-		&i.Category,
-		&i.SortOrder,
-		&i.IsStandard,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
-const getZmanDefinitions = `-- name: GetZmanDefinitions :many
-
-SELECT id, key, name_hebrew, name_english, transliteration, category, sort_order,
-       is_standard, created_at, updated_at
-FROM zman_definitions
-ORDER BY category, sort_order, name_hebrew
-`
-
-type GetZmanDefinitionsRow struct {
-	ID              string             `json:"id"`
-	Key             string             `json:"key"`
-	NameHebrew      string             `json:"name_hebrew"`
-	NameEnglish     string             `json:"name_english"`
-	Transliteration *string            `json:"transliteration"`
-	Category        string             `json:"category"`
-	SortOrder       *int32             `json:"sort_order"`
-	IsStandard      *bool              `json:"is_standard"`
-	CreatedAt       pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
-}
-
-// Zman Definitions (Global) --
-func (q *Queries) GetZmanDefinitions(ctx context.Context) ([]GetZmanDefinitionsRow, error) {
-	rows, err := q.db.Query(ctx, getZmanDefinitions)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []GetZmanDefinitionsRow{}
-	for rows.Next() {
-		var i GetZmanDefinitionsRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.Key,
-			&i.NameHebrew,
-			&i.NameEnglish,
-			&i.Transliteration,
-			&i.Category,
-			&i.SortOrder,
-			&i.IsStandard,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const updateInvitationToken = `-- name: UpdateInvitationToken :exec
 UPDATE publisher_invitations
 SET token = $1, expires_at = $2
@@ -524,9 +432,9 @@ WHERE id = $3
 `
 
 type UpdateInvitationTokenParams struct {
-	Token     string    `json:"token"`
-	ExpiresAt time.Time `json:"expires_at"`
-	ID        string    `json:"id"`
+	Token     string             `json:"token"`
+	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
+	ID        string             `json:"id"`
 }
 
 func (q *Queries) UpdateInvitationToken(ctx context.Context, arg UpdateInvitationTokenParams) error {

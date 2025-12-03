@@ -17,12 +17,18 @@ import { test as setup, expect } from '@playwright/test';
 import { setupClerkTestingToken, clerk } from '@clerk/testing/playwright';
 import { createClerkClient } from '@clerk/backend';
 import { getSharedPublisherAsync, linkClerkUserToPublisher } from '../utils';
+import {
+  BASE_URL,
+  TEST_PASSWORD,
+  TEST_EMAIL_PREFIX,
+  TIMEOUTS,
+  PAGINATION,
+  STORAGE_STATE,
+} from '../../config';
 
-// Storage state file paths
-export const ADMIN_STORAGE_STATE = 'test-results/.auth/admin.json';
-export const PUBLISHER_STORAGE_STATE = 'test-results/.auth/publisher.json';
-
-const TEST_PASSWORD = 'TestPassword123!';
+// Re-export storage state paths for backward compatibility
+export const ADMIN_STORAGE_STATE = STORAGE_STATE.ADMIN;
+export const PUBLISHER_STORAGE_STATE = STORAGE_STATE.PUBLISHER;
 
 /**
  * Find or create a test admin user in Clerk
@@ -33,7 +39,7 @@ async function getOrCreateAdminUser(): Promise<{ id: string; email: string }> {
 
   // First, try to find ANY existing admin user
   // This reuses real admin accounts for testing
-  const allUsers = await clerkClient.users.getUserList({ limit: 100 });
+  const allUsers = await clerkClient.users.getUserList({ limit: PAGINATION.CLERK_LIST_LIMIT });
   const existingAdmin = allUsers.data.find((u) => {
     return (u.publicMetadata as any)?.role === 'admin';
   });
@@ -47,7 +53,7 @@ async function getOrCreateAdminUser(): Promise<{ id: string; email: string }> {
   // No admin found - create one with e2e- prefix
   const timestamp = Date.now();
   const random = Math.random().toString(36).substring(2, 6);
-  const email = `e2e-admin-${timestamp}-${random}@mailslurp.world`;
+  const email = `${TEST_EMAIL_PREFIX}admin-${timestamp}-${random}@mailslurp.world`;
 
   // Create new admin user
   const user = await clerkClient.users.createUser({
@@ -70,12 +76,12 @@ async function getOrCreatePublisherUser(publisherId: string): Promise<{ id: stri
 
   // First, try to find an existing publisher user from previous runs
   // Look for users with publisher role in their metadata
-  const allUsers = await clerkClient.users.getUserList({ limit: 100 });
+  const allUsers = await clerkClient.users.getUserList({ limit: PAGINATION.CLERK_LIST_LIMIT });
   const existingPublisher = allUsers.data.find((u) => {
     const email = u.emailAddresses[0]?.emailAddress || '';
     return (
       (u.publicMetadata as any)?.role === 'publisher' &&
-      email.startsWith('e2e-')
+      email.startsWith(TEST_EMAIL_PREFIX)
     );
   });
 
@@ -96,7 +102,7 @@ async function getOrCreatePublisherUser(publisherId: string): Promise<{ id: stri
   // Generate unique email using timestamp + random (guaranteed unique)
   const timestamp = Date.now();
   const random = Math.random().toString(36).substring(2, 6);
-  const email = `e2e-publisher-${timestamp}-${random}@mailslurp.world`;
+  const email = `${TEST_EMAIL_PREFIX}publisher-${timestamp}-${random}@mailslurp.world`;
 
   // Create new publisher user
   const user = await clerkClient.users.createUser({
@@ -119,10 +125,8 @@ async function getOrCreatePublisherUser(publisherId: string): Promise<{ id: stri
  * Perform Clerk sign-in and wait for session
  */
 async function performSignIn(page: any, email: string): Promise<void> {
-  const baseUrl = process.env.BASE_URL || 'http://localhost:3001';
-
   // Navigate to the app first
-  await page.goto(baseUrl);
+  await page.goto(BASE_URL);
   await page.waitForLoadState('domcontentloaded');
 
   // Setup testing token to bypass bot detection
@@ -132,15 +136,15 @@ async function performSignIn(page: any, email: string): Promise<void> {
     console.warn('Warning: setupClerkTestingToken failed:', error?.message);
   }
 
-  // Wait for Clerk to be loaded (30s is plenty)
+  // Wait for Clerk to be loaded
   await page.waitForFunction(
     () => typeof (window as any).Clerk !== 'undefined',
-    { timeout: 30000 }
+    { timeout: TIMEOUTS.CLERK_AUTH }
   );
 
   await page.waitForFunction(
     () => (window as any).Clerk?.loaded === true,
-    { timeout: 30000 }
+    { timeout: TIMEOUTS.CLERK_AUTH }
   );
 
   // Sign in using email-based approach (more reliable in test environments)
@@ -149,10 +153,10 @@ async function performSignIn(page: any, email: string): Promise<void> {
     emailAddress: email,
   });
 
-  // Wait for authentication to complete (30s is plenty)
+  // Wait for authentication to complete
   await page.waitForFunction(
     () => (window as any).Clerk?.user !== null,
-    { timeout: 30000 }
+    { timeout: TIMEOUTS.CLERK_AUTH }
   );
 
   // Wait for session to be fully active
@@ -163,7 +167,7 @@ async function performSignIn(page: any, email: string): Promise<void> {
              clerk?.session?.status === 'active' &&
              clerk?.user?.primaryEmailAddress !== undefined;
     },
-    { timeout: 10000 }
+    { timeout: TIMEOUTS.CLERK_LOAD }
   ).catch(() => {
     // If detailed check times out, the basic auth check passed - continue
   });

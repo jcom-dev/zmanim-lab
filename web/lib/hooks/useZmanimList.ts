@@ -54,7 +54,7 @@ export interface PublisherZman {
   is_event_zman: boolean;
   category: 'essential' | 'optional';
   dependencies: string[];
-  sort_order: number;
+  time_category?: string;
   created_at: string;
   updated_at: string;
   tags?: ZmanTag[]; // Tags from master zman
@@ -82,7 +82,6 @@ export interface ZmanimTemplate {
   category: 'essential' | 'optional';
   description: string | null;
   is_required: boolean;
-  sort_order: number;
   created_at: string;
   updated_at: string;
 }
@@ -96,7 +95,6 @@ export interface CreateZmanRequest {
   publisher_comment?: string;
   is_enabled?: boolean;
   is_visible?: boolean;
-  sort_order?: number;
 }
 
 export interface UpdateZmanRequest {
@@ -112,7 +110,6 @@ export interface UpdateZmanRequest {
   is_published?: boolean;
   is_beta?: boolean;
   category?: 'essential' | 'optional';
-  sort_order?: number;
 }
 
 export interface PreviewLocation {
@@ -260,6 +257,58 @@ export const useImportZmanim = () =>
     invalidateKeys: ['publisher-zmanim'],
   });
 
+/**
+ * Hook: Get tags for a publisher zman
+ */
+export const usePublisherZmanTags = (zmanKey: string | null) =>
+  usePublisherQuery<ZmanTag[]>(
+    ['publisher-zman-tags', zmanKey],
+    `/publisher/zmanim/${zmanKey}/tags`,
+    { enabled: !!zmanKey }
+  );
+
+/**
+ * Hook: Update tags for a publisher zman (replace all tags)
+ */
+export function useUpdatePublisherZmanTags(zmanKey: string) {
+  return useDynamicMutation<ZmanTag[], { tag_ids: string[] }>(
+    () => `/publisher/zmanim/${zmanKey}/tags`,
+    'PUT',
+    (data) => data,
+    {
+      invalidateKeys: ['publisher-zmanim', `publisher-zman-tags-${zmanKey}`],
+    }
+  );
+}
+
+/**
+ * Hook: Add a single tag to a publisher zman
+ */
+export function useAddPublisherZmanTag(zmanKey: string) {
+  return useDynamicMutation<void, { tagId: string }>(
+    (vars) => `/publisher/zmanim/${zmanKey}/tags/${vars.tagId}`,
+    'POST',
+    () => undefined,
+    {
+      invalidateKeys: ['publisher-zmanim', `publisher-zman-tags-${zmanKey}`],
+    }
+  );
+}
+
+/**
+ * Hook: Remove a single tag from a publisher zman
+ */
+export function useRemovePublisherZmanTag(zmanKey: string) {
+  return useDynamicMutation<void, { tagId: string }>(
+    (vars) => `/publisher/zmanim/${zmanKey}/tags/${vars.tagId}`,
+    'DELETE',
+    () => undefined,
+    {
+      invalidateKeys: ['publisher-zmanim', `publisher-zman-tags-${zmanKey}`],
+    }
+  );
+}
+
 // =============================================================================
 // Preview/Validation Hooks (Refactored)
 // =============================================================================
@@ -380,7 +429,6 @@ export interface MasterZman {
   time_category: 'dawn' | 'sunrise' | 'morning' | 'midday' | 'afternoon' | 'sunset' | 'nightfall' | 'midnight';
   default_formula_dsl: string;
   is_core: boolean;
-  sort_order: number;
   tags: MasterZmanTag[];
   day_types?: DayType[];
   created_at: string;
@@ -875,7 +923,6 @@ export interface PublisherZmanForLinking {
   english_name: string;
   formula_dsl: string;
   category: string;
-  sort_order: number;
 }
 
 export interface CreateFromPublisherRequest {

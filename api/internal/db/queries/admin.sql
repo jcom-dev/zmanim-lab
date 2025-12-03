@@ -106,17 +106,3 @@ WHERE publisher_id = $1 AND LOWER(email) = LOWER($2) AND status = 'pending';
 
 -- name: GetPublisherOwner :one
 SELECT clerk_user_id FROM publishers WHERE id = $1;
-
--- Zman Definitions (Global) --
-
--- name: GetZmanDefinitions :many
-SELECT id, key, name_hebrew, name_english, transliteration, category, sort_order,
-       is_standard, created_at, updated_at
-FROM zman_definitions
-ORDER BY category, sort_order, name_hebrew;
-
--- name: GetZmanDefinitionByKey :one
-SELECT id, key, name_hebrew, name_english, transliteration, category, sort_order,
-       is_standard, created_at, updated_at
-FROM zman_definitions
-WHERE key = $1;

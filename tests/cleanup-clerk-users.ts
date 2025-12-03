@@ -6,6 +6,7 @@
 
 import { createClerkClient } from '@clerk/backend';
 import * as dotenv from 'dotenv';
+import { TEST_EMAIL_DOMAINS, TEST_EMAIL_PREFIX, PAGINATION } from './config';
 
 // Load environment variables
 dotenv.config();
@@ -19,23 +20,11 @@ if (!secretKey) {
 
 const clerkClient = createClerkClient({ secretKey });
 
-const TEST_DOMAINS = [
-  '@clerk.test',
-  '@mailslurp.xyz',
-  '@mailslurp.world',
-  '@tempsmtp.com',
-  '@mailslurp.info',
-  '@mailslurp.dev',
-  '@mailslurp.biz',
-  '@mailslurp.net',
-  '@test-zmanim.example.com',
-];
-
 async function cleanupAllTestUsers() {
   console.log('Fetching all users from Clerk...\n');
 
   let offset = 0;
-  const limit = 100;
+  const limit = PAGINATION.CLERK_LIST_LIMIT;
   let hasMore = true;
   let totalDeleted = 0;
   let totalFound = 0;
@@ -46,8 +35,8 @@ async function cleanupAllTestUsers() {
 
     const testUsers = response.data.filter((user) =>
       user.emailAddresses.some((email) =>
-        TEST_DOMAINS.some((domain) => email.emailAddress.endsWith(domain)) ||
-        email.emailAddress.startsWith('e2e-')
+        TEST_EMAIL_DOMAINS.some((domain) => email.emailAddress.endsWith(domain)) ||
+        email.emailAddress.startsWith(TEST_EMAIL_PREFIX)
       )
     );
 

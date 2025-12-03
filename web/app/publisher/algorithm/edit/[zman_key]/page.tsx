@@ -181,10 +181,11 @@ export default function ZmanEditorPage() {
     setFormulaParseResult(result);
 
     // Auto-switch to advanced if formula becomes complex while in guided mode
-    if (!result.success && mode === 'guided') {
-      setMode('advanced');
+    // Use functional update to avoid needing mode in dependency array
+    if (!result.success) {
+      setMode((currentMode) => currentMode === 'guided' ? 'advanced' : currentMode);
     }
-  }, [formula, mode]);
+  }, [formula]); // Removed mode from deps - we use functional update instead
 
   // Live preview with debounce
   useEffect(() => {
@@ -322,10 +323,11 @@ export default function ZmanEditorPage() {
     setFormula(selectedFormula);
   }, []);
 
-  // Handle parse error from formula builder - auto-switch to advanced mode
-  const handleParseError = useCallback((error: string) => {
-    // Auto-switch to advanced mode when formula can't be parsed by guided builder
-    setMode('advanced');
+  // Handle parse error from formula builder - no-op since useEffect already handles mode switching
+  // Keep callback to satisfy FormulaBuilder's prop type, but don't double-switch modes
+  const handleParseError = useCallback((_error: string) => {
+    // Mode switching is handled by the formula parsing useEffect above
+    // This callback exists only to satisfy FormulaBuilder's interface
   }, []);
 
   // Get zman keys for autocomplete

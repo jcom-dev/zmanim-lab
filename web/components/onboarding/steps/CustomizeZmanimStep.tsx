@@ -142,48 +142,6 @@ const EVENT_CATEGORY_CONFIG: Record<
 const EVERYDAY_CATEGORY_ORDER = ['dawn', 'sunrise', 'morning', 'midday', 'afternoon', 'sunset', 'nightfall', 'midnight'];
 const EVENT_CATEGORY_ORDER = ['candles', 'havdalah', 'yom_kippur', 'fast_day', 'tisha_bav', 'pesach'];
 
-// Default everyday zman keys that should be pre-selected
-// Based on standard luach requirements
-const DEFAULT_EVERYDAY_KEYS = [
-  // Dawn
-  'alos_hashachar',
-  // Sunrise
-  'misheyakir',
-  'sunrise',
-  // Morning
-  'sof_zman_shma_gra',
-  'sof_zman_tfila_gra',
-  // Midday
-  'chatzos',
-  'mincha_gedola',
-  // Afternoon
-  'mincha_ketana',
-  'plag_hamincha',
-  // Sunset
-  'sunset',
-  // Nightfall
-  'tzais',
-];
-
-// Default event zman keys that should be pre-selected
-const DEFAULT_EVENT_KEYS = [
-  // Candle lighting
-  'candle_lighting',
-  // Havdalah
-  'shabbos_ends',
-  // Fast days
-  'fast_ends',
-  // Yom Kippur
-  'yom_kippur_starts',
-  'yom_kippur_ends',
-  // Tisha B'Av
-  'tisha_bav_starts',
-  'tisha_bav_ends',
-  // Pesach
-  'sof_zman_achilas_chametz_gra',
-  'sof_zman_biur_chametz_gra',
-];
-
 export function CustomizeZmanimStep({ state, onUpdate, onNext, onBack }: CustomizeZmanimStepProps) {
   const api = useApi();
   const [viewMode, setViewMode] = useState<'everyday' | 'events'>('everyday');
@@ -213,6 +171,9 @@ export function CustomizeZmanimStep({ state, onUpdate, onNext, onBack }: Customi
   const searchInputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
+  // Track if initial selection has been done
+  const initializedRef = useRef(false);
+
   // Fetch zmanim from registry (no day_types filter - gets all zmanim)
   const { data: everydayZmanim, isLoading: loadingEveryday } = useMasterZmanimGrouped();
   const { data: eventZmanim, isLoading: loadingEvents } = useEventZmanimGrouped();
@@ -222,52 +183,58 @@ export function CustomizeZmanimStep({ state, onUpdate, onNext, onBack }: Customi
   const categoryOrder = viewMode === 'everyday' ? EVERYDAY_CATEGORY_ORDER : EVENT_CATEGORY_ORDER;
   const categoryConfig = viewMode === 'everyday' ? TIME_CATEGORY_CONFIG : EVENT_CATEGORY_CONFIG;
 
-  // Initialize default selections when data loads
+  // Initialize default selections when both data sources have loaded
+  // Uses is_core flag from master registry instead of hardcoded list
   useEffect(() => {
-    if (everydayZmanim && selectedZmanim.size === 0) {
-      const initialSelections = new Map<string, SelectedZman>();
+    // Skip if already initialized or if we have state from wizard
+    if (initializedRef.current) return;
+    if (state.data.customizations && Array.isArray(state.data.customizations) && state.data.customizations.length > 0) {
+      initializedRef.current = true;
+      return;
+    }
 
-      // Add default everyday zmanim
-      Object.values(everydayZmanim).flat().forEach((zman) => {
-        if (DEFAULT_EVERYDAY_KEYS.includes(zman.zman_key)) {
-          initialSelections.set(zman.zman_key, {
-            master_zman_id: zman.id,
-            zman_key: zman.zman_key,
-            hebrew_name: zman.canonical_hebrew_name,
-            english_name: zman.canonical_english_name,
-            formula: zman.default_formula_dsl,
-            category: 'everyday',
-            time_category: zman.time_category,
-            enabled: true,
-            modified: false,
-          });
-        }
-      });
+    // Wait for both data sources to load
+    if (!everydayZmanim || !eventZmanim) return;
 
-      // Add default event zmanim when that data loads
-      if (eventZmanim) {
-        Object.values(eventZmanim).flat().forEach((zman) => {
-          if (DEFAULT_EVENT_KEYS.includes(zman.zman_key)) {
-            initialSelections.set(zman.zman_key, {
-              master_zman_id: zman.id,
-              zman_key: zman.zman_key,
-              hebrew_name: zman.canonical_hebrew_name,
-              english_name: zman.canonical_english_name,
-              formula: zman.default_formula_dsl,
-              category: 'event',
-              time_category: zman.time_category,
-              enabled: true,
-              modified: false,
-            });
-          }
+    initializedRef.current = true;
+    const initialSelections = new Map<string, SelectedZman>();
+
+    // Add core everyday zmanim
+    Object.values(everydayZmanim).flat().forEach((zman) => {
+      if (zman.is_core) {
+        initialSelections.set(zman.zman_key, {
+          master_zman_id: zman.id,
+          zman_key: zman.zman_key,
+          hebrew_name: zman.canonical_hebrew_name,
+          english_name: zman.canonical_english_name,
+          formula: zman.default_formula_dsl,
+          category: 'everyday',
+          time_category: zman.time_category,
+          enabled: true,
+          modified: false,
         });
       }
+    });
 
-      if (initialSelections.size > 0) {
-        setSelectedZmanim(initialSelections);
+    // Add core event zmanim
+    Object.values(eventZmanim).flat().forEach((zman) => {
+      if (zman.is_core) {
+        initialSelections.set(zman.zman_key, {
+          master_zman_id: zman.id,
+          zman_key: zman.zman_key,
+          hebrew_name: zman.canonical_hebrew_name,
+          english_name: zman.canonical_english_name,
+          formula: zman.default_formula_dsl,
+          category: 'event',
+          time_category: zman.time_category,
+          enabled: true,
+          modified: false,
+        });
       }
-    }
-  }, [everydayZmanim, eventZmanim, selectedZmanim.size]);
+    });
+
+    setSelectedZmanim(initialSelections);
+  }, [everydayZmanim, eventZmanim, state.data.customizations]);
 
   // Filter groups by search
   const filteredGroups = useMemo(() => {

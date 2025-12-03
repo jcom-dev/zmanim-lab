@@ -49,7 +49,6 @@ interface MasterZman {
   default_formula_dsl: string;
   is_core: boolean;
   is_hidden: boolean;
-  sort_order: number;
   created_at: string;
   updated_at: string;
   tags?: ZmanTag[];
@@ -245,7 +244,6 @@ export default function AdminRegistryPage() {
       default_formula_dsl: data.default_formula_dsl,
       is_core: data.is_core,
       is_hidden: data.is_hidden,
-      sort_order: data.sort_order,
       tag_ids: data.tag_ids,
     };
 
@@ -629,7 +627,6 @@ export default function AdminRegistryPage() {
               default_formula_dsl: editingZman.default_formula_dsl,
               is_core: editingZman.is_core,
               is_hidden: editingZman.is_hidden,
-              sort_order: editingZman.sort_order,
               tag_ids: editingZman.tag_ids || (editingZman.tags?.map(t => t.id) || []),
             } : undefined}
             onSave={handleSave}

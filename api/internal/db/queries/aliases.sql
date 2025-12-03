@@ -51,6 +51,7 @@ WHERE pza.publisher_zman_id = pz.id
 
 -- name: GetAllPublisherZmanAliases :many
 -- Get all active aliases for a publisher with canonical names included
+-- Orders by time_category (chronological) then hebrew_name
 SELECT
     pza.id,
     pza.publisher_id,
@@ -68,16 +69,28 @@ FROM publisher_zman_aliases pza
 JOIN publisher_zmanim pz ON pza.publisher_zman_id = pz.id
 JOIN master_zmanim_registry mzr ON pz.zman_key = mzr.zman_key
 WHERE pza.publisher_id = $1 AND pza.is_active = true
-ORDER BY pz.sort_order;
+ORDER BY
+    CASE mzr.time_category
+        WHEN 'dawn' THEN 1
+        WHEN 'sunrise' THEN 2
+        WHEN 'morning' THEN 3
+        WHEN 'midday' THEN 4
+        WHEN 'afternoon' THEN 5
+        WHEN 'sunset' THEN 6
+        WHEN 'nightfall' THEN 7
+        WHEN 'midnight' THEN 8
+        ELSE 9
+    END,
+    mzr.canonical_hebrew_name;
 
 -- name: GetZmanimWithAliases :many
 -- Get all of a publisher's zmanim with their aliases (if any)
+-- Orders by time_category (chronological) then hebrew_name
 SELECT
     pz.id as publisher_zman_id,
     pz.zman_key,
     pz.formula_dsl,
     pz.is_enabled,
-    pz.sort_order,
     mzr.canonical_hebrew_name,
     mzr.canonical_english_name,
     pza.id as alias_id,
@@ -88,4 +101,16 @@ FROM publisher_zmanim pz
 JOIN master_zmanim_registry mzr ON pz.zman_key = mzr.zman_key
 LEFT JOIN publisher_zman_aliases pza ON pza.publisher_zman_id = pz.id AND pza.is_active = true
 WHERE pz.publisher_id = $1 AND pz.is_enabled = true
-ORDER BY pz.sort_order;
+ORDER BY
+    CASE mzr.time_category
+        WHEN 'dawn' THEN 1
+        WHEN 'sunrise' THEN 2
+        WHEN 'morning' THEN 3
+        WHEN 'midday' THEN 4
+        WHEN 'afternoon' THEN 5
+        WHEN 'sunset' THEN 6
+        WHEN 'nightfall' THEN 7
+        WHEN 'midnight' THEN 8
+        ELSE 9
+    END,
+    mzr.canonical_hebrew_name;

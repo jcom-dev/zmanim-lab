@@ -554,7 +554,7 @@ func (h *Handlers) GetMasterZmanimByEvent(w http.ResponseWriter, r *http.Request
 		rows, err := h.db.Pool.Query(ctx, `
 			SELECT DISTINCT mr.id, mr.zman_key, mr.canonical_hebrew_name, mr.canonical_english_name,
 				mr.transliteration, mr.description, mr.halachic_notes, mr.halachic_source,
-				mr.time_category, mr.default_formula_dsl, mr.is_core, mr.sort_order,
+				mr.time_category, mr.default_formula_dsl, mr.is_core,
 				mr.created_at, mr.updated_at
 			FROM master_zmanim_registry mr
 			JOIN master_zman_events mze ON mr.id = mze.master_zman_id
@@ -562,7 +562,7 @@ func (h *Handlers) GetMasterZmanimByEvent(w http.ResponseWriter, r *http.Request
 			WHERE je.code = $1
 				AND mze.is_default = true
 				AND (mze.applies_to_day IS NULL OR mze.applies_to_day = $2)
-			ORDER BY mr.time_category, mr.sort_order
+			ORDER BY mr.time_category, mr.canonical_hebrew_name
 		`, eventCode, *dayNumber)
 		if err != nil {
 			RespondInternalError(w, r, "Failed to get zmanim")
@@ -575,7 +575,7 @@ func (h *Handlers) GetMasterZmanimByEvent(w http.ResponseWriter, r *http.Request
 			if err := rows.Scan(
 				&z.ID, &z.ZmanKey, &z.CanonicalHebrewName, &z.CanonicalEnglishName,
 				&z.Transliteration, &z.Description, &z.HalachicNotes, &z.HalachicSource,
-				&z.TimeCategory, &z.DefaultFormulaDSL, &z.IsCore, &z.SortOrder,
+				&z.TimeCategory, &z.DefaultFormulaDSL, &z.IsCore,
 				&z.CreatedAt, &z.UpdatedAt,
 			); err != nil {
 				continue
@@ -587,13 +587,13 @@ func (h *Handlers) GetMasterZmanimByEvent(w http.ResponseWriter, r *http.Request
 		rows, err := h.db.Pool.Query(ctx, `
 			SELECT DISTINCT mr.id, mr.zman_key, mr.canonical_hebrew_name, mr.canonical_english_name,
 				mr.transliteration, mr.description, mr.halachic_notes, mr.halachic_source,
-				mr.time_category, mr.default_formula_dsl, mr.is_core, mr.sort_order,
+				mr.time_category, mr.default_formula_dsl, mr.is_core,
 				mr.created_at, mr.updated_at
 			FROM master_zmanim_registry mr
 			JOIN master_zman_events mze ON mr.id = mze.master_zman_id
 			JOIN jewish_events je ON je.id = mze.jewish_event_id
 			WHERE je.code = $1 AND mze.is_default = true
-			ORDER BY mr.time_category, mr.sort_order
+			ORDER BY mr.time_category, mr.canonical_hebrew_name
 		`, eventCode)
 		if err != nil {
 			RespondInternalError(w, r, "Failed to get zmanim")
@@ -606,7 +606,7 @@ func (h *Handlers) GetMasterZmanimByEvent(w http.ResponseWriter, r *http.Request
 			if err := rows.Scan(
 				&z.ID, &z.ZmanKey, &z.CanonicalHebrewName, &z.CanonicalEnglishName,
 				&z.Transliteration, &z.Description, &z.HalachicNotes, &z.HalachicSource,
-				&z.TimeCategory, &z.DefaultFormulaDSL, &z.IsCore, &z.SortOrder,
+				&z.TimeCategory, &z.DefaultFormulaDSL, &z.IsCore,
 				&z.CreatedAt, &z.UpdatedAt,
 			); err != nil {
 				continue

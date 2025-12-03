@@ -415,7 +415,6 @@ CREATE TABLE public.master_zmanim_registry (
     default_formula_dsl text NOT NULL,
     is_core boolean DEFAULT false,
     is_hidden boolean DEFAULT false NOT NULL,
-    sort_order integer DEFAULT 0,
     created_by character varying(255),
     updated_by character varying(255),
     created_at timestamp with time zone DEFAULT now() NOT NULL,
@@ -585,7 +584,6 @@ CREATE TABLE public.publisher_zmanim (
     is_custom boolean DEFAULT false NOT NULL,
     category text NOT NULL,
     dependencies text[] DEFAULT '{}'::text[] NOT NULL,
-    sort_order integer DEFAULT 0 NOT NULL,
     master_zman_id uuid,
     current_version integer DEFAULT 1,
     deleted_at timestamp with time zone,
@@ -667,6 +665,14 @@ CREATE TABLE public.publisher_zman_versions (
 );
 COMMENT ON TABLE public.publisher_zman_versions IS 'Version history for each publisher zman (max 7 versions, formula changes only)';
 
+-- Publisher Zman Tags (publisher-specific tag overrides)
+CREATE TABLE public.publisher_zman_tags (
+    publisher_zman_id uuid NOT NULL,
+    tag_id uuid NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+COMMENT ON TABLE public.publisher_zman_tags IS 'Publisher-specific tags for zmanim. These override/supplement the master registry tags.';
+
 -- Schema Migrations table is created by migrate.sh script, not here
 
 -- System Config
@@ -678,25 +684,6 @@ CREATE TABLE public.system_config (
     created_at timestamp with time zone DEFAULT now(),
     updated_at timestamp with time zone DEFAULT now()
 );
-
--- Zman Definitions
-CREATE TABLE public.zman_definitions (
-    id uuid DEFAULT gen_random_uuid() NOT NULL,
-    key character varying(100) NOT NULL,
-    name_hebrew text NOT NULL,
-    name_english text NOT NULL,
-    transliteration text,
-    category character varying(50) DEFAULT 'general'::character varying NOT NULL,
-    sort_order integer DEFAULT 0,
-    is_standard boolean DEFAULT false,
-    halachic_notes text,
-    halachic_source character varying(500),
-    created_at timestamp with time zone DEFAULT now(),
-    updated_at timestamp with time zone DEFAULT now(),
-    CONSTRAINT chk_hebrew_name CHECK ((name_hebrew ~ '[א-ת]'::text))
-);
-COMMENT ON COLUMN public.zman_definitions.halachic_notes IS 'Markdown-formatted halachic documentation and sources';
-COMMENT ON COLUMN public.zman_definitions.halachic_source IS 'Primary halachic source reference';
 
 -- Zman Display Contexts
 CREATE TABLE public.zman_display_contexts (
@@ -771,7 +758,6 @@ CREATE TABLE public.zmanim_templates (
     category text NOT NULL,
     description text,
     is_required boolean DEFAULT false NOT NULL,
-    sort_order integer DEFAULT 0 NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT zmanim_templates_category_check CHECK ((category = ANY (ARRAY['essential'::text, 'optional'::text])))
@@ -809,11 +795,11 @@ ALTER TABLE ONLY public.publisher_zman_aliases ADD CONSTRAINT publisher_zman_ali
 ALTER TABLE ONLY public.publisher_zman_day_types ADD CONSTRAINT publisher_zman_day_types_pkey PRIMARY KEY (publisher_zman_id, day_type_id);
 ALTER TABLE ONLY public.publisher_zman_events ADD CONSTRAINT publisher_zman_events_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY public.publisher_zman_versions ADD CONSTRAINT publisher_zman_versions_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.publisher_zman_tags ADD CONSTRAINT publisher_zman_tags_pkey PRIMARY KEY (publisher_zman_id, tag_id);
 ALTER TABLE ONLY public.publisher_zmanim ADD CONSTRAINT publisher_zmanim_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY public.publishers ADD CONSTRAINT publishers_pkey PRIMARY KEY (id);
 -- schema_migrations primary key is created by migrate.sh script
 ALTER TABLE ONLY public.system_config ADD CONSTRAINT system_config_pkey PRIMARY KEY (id);
-ALTER TABLE ONLY public.zman_definitions ADD CONSTRAINT zman_definitions_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY public.zman_display_contexts ADD CONSTRAINT zman_display_contexts_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY public.zman_registry_requests ADD CONSTRAINT zman_registry_requests_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY public.zman_request_tags ADD CONSTRAINT zman_request_tags_pkey PRIMARY KEY (id);
@@ -846,7 +832,6 @@ ALTER TABLE ONLY public.publisher_zmanim ADD CONSTRAINT publisher_zmanim_publish
 ALTER TABLE ONLY public.publishers ADD CONSTRAINT publishers_clerk_user_id_key UNIQUE (clerk_user_id);
 ALTER TABLE ONLY public.publishers ADD CONSTRAINT publishers_email_key UNIQUE (email);
 ALTER TABLE ONLY public.system_config ADD CONSTRAINT system_config_key_key UNIQUE (key);
-ALTER TABLE ONLY public.zman_definitions ADD CONSTRAINT zman_definitions_key_key UNIQUE (key);
 ALTER TABLE ONLY public.zman_display_contexts ADD CONSTRAINT zman_display_contexts_master_zman_id_context_code_key UNIQUE (master_zman_id, context_code);
 ALTER TABLE ONLY public.zman_tags ADD CONSTRAINT zman_tags_name_key UNIQUE (name);
 ALTER TABLE ONLY public.zman_tags ADD CONSTRAINT zman_tags_tag_key_key UNIQUE (tag_key);
@@ -879,18 +864,21 @@ CREATE INDEX idx_astronomical_primitives_category ON public.astronomical_primiti
 CREATE INDEX idx_astronomical_primitives_variable_name ON public.astronomical_primitives USING btree (variable_name);
 
 -- Cities
+-- Primary lookup patterns: country filtering, region filtering, population sorting, name search
 CREATE INDEX idx_cities_country_id ON public.cities USING btree (country_id);
 CREATE INDEX idx_cities_country_population ON public.cities USING btree (country_id, population DESC NULLS LAST, name);
 CREATE INDEX idx_cities_covering ON public.cities USING btree (id) INCLUDE (name, hebrew_name, country_id, region_id, latitude, longitude, timezone, population, elevation, geonameid);
 CREATE UNIQUE INDEX idx_cities_geonameid ON public.cities USING btree (geonameid) WHERE (geonameid IS NOT NULL);
 CREATE INDEX idx_cities_location ON public.cities USING gist (location);
-CREATE INDEX idx_cities_name ON public.cities USING btree (name);
-CREATE INDEX idx_cities_name_ascii ON public.cities USING btree (name_ascii);
+-- REMOVED: idx_cities_name - covered by trigram index for ILIKE searches
+-- REMOVED: idx_cities_name_ascii - covered by trigram index for ILIKE searches
 CREATE INDEX idx_cities_name_ascii_trgm ON public.cities USING gin (name_ascii public.gin_trgm_ops);
 CREATE INDEX idx_cities_name_trgm ON public.cities USING gin (name public.gin_trgm_ops);
 CREATE INDEX idx_cities_population ON public.cities USING btree (population DESC NULLS LAST);
 CREATE INDEX idx_cities_region_id ON public.cities USING btree (region_id);
 CREATE INDEX idx_cities_region_population ON public.cities USING btree (region_id, population DESC NULLS LAST, name) WHERE (region_id IS NOT NULL);
+-- NEW: Composite for ListCitiesByRegion queries (country_id + region_id + population sort)
+CREATE INDEX idx_cities_country_region_population ON public.cities USING btree (country_id, region_id, population DESC NULLS LAST, name);
 
 -- Day Types
 CREATE INDEX idx_day_types_name ON public.day_types USING btree (name);
@@ -916,10 +904,9 @@ CREATE INDEX idx_master_registry_category ON public.master_zmanim_registry USING
 CREATE INDEX idx_master_registry_english_name_trgm ON public.master_zmanim_registry USING gin (canonical_english_name public.gin_trgm_ops);
 CREATE INDEX idx_master_registry_hebrew_name_trgm ON public.master_zmanim_registry USING gin (canonical_hebrew_name public.gin_trgm_ops);
 CREATE INDEX idx_master_registry_hidden ON public.master_zmanim_registry USING btree (is_hidden);
-CREATE INDEX idx_master_registry_key ON public.master_zmanim_registry USING btree (zman_key);
-CREATE INDEX idx_master_registry_sort ON public.master_zmanim_registry USING btree (time_category, sort_order);
+-- REMOVED: idx_master_registry_key - redundant with UNIQUE constraint master_zmanim_registry_zman_key_key
 CREATE INDEX idx_master_registry_transliteration_trgm ON public.master_zmanim_registry USING gin (transliteration public.gin_trgm_ops);
-CREATE INDEX idx_master_registry_visible_by_category ON public.master_zmanim_registry USING btree (time_category, sort_order, canonical_hebrew_name) WHERE (is_hidden = false);
+CREATE INDEX idx_master_registry_visible_by_category ON public.master_zmanim_registry USING btree (time_category, canonical_hebrew_name) WHERE (is_hidden = false);
 
 -- Master Zman Day Types/Events/Tags
 CREATE INDEX idx_master_zman_day_types_day ON public.master_zman_day_types USING btree (day_type_id);
@@ -941,7 +928,7 @@ CREATE INDEX idx_pub_zman_day_types_day ON public.publisher_zman_day_types USING
 CREATE INDEX idx_pub_zman_day_types_zman ON public.publisher_zman_day_types USING btree (publisher_zman_id);
 
 -- Publisher Coverage
-CREATE INDEX idx_publisher_coverage_active ON public.publisher_coverage USING btree (is_active);
+-- REMOVED: idx_publisher_coverage_active - covered by idx_publisher_coverage_calc partial index
 CREATE INDEX idx_publisher_coverage_calc ON public.publisher_coverage USING btree (publisher_id, is_active, coverage_level, country_code, region) WHERE (is_active = true);
 CREATE INDEX idx_publisher_coverage_city ON public.publisher_coverage USING btree (city_id) WHERE (coverage_level = 'city'::text);
 CREATE INDEX idx_publisher_coverage_continent ON public.publisher_coverage USING btree (continent_code) WHERE (coverage_level = 'continent'::text);
@@ -970,7 +957,12 @@ CREATE INDEX idx_publisher_zman_aliases_zman ON public.publisher_zman_aliases US
 CREATE INDEX idx_publisher_zman_events_event ON public.publisher_zman_events USING btree (jewish_event_id);
 CREATE INDEX idx_publisher_zman_events_zman ON public.publisher_zman_events USING btree (publisher_zman_id);
 
+-- Publisher Zman Tags
+CREATE INDEX idx_publisher_zman_tags_zman ON public.publisher_zman_tags USING btree (publisher_zman_id);
+CREATE INDEX idx_publisher_zman_tags_tag ON public.publisher_zman_tags USING btree (tag_id);
+
 -- Publisher Zmanim
+-- Primary query pattern: GetPublisherZmanim (publisher_id + deleted_at IS NULL), GetPublisherZmanByKey (publisher_id + zman_key + deleted_at IS NULL)
 CREATE INDEX idx_publisher_zmanim_active ON public.publisher_zmanim USING btree (publisher_id) WHERE (deleted_at IS NULL);
 CREATE INDEX idx_publisher_zmanim_active_enabled ON public.publisher_zmanim USING btree (publisher_id, is_enabled) WHERE (deleted_at IS NULL);
 CREATE INDEX idx_publisher_zmanim_beta ON public.publisher_zmanim USING btree (publisher_id, is_beta) WHERE (is_beta = true);
@@ -985,8 +977,10 @@ CREATE INDEX idx_publisher_zmanim_linked_source ON public.publisher_zmanim USING
 CREATE INDEX idx_publisher_zmanim_master ON public.publisher_zmanim USING btree (master_zman_id);
 CREATE INDEX idx_publisher_zmanim_public_search ON public.publisher_zmanim USING btree (is_published, is_visible, category) WHERE ((is_published = true) AND (is_visible = true));
 CREATE INDEX idx_publisher_zmanim_published ON public.publisher_zmanim USING btree (publisher_id, is_published) WHERE (is_published = true);
-CREATE INDEX idx_publisher_zmanim_publisher ON public.publisher_zmanim USING btree (publisher_id);
+-- REMOVED: idx_publisher_zmanim_publisher - redundant with idx_publisher_zmanim_active partial index
 CREATE INDEX idx_publisher_zmanim_source_type ON public.publisher_zmanim USING btree (source_type);
+-- NEW: High-frequency lookup pattern for GetPublisherZmanByKey (publisher_id + zman_key + deleted_at IS NULL)
+CREATE INDEX idx_publisher_zmanim_key_lookup ON public.publisher_zmanim USING btree (publisher_id, zman_key) WHERE (deleted_at IS NULL);
 
 -- Publishers
 CREATE INDEX idx_publishers_clerk_user_id ON public.publishers USING btree (clerk_user_id);
@@ -997,10 +991,6 @@ CREATE INDEX idx_publishers_verified ON public.publishers USING btree (is_verifi
 
 -- System Config
 CREATE INDEX idx_system_config_key ON public.system_config USING btree (key);
-
--- Zman Definitions
-CREATE INDEX idx_zman_definitions_category ON public.zman_definitions USING btree (category);
-CREATE INDEX idx_zman_definitions_key ON public.zman_definitions USING btree (key);
 
 -- Zman Registry Requests (query optimization)
 CREATE INDEX idx_zman_registry_requests_publisher ON public.zman_registry_requests USING btree (publisher_id);
@@ -1013,14 +1003,17 @@ CREATE INDEX idx_zman_request_tags_request ON public.zman_request_tags USING btr
 CREATE INDEX idx_zman_request_tags_tag ON public.zman_request_tags USING btree (tag_id) WHERE (tag_id IS NOT NULL);
 
 -- Zman Tags (query optimization)
-CREATE INDEX idx_zman_tags_name_lower ON public.zman_tags USING btree (LOWER(name::text));
+-- REMOVED: idx_zman_tags_name_lower - redundant with UNIQUE constraint zman_tags_name_key
 CREATE INDEX idx_zman_tags_type ON public.zman_tags USING btree (tag_type);
 
 -- Publisher Zman Versions (query optimization)
 CREATE INDEX idx_publisher_zman_versions_zman_version ON public.publisher_zman_versions USING btree (publisher_zman_id, version_number DESC);
 
 -- Algorithms (query optimization - composite for publishing workflow)
+-- Queries: GetPublisherDraftAlgorithm, GetPublisherActiveAlgorithm ORDER BY created_at DESC LIMIT 1
 CREATE INDEX idx_algorithms_publisher_status ON public.algorithms USING btree (publisher_id, status);
+-- NEW: Optimized for ORDER BY created_at DESC LIMIT 1 queries
+CREATE INDEX idx_algorithms_publisher_status_created ON public.algorithms USING btree (publisher_id, status, created_at DESC);
 
 -- Zmanim Templates (query optimization)
 CREATE INDEX idx_zmanim_templates_key ON public.zmanim_templates USING btree (zman_key);
@@ -1033,6 +1026,10 @@ CREATE INDEX idx_publisher_zman_events_composite ON public.publisher_zman_events
 
 -- Cities (covering index for search results)
 CREATE INDEX idx_cities_search_covering ON public.cities USING btree (name) INCLUDE (hebrew_name, country_id, region_id, timezone, population, latitude, longitude);
+
+-- Publishers (covering index for JOINs)
+-- Queries frequently JOIN publishers just to get name
+CREATE INDEX idx_publishers_id_name ON public.publishers USING btree (id) INCLUDE (name, status, is_verified);
 
 -- ============================================================================
 -- VIEWS
@@ -1051,7 +1048,6 @@ CREATE VIEW public.master_zmanim_with_tags AS
     default_formula_dsl,
     is_core,
     is_hidden,
-    sort_order,
     created_by,
     updated_by,
     created_at,
@@ -1079,7 +1075,6 @@ CREATE VIEW public.publisher_zmanim_resolved AS
     pz.is_custom,
     pz.category,
     pz.dependencies,
-    pz.sort_order,
     pz.master_zman_id,
     pz.linked_publisher_zman_id,
     pz.source_type,
@@ -1121,7 +1116,6 @@ CREATE VIEW public.publisher_zmanim_with_registry AS
     COALESCE(mr.time_category, (pz.category)::character varying) AS time_category,
     pz.category,
     pz.dependencies,
-    pz.sort_order,
     pz.current_version,
     pz.deleted_at,
     pz.deleted_by,
@@ -1152,7 +1146,6 @@ CREATE TRIGGER update_publisher_coverage_updated_at BEFORE UPDATE ON public.publ
 CREATE TRIGGER update_publisher_zman_aliases_updated_at BEFORE UPDATE ON public.publisher_zman_aliases FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 CREATE TRIGGER update_publishers_updated_at BEFORE UPDATE ON public.publishers FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 CREATE TRIGGER update_system_config_updated_at BEFORE UPDATE ON public.system_config FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
-CREATE TRIGGER update_zman_definitions_updated_at BEFORE UPDATE ON public.zman_definitions FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
 -- ============================================================================
 -- FOREIGN KEYS
@@ -1182,6 +1175,8 @@ ALTER TABLE ONLY public.publisher_zman_day_types ADD CONSTRAINT publisher_zman_d
 ALTER TABLE ONLY public.publisher_zman_events ADD CONSTRAINT publisher_zman_events_jewish_event_id_fkey FOREIGN KEY (jewish_event_id) REFERENCES public.jewish_events(id) ON DELETE CASCADE;
 ALTER TABLE ONLY public.publisher_zman_events ADD CONSTRAINT publisher_zman_events_publisher_zman_id_fkey FOREIGN KEY (publisher_zman_id) REFERENCES public.publisher_zmanim(id) ON DELETE CASCADE;
 ALTER TABLE ONLY public.publisher_zman_versions ADD CONSTRAINT publisher_zman_versions_publisher_zman_id_fkey FOREIGN KEY (publisher_zman_id) REFERENCES public.publisher_zmanim(id) ON DELETE CASCADE;
+ALTER TABLE ONLY public.publisher_zman_tags ADD CONSTRAINT publisher_zman_tags_publisher_zman_id_fkey FOREIGN KEY (publisher_zman_id) REFERENCES public.publisher_zmanim(id) ON DELETE CASCADE;
+ALTER TABLE ONLY public.publisher_zman_tags ADD CONSTRAINT publisher_zman_tags_tag_id_fkey FOREIGN KEY (tag_id) REFERENCES public.zman_tags(id) ON DELETE CASCADE;
 ALTER TABLE ONLY public.publisher_zmanim ADD CONSTRAINT publisher_zmanim_linked_publisher_zman_id_fkey FOREIGN KEY (linked_publisher_zman_id) REFERENCES public.publisher_zmanim(id) ON DELETE SET NULL;
 ALTER TABLE ONLY public.publisher_zmanim ADD CONSTRAINT publisher_zmanim_master_zman_id_fkey FOREIGN KEY (master_zman_id) REFERENCES public.master_zmanim_registry(id);
 ALTER TABLE ONLY public.publisher_zmanim ADD CONSTRAINT publisher_zmanim_publisher_id_fkey FOREIGN KEY (publisher_id) REFERENCES public.publishers(id) ON DELETE CASCADE;

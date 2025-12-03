@@ -74,10 +74,8 @@ export function FixedOffsetForm({
 
   const isLoading = zmanimLoading || primitivesLoading;
 
-  // Filter daily zmanim (not event-specific)
-  const dailyZmanim = zmanim
-    .filter((z) => !z.is_event_zman)
-    .sort((a, b) => a.sort_order - b.sort_order);
+  // Filter daily zmanim (not event-specific) - already sorted by time_category from API
+  const dailyZmanim = zmanim.filter((z) => !z.is_event_zman);
 
   // Find selected zman info for display
   const selectedZman = zmanim.find((z) => z.zman_key === base);

@@ -13,6 +13,8 @@ import (
 type Querier interface {
 	AcceptInvitation(ctx context.Context, id string) error
 	AddMasterZmanFromRequest(ctx context.Context, id string) (AddMasterZmanFromRequestRow, error)
+	// Add a tag to a publisher zman
+	AddTagToPublisherZman(ctx context.Context, arg AddTagToPublisherZmanParams) error
 	// Request a new tag for a zman request
 	AddZmanRequestNewTag(ctx context.Context, arg AddZmanRequestNewTagParams) (AddZmanRequestNewTagRow, error)
 	// Add an existing tag to a zman request
@@ -40,6 +42,8 @@ type Querier interface {
 	ArchiveActiveAlgorithms(ctx context.Context, publisherID string) error
 	// Browse public zmanim --
 	BrowsePublicZmanim(ctx context.Context, arg BrowsePublicZmanimParams) ([]BrowsePublicZmanimRow, error)
+	// Bulk insert tags for a publisher zman
+	BulkAddTagsToPublisherZman(ctx context.Context, arg []BulkAddTagsToPublisherZmanParams) (int64, error)
 	CompleteOnboarding(ctx context.Context, publisherID string) (string, error)
 	CountCities(ctx context.Context, arg CountCitiesParams) (int64, error)
 	CountPendingInvitationsForEmail(ctx context.Context, arg CountPendingInvitationsForEmailParams) (int64, error)
@@ -91,8 +95,10 @@ type Querier interface {
 	// ============================================
 	// MASTER REGISTRY QUERIES
 	// ============================================
+	// Orders by time_category (chronological) then hebrew_name
 	GetAllMasterZmanim(ctx context.Context) ([]GetAllMasterZmanimRow, error)
 	// Get all active aliases for a publisher with canonical names included
+	// Orders by time_category (chronological) then hebrew_name
 	GetAllPublisherZmanAliases(ctx context.Context, publisherID string) ([]GetAllPublisherZmanAliasesRow, error)
 	// ============================================
 	// TAG QUERIES
@@ -157,12 +163,19 @@ type Querier interface {
 	GetPublisherZmanByKey(ctx context.Context, arg GetPublisherZmanByKeyParams) (GetPublisherZmanByKeyRow, error)
 	// Get all zman requests for a specific publisher
 	GetPublisherZmanRequests(ctx context.Context, publisherID string) ([]GetPublisherZmanRequestsRow, error)
+	// ============================================================================
+	// Publisher Zman Tags
+	// ============================================================================
+	// Get all tags for a specific publisher zman
+	GetPublisherZmanTags(ctx context.Context, publisherZmanID string) ([]GetPublisherZmanTagsRow, error)
 	GetPublisherZmanWithRegistry(ctx context.Context, arg GetPublisherZmanWithRegistryParams) (GetPublisherZmanWithRegistryRow, error)
 	// Zmanim SQL Queries
 	// SQLc will generate type-safe Go code from these queries
 	// Publisher Zmanim --
+	// Orders by time_category (chronological) then hebrew_name
 	GetPublisherZmanim(ctx context.Context, publisherID string) ([]GetPublisherZmanimRow, error)
 	// Get published zmanim from a specific publisher for copying/linking
+	// Orders by category chronologically then hebrew_name
 	GetPublisherZmanimForLinking(ctx context.Context, arg GetPublisherZmanimForLinkingParams) ([]GetPublisherZmanimForLinkingRow, error)
 	// ============================================
 	// PUBLISHER ZMANIM WITH REGISTRY (new model)
@@ -176,9 +189,6 @@ type Querier interface {
 	// Linked Zmanim Support --
 	// Get verified publishers that current publisher can link to (excludes self)
 	GetVerifiedPublishersForLinking(ctx context.Context, id string) ([]GetVerifiedPublishersForLinkingRow, error)
-	GetZmanDefinitionByKey(ctx context.Context, key string) (GetZmanDefinitionByKeyRow, error)
-	// Zman Definitions (Global) --
-	GetZmanDefinitions(ctx context.Context) ([]GetZmanDefinitionsRow, error)
 	GetZmanRegistryRequestByID(ctx context.Context, id string) (GetZmanRegistryRequestByIDRow, error)
 	GetZmanRegistryRequests(ctx context.Context, status *string) ([]GetZmanRegistryRequestsRow, error)
 	// Get a specific zman request by ID
@@ -194,9 +204,11 @@ type Querier interface {
 	GetZmanVersionHistory(ctx context.Context, arg GetZmanVersionHistoryParams) ([]PublisherZmanVersion, error)
 	GetZmanimTemplateByKey(ctx context.Context, zmanKey string) (ZmanimTemplate, error)
 	// Zmanim Templates --
+	// Orders by category then hebrew_name
 	GetZmanimTemplates(ctx context.Context) ([]ZmanimTemplate, error)
 	GetZmanimTemplatesByKeys(ctx context.Context, dollar_1 []string) ([]ZmanimTemplate, error)
 	// Get all of a publisher's zmanim with their aliases (if any)
+	// Orders by time_category (chronological) then hebrew_name
 	GetZmanimWithAliases(ctx context.Context, publisherID string) ([]GetZmanimWithAliasesRow, error)
 	ImportZmanimFromRegistryByKeys(ctx context.Context, arg ImportZmanimFromRegistryByKeysParams) ([]ImportZmanimFromRegistryByKeysRow, error)
 	// Import from templates to publisher --
@@ -221,6 +233,8 @@ type Querier interface {
 	RejectTagRequest(ctx context.Context, id string) error
 	// Reject a zman request
 	RejectZmanRequest(ctx context.Context, arg RejectZmanRequestParams) (RejectZmanRequestRow, error)
+	// Remove a tag from a publisher zman
+	RemoveTagFromPublisherZman(ctx context.Context, arg RemoveTagFromPublisherZmanParams) error
 	RestorePublisherZman(ctx context.Context, arg RestorePublisherZmanParams) (RestorePublisherZmanRow, error)
 	RollbackZmanToVersion(ctx context.Context, arg RollbackZmanToVersionParams) (RollbackZmanToVersionRow, error)
 	// Cities SQL Queries (Normalized Schema)
@@ -228,6 +242,9 @@ type Querier interface {
 	// Uses JOINs to geo_continents, geo_countries, and geo_regions lookup tables
 	SearchCities(ctx context.Context, arg SearchCitiesParams) ([]SearchCitiesRow, error)
 	SearchMasterZmanim(ctx context.Context, dollar_1 *string) ([]SearchMasterZmanimRow, error)
+	// Replace all tags for a publisher zman (delete existing, insert new)
+	// First delete all existing tags for the zman
+	SetPublisherZmanTags(ctx context.Context, publisherZmanID string) error
 	SkipOnboarding(ctx context.Context, publisherID string) (string, error)
 	// ============================================
 	// SOFT DELETE QUERIES

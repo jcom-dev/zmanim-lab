@@ -13,6 +13,14 @@ import type { Page } from '@playwright/test';
 import { Pool } from 'pg';
 import { createTestInbox } from './email-testing';
 import { linkClerkUserToPublisher } from './test-fixtures';
+import {
+  BASE_URL,
+  TEST_PASSWORD,
+  TEST_EMAIL_DOMAINS,
+  TEST_EMAIL_PREFIX,
+  TIMEOUTS,
+  PAGINATION,
+} from '../../config';
 
 // Cache for slug -> ID resolution
 const slugCache: Map<string, string> = new Map();
@@ -62,7 +70,7 @@ const getClerkClient = () => {
   return createClerkClient({ secretKey });
 };
 
-const TEST_PASSWORD = 'TestPassword123!';
+// TEST_PASSWORD imported from ../../config
 
 // Test user session - created once per test run
 interface TestUserSession {
@@ -94,7 +102,7 @@ async function generateTestEmail(role: string): Promise<string> {
     const timestamp = Date.now();
     const random = Math.random().toString(36).substring(2, 8);
     // Use mailslurp.dev domain which is typically whitelisted
-    return `e2e-${role}-${timestamp}-${random}@mailslurp.dev`;
+    return `${TEST_EMAIL_PREFIX}${role}-${timestamp}-${random}@mailslurp.dev`;
   }
 }
 
@@ -307,10 +315,8 @@ export async function createTestUser(): Promise<{ id: string; email: string }> {
  * This bypasses bot detection and uses Clerk's programmatic sign-in
  */
 async function performClerkSignIn(page: Page, email: string): Promise<void> {
-  const baseUrl = process.env.BASE_URL || 'http://localhost:3001';
-
   // Navigate to the app first (Clerk needs to be loaded)
-  await page.goto(baseUrl);
+  await page.goto(BASE_URL);
   await page.waitForLoadState('domcontentloaded');
 
   // Setup testing token to bypass bot detection
@@ -320,15 +326,15 @@ async function performClerkSignIn(page: Page, email: string): Promise<void> {
     console.warn('Warning: setupClerkTestingToken failed:', error?.message);
   }
 
-  // Wait for Clerk to be loaded (30s is plenty)
+  // Wait for Clerk to be loaded
   await page.waitForFunction(
     () => typeof (window as any).Clerk !== 'undefined',
-    { timeout: 30000 }
+    { timeout: TIMEOUTS.CLERK_AUTH }
   );
 
   await page.waitForFunction(
     () => (window as any).Clerk?.loaded === true,
-    { timeout: 30000 }
+    { timeout: TIMEOUTS.CLERK_AUTH }
   );
 
   // Check if already signed in (from storage state)
@@ -348,10 +354,10 @@ async function performClerkSignIn(page: Page, email: string): Promise<void> {
     emailAddress: email,
   });
 
-  // Wait for authentication to complete (30s is plenty)
+  // Wait for authentication to complete
   await page.waitForFunction(
     () => (window as any).Clerk?.user !== null,
-    { timeout: 30000 }
+    { timeout: TIMEOUTS.CLERK_AUTH }
   );
 
   // Wait for app to recognize the authenticated state
@@ -364,7 +370,7 @@ async function performClerkSignIn(page: Page, email: string): Promise<void> {
              clerk?.session?.status === 'active' &&
              clerk?.user?.primaryEmailAddress !== undefined;
     },
-    { timeout: 10000 }
+    { timeout: TIMEOUTS.CLERK_LOAD }
   ).catch(() => {
     // If detailed check times out, the basic auth check passed - continue
   });
@@ -424,8 +430,7 @@ export async function logout(page: Page): Promise<void> {
   try {
     await clerk.signOut({ page });
   } catch (error) {
-    const baseUrl = process.env.BASE_URL || 'http://localhost:3001';
-    await page.goto(`${baseUrl}/sign-out`);
+    await page.goto(`${BASE_URL}/sign-out`);
   }
 }
 
@@ -452,20 +457,9 @@ export async function cleanupTestUsers(): Promise<void> {
   }
 
   // Also clean up any orphaned test users (from previous failed runs)
-  // Include all domains used by generateTestEmail() and MailSlurp
-  const testDomains = [
-    '@clerk.test',
-    '@mailslurp.xyz',
-    '@mailslurp.world',
-    '@tempsmtp.com',
-    '@mailslurp.info',
-    '@mailslurp.dev',      // Fallback domain used in generateTestEmail()
-    '@mailslurp.biz',      // Additional MailSlurp domains
-    '@mailslurp.net',
-    '@test-zmanim.example.com',  // TEST_EMAIL_DOMAIN from test-fixtures
-  ];
+  // Use centralized TEST_EMAIL_DOMAINS from config
   let offset = 0;
-  const limit = 100;
+  const limit = PAGINATION.CLERK_LIST_LIMIT;
   let hasMore = true;
   let deletedCount = 0;
 
@@ -475,8 +469,8 @@ export async function cleanupTestUsers(): Promise<void> {
 
       const testUsers = response.data.filter((user) =>
         user.emailAddresses.some((email) =>
-          testDomains.some((domain) => email.emailAddress.endsWith(domain)) ||
-          email.emailAddress.startsWith('e2e-')
+          TEST_EMAIL_DOMAINS.some((domain) => email.emailAddress.endsWith(domain)) ||
+          email.emailAddress.startsWith(TEST_EMAIL_PREFIX)
         )
       );
 

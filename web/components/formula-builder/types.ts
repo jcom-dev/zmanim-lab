@@ -1,7 +1,7 @@
 // Formula builder state and types
 
 export type MethodType = 'solar' | 'fixed' | 'proportional' | 'fixed_zman' | null;
-export type SolarDirection = 'before_sunrise' | 'after_sunset';
+export type SolarDirection = 'before_sunrise' | 'after_sunset' | 'before_noon' | 'after_noon';
 export type OffsetDirection = 'before' | 'after';
 export type ShaosBase = 'gra' | 'mga' | 'custom';
 
@@ -165,7 +165,7 @@ export function parseFormula(formula: string): ParseResult {
   const trimmed = formula.trim();
 
   // 1. Check for solar angle: solar(degrees, direction)
-  const solarMatch = trimmed.match(/^solar\s*\(\s*([\d.]+)\s*,\s*(before_sunrise|after_sunset)\s*\)$/);
+  const solarMatch = trimmed.match(/^solar\s*\(\s*([\d.]+)\s*,\s*(before_sunrise|after_sunset|before_noon|after_noon)\s*\)$/);
   if (solarMatch) {
     return {
       success: true,

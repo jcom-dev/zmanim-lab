@@ -7,7 +7,6 @@ package sqlcgen
 
 import (
 	"context"
-	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -29,12 +28,12 @@ type AddZmanRequestNewTagParams struct {
 }
 
 type AddZmanRequestNewTagRow struct {
-	ID               string    `json:"id"`
-	RequestID        string    `json:"request_id"`
-	RequestedTagName *string   `json:"requested_tag_name"`
-	RequestedTagType *string   `json:"requested_tag_type"`
-	IsNewTagRequest  bool      `json:"is_new_tag_request"`
-	CreatedAt        time.Time `json:"created_at"`
+	ID               string             `json:"id"`
+	RequestID        string             `json:"request_id"`
+	RequestedTagName *string            `json:"requested_tag_name"`
+	RequestedTagType *string            `json:"requested_tag_type"`
+	IsNewTagRequest  bool               `json:"is_new_tag_request"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
 }
 
 // Request a new tag for a zman request
@@ -67,11 +66,11 @@ type AddZmanRequestTagParams struct {
 }
 
 type AddZmanRequestTagRow struct {
-	ID              string      `json:"id"`
-	RequestID       string      `json:"request_id"`
-	TagID           pgtype.UUID `json:"tag_id"`
-	IsNewTagRequest bool        `json:"is_new_tag_request"`
-	CreatedAt       time.Time   `json:"created_at"`
+	ID              string             `json:"id"`
+	RequestID       string             `json:"request_id"`
+	TagID           pgtype.UUID        `json:"tag_id"`
+	IsNewTagRequest bool               `json:"is_new_tag_request"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 }
 
 // Add an existing tag to a zman request
@@ -114,13 +113,13 @@ type ApproveTagRequestParams struct {
 }
 
 type ApproveTagRequestRow struct {
-	ID                 string    `json:"id"`
-	TagKey             string    `json:"tag_key"`
-	Name               string    `json:"name"`
-	DisplayNameHebrew  string    `json:"display_name_hebrew"`
-	DisplayNameEnglish string    `json:"display_name_english"`
-	TagType            string    `json:"tag_type"`
-	CreatedAt          time.Time `json:"created_at"`
+	ID                 string             `json:"id"`
+	TagKey             string             `json:"tag_key"`
+	Name               string             `json:"name"`
+	DisplayNameHebrew  string             `json:"display_name_hebrew"`
+	DisplayNameEnglish string             `json:"display_name_english"`
+	TagType            string             `json:"tag_type"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
 }
 
 // Approve a new tag request - creates the tag and updates the request
@@ -196,7 +195,7 @@ INSERT INTO publisher_zmanim (
     transliteration, description,
     formula_dsl, ai_explanation, publisher_comment,
     is_enabled, is_visible, is_published, is_custom, category,
-    dependencies, sort_order, current_version
+    dependencies, current_version
 )
 SELECT
     gen_random_uuid() AS id,
@@ -215,7 +214,6 @@ SELECT
     true AS is_custom,
     zrr.time_category AS category,
     '{}'::text[] AS dependencies,
-    999 AS sort_order,
     1 AS current_version
 FROM zman_registry_requests zrr
 WHERE zrr.id = $1
@@ -223,30 +221,29 @@ ON CONFLICT (publisher_id, zman_key) DO NOTHING
 RETURNING id, publisher_id, zman_key, hebrew_name, english_name,
     transliteration, description, formula_dsl, ai_explanation, publisher_comment,
     is_enabled, is_visible, is_published, is_custom, category,
-    dependencies, sort_order, created_at, updated_at, current_version
+    dependencies, created_at, updated_at, current_version
 `
 
 type CreatePublisherZmanFromRequestRow struct {
-	ID               string    `json:"id"`
-	PublisherID      string    `json:"publisher_id"`
-	ZmanKey          string    `json:"zman_key"`
-	HebrewName       string    `json:"hebrew_name"`
-	EnglishName      string    `json:"english_name"`
-	Transliteration  *string   `json:"transliteration"`
-	Description      *string   `json:"description"`
-	FormulaDsl       string    `json:"formula_dsl"`
-	AiExplanation    *string   `json:"ai_explanation"`
-	PublisherComment *string   `json:"publisher_comment"`
-	IsEnabled        bool      `json:"is_enabled"`
-	IsVisible        bool      `json:"is_visible"`
-	IsPublished      bool      `json:"is_published"`
-	IsCustom         bool      `json:"is_custom"`
-	Category         string    `json:"category"`
-	Dependencies     []string  `json:"dependencies"`
-	SortOrder        int32     `json:"sort_order"`
-	CreatedAt        time.Time `json:"created_at"`
-	UpdatedAt        time.Time `json:"updated_at"`
-	CurrentVersion   *int32    `json:"current_version"`
+	ID               string             `json:"id"`
+	PublisherID      string             `json:"publisher_id"`
+	ZmanKey          string             `json:"zman_key"`
+	HebrewName       string             `json:"hebrew_name"`
+	EnglishName      string             `json:"english_name"`
+	Transliteration  *string            `json:"transliteration"`
+	Description      *string            `json:"description"`
+	FormulaDsl       string             `json:"formula_dsl"`
+	AiExplanation    *string            `json:"ai_explanation"`
+	PublisherComment *string            `json:"publisher_comment"`
+	IsEnabled        bool               `json:"is_enabled"`
+	IsVisible        bool               `json:"is_visible"`
+	IsPublished      bool               `json:"is_published"`
+	IsCustom         bool               `json:"is_custom"`
+	Category         string             `json:"category"`
+	Dependencies     []string           `json:"dependencies"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+	CurrentVersion   *int32             `json:"current_version"`
 }
 
 // Create a publisher_zman entry from an approved zman request
@@ -271,7 +268,6 @@ func (q *Queries) CreatePublisherZmanFromRequest(ctx context.Context, id string)
 		&i.IsCustom,
 		&i.Category,
 		&i.Dependencies,
-		&i.SortOrder,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CurrentVersion,
@@ -321,22 +317,22 @@ type CreateZmanRequestParams struct {
 }
 
 type CreateZmanRequestRow struct {
-	ID                   string    `json:"id"`
-	PublisherID          string    `json:"publisher_id"`
-	RequestedKey         string    `json:"requested_key"`
-	RequestedHebrewName  string    `json:"requested_hebrew_name"`
-	RequestedEnglishName string    `json:"requested_english_name"`
-	Transliteration      *string   `json:"transliteration"`
-	RequestedFormulaDsl  *string   `json:"requested_formula_dsl"`
-	TimeCategory         string    `json:"time_category"`
-	Description          *string   `json:"description"`
-	HalachicNotes        *string   `json:"halachic_notes"`
-	HalachicSource       *string   `json:"halachic_source"`
-	PublisherEmail       *string   `json:"publisher_email"`
-	PublisherName        *string   `json:"publisher_name"`
-	AutoAddOnApproval    *bool     `json:"auto_add_on_approval"`
-	Status               string    `json:"status"`
-	CreatedAt            time.Time `json:"created_at"`
+	ID                   string             `json:"id"`
+	PublisherID          string             `json:"publisher_id"`
+	RequestedKey         string             `json:"requested_key"`
+	RequestedHebrewName  string             `json:"requested_hebrew_name"`
+	RequestedEnglishName string             `json:"requested_english_name"`
+	Transliteration      *string            `json:"transliteration"`
+	RequestedFormulaDsl  *string            `json:"requested_formula_dsl"`
+	TimeCategory         string             `json:"time_category"`
+	Description          *string            `json:"description"`
+	HalachicNotes        *string            `json:"halachic_notes"`
+	HalachicSource       *string            `json:"halachic_source"`
+	PublisherEmail       *string            `json:"publisher_email"`
+	PublisherName        *string            `json:"publisher_name"`
+	AutoAddOnApproval    *bool              `json:"auto_add_on_approval"`
+	Status               string             `json:"status"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
 }
 
 // Zman Request Queries
@@ -398,13 +394,13 @@ LIMIT 1
 `
 
 type FindTagByNameRow struct {
-	ID                 string    `json:"id"`
-	TagKey             string    `json:"tag_key"`
-	Name               string    `json:"name"`
-	DisplayNameHebrew  string    `json:"display_name_hebrew"`
-	DisplayNameEnglish string    `json:"display_name_english"`
-	TagType            string    `json:"tag_type"`
-	CreatedAt          time.Time `json:"created_at"`
+	ID                 string             `json:"id"`
+	TagKey             string             `json:"tag_key"`
+	Name               string             `json:"name"`
+	DisplayNameHebrew  string             `json:"display_name_hebrew"`
+	DisplayNameEnglish string             `json:"display_name_english"`
+	TagType            string             `json:"tag_type"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
 }
 
 // Find an existing tag by name (case-insensitive match)
@@ -456,7 +452,7 @@ type GetAllZmanRequestsRow struct {
 	Status               string             `json:"status"`
 	ReviewedBy           *string            `json:"reviewed_by"`
 	ReviewedAt           pgtype.Timestamptz `json:"reviewed_at"`
-	CreatedAt            time.Time          `json:"created_at"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
 	PublisherName        string             `json:"publisher_name"`
 }
 
@@ -537,7 +533,7 @@ type GetPublisherZmanRequestsRow struct {
 	Status               string             `json:"status"`
 	ReviewedAt           pgtype.Timestamptz `json:"reviewed_at"`
 	ReviewerNotes        *string            `json:"reviewer_notes"`
-	CreatedAt            time.Time          `json:"created_at"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
 }
 
 // Get all zman requests for a specific publisher
@@ -619,7 +615,7 @@ type GetZmanRequestRow struct {
 	ReviewedBy           *string            `json:"reviewed_by"`
 	ReviewedAt           pgtype.Timestamptz `json:"reviewed_at"`
 	ReviewerNotes        *string            `json:"reviewer_notes"`
-	CreatedAt            time.Time          `json:"created_at"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
 	SubmitterName        string             `json:"submitter_name"`
 }
 
@@ -699,16 +695,16 @@ WHERE zrt.request_id = $1
 `
 
 type GetZmanRequestTagsRow struct {
-	ID               string      `json:"id"`
-	RequestID        string      `json:"request_id"`
-	TagID            pgtype.UUID `json:"tag_id"`
-	RequestedTagName *string     `json:"requested_tag_name"`
-	RequestedTagType *string     `json:"requested_tag_type"`
-	IsNewTagRequest  bool        `json:"is_new_tag_request"`
-	CreatedAt        time.Time   `json:"created_at"`
-	ExistingTagKey   *string     `json:"existing_tag_key"`
-	ExistingTagName  *string     `json:"existing_tag_name"`
-	ExistingTagType  *string     `json:"existing_tag_type"`
+	ID               string             `json:"id"`
+	RequestID        string             `json:"request_id"`
+	TagID            pgtype.UUID        `json:"tag_id"`
+	RequestedTagName *string            `json:"requested_tag_name"`
+	RequestedTagType *string            `json:"requested_tag_type"`
+	IsNewTagRequest  bool               `json:"is_new_tag_request"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	ExistingTagKey   *string            `json:"existing_tag_key"`
+	ExistingTagName  *string            `json:"existing_tag_name"`
+	ExistingTagType  *string            `json:"existing_tag_type"`
 }
 
 // Get all tags (existing and requested) for a zman request

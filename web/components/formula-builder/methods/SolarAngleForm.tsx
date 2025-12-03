@@ -62,11 +62,10 @@ export function SolarAngleForm({
       {/* Direction toggle */}
       <div className="space-y-2">
         <label className="text-sm font-medium">Direction</label>
-        <div className="flex gap-2">
+        <div className="grid grid-cols-2 gap-2">
           <Button
             variant={direction === 'before_sunrise' ? 'default' : 'outline'}
             size="sm"
-            className="flex-1"
             onClick={(e) => {
               e.stopPropagation();
               onDirectionChange('before_sunrise');
@@ -77,13 +76,32 @@ export function SolarAngleForm({
           <Button
             variant={direction === 'after_sunset' ? 'default' : 'outline'}
             size="sm"
-            className="flex-1"
             onClick={(e) => {
               e.stopPropagation();
               onDirectionChange('after_sunset');
             }}
           >
             After Sunset
+          </Button>
+          <Button
+            variant={direction === 'before_noon' ? 'default' : 'outline'}
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDirectionChange('before_noon');
+            }}
+          >
+            Before Noon
+          </Button>
+          <Button
+            variant={direction === 'after_noon' ? 'default' : 'outline'}
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDirectionChange('after_noon');
+            }}
+          >
+            After Noon
           </Button>
         </div>
       </div>

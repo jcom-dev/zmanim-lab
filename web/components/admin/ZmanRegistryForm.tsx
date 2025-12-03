@@ -58,7 +58,6 @@ export interface ZmanFormData {
   default_formula_dsl: string;
   is_core: boolean;
   is_hidden: boolean;
-  sort_order: number;
   tag_ids: string[];
 }
 
@@ -108,7 +107,6 @@ const DEFAULT_FORM_DATA: ZmanFormData = {
   default_formula_dsl: '',
   is_core: false,
   is_hidden: false,
-  sort_order: 0,
   tag_ids: [],
 };
 
@@ -783,18 +781,6 @@ export function ZmanRegistryForm({
                 setFormData({ ...formData, halachic_source: e.target.value })
               }
               placeholder="e.g., Shulchan Aruch 89:1"
-              disabled={disabled}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="sort_order">Sort Order</Label>
-            <Input
-              id="sort_order"
-              type="number"
-              value={formData.sort_order}
-              onChange={(e) =>
-                setFormData({ ...formData, sort_order: parseInt(e.target.value) || 0 })
-              }
               disabled={disabled}
             />
           </div>

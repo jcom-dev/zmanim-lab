@@ -7,7 +7,6 @@ package sqlcgen
 
 import (
 	"context"
-	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -20,7 +19,6 @@ INSERT INTO master_zmanim_registry (
     time_category,
     default_formula_dsl,
     is_core,
-    sort_order,
     description
 )
 SELECT
@@ -30,25 +28,23 @@ SELECT
     time_category,
     requested_formula_dsl,
     false,
-    999,
     'Added from publisher request'
 FROM zman_registry_requests zrr
 WHERE zrr.id = $1
 RETURNING id, zman_key, canonical_hebrew_name, canonical_english_name, time_category,
-    default_formula_dsl, is_core, sort_order, created_at, updated_at
+    default_formula_dsl, is_core, created_at, updated_at
 `
 
 type AddMasterZmanFromRequestRow struct {
-	ID                   string    `json:"id"`
-	ZmanKey              string    `json:"zman_key"`
-	CanonicalHebrewName  string    `json:"canonical_hebrew_name"`
-	CanonicalEnglishName string    `json:"canonical_english_name"`
-	TimeCategory         string    `json:"time_category"`
-	DefaultFormulaDsl    string    `json:"default_formula_dsl"`
-	IsCore               *bool     `json:"is_core"`
-	SortOrder            *int32    `json:"sort_order"`
-	CreatedAt            time.Time `json:"created_at"`
-	UpdatedAt            time.Time `json:"updated_at"`
+	ID                   string             `json:"id"`
+	ZmanKey              string             `json:"zman_key"`
+	CanonicalHebrewName  string             `json:"canonical_hebrew_name"`
+	CanonicalEnglishName string             `json:"canonical_english_name"`
+	TimeCategory         string             `json:"time_category"`
+	DefaultFormulaDsl    string             `json:"default_formula_dsl"`
+	IsCore               *bool              `json:"is_core"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
 }
 
 func (q *Queries) AddMasterZmanFromRequest(ctx context.Context, id string) (AddMasterZmanFromRequestRow, error) {
@@ -62,7 +58,6 @@ func (q *Queries) AddMasterZmanFromRequest(ctx context.Context, id string) (AddM
 		&i.TimeCategory,
 		&i.DefaultFormulaDsl,
 		&i.IsCore,
-		&i.SortOrder,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -75,7 +70,7 @@ INSERT INTO publisher_zmanim (
     transliteration, description,
     formula_dsl, ai_explanation, publisher_comment,
     is_enabled, is_visible, is_published, is_custom, category,
-    dependencies, sort_order, master_zman_id, current_version
+    dependencies, master_zman_id, current_version
 )
 SELECT
     gen_random_uuid() AS id,
@@ -94,7 +89,6 @@ SELECT
     false AS is_custom,
     mr.time_category AS category,
     '{}'::text[] AS dependencies,
-    mr.sort_order AS sort_order,
     mr.id AS master_zman_id,
     1 AS current_version
 FROM master_zmanim_registry mr
@@ -102,7 +96,7 @@ WHERE mr.id = $2
 RETURNING id, publisher_id, zman_key, hebrew_name, english_name,
     transliteration, description, formula_dsl, ai_explanation, publisher_comment,
     is_enabled, is_visible, is_published, is_custom, category,
-    dependencies, sort_order, created_at, updated_at, master_zman_id, current_version
+    dependencies, created_at, updated_at, master_zman_id, current_version
 `
 
 type CreatePublisherZmanFromRegistryParams struct {
@@ -112,27 +106,26 @@ type CreatePublisherZmanFromRegistryParams struct {
 }
 
 type CreatePublisherZmanFromRegistryRow struct {
-	ID               string      `json:"id"`
-	PublisherID      string      `json:"publisher_id"`
-	ZmanKey          string      `json:"zman_key"`
-	HebrewName       string      `json:"hebrew_name"`
-	EnglishName      string      `json:"english_name"`
-	Transliteration  *string     `json:"transliteration"`
-	Description      *string     `json:"description"`
-	FormulaDsl       string      `json:"formula_dsl"`
-	AiExplanation    *string     `json:"ai_explanation"`
-	PublisherComment *string     `json:"publisher_comment"`
-	IsEnabled        bool        `json:"is_enabled"`
-	IsVisible        bool        `json:"is_visible"`
-	IsPublished      bool        `json:"is_published"`
-	IsCustom         bool        `json:"is_custom"`
-	Category         string      `json:"category"`
-	Dependencies     []string    `json:"dependencies"`
-	SortOrder        int32       `json:"sort_order"`
-	CreatedAt        time.Time   `json:"created_at"`
-	UpdatedAt        time.Time   `json:"updated_at"`
-	MasterZmanID     pgtype.UUID `json:"master_zman_id"`
-	CurrentVersion   *int32      `json:"current_version"`
+	ID               string             `json:"id"`
+	PublisherID      string             `json:"publisher_id"`
+	ZmanKey          string             `json:"zman_key"`
+	HebrewName       string             `json:"hebrew_name"`
+	EnglishName      string             `json:"english_name"`
+	Transliteration  *string            `json:"transliteration"`
+	Description      *string            `json:"description"`
+	FormulaDsl       string             `json:"formula_dsl"`
+	AiExplanation    *string            `json:"ai_explanation"`
+	PublisherComment *string            `json:"publisher_comment"`
+	IsEnabled        bool               `json:"is_enabled"`
+	IsVisible        bool               `json:"is_visible"`
+	IsPublished      bool               `json:"is_published"`
+	IsCustom         bool               `json:"is_custom"`
+	Category         string             `json:"category"`
+	Dependencies     []string           `json:"dependencies"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+	MasterZmanID     pgtype.UUID        `json:"master_zman_id"`
+	CurrentVersion   *int32             `json:"current_version"`
 }
 
 func (q *Queries) CreatePublisherZmanFromRegistry(ctx context.Context, arg CreatePublisherZmanFromRegistryParams) (CreatePublisherZmanFromRegistryRow, error) {
@@ -155,7 +148,6 @@ func (q *Queries) CreatePublisherZmanFromRegistry(ctx context.Context, arg Creat
 		&i.IsCustom,
 		&i.Category,
 		&i.Dependencies,
-		&i.SortOrder,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.MasterZmanID,
@@ -190,16 +182,16 @@ type CreateZmanRegistryRequestParams struct {
 }
 
 type CreateZmanRegistryRequestRow struct {
-	ID                   string    `json:"id"`
-	PublisherID          string    `json:"publisher_id"`
-	RequestedKey         string    `json:"requested_key"`
-	RequestedHebrewName  string    `json:"requested_hebrew_name"`
-	RequestedEnglishName string    `json:"requested_english_name"`
-	RequestedFormulaDsl  *string   `json:"requested_formula_dsl"`
-	TimeCategory         string    `json:"time_category"`
-	Description          *string   `json:"description"`
-	Status               string    `json:"status"`
-	CreatedAt            time.Time `json:"created_at"`
+	ID                   string             `json:"id"`
+	PublisherID          string             `json:"publisher_id"`
+	RequestedKey         string             `json:"requested_key"`
+	RequestedHebrewName  string             `json:"requested_hebrew_name"`
+	RequestedEnglishName string             `json:"requested_english_name"`
+	RequestedFormulaDsl  *string            `json:"requested_formula_dsl"`
+	TimeCategory         string             `json:"time_category"`
+	Description          *string            `json:"description"`
+	Status               string             `json:"status"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
 }
 
 // ============================================
@@ -327,27 +319,38 @@ const getAllMasterZmanim = `-- name: GetAllMasterZmanim :many
 SELECT
     id, zman_key, canonical_hebrew_name, canonical_english_name,
     transliteration, description, halachic_notes, halachic_source,
-    time_category, default_formula_dsl, is_core, sort_order,
+    time_category, default_formula_dsl, is_core,
     created_at, updated_at
 FROM master_zmanim_registry
-ORDER BY time_category, sort_order, canonical_hebrew_name
+ORDER BY
+    CASE time_category
+        WHEN 'dawn' THEN 1
+        WHEN 'sunrise' THEN 2
+        WHEN 'morning' THEN 3
+        WHEN 'midday' THEN 4
+        WHEN 'afternoon' THEN 5
+        WHEN 'sunset' THEN 6
+        WHEN 'nightfall' THEN 7
+        WHEN 'midnight' THEN 8
+        ELSE 9
+    END,
+    canonical_hebrew_name
 `
 
 type GetAllMasterZmanimRow struct {
-	ID                   string    `json:"id"`
-	ZmanKey              string    `json:"zman_key"`
-	CanonicalHebrewName  string    `json:"canonical_hebrew_name"`
-	CanonicalEnglishName string    `json:"canonical_english_name"`
-	Transliteration      *string   `json:"transliteration"`
-	Description          *string   `json:"description"`
-	HalachicNotes        *string   `json:"halachic_notes"`
-	HalachicSource       *string   `json:"halachic_source"`
-	TimeCategory         string    `json:"time_category"`
-	DefaultFormulaDsl    string    `json:"default_formula_dsl"`
-	IsCore               *bool     `json:"is_core"`
-	SortOrder            *int32    `json:"sort_order"`
-	CreatedAt            time.Time `json:"created_at"`
-	UpdatedAt            time.Time `json:"updated_at"`
+	ID                   string             `json:"id"`
+	ZmanKey              string             `json:"zman_key"`
+	CanonicalHebrewName  string             `json:"canonical_hebrew_name"`
+	CanonicalEnglishName string             `json:"canonical_english_name"`
+	Transliteration      *string            `json:"transliteration"`
+	Description          *string            `json:"description"`
+	HalachicNotes        *string            `json:"halachic_notes"`
+	HalachicSource       *string            `json:"halachic_source"`
+	TimeCategory         string             `json:"time_category"`
+	DefaultFormulaDsl    string             `json:"default_formula_dsl"`
+	IsCore               *bool              `json:"is_core"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
 }
 
 // Master Zmanim Registry SQL Queries
@@ -355,6 +358,7 @@ type GetAllMasterZmanimRow struct {
 // ============================================
 // MASTER REGISTRY QUERIES
 // ============================================
+// Orders by time_category (chronological) then hebrew_name
 func (q *Queries) GetAllMasterZmanim(ctx context.Context) ([]GetAllMasterZmanimRow, error) {
 	rows, err := q.db.Query(ctx, getAllMasterZmanim)
 	if err != nil {
@@ -376,7 +380,6 @@ func (q *Queries) GetAllMasterZmanim(ctx context.Context) ([]GetAllMasterZmanimR
 			&i.TimeCategory,
 			&i.DefaultFormulaDsl,
 			&i.IsCore,
-			&i.SortOrder,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -400,15 +403,15 @@ ORDER BY tag_type, sort_order, name
 `
 
 type GetAllTagsRow struct {
-	ID                 string    `json:"id"`
-	Name               string    `json:"name"`
-	DisplayNameHebrew  string    `json:"display_name_hebrew"`
-	DisplayNameEnglish string    `json:"display_name_english"`
-	TagType            string    `json:"tag_type"`
-	Description        *string   `json:"description"`
-	Color              *string   `json:"color"`
-	SortOrder          *int32    `json:"sort_order"`
-	CreatedAt          time.Time `json:"created_at"`
+	ID                 string             `json:"id"`
+	Name               string             `json:"name"`
+	DisplayNameHebrew  string             `json:"display_name_hebrew"`
+	DisplayNameEnglish string             `json:"display_name_english"`
+	TagType            string             `json:"tag_type"`
+	Description        *string            `json:"description"`
+	Color              *string            `json:"color"`
+	SortOrder          *int32             `json:"sort_order"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
 }
 
 // ============================================
@@ -639,27 +642,26 @@ const getMasterZmanByID = `-- name: GetMasterZmanByID :one
 SELECT
     id, zman_key, canonical_hebrew_name, canonical_english_name,
     transliteration, description, halachic_notes, halachic_source,
-    time_category, default_formula_dsl, is_core, sort_order,
+    time_category, default_formula_dsl, is_core,
     created_at, updated_at
 FROM master_zmanim_registry
 WHERE id = $1
 `
 
 type GetMasterZmanByIDRow struct {
-	ID                   string    `json:"id"`
-	ZmanKey              string    `json:"zman_key"`
-	CanonicalHebrewName  string    `json:"canonical_hebrew_name"`
-	CanonicalEnglishName string    `json:"canonical_english_name"`
-	Transliteration      *string   `json:"transliteration"`
-	Description          *string   `json:"description"`
-	HalachicNotes        *string   `json:"halachic_notes"`
-	HalachicSource       *string   `json:"halachic_source"`
-	TimeCategory         string    `json:"time_category"`
-	DefaultFormulaDsl    string    `json:"default_formula_dsl"`
-	IsCore               *bool     `json:"is_core"`
-	SortOrder            *int32    `json:"sort_order"`
-	CreatedAt            time.Time `json:"created_at"`
-	UpdatedAt            time.Time `json:"updated_at"`
+	ID                   string             `json:"id"`
+	ZmanKey              string             `json:"zman_key"`
+	CanonicalHebrewName  string             `json:"canonical_hebrew_name"`
+	CanonicalEnglishName string             `json:"canonical_english_name"`
+	Transliteration      *string            `json:"transliteration"`
+	Description          *string            `json:"description"`
+	HalachicNotes        *string            `json:"halachic_notes"`
+	HalachicSource       *string            `json:"halachic_source"`
+	TimeCategory         string             `json:"time_category"`
+	DefaultFormulaDsl    string             `json:"default_formula_dsl"`
+	IsCore               *bool              `json:"is_core"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
 }
 
 func (q *Queries) GetMasterZmanByID(ctx context.Context, id string) (GetMasterZmanByIDRow, error) {
@@ -677,7 +679,6 @@ func (q *Queries) GetMasterZmanByID(ctx context.Context, id string) (GetMasterZm
 		&i.TimeCategory,
 		&i.DefaultFormulaDsl,
 		&i.IsCore,
-		&i.SortOrder,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -688,27 +689,26 @@ const getMasterZmanByKey = `-- name: GetMasterZmanByKey :one
 SELECT
     id, zman_key, canonical_hebrew_name, canonical_english_name,
     transliteration, description, halachic_notes, halachic_source,
-    time_category, default_formula_dsl, is_core, sort_order,
+    time_category, default_formula_dsl, is_core,
     created_at, updated_at
 FROM master_zmanim_registry
 WHERE zman_key = $1
 `
 
 type GetMasterZmanByKeyRow struct {
-	ID                   string    `json:"id"`
-	ZmanKey              string    `json:"zman_key"`
-	CanonicalHebrewName  string    `json:"canonical_hebrew_name"`
-	CanonicalEnglishName string    `json:"canonical_english_name"`
-	Transliteration      *string   `json:"transliteration"`
-	Description          *string   `json:"description"`
-	HalachicNotes        *string   `json:"halachic_notes"`
-	HalachicSource       *string   `json:"halachic_source"`
-	TimeCategory         string    `json:"time_category"`
-	DefaultFormulaDsl    string    `json:"default_formula_dsl"`
-	IsCore               *bool     `json:"is_core"`
-	SortOrder            *int32    `json:"sort_order"`
-	CreatedAt            time.Time `json:"created_at"`
-	UpdatedAt            time.Time `json:"updated_at"`
+	ID                   string             `json:"id"`
+	ZmanKey              string             `json:"zman_key"`
+	CanonicalHebrewName  string             `json:"canonical_hebrew_name"`
+	CanonicalEnglishName string             `json:"canonical_english_name"`
+	Transliteration      *string            `json:"transliteration"`
+	Description          *string            `json:"description"`
+	HalachicNotes        *string            `json:"halachic_notes"`
+	HalachicSource       *string            `json:"halachic_source"`
+	TimeCategory         string             `json:"time_category"`
+	DefaultFormulaDsl    string             `json:"default_formula_dsl"`
+	IsCore               *bool              `json:"is_core"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
 }
 
 func (q *Queries) GetMasterZmanByKey(ctx context.Context, zmanKey string) (GetMasterZmanByKeyRow, error) {
@@ -726,7 +726,6 @@ func (q *Queries) GetMasterZmanByKey(ctx context.Context, zmanKey string) (GetMa
 		&i.TimeCategory,
 		&i.DefaultFormulaDsl,
 		&i.IsCore,
-		&i.SortOrder,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -737,28 +736,27 @@ const getMasterZmanimByCategory = `-- name: GetMasterZmanimByCategory :many
 SELECT
     id, zman_key, canonical_hebrew_name, canonical_english_name,
     transliteration, description, halachic_notes, halachic_source,
-    time_category, default_formula_dsl, is_core, sort_order,
+    time_category, default_formula_dsl, is_core,
     created_at, updated_at
 FROM master_zmanim_registry
 WHERE time_category = $1
-ORDER BY sort_order, canonical_hebrew_name
+ORDER BY canonical_hebrew_name
 `
 
 type GetMasterZmanimByCategoryRow struct {
-	ID                   string    `json:"id"`
-	ZmanKey              string    `json:"zman_key"`
-	CanonicalHebrewName  string    `json:"canonical_hebrew_name"`
-	CanonicalEnglishName string    `json:"canonical_english_name"`
-	Transliteration      *string   `json:"transliteration"`
-	Description          *string   `json:"description"`
-	HalachicNotes        *string   `json:"halachic_notes"`
-	HalachicSource       *string   `json:"halachic_source"`
-	TimeCategory         string    `json:"time_category"`
-	DefaultFormulaDsl    string    `json:"default_formula_dsl"`
-	IsCore               *bool     `json:"is_core"`
-	SortOrder            *int32    `json:"sort_order"`
-	CreatedAt            time.Time `json:"created_at"`
-	UpdatedAt            time.Time `json:"updated_at"`
+	ID                   string             `json:"id"`
+	ZmanKey              string             `json:"zman_key"`
+	CanonicalHebrewName  string             `json:"canonical_hebrew_name"`
+	CanonicalEnglishName string             `json:"canonical_english_name"`
+	Transliteration      *string            `json:"transliteration"`
+	Description          *string            `json:"description"`
+	HalachicNotes        *string            `json:"halachic_notes"`
+	HalachicSource       *string            `json:"halachic_source"`
+	TimeCategory         string             `json:"time_category"`
+	DefaultFormulaDsl    string             `json:"default_formula_dsl"`
+	IsCore               *bool              `json:"is_core"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
 }
 
 func (q *Queries) GetMasterZmanimByCategory(ctx context.Context, timeCategory string) ([]GetMasterZmanimByCategoryRow, error) {
@@ -782,7 +780,6 @@ func (q *Queries) GetMasterZmanimByCategory(ctx context.Context, timeCategory st
 			&i.TimeCategory,
 			&i.DefaultFormulaDsl,
 			&i.IsCore,
-			&i.SortOrder,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -800,30 +797,41 @@ const getMasterZmanimByTag = `-- name: GetMasterZmanimByTag :many
 SELECT
     mr.id, mr.zman_key, mr.canonical_hebrew_name, mr.canonical_english_name,
     mr.transliteration, mr.description, mr.halachic_notes, mr.halachic_source,
-    mr.time_category, mr.default_formula_dsl, mr.is_core, mr.sort_order,
+    mr.time_category, mr.default_formula_dsl, mr.is_core,
     mr.created_at, mr.updated_at
 FROM master_zmanim_registry mr
 JOIN master_zman_tags mzt ON mr.id = mzt.master_zman_id
 JOIN zman_tags t ON t.id = mzt.tag_id
 WHERE t.name = $1
-ORDER BY mr.time_category, mr.sort_order
+ORDER BY
+    CASE mr.time_category
+        WHEN 'dawn' THEN 1
+        WHEN 'sunrise' THEN 2
+        WHEN 'morning' THEN 3
+        WHEN 'midday' THEN 4
+        WHEN 'afternoon' THEN 5
+        WHEN 'sunset' THEN 6
+        WHEN 'nightfall' THEN 7
+        WHEN 'midnight' THEN 8
+        ELSE 9
+    END,
+    mr.canonical_hebrew_name
 `
 
 type GetMasterZmanimByTagRow struct {
-	ID                   string    `json:"id"`
-	ZmanKey              string    `json:"zman_key"`
-	CanonicalHebrewName  string    `json:"canonical_hebrew_name"`
-	CanonicalEnglishName string    `json:"canonical_english_name"`
-	Transliteration      *string   `json:"transliteration"`
-	Description          *string   `json:"description"`
-	HalachicNotes        *string   `json:"halachic_notes"`
-	HalachicSource       *string   `json:"halachic_source"`
-	TimeCategory         string    `json:"time_category"`
-	DefaultFormulaDsl    string    `json:"default_formula_dsl"`
-	IsCore               *bool     `json:"is_core"`
-	SortOrder            *int32    `json:"sort_order"`
-	CreatedAt            time.Time `json:"created_at"`
-	UpdatedAt            time.Time `json:"updated_at"`
+	ID                   string             `json:"id"`
+	ZmanKey              string             `json:"zman_key"`
+	CanonicalHebrewName  string             `json:"canonical_hebrew_name"`
+	CanonicalEnglishName string             `json:"canonical_english_name"`
+	Transliteration      *string            `json:"transliteration"`
+	Description          *string            `json:"description"`
+	HalachicNotes        *string            `json:"halachic_notes"`
+	HalachicSource       *string            `json:"halachic_source"`
+	TimeCategory         string             `json:"time_category"`
+	DefaultFormulaDsl    string             `json:"default_formula_dsl"`
+	IsCore               *bool              `json:"is_core"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
 }
 
 func (q *Queries) GetMasterZmanimByTag(ctx context.Context, name string) ([]GetMasterZmanimByTagRow, error) {
@@ -847,7 +855,6 @@ func (q *Queries) GetMasterZmanimByTag(ctx context.Context, name string) ([]GetM
 			&i.TimeCategory,
 			&i.DefaultFormulaDsl,
 			&i.IsCore,
-			&i.SortOrder,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -872,9 +879,8 @@ SELECT
             'canonical_english_name', canonical_english_name,
             'transliteration', transliteration,
             'default_formula_dsl', default_formula_dsl,
-            'is_core', is_core,
-            'sort_order', sort_order
-        ) ORDER BY sort_order, canonical_hebrew_name
+            'is_core', is_core
+        ) ORDER BY canonical_hebrew_name
     ) as zmanim
 FROM master_zmanim_registry
 GROUP BY time_category
@@ -935,7 +941,6 @@ SELECT
     COALESCE(mr.time_category, pz.category) AS time_category,
     pz.category,
     pz.dependencies,
-    pz.sort_order,
     pz.current_version,
     pz.created_at,
     pz.updated_at,
@@ -956,31 +961,30 @@ type GetPublisherZmanWithRegistryParams struct {
 }
 
 type GetPublisherZmanWithRegistryRow struct {
-	ID                string      `json:"id"`
-	PublisherID       string      `json:"publisher_id"`
-	ZmanKey           string      `json:"zman_key"`
-	HebrewName        string      `json:"hebrew_name"`
-	EnglishName       string      `json:"english_name"`
-	Transliteration   *string     `json:"transliteration"`
-	FormulaDsl        string      `json:"formula_dsl"`
-	DefaultFormulaDsl *string     `json:"default_formula_dsl"`
-	AiExplanation     *string     `json:"ai_explanation"`
-	PublisherComment  *string     `json:"publisher_comment"`
-	IsEnabled         bool        `json:"is_enabled"`
-	IsVisible         bool        `json:"is_visible"`
-	IsPublished       bool        `json:"is_published"`
-	IsCustom          bool        `json:"is_custom"`
-	TimeCategory      string      `json:"time_category"`
-	Category          string      `json:"category"`
-	Dependencies      []string    `json:"dependencies"`
-	SortOrder         int32       `json:"sort_order"`
-	CurrentVersion    *int32      `json:"current_version"`
-	CreatedAt         time.Time   `json:"created_at"`
-	UpdatedAt         time.Time   `json:"updated_at"`
-	MasterZmanID      pgtype.UUID `json:"master_zman_id"`
-	ZmanDescription   *string     `json:"zman_description"`
-	HalachicNotes     *string     `json:"halachic_notes"`
-	IsCore            *bool       `json:"is_core"`
+	ID                string             `json:"id"`
+	PublisherID       string             `json:"publisher_id"`
+	ZmanKey           string             `json:"zman_key"`
+	HebrewName        string             `json:"hebrew_name"`
+	EnglishName       string             `json:"english_name"`
+	Transliteration   *string            `json:"transliteration"`
+	FormulaDsl        string             `json:"formula_dsl"`
+	DefaultFormulaDsl *string            `json:"default_formula_dsl"`
+	AiExplanation     *string            `json:"ai_explanation"`
+	PublisherComment  *string            `json:"publisher_comment"`
+	IsEnabled         bool               `json:"is_enabled"`
+	IsVisible         bool               `json:"is_visible"`
+	IsPublished       bool               `json:"is_published"`
+	IsCustom          bool               `json:"is_custom"`
+	TimeCategory      string             `json:"time_category"`
+	Category          string             `json:"category"`
+	Dependencies      []string           `json:"dependencies"`
+	CurrentVersion    *int32             `json:"current_version"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+	MasterZmanID      pgtype.UUID        `json:"master_zman_id"`
+	ZmanDescription   *string            `json:"zman_description"`
+	HalachicNotes     *string            `json:"halachic_notes"`
+	IsCore            *bool              `json:"is_core"`
 }
 
 func (q *Queries) GetPublisherZmanWithRegistry(ctx context.Context, arg GetPublisherZmanWithRegistryParams) (GetPublisherZmanWithRegistryRow, error) {
@@ -1004,7 +1008,6 @@ func (q *Queries) GetPublisherZmanWithRegistry(ctx context.Context, arg GetPubli
 		&i.TimeCategory,
 		&i.Category,
 		&i.Dependencies,
-		&i.SortOrder,
 		&i.CurrentVersion,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -1036,7 +1039,6 @@ SELECT
     COALESCE(mr.time_category, pz.category) AS time_category,
     pz.category,
     pz.dependencies,
-    pz.sort_order,
     pz.current_version,
     pz.created_at,
     pz.updated_at,
@@ -1060,36 +1062,34 @@ ORDER BY
         WHEN 'midnight' THEN 8
         ELSE 9
     END,
-    pz.sort_order,
     pz.hebrew_name
 `
 
 type GetPublisherZmanimWithRegistryRow struct {
-	ID                string      `json:"id"`
-	PublisherID       string      `json:"publisher_id"`
-	ZmanKey           string      `json:"zman_key"`
-	HebrewName        string      `json:"hebrew_name"`
-	EnglishName       string      `json:"english_name"`
-	Transliteration   *string     `json:"transliteration"`
-	FormulaDsl        string      `json:"formula_dsl"`
-	DefaultFormulaDsl *string     `json:"default_formula_dsl"`
-	AiExplanation     *string     `json:"ai_explanation"`
-	PublisherComment  *string     `json:"publisher_comment"`
-	IsEnabled         bool        `json:"is_enabled"`
-	IsVisible         bool        `json:"is_visible"`
-	IsPublished       bool        `json:"is_published"`
-	IsCustom          bool        `json:"is_custom"`
-	TimeCategory      string      `json:"time_category"`
-	Category          string      `json:"category"`
-	Dependencies      []string    `json:"dependencies"`
-	SortOrder         int32       `json:"sort_order"`
-	CurrentVersion    *int32      `json:"current_version"`
-	CreatedAt         time.Time   `json:"created_at"`
-	UpdatedAt         time.Time   `json:"updated_at"`
-	MasterZmanID      pgtype.UUID `json:"master_zman_id"`
-	ZmanDescription   *string     `json:"zman_description"`
-	HalachicNotes     *string     `json:"halachic_notes"`
-	IsCore            *bool       `json:"is_core"`
+	ID                string             `json:"id"`
+	PublisherID       string             `json:"publisher_id"`
+	ZmanKey           string             `json:"zman_key"`
+	HebrewName        string             `json:"hebrew_name"`
+	EnglishName       string             `json:"english_name"`
+	Transliteration   *string            `json:"transliteration"`
+	FormulaDsl        string             `json:"formula_dsl"`
+	DefaultFormulaDsl *string            `json:"default_formula_dsl"`
+	AiExplanation     *string            `json:"ai_explanation"`
+	PublisherComment  *string            `json:"publisher_comment"`
+	IsEnabled         bool               `json:"is_enabled"`
+	IsVisible         bool               `json:"is_visible"`
+	IsPublished       bool               `json:"is_published"`
+	IsCustom          bool               `json:"is_custom"`
+	TimeCategory      string             `json:"time_category"`
+	Category          string             `json:"category"`
+	Dependencies      []string           `json:"dependencies"`
+	CurrentVersion    *int32             `json:"current_version"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+	MasterZmanID      pgtype.UUID        `json:"master_zman_id"`
+	ZmanDescription   *string            `json:"zman_description"`
+	HalachicNotes     *string            `json:"halachic_notes"`
+	IsCore            *bool              `json:"is_core"`
 }
 
 // ============================================
@@ -1122,7 +1122,6 @@ func (q *Queries) GetPublisherZmanimWithRegistry(ctx context.Context, publisherI
 			&i.TimeCategory,
 			&i.Category,
 			&i.Dependencies,
-			&i.SortOrder,
 			&i.CurrentVersion,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -1150,15 +1149,15 @@ WHERE name = $1
 `
 
 type GetTagByNameRow struct {
-	ID                 string    `json:"id"`
-	Name               string    `json:"name"`
-	DisplayNameHebrew  string    `json:"display_name_hebrew"`
-	DisplayNameEnglish string    `json:"display_name_english"`
-	TagType            string    `json:"tag_type"`
-	Description        *string   `json:"description"`
-	Color              *string   `json:"color"`
-	SortOrder          *int32    `json:"sort_order"`
-	CreatedAt          time.Time `json:"created_at"`
+	ID                 string             `json:"id"`
+	Name               string             `json:"name"`
+	DisplayNameHebrew  string             `json:"display_name_hebrew"`
+	DisplayNameEnglish string             `json:"display_name_english"`
+	TagType            string             `json:"tag_type"`
+	Description        *string            `json:"description"`
+	Color              *string            `json:"color"`
+	SortOrder          *int32             `json:"sort_order"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
 }
 
 func (q *Queries) GetTagByName(ctx context.Context, name string) (GetTagByNameRow, error) {
@@ -1188,15 +1187,15 @@ ORDER BY sort_order, name
 `
 
 type GetTagsByTypeRow struct {
-	ID                 string    `json:"id"`
-	Name               string    `json:"name"`
-	DisplayNameHebrew  string    `json:"display_name_hebrew"`
-	DisplayNameEnglish string    `json:"display_name_english"`
-	TagType            string    `json:"tag_type"`
-	Description        *string   `json:"description"`
-	Color              *string   `json:"color"`
-	SortOrder          *int32    `json:"sort_order"`
-	CreatedAt          time.Time `json:"created_at"`
+	ID                 string             `json:"id"`
+	Name               string             `json:"name"`
+	DisplayNameHebrew  string             `json:"display_name_hebrew"`
+	DisplayNameEnglish string             `json:"display_name_english"`
+	TagType            string             `json:"tag_type"`
+	Description        *string            `json:"description"`
+	Color              *string            `json:"color"`
+	SortOrder          *int32             `json:"sort_order"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
 }
 
 func (q *Queries) GetTagsByType(ctx context.Context, tagType string) ([]GetTagsByTypeRow, error) {
@@ -1240,15 +1239,15 @@ ORDER BY t.tag_type, t.sort_order
 `
 
 type GetTagsForMasterZmanRow struct {
-	ID                 string    `json:"id"`
-	Name               string    `json:"name"`
-	DisplayNameHebrew  string    `json:"display_name_hebrew"`
-	DisplayNameEnglish string    `json:"display_name_english"`
-	TagType            string    `json:"tag_type"`
-	Description        *string   `json:"description"`
-	Color              *string   `json:"color"`
-	SortOrder          *int32    `json:"sort_order"`
-	CreatedAt          time.Time `json:"created_at"`
+	ID                 string             `json:"id"`
+	Name               string             `json:"name"`
+	DisplayNameHebrew  string             `json:"display_name_hebrew"`
+	DisplayNameEnglish string             `json:"display_name_english"`
+	TagType            string             `json:"tag_type"`
+	Description        *string            `json:"description"`
+	Color              *string            `json:"color"`
+	SortOrder          *int32             `json:"sort_order"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
 }
 
 func (q *Queries) GetTagsForMasterZman(ctx context.Context, masterZmanID string) ([]GetTagsForMasterZmanRow, error) {
@@ -1303,7 +1302,7 @@ type GetZmanRegistryRequestByIDRow struct {
 	ReviewedBy           *string            `json:"reviewed_by"`
 	ReviewedAt           pgtype.Timestamptz `json:"reviewed_at"`
 	ReviewerNotes        *string            `json:"reviewer_notes"`
-	CreatedAt            time.Time          `json:"created_at"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
 }
 
 func (q *Queries) GetZmanRegistryRequestByID(ctx context.Context, id string) (GetZmanRegistryRequestByIDRow, error) {
@@ -1350,7 +1349,7 @@ type GetZmanRegistryRequestsRow struct {
 	ReviewedBy           *string            `json:"reviewed_by"`
 	ReviewedAt           pgtype.Timestamptz `json:"reviewed_at"`
 	ReviewerNotes        *string            `json:"reviewer_notes"`
-	CreatedAt            time.Time          `json:"created_at"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
 }
 
 func (q *Queries) GetZmanRegistryRequests(ctx context.Context, status *string) ([]GetZmanRegistryRequestsRow, error) {
@@ -1477,7 +1476,7 @@ INSERT INTO publisher_zmanim (
     transliteration, description,
     formula_dsl, ai_explanation, publisher_comment,
     is_enabled, is_visible, is_published, is_custom, category,
-    dependencies, sort_order, master_zman_id, current_version
+    dependencies, master_zman_id, current_version
 )
 SELECT
     gen_random_uuid(),
@@ -1496,7 +1495,6 @@ SELECT
     false,
     mr.time_category,
     '{}',
-    mr.sort_order,
     mr.id,
     1
 FROM master_zmanim_registry mr
@@ -1505,7 +1503,7 @@ ON CONFLICT (publisher_id, zman_key) DO NOTHING
 RETURNING id, publisher_id, zman_key, hebrew_name, english_name,
     transliteration, description, formula_dsl, ai_explanation, publisher_comment,
     is_enabled, is_visible, is_published, is_custom, category,
-    dependencies, sort_order, created_at, updated_at, master_zman_id, current_version
+    dependencies, created_at, updated_at, master_zman_id, current_version
 `
 
 type ImportZmanimFromRegistryByKeysParams struct {
@@ -1514,27 +1512,26 @@ type ImportZmanimFromRegistryByKeysParams struct {
 }
 
 type ImportZmanimFromRegistryByKeysRow struct {
-	ID               string      `json:"id"`
-	PublisherID      string      `json:"publisher_id"`
-	ZmanKey          string      `json:"zman_key"`
-	HebrewName       string      `json:"hebrew_name"`
-	EnglishName      string      `json:"english_name"`
-	Transliteration  *string     `json:"transliteration"`
-	Description      *string     `json:"description"`
-	FormulaDsl       string      `json:"formula_dsl"`
-	AiExplanation    *string     `json:"ai_explanation"`
-	PublisherComment *string     `json:"publisher_comment"`
-	IsEnabled        bool        `json:"is_enabled"`
-	IsVisible        bool        `json:"is_visible"`
-	IsPublished      bool        `json:"is_published"`
-	IsCustom         bool        `json:"is_custom"`
-	Category         string      `json:"category"`
-	Dependencies     []string    `json:"dependencies"`
-	SortOrder        int32       `json:"sort_order"`
-	CreatedAt        time.Time   `json:"created_at"`
-	UpdatedAt        time.Time   `json:"updated_at"`
-	MasterZmanID     pgtype.UUID `json:"master_zman_id"`
-	CurrentVersion   *int32      `json:"current_version"`
+	ID               string             `json:"id"`
+	PublisherID      string             `json:"publisher_id"`
+	ZmanKey          string             `json:"zman_key"`
+	HebrewName       string             `json:"hebrew_name"`
+	EnglishName      string             `json:"english_name"`
+	Transliteration  *string            `json:"transliteration"`
+	Description      *string            `json:"description"`
+	FormulaDsl       string             `json:"formula_dsl"`
+	AiExplanation    *string            `json:"ai_explanation"`
+	PublisherComment *string            `json:"publisher_comment"`
+	IsEnabled        bool               `json:"is_enabled"`
+	IsVisible        bool               `json:"is_visible"`
+	IsPublished      bool               `json:"is_published"`
+	IsCustom         bool               `json:"is_custom"`
+	Category         string             `json:"category"`
+	Dependencies     []string           `json:"dependencies"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+	MasterZmanID     pgtype.UUID        `json:"master_zman_id"`
+	CurrentVersion   *int32             `json:"current_version"`
 }
 
 func (q *Queries) ImportZmanimFromRegistryByKeys(ctx context.Context, arg ImportZmanimFromRegistryByKeysParams) ([]ImportZmanimFromRegistryByKeysRow, error) {
@@ -1563,7 +1560,6 @@ func (q *Queries) ImportZmanimFromRegistryByKeys(ctx context.Context, arg Import
 			&i.IsCustom,
 			&i.Category,
 			&i.Dependencies,
-			&i.SortOrder,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.MasterZmanID,
@@ -1601,7 +1597,7 @@ WHERE publisher_id = $1 AND zman_key = $2 AND deleted_at IS NOT NULL
 RETURNING id, publisher_id, zman_key, hebrew_name, english_name,
     formula_dsl, ai_explanation, publisher_comment,
     is_enabled, is_visible, is_published, is_custom, category,
-    dependencies, sort_order, created_at, updated_at, master_zman_id, current_version
+    dependencies, created_at, updated_at, master_zman_id, current_version
 `
 
 type RestorePublisherZmanParams struct {
@@ -1610,25 +1606,24 @@ type RestorePublisherZmanParams struct {
 }
 
 type RestorePublisherZmanRow struct {
-	ID               string      `json:"id"`
-	PublisherID      string      `json:"publisher_id"`
-	ZmanKey          string      `json:"zman_key"`
-	HebrewName       string      `json:"hebrew_name"`
-	EnglishName      string      `json:"english_name"`
-	FormulaDsl       string      `json:"formula_dsl"`
-	AiExplanation    *string     `json:"ai_explanation"`
-	PublisherComment *string     `json:"publisher_comment"`
-	IsEnabled        bool        `json:"is_enabled"`
-	IsVisible        bool        `json:"is_visible"`
-	IsPublished      bool        `json:"is_published"`
-	IsCustom         bool        `json:"is_custom"`
-	Category         string      `json:"category"`
-	Dependencies     []string    `json:"dependencies"`
-	SortOrder        int32       `json:"sort_order"`
-	CreatedAt        time.Time   `json:"created_at"`
-	UpdatedAt        time.Time   `json:"updated_at"`
-	MasterZmanID     pgtype.UUID `json:"master_zman_id"`
-	CurrentVersion   *int32      `json:"current_version"`
+	ID               string             `json:"id"`
+	PublisherID      string             `json:"publisher_id"`
+	ZmanKey          string             `json:"zman_key"`
+	HebrewName       string             `json:"hebrew_name"`
+	EnglishName      string             `json:"english_name"`
+	FormulaDsl       string             `json:"formula_dsl"`
+	AiExplanation    *string            `json:"ai_explanation"`
+	PublisherComment *string            `json:"publisher_comment"`
+	IsEnabled        bool               `json:"is_enabled"`
+	IsVisible        bool               `json:"is_visible"`
+	IsPublished      bool               `json:"is_published"`
+	IsCustom         bool               `json:"is_custom"`
+	Category         string             `json:"category"`
+	Dependencies     []string           `json:"dependencies"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+	MasterZmanID     pgtype.UUID        `json:"master_zman_id"`
+	CurrentVersion   *int32             `json:"current_version"`
 }
 
 func (q *Queries) RestorePublisherZman(ctx context.Context, arg RestorePublisherZmanParams) (RestorePublisherZmanRow, error) {
@@ -1649,7 +1644,6 @@ func (q *Queries) RestorePublisherZman(ctx context.Context, arg RestorePublisher
 		&i.IsCustom,
 		&i.Category,
 		&i.Dependencies,
-		&i.SortOrder,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.MasterZmanID,
@@ -1703,7 +1697,7 @@ const searchMasterZmanim = `-- name: SearchMasterZmanim :many
 SELECT
     id, zman_key, canonical_hebrew_name, canonical_english_name,
     transliteration, description, halachic_notes, halachic_source,
-    time_category, default_formula_dsl, is_core, sort_order,
+    time_category, default_formula_dsl, is_core,
     created_at, updated_at
 FROM master_zmanim_registry
 WHERE
@@ -1717,25 +1711,34 @@ ORDER BY
         WHEN canonical_hebrew_name ILIKE $1 || '%' THEN 2
         ELSE 3
     END,
-    sort_order
+    CASE time_category
+        WHEN 'dawn' THEN 1
+        WHEN 'sunrise' THEN 2
+        WHEN 'morning' THEN 3
+        WHEN 'midday' THEN 4
+        WHEN 'afternoon' THEN 5
+        WHEN 'sunset' THEN 6
+        WHEN 'nightfall' THEN 7
+        WHEN 'midnight' THEN 8
+        ELSE 9
+    END
 LIMIT 50
 `
 
 type SearchMasterZmanimRow struct {
-	ID                   string    `json:"id"`
-	ZmanKey              string    `json:"zman_key"`
-	CanonicalHebrewName  string    `json:"canonical_hebrew_name"`
-	CanonicalEnglishName string    `json:"canonical_english_name"`
-	Transliteration      *string   `json:"transliteration"`
-	Description          *string   `json:"description"`
-	HalachicNotes        *string   `json:"halachic_notes"`
-	HalachicSource       *string   `json:"halachic_source"`
-	TimeCategory         string    `json:"time_category"`
-	DefaultFormulaDsl    string    `json:"default_formula_dsl"`
-	IsCore               *bool     `json:"is_core"`
-	SortOrder            *int32    `json:"sort_order"`
-	CreatedAt            time.Time `json:"created_at"`
-	UpdatedAt            time.Time `json:"updated_at"`
+	ID                   string             `json:"id"`
+	ZmanKey              string             `json:"zman_key"`
+	CanonicalHebrewName  string             `json:"canonical_hebrew_name"`
+	CanonicalEnglishName string             `json:"canonical_english_name"`
+	Transliteration      *string            `json:"transliteration"`
+	Description          *string            `json:"description"`
+	HalachicNotes        *string            `json:"halachic_notes"`
+	HalachicSource       *string            `json:"halachic_source"`
+	TimeCategory         string             `json:"time_category"`
+	DefaultFormulaDsl    string             `json:"default_formula_dsl"`
+	IsCore               *bool              `json:"is_core"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
 }
 
 func (q *Queries) SearchMasterZmanim(ctx context.Context, dollar_1 *string) ([]SearchMasterZmanimRow, error) {
@@ -1759,7 +1762,6 @@ func (q *Queries) SearchMasterZmanim(ctx context.Context, dollar_1 *string) ([]S
 			&i.TimeCategory,
 			&i.DefaultFormulaDsl,
 			&i.IsCore,
-			&i.SortOrder,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -1861,7 +1863,7 @@ type UpdateZmanRegistryRequestStatusRow struct {
 	ReviewedBy           *string            `json:"reviewed_by"`
 	ReviewedAt           pgtype.Timestamptz `json:"reviewed_at"`
 	ReviewerNotes        *string            `json:"reviewer_notes"`
-	CreatedAt            time.Time          `json:"created_at"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
 }
 
 func (q *Queries) UpdateZmanRegistryRequestStatus(ctx context.Context, arg UpdateZmanRegistryRequestStatusParams) (UpdateZmanRegistryRequestStatusRow, error) {

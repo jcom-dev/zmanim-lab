@@ -1,19 +1,23 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jcom-dev/zmanim-lab/internal/calendar"
 	"github.com/jcom-dev/zmanim-lab/internal/db/sqlcgen"
+	"github.com/jcom-dev/zmanim-lab/internal/dsl"
 )
 
 // PublisherZman represents a single zman formula for a publisher
@@ -35,8 +39,8 @@ type PublisherZman struct {
 	IsCustom         bool      `json:"is_custom" db:"is_custom"`
 	IsEventZman      bool      `json:"is_event_zman" db:"is_event_zman"`
 	Category         string    `json:"category" db:"category"`
+	TimeCategory     string    `json:"time_category,omitempty" db:"time_category"` // For ordering (from registry)
 	Dependencies     []string  `json:"dependencies" db:"dependencies"`
-	SortOrder        int       `json:"sort_order" db:"sort_order"`
 	CreatedAt        time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt        time.Time `json:"updated_at" db:"updated_at"`
 	Tags             []ZmanTag `json:"tags,omitempty" db:"tags"` // Tags from master zman
@@ -65,7 +69,6 @@ type ZmanimTemplate struct {
 	Category    string    `json:"category" db:"category"`
 	Description *string   `json:"description" db:"description"`
 	IsRequired  bool      `json:"is_required" db:"is_required"`
-	SortOrder   int       `json:"sort_order" db:"sort_order"`
 	CreatedAt   time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at" db:"updated_at"`
 }
@@ -80,7 +83,6 @@ type CreateZmanRequest struct {
 	PublisherComment *string `json:"publisher_comment"`
 	IsEnabled        *bool   `json:"is_enabled"`
 	IsVisible        *bool   `json:"is_visible"`
-	SortOrder        *int    `json:"sort_order"`
 }
 
 // UpdateZmanRequest represents the request body for updating a zman
@@ -97,7 +99,40 @@ type UpdateZmanRequest struct {
 	IsPublished      *bool   `json:"is_published"`
 	IsBeta           *bool   `json:"is_beta"`
 	Category         *string `json:"category"`
-	SortOrder        *int    `json:"sort_order"`
+}
+
+// DayContext contains day-specific information for zmanim filtering
+// This is entirely database/tag-driven - no hardcoded logic
+type DayContext struct {
+	Date                 string   `json:"date"`                   // YYYY-MM-DD
+	DayOfWeek            int      `json:"day_of_week"`            // 0=Sunday, 6=Saturday
+	DayName              string   `json:"day_name"`               // "Sunday", "Friday", etc.
+	HebrewDate           string   `json:"hebrew_date"`            // "23 Kislev 5785"
+	HebrewDateFormatted  string   `json:"hebrew_date_formatted"`  // Hebrew letters format
+	IsErevShabbos        bool     `json:"is_erev_shabbos"`        // Friday
+	IsShabbos            bool     `json:"is_shabbos"`             // Saturday
+	IsYomTov             bool     `json:"is_yom_tov"`             // Yom Tov day
+	IsFastDay            bool     `json:"is_fast_day"`            // Fast day
+	Holidays             []string `json:"holidays"`               // Holiday names
+	ActiveEventCodes     []string `json:"active_event_codes"`     // Event codes active today
+	ShowCandleLighting   bool     `json:"show_candle_lighting"`   // Should show candle lighting zmanim
+	ShowHavdalah         bool     `json:"show_havdalah"`          // Should show havdalah zmanim
+	ShowFastStart        bool     `json:"show_fast_start"`        // Should show fast start zmanim
+	ShowFastEnd          bool     `json:"show_fast_end"`          // Should show fast end zmanim
+	SpecialContexts      []string `json:"special_contexts"`       // shabbos_to_yomtov, etc.
+}
+
+// PublisherZmanWithTime extends PublisherZman with calculated time
+type PublisherZmanWithTime struct {
+	PublisherZman
+	Time  *string `json:"time,omitempty"`  // Calculated time HH:MM:SS (nil if calculation failed)
+	Error *string `json:"error,omitempty"` // Error message if calculation failed
+}
+
+// FilteredZmanimResponse is returned when date/location params are provided
+type FilteredZmanimResponse struct {
+	DayContext DayContext              `json:"day_context"`
+	Zmanim     []PublisherZmanWithTime `json:"zmanim"`
 }
 
 // extractDependencies extracts @references from a DSL formula
@@ -122,8 +157,20 @@ func extractDependencies(formula string) []string {
 	return result
 }
 
+// Day names for DayContext
+var dayNames = []string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"}
+
 // GetPublisherZmanim returns all zmanim for a publisher
 // GET /api/v1/publisher/zmanim
+//
+// Optional query params for filtered/preview mode:
+//   - date: YYYY-MM-DD (enables filtering and time calculation)
+//   - latitude: float (required with date for time calculation)
+//   - longitude: float (required with date for time calculation)
+//   - timezone: string (defaults to UTC)
+//
+// Without date params: returns all zmanim (for editor list)
+// With date params: returns filtered zmanim + day context + calculated times (for preview)
 func (h *Handlers) GetPublisherZmanim(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -134,10 +181,291 @@ func (h *Handlers) GetPublisherZmanim(w http.ResponseWriter, r *http.Request) {
 	}
 	publisherID := pc.PublisherID
 
-	// Log the publisher ID being queried
-	slog.Info("fetching zmanim", "publisher_id", publisherID)
+	// Check for optional date/location params
+	dateStr := r.URL.Query().Get("date")
+	latStr := r.URL.Query().Get("latitude")
+	lonStr := r.URL.Query().Get("longitude")
+	timezone := r.URL.Query().Get("timezone")
 
-	// Query with linked zmanim resolution
+	// Fetch all zmanim first
+	zmanim, err := h.fetchPublisherZmanim(ctx, publisherID)
+	if err != nil {
+		slog.Error("failed to fetch zmanim", "error", err, "publisher_id", publisherID)
+		RespondInternalError(w, r, "Failed to fetch zmanim")
+		return
+	}
+
+	// If no date param, return all zmanim (original behavior)
+	if dateStr == "" {
+		slog.Info("fetched zmanim (unfiltered)", "count", len(zmanim), "publisher_id", publisherID)
+		RespondJSON(w, r, http.StatusOK, zmanim)
+		return
+	}
+
+	// Parse date
+	date, err := time.Parse("2006-01-02", dateStr)
+	if err != nil {
+		RespondBadRequest(w, r, "Invalid date format. Use YYYY-MM-DD")
+		return
+	}
+
+	// Parse coordinates
+	var latitude, longitude float64
+	if latStr != "" {
+		latitude, err = strconv.ParseFloat(latStr, 64)
+		if err != nil || latitude < -90 || latitude > 90 {
+			RespondBadRequest(w, r, "Invalid latitude. Must be between -90 and 90")
+			return
+		}
+	}
+	if lonStr != "" {
+		longitude, err = strconv.ParseFloat(lonStr, 64)
+		if err != nil || longitude < -180 || longitude > 180 {
+			RespondBadRequest(w, r, "Invalid longitude. Must be between -180 and 180")
+			return
+		}
+	}
+	if timezone == "" {
+		timezone = "UTC"
+	}
+
+	// Check cache first
+	cacheKey := fmt.Sprintf("%s:%s:%.4f:%.4f", publisherID, dateStr, latitude, longitude)
+	if h.cache != nil {
+		cached, err := h.cache.GetZmanim(ctx, publisherID, cacheKey, dateStr)
+		if err == nil && cached != nil {
+			var response FilteredZmanimResponse
+			if err := json.Unmarshal(cached.Data, &response); err == nil {
+				slog.Info("serving cached filtered zmanim", "publisher_id", publisherID, "date", dateStr)
+				RespondJSON(w, r, http.StatusOK, response)
+				return
+			}
+		}
+	}
+
+	// Build day context using calendar service
+	calService := calendar.NewCalendarService()
+	loc := calendar.Location{
+		Latitude:  latitude,
+		Longitude: longitude,
+		Timezone:  timezone,
+		IsIsrael:  calendar.IsLocationInIsrael(latitude, longitude),
+	}
+	zmanimCtx := calService.GetZmanimContext(date, loc)
+	hebrewDate := calService.GetHebrewDate(date)
+
+	// Build holidays list from hebcal
+	holidays := calService.GetHolidays(date)
+	holidayNames := make([]string, 0, len(holidays))
+	for _, h := range holidays {
+		holidayNames = append(holidayNames, h.Name)
+	}
+
+	dayCtx := DayContext{
+		Date:                 dateStr,
+		DayOfWeek:            int(date.Weekday()),
+		DayName:              dayNames[date.Weekday()],
+		HebrewDate:           hebrewDate.Formatted,
+		HebrewDateFormatted:  hebrewDate.Hebrew,
+		IsErevShabbos:        date.Weekday() == time.Friday,
+		IsShabbos:            date.Weekday() == time.Saturday,
+		IsYomTov:             false, // Will be set below
+		IsFastDay:            zmanimCtx.ShowFastStarts || zmanimCtx.ShowFastEnds,
+		Holidays:             holidayNames,
+		ActiveEventCodes:     zmanimCtx.ActiveEventCodes,
+		ShowCandleLighting:   zmanimCtx.ShowCandleLighting || zmanimCtx.ShowCandleLightingSheni,
+		ShowHavdalah:         zmanimCtx.ShowShabbosYomTovEnds,
+		ShowFastStart:        zmanimCtx.ShowFastStarts,
+		ShowFastEnd:          zmanimCtx.ShowFastEnds,
+		SpecialContexts:      zmanimCtx.DisplayContexts,
+	}
+
+	// Check for Yom Tov from holidays
+	for _, h := range holidays {
+		if h.Yomtov {
+			dayCtx.IsYomTov = true
+			break
+		}
+	}
+
+	// Filter and calculate times
+	filteredZmanim := h.filterAndCalculateZmanim(zmanim, dayCtx, date, latitude, longitude, timezone)
+
+	response := FilteredZmanimResponse{
+		DayContext: dayCtx,
+		Zmanim:     filteredZmanim,
+	}
+
+	// Cache the response
+	if h.cache != nil {
+		if err := h.cache.SetZmanim(ctx, publisherID, cacheKey, dateStr, response); err != nil {
+			slog.Warn("failed to cache filtered zmanim", "error", err, "publisher_id", publisherID)
+		}
+	}
+
+	slog.Info("fetched filtered zmanim", "count", len(filteredZmanim), "publisher_id", publisherID, "date", dateStr)
+	RespondJSON(w, r, http.StatusOK, response)
+}
+
+// WeekDayZmanim represents zmanim for a single day in a week response
+type WeekDayZmanim struct {
+	DayContext DayContext              `json:"day_context"`
+	Zmanim     []PublisherZmanWithTime `json:"zmanim"`
+}
+
+// WeekZmanimResponse is the response for the batch week endpoint
+type WeekZmanimResponse struct {
+	Days []WeekDayZmanim `json:"days"`
+}
+
+// GetPublisherZmanimWeek returns all zmanim for a publisher for an entire week
+// This is a batch endpoint that calculates all 7 days in one request with caching
+// GET /api/v1/publisher/zmanim/week?start_date=YYYY-MM-DD&latitude=X&longitude=Y&timezone=Z
+func (h *Handlers) GetPublisherZmanimWeek(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// Use PublisherResolver to get publisher context
+	pc := h.publisherResolver.MustResolve(w, r)
+	if pc == nil {
+		return // Response already sent
+	}
+	publisherID := pc.PublisherID
+
+	// Parse query params
+	startDateStr := r.URL.Query().Get("start_date")
+	latStr := r.URL.Query().Get("latitude")
+	lonStr := r.URL.Query().Get("longitude")
+	timezone := r.URL.Query().Get("timezone")
+
+	// Validate required params
+	if startDateStr == "" {
+		RespondBadRequest(w, r, "start_date is required (YYYY-MM-DD)")
+		return
+	}
+
+	startDate, err := time.Parse("2006-01-02", startDateStr)
+	if err != nil {
+		RespondBadRequest(w, r, "Invalid start_date format. Use YYYY-MM-DD")
+		return
+	}
+
+	// Parse coordinates
+	var latitude, longitude float64
+	if latStr != "" {
+		latitude, err = strconv.ParseFloat(latStr, 64)
+		if err != nil || latitude < -90 || latitude > 90 {
+			RespondBadRequest(w, r, "Invalid latitude. Must be between -90 and 90")
+			return
+		}
+	}
+	if lonStr != "" {
+		longitude, err = strconv.ParseFloat(lonStr, 64)
+		if err != nil || longitude < -180 || longitude > 180 {
+			RespondBadRequest(w, r, "Invalid longitude. Must be between -180 and 180")
+			return
+		}
+	}
+	if timezone == "" {
+		timezone = "UTC"
+	}
+
+	// Check cache first - use week start date as key
+	cacheKey := fmt.Sprintf("week:%s:%s:%.4f:%.4f", publisherID, startDateStr, latitude, longitude)
+	if h.cache != nil {
+		cached, err := h.cache.GetZmanim(ctx, publisherID, cacheKey, startDateStr)
+		if err == nil && cached != nil {
+			var response WeekZmanimResponse
+			if err := json.Unmarshal(cached.Data, &response); err == nil {
+				slog.Info("serving cached week zmanim", "publisher_id", publisherID, "start_date", startDateStr)
+				RespondJSON(w, r, http.StatusOK, response)
+				return
+			}
+		}
+	}
+
+	// Fetch all zmanim once
+	zmanim, err := h.fetchPublisherZmanim(ctx, publisherID)
+	if err != nil {
+		slog.Error("failed to fetch zmanim", "error", err, "publisher_id", publisherID)
+		RespondInternalError(w, r, "Failed to fetch zmanim")
+		return
+	}
+
+	// Build calendar service for day contexts
+	calService := calendar.NewCalendarService()
+	loc := calendar.Location{
+		Latitude:  latitude,
+		Longitude: longitude,
+		Timezone:  timezone,
+		IsIsrael:  calendar.IsLocationInIsrael(latitude, longitude),
+	}
+
+	// Calculate all 7 days
+	days := make([]WeekDayZmanim, 7)
+	for i := 0; i < 7; i++ {
+		date := startDate.AddDate(0, 0, i)
+		dateStr := date.Format("2006-01-02")
+
+		// Build day context
+		zmanimCtx := calService.GetZmanimContext(date, loc)
+		hebrewDate := calService.GetHebrewDate(date)
+		holidays := calService.GetHolidays(date)
+		holidayNames := make([]string, 0, len(holidays))
+		for _, h := range holidays {
+			holidayNames = append(holidayNames, h.Name)
+		}
+
+		dayCtx := DayContext{
+			Date:                dateStr,
+			DayOfWeek:           int(date.Weekday()),
+			DayName:             dayNames[date.Weekday()],
+			HebrewDate:          hebrewDate.Formatted,
+			HebrewDateFormatted: hebrewDate.Hebrew,
+			IsErevShabbos:       date.Weekday() == time.Friday,
+			IsShabbos:           date.Weekday() == time.Saturday,
+			IsYomTov:            false,
+			IsFastDay:           zmanimCtx.ShowFastStarts || zmanimCtx.ShowFastEnds,
+			Holidays:            holidayNames,
+			ActiveEventCodes:    zmanimCtx.ActiveEventCodes,
+			ShowCandleLighting:  zmanimCtx.ShowCandleLighting || zmanimCtx.ShowCandleLightingSheni,
+			ShowHavdalah:        zmanimCtx.ShowShabbosYomTovEnds,
+			ShowFastStart:       zmanimCtx.ShowFastStarts,
+			ShowFastEnd:         zmanimCtx.ShowFastEnds,
+			SpecialContexts:     zmanimCtx.DisplayContexts,
+		}
+
+		// Check for Yom Tov
+		for _, h := range holidays {
+			if h.Yomtov {
+				dayCtx.IsYomTov = true
+				break
+			}
+		}
+
+		// Filter and calculate times for this day
+		filteredZmanim := h.filterAndCalculateZmanim(zmanim, dayCtx, date, latitude, longitude, timezone)
+
+		days[i] = WeekDayZmanim{
+			DayContext: dayCtx,
+			Zmanim:     filteredZmanim,
+		}
+	}
+
+	response := WeekZmanimResponse{Days: days}
+
+	// Cache the response
+	if h.cache != nil {
+		if err := h.cache.SetZmanim(ctx, publisherID, cacheKey, startDateStr, response); err != nil {
+			slog.Warn("failed to cache week zmanim", "error", err, "publisher_id", publisherID)
+		}
+	}
+
+	slog.Info("fetched week zmanim", "publisher_id", publisherID, "start_date", startDateStr)
+	RespondJSON(w, r, http.StatusOK, response)
+}
+
+// fetchPublisherZmanim retrieves all zmanim for a publisher from the database
+func (h *Handlers) fetchPublisherZmanim(ctx context.Context, publisherID string) ([]PublisherZman, error) {
 	query := `
 		SELECT
 			pz.id, pz.publisher_id, pz.zman_key, pz.hebrew_name, pz.english_name,
@@ -145,7 +473,7 @@ func (h *Handlers) GetPublisherZmanim(w http.ResponseWriter, r *http.Request) {
 			COALESCE(linked_pz.formula_dsl, pz.formula_dsl) AS formula_dsl,
 			pz.ai_explanation, pz.publisher_comment,
 			pz.is_enabled, pz.is_visible, pz.is_published, pz.is_beta, pz.is_custom, pz.category,
-			pz.dependencies, pz.sort_order, pz.created_at, pz.updated_at,
+			pz.dependencies, pz.created_at, pz.updated_at,
 			pz.master_zman_id, pz.linked_publisher_zman_id, pz.source_type,
 			-- Source/original values from registry or linked publisher (for diff/revert UI)
 			COALESCE(mr.canonical_hebrew_name, linked_pz.hebrew_name) AS source_hebrew_name,
@@ -153,10 +481,22 @@ func (h *Handlers) GetPublisherZmanim(w http.ResponseWriter, r *http.Request) {
 			COALESCE(mr.transliteration, linked_pz.transliteration) AS source_transliteration,
 			COALESCE(mr.description, linked_pz.description) AS source_description,
 			COALESCE(mr.default_formula_dsl, linked_pz.formula_dsl) AS source_formula_dsl,
+			-- Check if this zman is an event zman (has event or behavior tags like is_candle_lighting, is_havdalah, etc.)
 			EXISTS (
-				SELECT 1 FROM master_zman_events mze
-				WHERE mze.master_zman_id = pz.master_zman_id
+				SELECT 1 FROM (
+					-- Check master zman tags
+					SELECT zt.tag_type FROM master_zman_tags mzt
+					JOIN zman_tags zt ON mzt.tag_id = zt.id
+					WHERE mzt.master_zman_id = pz.master_zman_id
+					UNION ALL
+					-- Check publisher-specific tags
+					SELECT zt.tag_type FROM publisher_zman_tags pzt
+					JOIN zman_tags zt ON pzt.tag_id = zt.id
+					WHERE pzt.publisher_zman_id = pz.id
+				) all_tags
+				WHERE all_tags.tag_type IN ('event', 'behavior')
 			) AS is_event_zman,
+			-- Combine tags from master registry AND publisher-specific tags (UNION removes duplicates)
 			COALESCE(
 				(SELECT json_agg(json_build_object(
 					'id', t.id,
@@ -166,29 +506,48 @@ func (h *Handlers) GetPublisherZmanim(w http.ResponseWriter, r *http.Request) {
 					'display_name_english', t.display_name_english,
 					'tag_type', t.tag_type
 				) ORDER BY t.sort_order)
-				FROM master_zman_tags mzt
-				JOIN zman_tags t ON mzt.tag_id = t.id
-				WHERE mzt.master_zman_id = pz.master_zman_id),
+				FROM (
+					-- Tags from master registry
+					SELECT t.* FROM master_zman_tags mzt
+					JOIN zman_tags t ON mzt.tag_id = t.id
+					WHERE mzt.master_zman_id = pz.master_zman_id
+					UNION
+					-- Tags added by publisher
+					SELECT t.* FROM publisher_zman_tags pzt
+					JOIN zman_tags t ON pzt.tag_id = t.id
+					WHERE pzt.publisher_zman_id = pz.id
+				) t),
 				'[]'::json
 			) AS tags,
 			CASE WHEN pz.linked_publisher_zman_id IS NOT NULL THEN true ELSE false END AS is_linked,
 			linked_pub.name AS linked_source_publisher_name,
 			CASE WHEN pz.linked_publisher_zman_id IS NOT NULL AND linked_pz.deleted_at IS NOT NULL
-				 THEN true ELSE false END AS linked_source_is_deleted
+				 THEN true ELSE false END AS linked_source_is_deleted,
+			COALESCE(mr.time_category, pz.category) AS time_category
 		FROM publisher_zmanim pz
 		LEFT JOIN publisher_zmanim linked_pz ON pz.linked_publisher_zman_id = linked_pz.id
 		LEFT JOIN publishers linked_pub ON linked_pz.publisher_id = linked_pub.id
 		LEFT JOIN master_zmanim_registry mr ON pz.master_zman_id = mr.id
 		WHERE pz.publisher_id = $1
 		  AND pz.deleted_at IS NULL
-		ORDER BY pz.sort_order, pz.hebrew_name
+		ORDER BY
+			CASE COALESCE(mr.time_category, pz.category)
+				WHEN 'dawn' THEN 1
+				WHEN 'sunrise' THEN 2
+				WHEN 'morning' THEN 3
+				WHEN 'midday' THEN 4
+				WHEN 'afternoon' THEN 5
+				WHEN 'sunset' THEN 6
+				WHEN 'nightfall' THEN 7
+				WHEN 'midnight' THEN 8
+				ELSE 9
+			END,
+			pz.hebrew_name
 	`
 
 	rows, err := h.db.Pool.Query(ctx, query, publisherID)
 	if err != nil {
-		slog.Error("failed to fetch zmanim", "error", err, "publisher_id", publisherID)
-		RespondInternalError(w, r, "Failed to fetch zmanim")
-		return
+		return nil, err
 	}
 	defer rows.Close()
 
@@ -201,15 +560,14 @@ func (h *Handlers) GetPublisherZmanim(w http.ResponseWriter, r *http.Request) {
 			&z.Transliteration, &z.Description,
 			&z.FormulaDSL, &z.AIExplanation, &z.PublisherComment,
 			&z.IsEnabled, &z.IsVisible, &z.IsPublished, &z.IsBeta, &z.IsCustom, &z.Category,
-			&z.Dependencies, &z.SortOrder, &z.CreatedAt, &z.UpdatedAt,
+			&z.Dependencies, &z.CreatedAt, &z.UpdatedAt,
 			&z.MasterZmanID, &z.LinkedPublisherZmanID, &z.SourceType,
 			&z.SourceHebrewName, &z.SourceEnglishName, &z.SourceTransliteration, &z.SourceDescription, &z.SourceFormulaDSL,
 			&z.IsEventZman, &tagsJSON, &z.IsLinked, &z.LinkedSourcePublisherName, &z.LinkedSourceIsDeleted,
+			&z.TimeCategory,
 		)
 		if err != nil {
-			slog.Error("failed to scan zman", "error", err, "publisher_id", publisherID)
-			RespondInternalError(w, r, "Failed to fetch zmanim")
-			return
+			return nil, err
 		}
 
 		// Parse tags JSON
@@ -223,10 +581,102 @@ func (h *Handlers) GetPublisherZmanim(w http.ResponseWriter, r *http.Request) {
 		zmanim = append(zmanim, z)
 	}
 
-	// Log the result count
-	slog.Info("fetched zmanim", "count", len(zmanim), "publisher_id", publisherID)
+	return zmanim, nil
+}
 
-	RespondJSON(w, r, http.StatusOK, zmanim)
+// filterAndCalculateZmanim filters zmanim based on day context and calculates times
+// Filtering is entirely tag-driven - no hardcoded zman keys
+func (h *Handlers) filterAndCalculateZmanim(zmanim []PublisherZman, dayCtx DayContext, date time.Time, lat, lon float64, timezone string) []PublisherZmanWithTime {
+	var result []PublisherZmanWithTime
+
+	// Load timezone
+	tz, err := time.LoadLocation(timezone)
+	if err != nil {
+		tz = time.UTC
+	}
+
+	// Set date to start of day in timezone
+	date = time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, tz)
+
+	// Create DSL execution context for time calculation
+	var execCtx *dsl.ExecutionContext
+	if lat != 0 || lon != 0 {
+		execCtx = dsl.NewExecutionContext(date, lat, lon, 0, tz)
+	}
+
+	for _, z := range zmanim {
+		// Only include enabled zmanim
+		if !z.IsEnabled {
+			continue
+		}
+
+		// Check if this zman should be shown based on tags and day context
+		if !h.shouldShowZman(z, dayCtx) {
+			continue
+		}
+
+		// Build result with calculated time
+		zwt := PublisherZmanWithTime{
+			PublisherZman: z,
+		}
+
+		// Calculate time if we have location
+		if execCtx != nil && z.FormulaDSL != "" {
+			timeResult, _, calcErr := dsl.ExecuteFormulaWithBreakdown(z.FormulaDSL, execCtx)
+			if calcErr != nil {
+				errStr := calcErr.Error()
+				zwt.Error = &errStr
+			} else if !timeResult.IsZero() {
+				timeStr := timeResult.Format("15:04:05")
+				zwt.Time = &timeStr
+			}
+		}
+
+		result = append(result, zwt)
+	}
+
+	return result
+}
+
+// shouldShowZman determines if a zman should be shown based on its tags and day context
+// This is entirely tag-driven - no hardcoded zman keys
+func (h *Handlers) shouldShowZman(z PublisherZman, dayCtx DayContext) bool {
+	// Check for behavior tags
+	isCandleLighting := hasTagKey(z.Tags, "is_candle_lighting")
+	isHavdalah := hasTagKey(z.Tags, "is_havdalah")
+	isFastStart := hasTagKey(z.Tags, "is_fast_start")
+	isFastEnd := hasTagKey(z.Tags, "is_fast_end")
+
+	// If it's not an event zman (no behavior tags), always show it
+	if !isCandleLighting && !isHavdalah && !isFastStart && !isFastEnd {
+		return true
+	}
+
+	// Filter event zmanim based on day context
+	if isCandleLighting && !dayCtx.ShowCandleLighting {
+		return false
+	}
+	if isHavdalah && !dayCtx.ShowHavdalah {
+		return false
+	}
+	if isFastStart && !dayCtx.ShowFastStart {
+		return false
+	}
+	if isFastEnd && !dayCtx.ShowFastEnd {
+		return false
+	}
+
+	return true
+}
+
+// hasTagKey checks if a zman has a specific tag by tag_key
+func hasTagKey(tags []ZmanTag, tagKey string) bool {
+	for _, t := range tags {
+		if t.TagKey == tagKey {
+			return true
+		}
+	}
+	return false
 }
 
 // sqlcZmanRow is an interface for SQLc generated row types
@@ -311,10 +761,10 @@ func getPublisherZmanimRowToPublisherZman(z sqlcgen.GetPublisherZmanimRow) Publi
 		IsCustom:                  z.IsCustom,
 		IsEventZman:               z.IsEventZman,
 		Category:                  z.Category,
+		TimeCategory:              z.TimeCategory,
 		Dependencies:              z.Dependencies,
-		SortOrder:                 int(z.SortOrder),
-		CreatedAt:                 z.CreatedAt,
-		UpdatedAt:                 z.UpdatedAt,
+		CreatedAt:                 z.CreatedAt.Time,
+		UpdatedAt:                 z.UpdatedAt.Time,
 		Tags:                      tags,
 		MasterZmanID:              masterZmanID,
 		LinkedPublisherZmanID:     linkedPublisherZmanID,
@@ -382,10 +832,10 @@ func getPublisherZmanByKeyRowToPublisherZman(z sqlcgen.GetPublisherZmanByKeyRow)
 		IsBeta:                    z.IsBeta,
 		IsCustom:                  z.IsCustom,
 		Category:                  z.Category,
+		TimeCategory:              z.TimeCategory,
 		Dependencies:              z.Dependencies,
-		SortOrder:                 int(z.SortOrder),
-		CreatedAt:                 z.CreatedAt,
-		UpdatedAt:                 z.UpdatedAt,
+		CreatedAt:                 z.CreatedAt.Time,
+		UpdatedAt:                 z.UpdatedAt.Time,
 		MasterZmanID:              masterZmanID,
 		LinkedPublisherZmanID:     linkedPublisherZmanID,
 		SourceType:                z.SourceType,
@@ -417,9 +867,8 @@ func createPublisherZmanRowToPublisherZman(z sqlcgen.CreatePublisherZmanRow) Pub
 		IsCustom:         z.IsCustom,
 		Category:         z.Category,
 		Dependencies:     z.Dependencies,
-		SortOrder:        int(z.SortOrder),
-		CreatedAt:        z.CreatedAt,
-		UpdatedAt:        z.UpdatedAt,
+		CreatedAt:        z.CreatedAt.Time,
+		UpdatedAt:        z.UpdatedAt.Time,
 	}
 }
 
@@ -443,9 +892,8 @@ func updatePublisherZmanRowToPublisherZman(z sqlcgen.UpdatePublisherZmanRow) Pub
 		IsCustom:         z.IsCustom,
 		Category:         z.Category,
 		Dependencies:     z.Dependencies,
-		SortOrder:        int(z.SortOrder),
-		CreatedAt:        z.CreatedAt,
-		UpdatedAt:        z.UpdatedAt,
+		CreatedAt:        z.CreatedAt.Time,
+		UpdatedAt:        z.UpdatedAt.Time,
 	}
 }
 
@@ -466,9 +914,8 @@ func importZmanimFromTemplatesRowToPublisherZman(z sqlcgen.ImportZmanimFromTempl
 		IsCustom:         z.IsCustom,
 		Category:         z.Category,
 		Dependencies:     z.Dependencies,
-		SortOrder:        int(z.SortOrder),
-		CreatedAt:        z.CreatedAt,
-		UpdatedAt:        z.UpdatedAt,
+		CreatedAt:        z.CreatedAt.Time,
+		UpdatedAt:        z.UpdatedAt.Time,
 	}
 }
 
@@ -489,9 +936,8 @@ func importZmanimFromTemplatesByKeysRowToPublisherZman(z sqlcgen.ImportZmanimFro
 		IsCustom:         z.IsCustom,
 		Category:         z.Category,
 		Dependencies:     z.Dependencies,
-		SortOrder:        int(z.SortOrder),
-		CreatedAt:        z.CreatedAt,
-		UpdatedAt:        z.UpdatedAt,
+		CreatedAt:        z.CreatedAt.Time,
+		UpdatedAt:        z.UpdatedAt.Time,
 	}
 }
 
@@ -567,11 +1013,6 @@ func (h *Handlers) CreatePublisherZman(w http.ResponseWriter, r *http.Request) {
 		isVisible = *req.IsVisible
 	}
 
-	sortOrder := int32(0)
-	if req.SortOrder != nil {
-		sortOrder = int32(*req.SortOrder)
-	}
-
 	id := uuid.New().String()
 
 	// Use SQLc generated query
@@ -590,7 +1031,6 @@ func (h *Handlers) CreatePublisherZman(w http.ResponseWriter, r *http.Request) {
 		IsCustom:         true,  // Custom zmanim are always user-created
 		Category:         "custom",
 		Dependencies:     dependencies,
-		SortOrder:        sortOrder,
 	})
 
 	if insertErr != nil {
@@ -646,7 +1086,7 @@ func (h *Handlers) UpdatePublisherZman(w http.ResponseWriter, r *http.Request) {
 		req.Description == nil && req.FormulaDSL == nil &&
 		req.AIExplanation == nil && req.PublisherComment == nil &&
 		req.IsEnabled == nil && req.IsVisible == nil && req.IsPublished == nil &&
-		req.IsBeta == nil && req.Category == nil && req.SortOrder == nil {
+		req.IsBeta == nil && req.Category == nil {
 		slog.Error("UpdatePublisherZman: no fields to update")
 		RespondBadRequest(w, r, "No fields to update")
 		return
@@ -656,13 +1096,6 @@ func (h *Handlers) UpdatePublisherZman(w http.ResponseWriter, r *http.Request) {
 	var dependencies []string
 	if req.FormulaDSL != nil {
 		dependencies = extractDependencies(*req.FormulaDSL)
-	}
-
-	// Convert sort order to int32 pointer
-	var sortOrder *int32
-	if req.SortOrder != nil {
-		so := int32(*req.SortOrder)
-		sortOrder = &so
 	}
 
 	// Use SQLc generated query
@@ -681,7 +1114,6 @@ func (h *Handlers) UpdatePublisherZman(w http.ResponseWriter, r *http.Request) {
 		IsPublished:      req.IsPublished,
 		IsBeta:           req.IsBeta,
 		Category:         req.Category,
-		SortOrder:        sortOrder,
 		Dependencies:     dependencies,
 	})
 
@@ -692,6 +1124,15 @@ func (h *Handlers) UpdatePublisherZman(w http.ResponseWriter, r *http.Request) {
 	if updateErr != nil {
 		RespondInternalError(w, r, "Failed to update zman")
 		return
+	}
+
+	// Invalidate cached zmanim for this publisher when formula or is_enabled changes
+	if h.cache != nil && (req.FormulaDSL != nil || req.IsEnabled != nil) {
+		if err := h.cache.InvalidateZmanim(ctx, publisherID); err != nil {
+			slog.Warn("failed to invalidate zmanim cache", "error", err, "publisher_id", publisherID)
+		} else {
+			slog.Info("invalidated zmanim cache", "publisher_id", publisherID, "reason", "zman_updated")
+		}
 	}
 
 	z := updatePublisherZmanRowToPublisherZman(sqlcZman)
@@ -838,20 +1279,20 @@ func (h *Handlers) ImportZmanim(w http.ResponseWriter, r *http.Request) {
 					id, publisher_id, zman_key, hebrew_name, english_name,
 					formula_dsl, ai_explanation, publisher_comment,
 					is_enabled, is_visible, is_custom, category,
-					dependencies, sort_order
+					dependencies
 				)
 				SELECT
 					gen_random_uuid(), $1, zman_key, hebrew_name, english_name,
 					formula_dsl, ai_explanation, NULL,
 					true, true, false, category,
-					dependencies, sort_order
+					dependencies
 				FROM publisher_zmanim
 				WHERE publisher_id = $2 AND zman_key = ANY($3)
 				ON CONFLICT (publisher_id, zman_key) DO NOTHING
 				RETURNING id, publisher_id, zman_key, hebrew_name, english_name,
 					formula_dsl, ai_explanation, publisher_comment,
 					is_enabled, is_visible, is_custom, category,
-					dependencies, sort_order, created_at, updated_at
+					dependencies, created_at, updated_at
 			`
 			args = []interface{}{publisherID, sourcePublisherID, req.ZmanKeys}
 		} else {
@@ -860,20 +1301,20 @@ func (h *Handlers) ImportZmanim(w http.ResponseWriter, r *http.Request) {
 					id, publisher_id, zman_key, hebrew_name, english_name,
 					formula_dsl, ai_explanation, publisher_comment,
 					is_enabled, is_visible, is_custom, category,
-					dependencies, sort_order
+					dependencies
 				)
 				SELECT
 					gen_random_uuid(), $1, zman_key, hebrew_name, english_name,
 					formula_dsl, ai_explanation, NULL,
 					true, true, false, category,
-					dependencies, sort_order
+					dependencies
 				FROM publisher_zmanim
 				WHERE publisher_id = $2
 				ON CONFLICT (publisher_id, zman_key) DO NOTHING
 				RETURNING id, publisher_id, zman_key, hebrew_name, english_name,
 					formula_dsl, ai_explanation, publisher_comment,
 					is_enabled, is_visible, is_custom, category,
-					dependencies, sort_order, created_at, updated_at
+					dependencies, created_at, updated_at
 			`
 			args = []interface{}{publisherID, sourcePublisherID}
 		}
@@ -891,7 +1332,7 @@ func (h *Handlers) ImportZmanim(w http.ResponseWriter, r *http.Request) {
 				&z.ID, &z.PublisherID, &z.ZmanKey, &z.HebrewName, &z.EnglishName,
 				&z.FormulaDSL, &z.AIExplanation, &z.PublisherComment,
 				&z.IsEnabled, &z.IsVisible, &z.IsCustom, &z.Category,
-				&z.Dependencies, &z.SortOrder, &z.CreatedAt, &z.UpdatedAt,
+				&z.Dependencies, &z.CreatedAt, &z.UpdatedAt,
 			)
 			if err != nil {
 				RespondInternalError(w, r, "Failed to scan imported zman")
@@ -940,9 +1381,8 @@ func sqlcTemplateToZmanimTemplate(t sqlcgen.ZmanimTemplate) ZmanimTemplate {
 		Category:    t.Category,
 		Description: t.Description,
 		IsRequired:  t.IsRequired,
-		SortOrder:   int(t.SortOrder),
-		CreatedAt:   t.CreatedAt,
-		UpdatedAt:   t.UpdatedAt,
+		CreatedAt:   t.CreatedAt.Time,
+		UpdatedAt:   t.UpdatedAt.Time,
 	}
 }
 
@@ -1124,7 +1564,7 @@ func (h *Handlers) GetPublisherZmanimForLinking(w http.ResponseWriter, r *http.R
 		  AND pz.zman_key NOT IN (
 			  SELECT zman_key FROM publisher_zmanim WHERE publisher_id = $2 AND deleted_at IS NULL
 		  )
-		ORDER BY pz.sort_order, pz.hebrew_name
+		ORDER BY pz.hebrew_name
 	`
 
 	rows, err := h.db.Pool.Query(ctx, query, sourcePublisherID, currentPublisherID)
@@ -1185,7 +1625,6 @@ func (h *Handlers) CreateZmanFromPublisher(w http.ResponseWriter, r *http.Reques
 		FormulaDSL   string
 		Category     string
 		Dependencies []string
-		SortOrder    int32
 		MasterZmanID *string
 		IsVerified   bool
 	}
@@ -1193,7 +1632,7 @@ func (h *Handlers) CreateZmanFromPublisher(w http.ResponseWriter, r *http.Reques
 	err := h.db.Pool.QueryRow(ctx, `
 		SELECT
 			pz.id, pz.publisher_id, pz.zman_key, pz.hebrew_name, pz.english_name,
-			pz.formula_dsl, pz.category, pz.dependencies, pz.sort_order, pz.master_zman_id,
+			pz.formula_dsl, pz.category, pz.dependencies, pz.master_zman_id,
 			p.is_verified
 		FROM publisher_zmanim pz
 		JOIN publishers p ON p.id = pz.publisher_id
@@ -1204,7 +1643,7 @@ func (h *Handlers) CreateZmanFromPublisher(w http.ResponseWriter, r *http.Reques
 	`, req.SourcePublisherZmanID).Scan(
 		&sourceZman.ID, &sourceZman.PublisherID, &sourceZman.ZmanKey, &sourceZman.HebrewName,
 		&sourceZman.EnglishName, &sourceZman.FormulaDSL, &sourceZman.Category,
-		&sourceZman.Dependencies, &sourceZman.SortOrder, &sourceZman.MasterZmanID, &sourceZman.IsVerified,
+		&sourceZman.Dependencies, &sourceZman.MasterZmanID, &sourceZman.IsVerified,
 	)
 
 	if err == pgx.ErrNoRows {
@@ -1258,9 +1697,9 @@ func (h *Handlers) CreateZmanFromPublisher(w http.ResponseWriter, r *http.Reques
 		INSERT INTO publisher_zmanim (
 			id, publisher_id, zman_key, hebrew_name, english_name,
 			formula_dsl, is_enabled, is_visible, is_published, is_custom, category,
-			dependencies, sort_order, master_zman_id, linked_publisher_zman_id, source_type
+			dependencies, master_zman_id, linked_publisher_zman_id, source_type
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, true, true, false, false, $7, $8, $9, $10, $11, $12
+			$1, $2, $3, $4, $5, $6, true, true, false, false, $7, $8, $9, $10, $11
 		)
 		RETURNING id, created_at, updated_at
 	`
@@ -1268,7 +1707,7 @@ func (h *Handlers) CreateZmanFromPublisher(w http.ResponseWriter, r *http.Reques
 	var createdAt, updatedAt time.Time
 	err = h.db.Pool.QueryRow(ctx, query,
 		newID, publisherID, sourceZman.ZmanKey, sourceZman.HebrewName, sourceZman.EnglishName,
-		formulaDSL, sourceZman.Category, sourceZman.Dependencies, sourceZman.SortOrder,
+		formulaDSL, sourceZman.Category, sourceZman.Dependencies,
 		sourceZman.MasterZmanID, linkedID, sourceType,
 	).Scan(&newID, &createdAt, &updatedAt)
 
@@ -1296,7 +1735,6 @@ func (h *Handlers) CreateZmanFromPublisher(w http.ResponseWriter, r *http.Reques
 		IsCustom:              false,
 		Category:              sourceZman.Category,
 		Dependencies:          sourceZman.Dependencies,
-		SortOrder:             int(sourceZman.SortOrder),
 		CreatedAt:             createdAt,
 		UpdatedAt:             updatedAt,
 		MasterZmanID:          sourceZman.MasterZmanID,
@@ -1306,4 +1744,229 @@ func (h *Handlers) CreateZmanFromPublisher(w http.ResponseWriter, r *http.Reques
 	}
 
 	RespondJSON(w, r, http.StatusCreated, result)
+}
+
+// ============================================================================
+// Publisher Zman Tags
+// ============================================================================
+
+// GetPublisherZmanTags returns all tags for a specific publisher zman
+// GET /api/v1/publisher/zmanim/{zmanKey}/tags
+func (h *Handlers) GetPublisherZmanTags(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	pc := h.publisherResolver.MustResolve(w, r)
+	if pc == nil {
+		return
+	}
+	publisherID := pc.PublisherID
+	zmanKey := chi.URLParam(r, "zmanKey")
+
+	// First get the publisher_zman_id
+	var zmanID string
+	err := h.db.Pool.QueryRow(ctx,
+		"SELECT id FROM publisher_zmanim WHERE publisher_id = $1 AND zman_key = $2 AND deleted_at IS NULL",
+		publisherID, zmanKey,
+	).Scan(&zmanID)
+
+	if err == pgx.ErrNoRows {
+		RespondNotFound(w, r, "Zman not found")
+		return
+	}
+	if err != nil {
+		slog.Error("failed to find zman", "error", err)
+		RespondInternalError(w, r, "Failed to find zman")
+		return
+	}
+
+	tags, err := h.db.Queries.GetPublisherZmanTags(ctx, zmanID)
+	if err != nil {
+		slog.Error("failed to get tags", "error", err)
+		RespondInternalError(w, r, "Failed to get tags")
+		return
+	}
+
+	RespondJSON(w, r, http.StatusOK, tags)
+}
+
+// UpdatePublisherZmanTagsRequest represents the request body for updating tags
+type UpdatePublisherZmanTagsRequest struct {
+	TagIDs []string `json:"tag_ids"`
+}
+
+// UpdatePublisherZmanTags replaces all tags for a publisher zman
+// PUT /api/v1/publisher/zmanim/{zmanKey}/tags
+func (h *Handlers) UpdatePublisherZmanTags(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	pc := h.publisherResolver.MustResolve(w, r)
+	if pc == nil {
+		return
+	}
+	publisherID := pc.PublisherID
+	zmanKey := chi.URLParam(r, "zmanKey")
+
+	var req UpdatePublisherZmanTagsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		RespondBadRequest(w, r, "Invalid request body")
+		return
+	}
+
+	// First get the publisher_zman_id
+	var zmanID string
+	err := h.db.Pool.QueryRow(ctx,
+		"SELECT id FROM publisher_zmanim WHERE publisher_id = $1 AND zman_key = $2 AND deleted_at IS NULL",
+		publisherID, zmanKey,
+	).Scan(&zmanID)
+
+	if err == pgx.ErrNoRows {
+		RespondNotFound(w, r, "Zman not found")
+		return
+	}
+	if err != nil {
+		slog.Error("failed to find zman", "error", err)
+		RespondInternalError(w, r, "Failed to find zman")
+		return
+	}
+
+	// Start a transaction
+	tx, err := h.db.Pool.Begin(ctx)
+	if err != nil {
+		slog.Error("failed to begin transaction", "error", err)
+		RespondInternalError(w, r, "Failed to update tags")
+		return
+	}
+	defer tx.Rollback(ctx)
+
+	// Delete existing tags
+	_, err = tx.Exec(ctx, "DELETE FROM publisher_zman_tags WHERE publisher_zman_id = $1", zmanID)
+	if err != nil {
+		slog.Error("failed to delete existing tags", "error", err)
+		RespondInternalError(w, r, "Failed to update tags")
+		return
+	}
+
+	// Insert new tags
+	for _, tagID := range req.TagIDs {
+		_, err = tx.Exec(ctx,
+			"INSERT INTO publisher_zman_tags (publisher_zman_id, tag_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+			zmanID, tagID,
+		)
+		if err != nil {
+			slog.Error("failed to insert tag", "error", err, "tag_id", tagID)
+			RespondInternalError(w, r, "Failed to update tags")
+			return
+		}
+	}
+
+	// Commit
+	if err = tx.Commit(ctx); err != nil {
+		slog.Error("failed to commit transaction", "error", err)
+		RespondInternalError(w, r, "Failed to update tags")
+		return
+	}
+
+	// Fetch updated tags
+	tags, err := h.db.Queries.GetPublisherZmanTags(ctx, zmanID)
+	if err != nil {
+		slog.Error("failed to get updated tags", "error", err)
+		RespondInternalError(w, r, "Tags updated but failed to fetch")
+		return
+	}
+
+	RespondJSON(w, r, http.StatusOK, tags)
+}
+
+// AddTagToPublisherZman adds a single tag to a publisher zman
+// POST /api/v1/publisher/zmanim/{zmanKey}/tags/{tagId}
+func (h *Handlers) AddTagToPublisherZman(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	pc := h.publisherResolver.MustResolve(w, r)
+	if pc == nil {
+		return
+	}
+	publisherID := pc.PublisherID
+	zmanKey := chi.URLParam(r, "zmanKey")
+	tagID := chi.URLParam(r, "tagId")
+
+	// Get the publisher_zman_id
+	var zmanID string
+	err := h.db.Pool.QueryRow(ctx,
+		"SELECT id FROM publisher_zmanim WHERE publisher_id = $1 AND zman_key = $2 AND deleted_at IS NULL",
+		publisherID, zmanKey,
+	).Scan(&zmanID)
+
+	if err == pgx.ErrNoRows {
+		RespondNotFound(w, r, "Zman not found")
+		return
+	}
+	if err != nil {
+		slog.Error("failed to find zman", "error", err)
+		RespondInternalError(w, r, "Failed to find zman")
+		return
+	}
+
+	// Add the tag
+	err = h.db.Queries.AddTagToPublisherZman(ctx, sqlcgen.AddTagToPublisherZmanParams{
+		PublisherZmanID: zmanID,
+		TagID:           tagID,
+	})
+	if err != nil {
+		slog.Error("failed to add tag", "error", err)
+		RespondInternalError(w, r, "Failed to add tag")
+		return
+	}
+
+	RespondJSON(w, r, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"message": "Tag added successfully",
+	})
+}
+
+// RemoveTagFromPublisherZman removes a single tag from a publisher zman
+// DELETE /api/v1/publisher/zmanim/{zmanKey}/tags/{tagId}
+func (h *Handlers) RemoveTagFromPublisherZman(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	pc := h.publisherResolver.MustResolve(w, r)
+	if pc == nil {
+		return
+	}
+	publisherID := pc.PublisherID
+	zmanKey := chi.URLParam(r, "zmanKey")
+	tagID := chi.URLParam(r, "tagId")
+
+	// Get the publisher_zman_id
+	var zmanID string
+	err := h.db.Pool.QueryRow(ctx,
+		"SELECT id FROM publisher_zmanim WHERE publisher_id = $1 AND zman_key = $2 AND deleted_at IS NULL",
+		publisherID, zmanKey,
+	).Scan(&zmanID)
+
+	if err == pgx.ErrNoRows {
+		RespondNotFound(w, r, "Zman not found")
+		return
+	}
+	if err != nil {
+		slog.Error("failed to find zman", "error", err)
+		RespondInternalError(w, r, "Failed to find zman")
+		return
+	}
+
+	// Remove the tag
+	err = h.db.Queries.RemoveTagFromPublisherZman(ctx, sqlcgen.RemoveTagFromPublisherZmanParams{
+		PublisherZmanID: zmanID,
+		TagID:           tagID,
+	})
+	if err != nil {
+		slog.Error("failed to remove tag", "error", err)
+		RespondInternalError(w, r, "Failed to remove tag")
+		return
+	}
+
+	RespondJSON(w, r, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"message": "Tag removed successfully",
+	})
 }

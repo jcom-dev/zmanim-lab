@@ -4,6 +4,7 @@
 -- Publisher Zmanim --
 
 -- name: GetPublisherZmanim :many
+-- Orders by time_category (chronological) then hebrew_name
 SELECT
     pz.id, pz.publisher_id, pz.zman_key, pz.hebrew_name, pz.english_name,
     pz.transliteration, pz.description,
@@ -11,7 +12,7 @@ SELECT
     COALESCE(linked_pz.formula_dsl, pz.formula_dsl) AS formula_dsl,
     pz.ai_explanation, pz.publisher_comment,
     pz.is_enabled, pz.is_visible, pz.is_published, pz.is_beta, pz.is_custom, pz.category,
-    pz.dependencies, pz.sort_order, pz.created_at, pz.updated_at,
+    pz.dependencies, pz.created_at, pz.updated_at,
     pz.master_zman_id, pz.linked_publisher_zman_id, pz.source_type,
     -- Source/original values from registry or linked publisher (for diff/revert UI)
     COALESCE(mr.canonical_hebrew_name, linked_pz.hebrew_name) AS source_hebrew_name,
@@ -19,38 +20,70 @@ SELECT
     COALESCE(mr.transliteration, linked_pz.transliteration) AS source_transliteration,
     COALESCE(mr.description, linked_pz.description) AS source_description,
     COALESCE(mr.default_formula_dsl, linked_pz.formula_dsl) AS source_formula_dsl,
-    -- Check if this zman is linked to any events (daily zmanim have no event links)
+    -- Check if this zman is an event zman (has event or behavior tags like is_candle_lighting, is_havdalah, etc.)
     EXISTS (
-        SELECT 1 FROM master_zman_events mze
-        WHERE mze.master_zman_id = pz.master_zman_id
+        SELECT 1 FROM (
+            -- Check master zman tags
+            SELECT zt.tag_type FROM master_zman_tags mzt
+            JOIN zman_tags zt ON mzt.tag_id = zt.id
+            WHERE mzt.master_zman_id = pz.master_zman_id
+            UNION ALL
+            -- Check publisher-specific tags
+            SELECT zt.tag_type FROM publisher_zman_tags pzt
+            JOIN zman_tags zt ON pzt.tag_id = zt.id
+            WHERE pzt.publisher_zman_id = pz.id
+        ) all_tags
+        WHERE all_tags.tag_type IN ('event', 'behavior')
     ) AS is_event_zman,
-    -- Tags from master zman (if from registry)
+    -- Tags from master zman AND publisher-specific tags (combined, deduplicated)
     COALESCE(
-        (SELECT json_agg(json_build_object(
+        (SELECT json_agg(DISTINCT json_build_object(
             'id', t.id,
             'tag_key', t.tag_key,
             'name', t.name,
             'display_name_hebrew', t.display_name_hebrew,
             'display_name_english', t.display_name_english,
             'tag_type', t.tag_type
-        ) ORDER BY t.sort_order)
-        FROM master_zman_tags mzt
-        JOIN zman_tags t ON mzt.tag_id = t.id
-        WHERE mzt.master_zman_id = pz.master_zman_id),
+        ))
+        FROM (
+            -- Master zman tags
+            SELECT t.* FROM master_zman_tags mzt
+            JOIN zman_tags t ON mzt.tag_id = t.id
+            WHERE mzt.master_zman_id = pz.master_zman_id
+            UNION
+            -- Publisher-specific tags
+            SELECT t.* FROM publisher_zman_tags pzt
+            JOIN zman_tags t ON pzt.tag_id = t.id
+            WHERE pzt.publisher_zman_id = pz.id
+        ) t),
         '[]'::json
     ) AS tags,
     -- Linked source info
     CASE WHEN pz.linked_publisher_zman_id IS NOT NULL THEN true ELSE false END AS is_linked,
     linked_pub.name AS linked_source_publisher_name,
     CASE WHEN pz.linked_publisher_zman_id IS NOT NULL AND linked_pz.deleted_at IS NOT NULL
-         THEN true ELSE false END AS linked_source_is_deleted
+         THEN true ELSE false END AS linked_source_is_deleted,
+    -- Time category for ordering (from registry or inferred from category)
+    COALESCE(mr.time_category, pz.category) AS time_category
 FROM publisher_zmanim pz
 LEFT JOIN publisher_zmanim linked_pz ON pz.linked_publisher_zman_id = linked_pz.id
 LEFT JOIN publishers linked_pub ON linked_pz.publisher_id = linked_pub.id
 LEFT JOIN master_zmanim_registry mr ON pz.master_zman_id = mr.id
 WHERE pz.publisher_id = $1
   AND pz.deleted_at IS NULL
-ORDER BY pz.sort_order, pz.hebrew_name;
+ORDER BY
+    CASE COALESCE(mr.time_category, pz.category)
+        WHEN 'dawn' THEN 1
+        WHEN 'sunrise' THEN 2
+        WHEN 'morning' THEN 3
+        WHEN 'midday' THEN 4
+        WHEN 'afternoon' THEN 5
+        WHEN 'sunset' THEN 6
+        WHEN 'nightfall' THEN 7
+        WHEN 'midnight' THEN 8
+        ELSE 9
+    END,
+    pz.hebrew_name;
 
 -- name: GetPublisherZmanByKey :one
 SELECT
@@ -59,7 +92,7 @@ SELECT
     COALESCE(linked_pz.formula_dsl, pz.formula_dsl) AS formula_dsl,
     pz.ai_explanation, pz.publisher_comment,
     pz.is_enabled, pz.is_visible, pz.is_published, pz.is_beta, pz.is_custom, pz.category,
-    pz.dependencies, pz.sort_order, pz.created_at, pz.updated_at,
+    pz.dependencies, pz.created_at, pz.updated_at,
     pz.master_zman_id, pz.linked_publisher_zman_id, pz.source_type,
     -- Source/original values from registry or linked publisher (for diff/revert UI)
     COALESCE(mr.canonical_hebrew_name, linked_pz.hebrew_name) AS source_hebrew_name,
@@ -69,7 +102,9 @@ SELECT
     COALESCE(mr.default_formula_dsl, linked_pz.formula_dsl) AS source_formula_dsl,
     -- Linked source info
     CASE WHEN pz.linked_publisher_zman_id IS NOT NULL THEN true ELSE false END AS is_linked,
-    linked_pub.name AS linked_source_publisher_name
+    linked_pub.name AS linked_source_publisher_name,
+    -- Time category for consistency
+    COALESCE(mr.time_category, pz.category) AS time_category
 FROM publisher_zmanim pz
 LEFT JOIN publisher_zmanim linked_pz ON pz.linked_publisher_zman_id = linked_pz.id
 LEFT JOIN publishers linked_pub ON linked_pz.publisher_id = linked_pub.id
@@ -81,14 +116,14 @@ INSERT INTO publisher_zmanim (
     id, publisher_id, zman_key, hebrew_name, english_name,
     formula_dsl, ai_explanation, publisher_comment,
     is_enabled, is_visible, is_published, is_beta, is_custom, category,
-    dependencies, sort_order, master_zman_id, linked_publisher_zman_id, source_type
+    dependencies, master_zman_id, linked_publisher_zman_id, source_type
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18
 )
 RETURNING id, publisher_id, zman_key, hebrew_name, english_name,
     formula_dsl, ai_explanation, publisher_comment,
     is_enabled, is_visible, is_published, is_beta, is_custom, category,
-    dependencies, sort_order, master_zman_id, linked_publisher_zman_id, source_type,
+    dependencies, master_zman_id, linked_publisher_zman_id, source_type,
     created_at, updated_at;
 
 -- name: UpdatePublisherZman :one
@@ -109,14 +144,13 @@ SET hebrew_name = COALESCE(sqlc.narg('hebrew_name'), hebrew_name),
         ELSE certified_at
     END,
     category = COALESCE(sqlc.narg('category'), category),
-    sort_order = COALESCE(sqlc.narg('sort_order'), sort_order),
     dependencies = COALESCE(sqlc.narg('dependencies'), dependencies),
     updated_at = NOW()
 WHERE publisher_id = $1 AND zman_key = $2
 RETURNING id, publisher_id, zman_key, hebrew_name, english_name,
     transliteration, description, formula_dsl, ai_explanation, publisher_comment,
     is_enabled, is_visible, is_published, is_beta, is_custom, category,
-    dependencies, sort_order, created_at, updated_at;
+    dependencies, created_at, updated_at;
 
 -- name: DeletePublisherZman :one
 DELETE FROM publisher_zmanim
@@ -129,17 +163,18 @@ SELECT COUNT(*) FROM publisher_zmanim WHERE publisher_id = $1;
 -- Zmanim Templates --
 
 -- name: GetZmanimTemplates :many
+-- Orders by category then hebrew_name
 SELECT
     id, zman_key, hebrew_name, english_name, formula_dsl,
-    category, description, is_required, sort_order,
+    category, description, is_required,
     created_at, updated_at
 FROM zmanim_templates
-ORDER BY category, sort_order, hebrew_name;
+ORDER BY category, hebrew_name;
 
 -- name: GetZmanimTemplateByKey :one
 SELECT
     id, zman_key, hebrew_name, english_name, formula_dsl,
-    category, description, is_required, sort_order,
+    category, description, is_required,
     created_at, updated_at
 FROM zmanim_templates
 WHERE zman_key = $1;
@@ -147,7 +182,7 @@ WHERE zman_key = $1;
 -- name: GetZmanimTemplatesByKeys :many
 SELECT
     id, zman_key, hebrew_name, english_name, formula_dsl,
-    category, description, is_required, sort_order,
+    category, description, is_required,
     created_at, updated_at
 FROM zmanim_templates
 WHERE zman_key = ANY($1::text[]);
@@ -159,39 +194,39 @@ INSERT INTO publisher_zmanim (
     id, publisher_id, zman_key, hebrew_name, english_name,
     formula_dsl, ai_explanation, publisher_comment,
     is_enabled, is_visible, is_published, is_custom, category,
-    dependencies, sort_order
+    dependencies
 )
 SELECT
     gen_random_uuid(), $1, zman_key, hebrew_name, english_name,
     formula_dsl, NULL, NULL,
     true, true, false, false, category,
-    '{}', sort_order
+    '{}'
 FROM zmanim_templates
 ON CONFLICT (publisher_id, zman_key) DO NOTHING
 RETURNING id, publisher_id, zman_key, hebrew_name, english_name,
     formula_dsl, ai_explanation, publisher_comment,
     is_enabled, is_visible, is_published, is_custom, category,
-    dependencies, sort_order, created_at, updated_at;
+    dependencies, created_at, updated_at;
 
 -- name: ImportZmanimFromTemplatesByKeys :many
 INSERT INTO publisher_zmanim (
     id, publisher_id, zman_key, hebrew_name, english_name,
     formula_dsl, ai_explanation, publisher_comment,
     is_enabled, is_visible, is_published, is_custom, category,
-    dependencies, sort_order
+    dependencies
 )
 SELECT
     gen_random_uuid(), $1, zman_key, hebrew_name, english_name,
     formula_dsl, NULL, NULL,
     true, true, false, false, category,
-    '{}', sort_order
+    '{}'
 FROM zmanim_templates
 WHERE zman_key = ANY($2::text[])
 ON CONFLICT (publisher_id, zman_key) DO NOTHING
 RETURNING id, publisher_id, zman_key, hebrew_name, english_name,
     formula_dsl, ai_explanation, publisher_comment,
     is_enabled, is_visible, is_published, is_custom, category,
-    dependencies, sort_order, created_at, updated_at;
+    dependencies, created_at, updated_at;
 
 -- Browse public zmanim --
 
@@ -253,6 +288,7 @@ ORDER BY p.name;
 
 -- name: GetPublisherZmanimForLinking :many
 -- Get published zmanim from a specific publisher for copying/linking
+-- Orders by category chronologically then hebrew_name
 SELECT
     pz.id, pz.publisher_id, pz.zman_key, pz.hebrew_name, pz.english_name,
     pz.formula_dsl, pz.category, pz.source_type,
@@ -266,7 +302,19 @@ WHERE pz.publisher_id = $1
   AND ($2::text IS NULL OR pz.zman_key NOT IN (
       SELECT zman_key FROM publisher_zmanim WHERE publisher_id = $2 AND deleted_at IS NULL
   ))
-ORDER BY pz.sort_order, pz.hebrew_name;
+ORDER BY
+    CASE pz.category
+        WHEN 'dawn' THEN 1
+        WHEN 'sunrise' THEN 2
+        WHEN 'morning' THEN 3
+        WHEN 'midday' THEN 4
+        WHEN 'afternoon' THEN 5
+        WHEN 'sunset' THEN 6
+        WHEN 'nightfall' THEN 7
+        WHEN 'midnight' THEN 8
+        ELSE 9
+    END,
+    pz.hebrew_name;
 
 -- name: GetPublisherZmanByID :one
 -- Get a specific zman by ID (for linking validation)
@@ -274,10 +322,44 @@ SELECT
     pz.id, pz.publisher_id, pz.zman_key, pz.hebrew_name, pz.english_name,
     pz.formula_dsl, pz.ai_explanation, pz.publisher_comment,
     pz.is_enabled, pz.is_visible, pz.is_published, pz.is_custom, pz.category,
-    pz.dependencies, pz.sort_order, pz.master_zman_id, pz.linked_publisher_zman_id,
+    pz.dependencies, pz.master_zman_id, pz.linked_publisher_zman_id,
     pz.source_type, pz.deleted_at, pz.created_at, pz.updated_at,
     p.name AS publisher_name,
     p.is_verified AS publisher_is_verified
 FROM publisher_zmanim pz
 JOIN publishers p ON p.id = pz.publisher_id
 WHERE pz.id = $1;
+
+-- ============================================================================
+-- Publisher Zman Tags
+-- ============================================================================
+
+-- name: GetPublisherZmanTags :many
+-- Get all tags for a specific publisher zman
+SELECT
+    t.id, t.tag_key, t.name, t.display_name_hebrew, t.display_name_english,
+    t.tag_type, t.description, t.sort_order
+FROM publisher_zman_tags pzt
+JOIN zman_tags t ON t.id = pzt.tag_id
+WHERE pzt.publisher_zman_id = $1
+ORDER BY t.sort_order, t.display_name_english;
+
+-- name: AddTagToPublisherZman :exec
+-- Add a tag to a publisher zman
+INSERT INTO publisher_zman_tags (publisher_zman_id, tag_id)
+VALUES ($1, $2)
+ON CONFLICT (publisher_zman_id, tag_id) DO NOTHING;
+
+-- name: RemoveTagFromPublisherZman :exec
+-- Remove a tag from a publisher zman
+DELETE FROM publisher_zman_tags
+WHERE publisher_zman_id = $1 AND tag_id = $2;
+
+-- name: SetPublisherZmanTags :exec
+-- Replace all tags for a publisher zman (delete existing, insert new)
+-- First delete all existing tags for the zman
+DELETE FROM publisher_zman_tags WHERE publisher_zman_id = $1;
+
+-- name: BulkAddTagsToPublisherZman :copyfrom
+-- Bulk insert tags for a publisher zman
+INSERT INTO publisher_zman_tags (publisher_zman_id, tag_id) VALUES ($1, $2);

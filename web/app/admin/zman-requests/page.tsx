@@ -183,7 +183,6 @@ export default function AdminZmanRequestsPage() {
       default_formula_dsl: data.default_formula_dsl,
       is_core: data.is_core,
       is_hidden: data.is_hidden,
-      sort_order: data.sort_order,
       tag_ids: data.tag_ids,
     };
 
@@ -286,7 +285,6 @@ export default function AdminZmanRequestsPage() {
     halachic_source: request.halachic_source || '',
     is_core: false,
     is_hidden: false,
-    sort_order: 0,
     // Include existing tag IDs from approved tags
     tag_ids: pendingTagRequests
       .filter((t) => !t.is_new_tag_request && t.tag_id)

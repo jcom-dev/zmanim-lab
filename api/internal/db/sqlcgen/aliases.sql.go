@@ -7,7 +7,6 @@ package sqlcgen
 
 import (
 	"context"
-	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -49,25 +48,38 @@ FROM publisher_zman_aliases pza
 JOIN publisher_zmanim pz ON pza.publisher_zman_id = pz.id
 JOIN master_zmanim_registry mzr ON pz.zman_key = mzr.zman_key
 WHERE pza.publisher_id = $1 AND pza.is_active = true
-ORDER BY pz.sort_order
+ORDER BY
+    CASE mzr.time_category
+        WHEN 'dawn' THEN 1
+        WHEN 'sunrise' THEN 2
+        WHEN 'morning' THEN 3
+        WHEN 'midday' THEN 4
+        WHEN 'afternoon' THEN 5
+        WHEN 'sunset' THEN 6
+        WHEN 'nightfall' THEN 7
+        WHEN 'midnight' THEN 8
+        ELSE 9
+    END,
+    mzr.canonical_hebrew_name
 `
 
 type GetAllPublisherZmanAliasesRow struct {
-	ID                    string    `json:"id"`
-	PublisherID           string    `json:"publisher_id"`
-	PublisherZmanID       string    `json:"publisher_zman_id"`
-	CustomHebrewName      string    `json:"custom_hebrew_name"`
-	CustomEnglishName     string    `json:"custom_english_name"`
-	CustomTransliteration *string   `json:"custom_transliteration"`
-	IsActive              bool      `json:"is_active"`
-	CreatedAt             time.Time `json:"created_at"`
-	UpdatedAt             time.Time `json:"updated_at"`
-	ZmanKey               string    `json:"zman_key"`
-	CanonicalHebrewName   string    `json:"canonical_hebrew_name"`
-	CanonicalEnglishName  string    `json:"canonical_english_name"`
+	ID                    string             `json:"id"`
+	PublisherID           string             `json:"publisher_id"`
+	PublisherZmanID       string             `json:"publisher_zman_id"`
+	CustomHebrewName      string             `json:"custom_hebrew_name"`
+	CustomEnglishName     string             `json:"custom_english_name"`
+	CustomTransliteration *string            `json:"custom_transliteration"`
+	IsActive              bool               `json:"is_active"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
+	ZmanKey               string             `json:"zman_key"`
+	CanonicalHebrewName   string             `json:"canonical_hebrew_name"`
+	CanonicalEnglishName  string             `json:"canonical_english_name"`
 }
 
 // Get all active aliases for a publisher with canonical names included
+// Orders by time_category (chronological) then hebrew_name
 func (q *Queries) GetAllPublisherZmanAliases(ctx context.Context, publisherID string) ([]GetAllPublisherZmanAliasesRow, error) {
 	rows, err := q.db.Query(ctx, getAllPublisherZmanAliases, publisherID)
 	if err != nil {
@@ -128,18 +140,18 @@ type GetPublisherZmanAliasParams struct {
 }
 
 type GetPublisherZmanAliasRow struct {
-	ID                    string    `json:"id"`
-	PublisherID           string    `json:"publisher_id"`
-	PublisherZmanID       string    `json:"publisher_zman_id"`
-	CustomHebrewName      string    `json:"custom_hebrew_name"`
-	CustomEnglishName     string    `json:"custom_english_name"`
-	CustomTransliteration *string   `json:"custom_transliteration"`
-	IsActive              bool      `json:"is_active"`
-	CreatedAt             time.Time `json:"created_at"`
-	UpdatedAt             time.Time `json:"updated_at"`
-	ZmanKey               string    `json:"zman_key"`
-	CanonicalHebrewName   string    `json:"canonical_hebrew_name"`
-	CanonicalEnglishName  string    `json:"canonical_english_name"`
+	ID                    string             `json:"id"`
+	PublisherID           string             `json:"publisher_id"`
+	PublisherZmanID       string             `json:"publisher_zman_id"`
+	CustomHebrewName      string             `json:"custom_hebrew_name"`
+	CustomEnglishName     string             `json:"custom_english_name"`
+	CustomTransliteration *string            `json:"custom_transliteration"`
+	IsActive              bool               `json:"is_active"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
+	ZmanKey               string             `json:"zman_key"`
+	CanonicalHebrewName   string             `json:"canonical_hebrew_name"`
+	CanonicalEnglishName  string             `json:"canonical_english_name"`
 }
 
 // Alias CRUD Queries
@@ -171,7 +183,6 @@ SELECT
     pz.zman_key,
     pz.formula_dsl,
     pz.is_enabled,
-    pz.sort_order,
     mzr.canonical_hebrew_name,
     mzr.canonical_english_name,
     pza.id as alias_id,
@@ -182,7 +193,19 @@ FROM publisher_zmanim pz
 JOIN master_zmanim_registry mzr ON pz.zman_key = mzr.zman_key
 LEFT JOIN publisher_zman_aliases pza ON pza.publisher_zman_id = pz.id AND pza.is_active = true
 WHERE pz.publisher_id = $1 AND pz.is_enabled = true
-ORDER BY pz.sort_order
+ORDER BY
+    CASE mzr.time_category
+        WHEN 'dawn' THEN 1
+        WHEN 'sunrise' THEN 2
+        WHEN 'morning' THEN 3
+        WHEN 'midday' THEN 4
+        WHEN 'afternoon' THEN 5
+        WHEN 'sunset' THEN 6
+        WHEN 'nightfall' THEN 7
+        WHEN 'midnight' THEN 8
+        ELSE 9
+    END,
+    mzr.canonical_hebrew_name
 `
 
 type GetZmanimWithAliasesRow struct {
@@ -190,7 +213,6 @@ type GetZmanimWithAliasesRow struct {
 	ZmanKey               string      `json:"zman_key"`
 	FormulaDsl            string      `json:"formula_dsl"`
 	IsEnabled             bool        `json:"is_enabled"`
-	SortOrder             int32       `json:"sort_order"`
 	CanonicalHebrewName   string      `json:"canonical_hebrew_name"`
 	CanonicalEnglishName  string      `json:"canonical_english_name"`
 	AliasID               pgtype.UUID `json:"alias_id"`
@@ -200,6 +222,7 @@ type GetZmanimWithAliasesRow struct {
 }
 
 // Get all of a publisher's zmanim with their aliases (if any)
+// Orders by time_category (chronological) then hebrew_name
 func (q *Queries) GetZmanimWithAliases(ctx context.Context, publisherID string) ([]GetZmanimWithAliasesRow, error) {
 	rows, err := q.db.Query(ctx, getZmanimWithAliases, publisherID)
 	if err != nil {
@@ -214,7 +237,6 @@ func (q *Queries) GetZmanimWithAliases(ctx context.Context, publisherID string) 
 			&i.ZmanKey,
 			&i.FormulaDsl,
 			&i.IsEnabled,
-			&i.SortOrder,
 			&i.CanonicalHebrewName,
 			&i.CanonicalEnglishName,
 			&i.AliasID,

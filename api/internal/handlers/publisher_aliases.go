@@ -104,8 +104,8 @@ func (h *Handlers) CreateOrUpdateAlias(w http.ResponseWriter, r *http.Request) {
 		CustomTransliteration: fullAlias.CustomTransliteration,
 		CanonicalHebrewName:   fullAlias.CanonicalHebrewName,
 		CanonicalEnglishName:  fullAlias.CanonicalEnglishName,
-		CreatedAt:             alias.CreatedAt.Format("2006-01-02T15:04:05Z"),
-		UpdatedAt:             alias.UpdatedAt.Format("2006-01-02T15:04:05Z"),
+		CreatedAt:             alias.CreatedAt.Time.Format("2006-01-02T15:04:05Z"),
+		UpdatedAt:             alias.UpdatedAt.Time.Format("2006-01-02T15:04:05Z"),
 	}
 
 	RespondJSON(w, r, http.StatusOK, response)
@@ -155,8 +155,8 @@ func (h *Handlers) GetAlias(w http.ResponseWriter, r *http.Request) {
 		CustomTransliteration: alias.CustomTransliteration,
 		CanonicalHebrewName:   alias.CanonicalHebrewName,
 		CanonicalEnglishName:  alias.CanonicalEnglishName,
-		CreatedAt:             alias.CreatedAt.Format("2006-01-02T15:04:05Z"),
-		UpdatedAt:             alias.UpdatedAt.Format("2006-01-02T15:04:05Z"),
+		CreatedAt:             alias.CreatedAt.Time.Format("2006-01-02T15:04:05Z"),
+		UpdatedAt:             alias.UpdatedAt.Time.Format("2006-01-02T15:04:05Z"),
 	}
 
 	RespondJSON(w, r, http.StatusOK, response)
@@ -230,8 +230,8 @@ func (h *Handlers) ListAliases(w http.ResponseWriter, r *http.Request) {
 			CustomTransliteration: alias.CustomTransliteration,
 			CanonicalHebrewName:   alias.CanonicalHebrewName,
 			CanonicalEnglishName:  alias.CanonicalEnglishName,
-			CreatedAt:             alias.CreatedAt.Format("2006-01-02T15:04:05Z"),
-			UpdatedAt:             alias.UpdatedAt.Format("2006-01-02T15:04:05Z"),
+			CreatedAt:             alias.CreatedAt.Time.Format("2006-01-02T15:04:05Z"),
+			UpdatedAt:             alias.UpdatedAt.Time.Format("2006-01-02T15:04:05Z"),
 		})
 	}
 

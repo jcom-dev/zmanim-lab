@@ -10,39 +10,69 @@ echo ""
 # Get the script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Function to kill processes by pattern
+# Function to kill processes by pattern (with SIGKILL fallback)
 kill_processes() {
     local pattern=$1
     local name=$2
     echo "🛑 Stopping $name..."
+    # First try graceful SIGTERM
     pkill -f "$pattern" 2>/dev/null || true
+    sleep 0.5
+    # Then force SIGKILL if still running
+    pkill -9 -f "$pattern" 2>/dev/null || true
+}
+
+# Function to force-kill anything on a port
+kill_port() {
+    local port=$1
+    local pids=$(lsof -ti:$port 2>/dev/null)
+    if [ -n "$pids" ]; then
+        echo "🔪 Force killing processes on port $port (PIDs: $pids)..."
+        echo "$pids" | xargs kill -9 2>/dev/null || true
+        sleep 1
+    fi
 }
 
 # Kill the tmux session if it exists
 echo "🛑 Stopping tmux session 'zmanim'..."
 tmux kill-session -t zmanim 2>/dev/null || true
 
-# Kill any stray processes
-kill_processes "go run cmd/api/main.go" "Go API server (go run)"
-kill_processes "zmanim-api" "Go API server (binary)"
-kill_processes "next dev" "Next.js dev server"
-# Also kill any compiled "main" binaries from go run
-pkill -9 -f "api.*main" 2>/dev/null || true
+# Kill any stray processes by pattern - cast a wide net
+echo "🛑 Stopping Go API processes..."
+# Any go process in our workspace
+pkill -9 -f "zmanim-lab.*go" 2>/dev/null || true
+pkill -9 -f "zmanim-lab/api" 2>/dev/null || true
+# Go temp binaries (go run creates these in /tmp)
+pkill -9 -f "/tmp/go-build.*/exe/main" 2>/dev/null || true
+pkill -9 -f "/tmp/go-build.*/exe/api" 2>/dev/null || true
+# Named binary
+pkill -9 -f "zmanim-api" 2>/dev/null || true
 
-# Wait a moment for processes to fully terminate
+echo "🛑 Stopping Next.js processes..."
+# Any next process on our port or in our workspace
+pkill -9 -f "next.*3001" 2>/dev/null || true
+pkill -9 -f "next-server" 2>/dev/null || true
+pkill -9 -f "zmanim-lab/web.*next" 2>/dev/null || true
+pkill -9 -f "zmanim-lab/web/node_modules/.bin/next" 2>/dev/null || true
+
+# Wait for processes to terminate
 sleep 2
 
-# Check if ports are still in use
+# Force kill anything still on our ports (nuclear option)
 echo ""
 echo "🔍 Checking if ports are available..."
 for port in 8080 3001; do
     if lsof -Pi :$port -sTCP:LISTEN -t >/dev/null 2>&1; then
         echo "⚠️  Port $port is still in use, force killing..."
-        lsof -ti:$port | xargs kill -9 2>/dev/null || true
-        sleep 1
-    else
-        echo "✅ Port $port is available"
+        kill_port $port
+        # Double-check
+        if lsof -Pi :$port -sTCP:LISTEN -t >/dev/null 2>&1; then
+            echo "❌ Failed to free port $port. Manual intervention required."
+            echo "   Run: lsof -i :$port"
+            exit 1
+        fi
     fi
+    echo "✅ Port $port is available"
 done
 
 echo ""

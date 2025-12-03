@@ -6,29 +6,42 @@
 -- ============================================
 
 -- name: GetAllMasterZmanim :many
+-- Orders by time_category (chronological) then hebrew_name
 SELECT
     id, zman_key, canonical_hebrew_name, canonical_english_name,
     transliteration, description, halachic_notes, halachic_source,
-    time_category, default_formula_dsl, is_core, sort_order,
+    time_category, default_formula_dsl, is_core,
     created_at, updated_at
 FROM master_zmanim_registry
-ORDER BY time_category, sort_order, canonical_hebrew_name;
+ORDER BY
+    CASE time_category
+        WHEN 'dawn' THEN 1
+        WHEN 'sunrise' THEN 2
+        WHEN 'morning' THEN 3
+        WHEN 'midday' THEN 4
+        WHEN 'afternoon' THEN 5
+        WHEN 'sunset' THEN 6
+        WHEN 'nightfall' THEN 7
+        WHEN 'midnight' THEN 8
+        ELSE 9
+    END,
+    canonical_hebrew_name;
 
 -- name: GetMasterZmanimByCategory :many
 SELECT
     id, zman_key, canonical_hebrew_name, canonical_english_name,
     transliteration, description, halachic_notes, halachic_source,
-    time_category, default_formula_dsl, is_core, sort_order,
+    time_category, default_formula_dsl, is_core,
     created_at, updated_at
 FROM master_zmanim_registry
 WHERE time_category = $1
-ORDER BY sort_order, canonical_hebrew_name;
+ORDER BY canonical_hebrew_name;
 
 -- name: GetMasterZmanByKey :one
 SELECT
     id, zman_key, canonical_hebrew_name, canonical_english_name,
     transliteration, description, halachic_notes, halachic_source,
-    time_category, default_formula_dsl, is_core, sort_order,
+    time_category, default_formula_dsl, is_core,
     created_at, updated_at
 FROM master_zmanim_registry
 WHERE zman_key = $1;
@@ -37,7 +50,7 @@ WHERE zman_key = $1;
 SELECT
     id, zman_key, canonical_hebrew_name, canonical_english_name,
     transliteration, description, halachic_notes, halachic_source,
-    time_category, default_formula_dsl, is_core, sort_order,
+    time_category, default_formula_dsl, is_core,
     created_at, updated_at
 FROM master_zmanim_registry
 WHERE id = $1;
@@ -46,7 +59,7 @@ WHERE id = $1;
 SELECT
     id, zman_key, canonical_hebrew_name, canonical_english_name,
     transliteration, description, halachic_notes, halachic_source,
-    time_category, default_formula_dsl, is_core, sort_order,
+    time_category, default_formula_dsl, is_core,
     created_at, updated_at
 FROM master_zmanim_registry
 WHERE
@@ -60,7 +73,17 @@ ORDER BY
         WHEN canonical_hebrew_name ILIKE $1 || '%' THEN 2
         ELSE 3
     END,
-    sort_order
+    CASE time_category
+        WHEN 'dawn' THEN 1
+        WHEN 'sunrise' THEN 2
+        WHEN 'morning' THEN 3
+        WHEN 'midday' THEN 4
+        WHEN 'afternoon' THEN 5
+        WHEN 'sunset' THEN 6
+        WHEN 'nightfall' THEN 7
+        WHEN 'midnight' THEN 8
+        ELSE 9
+    END
 LIMIT 50;
 
 -- name: GetMasterZmanimGroupedByCategory :many
@@ -74,9 +97,8 @@ SELECT
             'canonical_english_name', canonical_english_name,
             'transliteration', transliteration,
             'default_formula_dsl', default_formula_dsl,
-            'is_core', is_core,
-            'sort_order', sort_order
-        ) ORDER BY sort_order, canonical_hebrew_name
+            'is_core', is_core
+        ) ORDER BY canonical_hebrew_name
     ) as zmanim
 FROM master_zmanim_registry
 GROUP BY time_category
@@ -131,13 +153,25 @@ ORDER BY t.tag_type, t.sort_order;
 SELECT
     mr.id, mr.zman_key, mr.canonical_hebrew_name, mr.canonical_english_name,
     mr.transliteration, mr.description, mr.halachic_notes, mr.halachic_source,
-    mr.time_category, mr.default_formula_dsl, mr.is_core, mr.sort_order,
+    mr.time_category, mr.default_formula_dsl, mr.is_core,
     mr.created_at, mr.updated_at
 FROM master_zmanim_registry mr
 JOIN master_zman_tags mzt ON mr.id = mzt.master_zman_id
 JOIN zman_tags t ON t.id = mzt.tag_id
 WHERE t.name = $1
-ORDER BY mr.time_category, mr.sort_order;
+ORDER BY
+    CASE mr.time_category
+        WHEN 'dawn' THEN 1
+        WHEN 'sunrise' THEN 2
+        WHEN 'morning' THEN 3
+        WHEN 'midday' THEN 4
+        WHEN 'afternoon' THEN 5
+        WHEN 'sunset' THEN 6
+        WHEN 'nightfall' THEN 7
+        WHEN 'midnight' THEN 8
+        ELSE 9
+    END,
+    mr.canonical_hebrew_name;
 
 -- ============================================
 -- PUBLISHER ZMANIM WITH REGISTRY (new model)
@@ -162,7 +196,6 @@ SELECT
     COALESCE(mr.time_category, pz.category) AS time_category,
     pz.category,
     pz.dependencies,
-    pz.sort_order,
     pz.current_version,
     pz.created_at,
     pz.updated_at,
@@ -186,7 +219,6 @@ ORDER BY
         WHEN 'midnight' THEN 8
         ELSE 9
     END,
-    pz.sort_order,
     pz.hebrew_name;
 
 -- name: GetPublisherZmanWithRegistry :one
@@ -208,7 +240,6 @@ SELECT
     COALESCE(mr.time_category, pz.category) AS time_category,
     pz.category,
     pz.dependencies,
-    pz.sort_order,
     pz.current_version,
     pz.created_at,
     pz.updated_at,
@@ -228,7 +259,7 @@ INSERT INTO publisher_zmanim (
     transliteration, description,
     formula_dsl, ai_explanation, publisher_comment,
     is_enabled, is_visible, is_published, is_custom, category,
-    dependencies, sort_order, master_zman_id, current_version
+    dependencies, master_zman_id, current_version
 )
 SELECT
     gen_random_uuid() AS id,
@@ -247,7 +278,6 @@ SELECT
     false AS is_custom,
     mr.time_category AS category,
     '{}'::text[] AS dependencies,
-    mr.sort_order AS sort_order,
     mr.id AS master_zman_id,
     1 AS current_version
 FROM master_zmanim_registry mr
@@ -255,7 +285,7 @@ WHERE mr.id = $2
 RETURNING id, publisher_id, zman_key, hebrew_name, english_name,
     transliteration, description, formula_dsl, ai_explanation, publisher_comment,
     is_enabled, is_visible, is_published, is_custom, category,
-    dependencies, sort_order, created_at, updated_at, master_zman_id, current_version;
+    dependencies, created_at, updated_at, master_zman_id, current_version;
 
 -- name: ImportZmanimFromRegistryByKeys :many
 INSERT INTO publisher_zmanim (
@@ -263,7 +293,7 @@ INSERT INTO publisher_zmanim (
     transliteration, description,
     formula_dsl, ai_explanation, publisher_comment,
     is_enabled, is_visible, is_published, is_custom, category,
-    dependencies, sort_order, master_zman_id, current_version
+    dependencies, master_zman_id, current_version
 )
 SELECT
     gen_random_uuid(),
@@ -282,7 +312,6 @@ SELECT
     false,
     mr.time_category,
     '{}',
-    mr.sort_order,
     mr.id,
     1
 FROM master_zmanim_registry mr
@@ -291,7 +320,7 @@ ON CONFLICT (publisher_id, zman_key) DO NOTHING
 RETURNING id, publisher_id, zman_key, hebrew_name, english_name,
     transliteration, description, formula_dsl, ai_explanation, publisher_comment,
     is_enabled, is_visible, is_published, is_custom, category,
-    dependencies, sort_order, created_at, updated_at, master_zman_id, current_version;
+    dependencies, created_at, updated_at, master_zman_id, current_version;
 
 -- ============================================
 -- SOFT DELETE QUERIES
@@ -310,7 +339,7 @@ WHERE publisher_id = $1 AND zman_key = $2 AND deleted_at IS NOT NULL
 RETURNING id, publisher_id, zman_key, hebrew_name, english_name,
     formula_dsl, ai_explanation, publisher_comment,
     is_enabled, is_visible, is_published, is_custom, category,
-    dependencies, sort_order, created_at, updated_at, master_zman_id, current_version;
+    dependencies, created_at, updated_at, master_zman_id, current_version;
 
 -- name: GetDeletedPublisherZmanim :many
 SELECT
@@ -452,7 +481,6 @@ INSERT INTO master_zmanim_registry (
     time_category,
     default_formula_dsl,
     is_core,
-    sort_order,
     description
 )
 SELECT
@@ -462,12 +490,11 @@ SELECT
     time_category,
     requested_formula_dsl,
     false,
-    999,
     'Added from publisher request'
 FROM zman_registry_requests zrr
 WHERE zrr.id = $1
 RETURNING id, zman_key, canonical_hebrew_name, canonical_english_name, time_category,
-    default_formula_dsl, is_core, sort_order, created_at, updated_at;
+    default_formula_dsl, is_core, created_at, updated_at;
 
 -- ============================================
 -- ASTRONOMICAL PRIMITIVES QUERIES

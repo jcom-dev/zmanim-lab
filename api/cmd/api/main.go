@@ -205,10 +205,6 @@ func main() {
 			r.Post("/dsl/preview", h.PreviewDSLFormula)          // Preview/calculate DSL formula
 			r.Post("/dsl/preview-week", h.PreviewDSLFormulaWeek) // Weekly preview (Story 4-10)
 
-			// Zman definitions - bilingual naming (Story 4-3)
-			r.Get("/zman-definitions", h.GetZmanDefinitions)
-			r.Get("/zman-definitions/{key}", h.GetZmanDefinition)
-
 			// AI endpoints (Story 4-7, 4-8)
 			r.Post("/ai/search", h.SearchAI)
 			r.Post("/ai/context", h.GetAIContext)
@@ -275,6 +271,7 @@ func main() {
 			r.Get("/algorithm/methods", h.GetZmanMethods)
 			// Publisher zmanim management (Story 4-4)
 			r.Get("/zmanim", h.GetPublisherZmanim)
+			r.Get("/zmanim/week", h.GetPublisherZmanimWeek) // Batch week preview with caching
 			r.Post("/zmanim", h.CreatePublisherZmanFromRegistry) // Updated: create from registry
 			r.Post("/zmanim/import", h.ImportZmanim)
 			r.Post("/zmanim/from-publisher", h.CreateZmanFromPublisher) // Copy or link from another publisher
@@ -294,6 +291,11 @@ func main() {
 			r.Get("/zmanim/{zmanKey}/alias", h.GetAlias)
 			r.Put("/zmanim/{zmanKey}/alias", h.CreateOrUpdateAlias)
 			r.Delete("/zmanim/{zmanKey}/alias", h.DeleteAlias)
+			// Publisher zman tags (publisher-specific tag overrides)
+			r.Get("/zmanim/{zmanKey}/tags", h.GetPublisherZmanTags)
+			r.Put("/zmanim/{zmanKey}/tags", h.UpdatePublisherZmanTags)
+			r.Post("/zmanim/{zmanKey}/tags/{tagId}", h.AddTagToPublisherZman)
+			r.Delete("/zmanim/{zmanKey}/tags/{tagId}", h.RemoveTagFromPublisherZman)
 			// Zman registry requests (Story 5.6)
 			r.Get("/zman-requests", h.GetPublisherZmanRequests)
 			r.Post("/zman-requests", h.CreateZmanRegistryRequest)
@@ -308,9 +310,6 @@ func main() {
 			r.Delete("/coverage/{id}", h.DeletePublisherCoverage)
 			// Cache management
 			r.Delete("/cache", h.InvalidatePublisherCache)
-			// Zman definitions management (Story 4-3)
-			r.Post("/zman-definitions", h.CreateZmanDefinition)
-			r.Put("/zman-definitions/{key}", h.UpdateZmanDefinition)
 			// Team management (Story 2-10)
 			r.Get("/team", h.GetPublisherTeam)
 			r.Post("/team/invite", h.InvitePublisherTeamMember)

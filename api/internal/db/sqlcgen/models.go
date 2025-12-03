@@ -5,10 +5,7 @@
 package sqlcgen
 
 import (
-	"time"
-
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/pgvector/pgvector-go"
 )
 
 // Audit log for all AI-powered formula generation and explanation requests
@@ -81,10 +78,10 @@ type AstronomicalPrimitive struct {
 	// True for morning events (dawn/sunrise), false for evening events (dusk/sunset), NULL for position events (noon/midnight)
 	IsDawn *bool `json:"is_dawn"`
 	// Which part of the sun: center (geometric), top_edge (visible sunrise/sunset), bottom_edge
-	EdgeType  *string   `json:"edge_type"`
-	SortOrder *int32    `json:"sort_order"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	EdgeType  *string            `json:"edge_type"`
+	SortOrder *int32             `json:"sort_order"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }
 
 // Cities table - use idx_cities_name_trgm for ILIKE searches, idx_cities_country_population for country listings
@@ -125,9 +122,9 @@ type DayType struct {
 	DisplayNameEnglish string  `json:"display_name_english"`
 	Description        *string `json:"description"`
 	// Parent type name for hierarchical day types
-	ParentType *string   `json:"parent_type"`
-	SortOrder  *int32    `json:"sort_order"`
-	CreatedAt  time.Time `json:"created_at"`
+	ParentType *string            `json:"parent_type"`
+	SortOrder  *int32             `json:"sort_order"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 }
 
 // Vector embeddings for RAG semantic search
@@ -141,7 +138,7 @@ type Embedding struct {
 	Content     string `json:"content"`
 	Metadata    []byte `json:"metadata"`
 	// OpenAI text-embedding-3-small 1536-dimensional vector
-	Embedding *pgvector.Vector `json:"embedding"`
+	Embedding interface{}      `json:"embedding"`
 	CreatedAt pgtype.Timestamp `json:"created_at"`
 	UpdatedAt pgtype.Timestamp `json:"updated_at"`
 }
@@ -198,18 +195,18 @@ type JewishEvent struct {
 	// Number of days this event lasts in the Diaspora
 	DurationDaysDiaspora *int32 `json:"duration_days_diaspora"`
 	// For fasts: dawn (regular fasts) or sunset (Yom Kippur, Tisha B'Av)
-	FastStartType   *string   `json:"fast_start_type"`
-	ParentEventCode *string   `json:"parent_event_code"`
-	SortOrder       *int32    `json:"sort_order"`
-	CreatedAt       time.Time `json:"created_at"`
+	FastStartType   *string            `json:"fast_start_type"`
+	ParentEventCode *string            `json:"parent_event_code"`
+	SortOrder       *int32             `json:"sort_order"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 }
 
 // DEPRECATED: Use master_zman_events instead.
 type MasterZmanDayType struct {
-	MasterZmanID string    `json:"master_zman_id"`
-	DayTypeID    string    `json:"day_type_id"`
-	IsDefault    *bool     `json:"is_default"`
-	CreatedAt    time.Time `json:"created_at"`
+	MasterZmanID string             `json:"master_zman_id"`
+	DayTypeID    string             `json:"day_type_id"`
+	IsDefault    *bool              `json:"is_default"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 }
 
 // Links zmanim to the Jewish events they apply to
@@ -219,16 +216,16 @@ type MasterZmanEvent struct {
 	JewishEventID string `json:"jewish_event_id"`
 	IsDefault     *bool  `json:"is_default"`
 	// NULL = all days of event, 1 = day 1 only, 2 = day 2 only (for 2-day Yom Tov in Diaspora)
-	AppliesToDay *int32    `json:"applies_to_day"`
-	Notes        *string   `json:"notes"`
-	CreatedAt    time.Time `json:"created_at"`
+	AppliesToDay *int32             `json:"applies_to_day"`
+	Notes        *string            `json:"notes"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 }
 
 // Many-to-many relationship between zmanim and tags
 type MasterZmanTag struct {
-	MasterZmanID string    `json:"master_zman_id"`
-	TagID        string    `json:"tag_id"`
-	CreatedAt    time.Time `json:"created_at"`
+	MasterZmanID string             `json:"master_zman_id"`
+	TagID        string             `json:"tag_id"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 }
 
 // Master zmanim registry - trigram indexes available for fuzzy Hebrew/English/transliteration searches
@@ -249,43 +246,41 @@ type MasterZmanimRegistry struct {
 	// If true, this zman is a core/essential zman that cannot be removed from the registry
 	IsCore *bool `json:"is_core"`
 	// When true, this zman is hidden from public registry queries but visible to admins. Useful for deprecated or experimental zmanim.
-	IsHidden  bool   `json:"is_hidden"`
-	SortOrder *int32 `json:"sort_order"`
+	IsHidden bool `json:"is_hidden"`
 	// Clerk user ID of the admin who created this zman
 	CreatedBy *string `json:"created_by"`
 	// Clerk user ID of the admin who last updated this zman
-	UpdatedBy *string   `json:"updated_by"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	UpdatedBy *string            `json:"updated_by"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }
 
 // Master zmanim registry with their associated tags
 type MasterZmanimWithTag struct {
-	ID                   string      `json:"id"`
-	ZmanKey              string      `json:"zman_key"`
-	CanonicalHebrewName  string      `json:"canonical_hebrew_name"`
-	CanonicalEnglishName string      `json:"canonical_english_name"`
-	Transliteration      *string     `json:"transliteration"`
-	Description          *string     `json:"description"`
-	HalachicNotes        *string     `json:"halachic_notes"`
-	HalachicSource       *string     `json:"halachic_source"`
-	TimeCategory         string      `json:"time_category"`
-	DefaultFormulaDsl    string      `json:"default_formula_dsl"`
-	IsCore               *bool       `json:"is_core"`
-	IsHidden             bool        `json:"is_hidden"`
-	SortOrder            *int32      `json:"sort_order"`
-	CreatedBy            *string     `json:"created_by"`
-	UpdatedBy            *string     `json:"updated_by"`
-	CreatedAt            time.Time   `json:"created_at"`
-	UpdatedAt            time.Time   `json:"updated_at"`
-	Tags                 interface{} `json:"tags"`
+	ID                   string             `json:"id"`
+	ZmanKey              string             `json:"zman_key"`
+	CanonicalHebrewName  string             `json:"canonical_hebrew_name"`
+	CanonicalEnglishName string             `json:"canonical_english_name"`
+	Transliteration      *string            `json:"transliteration"`
+	Description          *string            `json:"description"`
+	HalachicNotes        *string            `json:"halachic_notes"`
+	HalachicSource       *string            `json:"halachic_source"`
+	TimeCategory         string             `json:"time_category"`
+	DefaultFormulaDsl    string             `json:"default_formula_dsl"`
+	IsCore               *bool              `json:"is_core"`
+	IsHidden             bool               `json:"is_hidden"`
+	CreatedBy            *string            `json:"created_by"`
+	UpdatedBy            *string            `json:"updated_by"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
+	Tags                 interface{}        `json:"tags"`
 }
 
 type PasswordResetToken struct {
 	ID        string             `json:"id"`
 	Email     string             `json:"email"`
 	Token     string             `json:"token"`
-	ExpiresAt time.Time          `json:"expires_at"`
+	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
@@ -345,7 +340,7 @@ type PublisherInvitation struct {
 	Token       string             `json:"token"`
 	Status      string             `json:"status"`
 	InvitedBy   string             `json:"invited_by"`
-	ExpiresAt   time.Time          `json:"expires_at"`
+	ExpiresAt   pgtype.Timestamptz `json:"expires_at"`
 	AcceptedAt  pgtype.Timestamptz `json:"accepted_at"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 }
@@ -391,39 +386,46 @@ type PublisherZmanAlias struct {
 	// Optional publisher-specific transliteration
 	CustomTransliteration *string `json:"custom_transliteration"`
 	// Whether this alias is currently in use
-	IsActive  bool      `json:"is_active"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	IsActive  bool               `json:"is_active"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }
 
 // DEPRECATED: Use publisher_zman_events instead.
 type PublisherZmanDayType struct {
-	PublisherZmanID string    `json:"publisher_zman_id"`
-	DayTypeID       string    `json:"day_type_id"`
-	IsVisible       *bool     `json:"is_visible"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
+	PublisherZmanID string             `json:"publisher_zman_id"`
+	DayTypeID       string             `json:"day_type_id"`
+	IsVisible       *bool              `json:"is_visible"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
 }
 
 // Publisher overrides for which events their zmanim apply to
 type PublisherZmanEvent struct {
-	ID              string    `json:"id"`
-	PublisherZmanID string    `json:"publisher_zman_id"`
-	JewishEventID   string    `json:"jewish_event_id"`
-	IsEnabled       *bool     `json:"is_enabled"`
-	AppliesToDay    *int32    `json:"applies_to_day"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
+	ID              string             `json:"id"`
+	PublisherZmanID string             `json:"publisher_zman_id"`
+	JewishEventID   string             `json:"jewish_event_id"`
+	IsEnabled       *bool              `json:"is_enabled"`
+	AppliesToDay    *int32             `json:"applies_to_day"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+}
+
+// Publisher-specific tags for zmanim. These override/supplement the master registry tags.
+type PublisherZmanTag struct {
+	PublisherZmanID string             `json:"publisher_zman_id"`
+	TagID           string             `json:"tag_id"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 }
 
 // Version history for each publisher zman (max 7 versions, formula changes only)
 type PublisherZmanVersion struct {
-	ID              string    `json:"id"`
-	PublisherZmanID string    `json:"publisher_zman_id"`
-	VersionNumber   int32     `json:"version_number"`
-	FormulaDsl      string    `json:"formula_dsl"`
-	CreatedBy       *string   `json:"created_by"`
-	CreatedAt       time.Time `json:"created_at"`
+	ID              string             `json:"id"`
+	PublisherZmanID string             `json:"publisher_zman_id"`
+	VersionNumber   int32              `json:"version_number"`
+	FormulaDsl      string             `json:"formula_dsl"`
+	CreatedBy       *string            `json:"created_by"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 }
 
 // Publisher zmanim - filtered queries should use publisher_id + deleted_at + is_enabled for best performance
@@ -448,13 +450,12 @@ type PublisherZmanim struct {
 	Category string `json:"category"`
 	// Auto-extracted @references from formula_dsl
 	Dependencies   []string           `json:"dependencies"`
-	SortOrder      int32              `json:"sort_order"`
 	MasterZmanID   pgtype.UUID        `json:"master_zman_id"`
 	CurrentVersion *int32             `json:"current_version"`
 	DeletedAt      pgtype.Timestamptz `json:"deleted_at"`
 	DeletedBy      *string            `json:"deleted_by"`
-	CreatedAt      time.Time          `json:"created_at"`
-	UpdatedAt      time.Time          `json:"updated_at"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 	// For linked zmanim, points to the source zman from another publisher
 	LinkedPublisherZmanID pgtype.UUID `json:"linked_publisher_zman_id"`
 	// How this zman was created: registry, copied, linked, or custom
@@ -486,15 +487,14 @@ type PublisherZmanimResolved struct {
 	IsCustom                  bool               `json:"is_custom"`
 	Category                  string             `json:"category"`
 	Dependencies              []string           `json:"dependencies"`
-	SortOrder                 int32              `json:"sort_order"`
 	MasterZmanID              pgtype.UUID        `json:"master_zman_id"`
 	LinkedPublisherZmanID     pgtype.UUID        `json:"linked_publisher_zman_id"`
 	SourceType                *string            `json:"source_type"`
 	CurrentVersion            *int32             `json:"current_version"`
 	DeletedAt                 pgtype.Timestamptz `json:"deleted_at"`
 	DeletedBy                 *string            `json:"deleted_by"`
-	CreatedAt                 time.Time          `json:"created_at"`
-	UpdatedAt                 time.Time          `json:"updated_at"`
+	CreatedAt                 pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt                 pgtype.Timestamptz `json:"updated_at"`
 	LinkedSourcePublisherID   pgtype.UUID        `json:"linked_source_publisher_id"`
 	LinkedSourcePublisherName *string            `json:"linked_source_publisher_name"`
 	LinkedSourceDeletedAt     pgtype.Timestamptz `json:"linked_source_deleted_at"`
@@ -520,12 +520,11 @@ type PublisherZmanimWithRegistry struct {
 	TimeCategory      string             `json:"time_category"`
 	Category          string             `json:"category"`
 	Dependencies      []string           `json:"dependencies"`
-	SortOrder         int32              `json:"sort_order"`
 	CurrentVersion    *int32             `json:"current_version"`
 	DeletedAt         pgtype.Timestamptz `json:"deleted_at"`
 	DeletedBy         *string            `json:"deleted_by"`
-	CreatedAt         time.Time          `json:"created_at"`
-	UpdatedAt         time.Time          `json:"updated_at"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
 	MasterZmanID      pgtype.UUID        `json:"master_zman_id"`
 	ZmanDescription   *string            `json:"zman_description"`
 	HalachicNotes     *string            `json:"halachic_notes"`
@@ -542,33 +541,16 @@ type SystemConfig struct {
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
 
-type ZmanDefinition struct {
-	ID              string  `json:"id"`
-	Key             string  `json:"key"`
-	NameHebrew      string  `json:"name_hebrew"`
-	NameEnglish     string  `json:"name_english"`
-	Transliteration *string `json:"transliteration"`
-	Category        string  `json:"category"`
-	SortOrder       *int32  `json:"sort_order"`
-	IsStandard      *bool   `json:"is_standard"`
-	// Markdown-formatted halachic documentation and sources
-	HalachicNotes *string `json:"halachic_notes"`
-	// Primary halachic source reference
-	HalachicSource *string            `json:"halachic_source"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
-}
-
 // Context-specific display names for zmanim with the same calculation but different labels
 type ZmanDisplayContext struct {
 	ID           string `json:"id"`
 	MasterZmanID string `json:"master_zman_id"`
 	// Context identifier - matches jewish_events.code or special values
-	ContextCode        string    `json:"context_code"`
-	DisplayNameHebrew  string    `json:"display_name_hebrew"`
-	DisplayNameEnglish string    `json:"display_name_english"`
-	SortOrder          *int32    `json:"sort_order"`
-	CreatedAt          time.Time `json:"created_at"`
+	ContextCode        string             `json:"context_code"`
+	DisplayNameHebrew  string             `json:"display_name_hebrew"`
+	DisplayNameEnglish string             `json:"display_name_english"`
+	SortOrder          *int32             `json:"sort_order"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
 }
 
 // Requests from publishers to add new zmanim to the master registry
@@ -584,7 +566,7 @@ type ZmanRegistryRequest struct {
 	ReviewedBy           *string            `json:"reviewed_by"`
 	ReviewedAt           pgtype.Timestamptz `json:"reviewed_at"`
 	ReviewerNotes        *string            `json:"reviewer_notes"`
-	CreatedAt            time.Time          `json:"created_at"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
 	// Transliteration of the Hebrew name
 	Transliteration *string `json:"transliteration"`
 	// Brief description of the zman
@@ -612,23 +594,23 @@ type ZmanRequestTag struct {
 	// Type of requested new tag: event, timing, behavior, shita, method
 	RequestedTagType *string `json:"requested_tag_type"`
 	// True if this is a request for a new tag to be created
-	IsNewTagRequest bool      `json:"is_new_tag_request"`
-	CreatedAt       time.Time `json:"created_at"`
+	IsNewTagRequest bool               `json:"is_new_tag_request"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 }
 
 // Tags for categorizing zmanim by event type, timing, and behavior
 type ZmanTag struct {
 	ID string `json:"id"`
 	// Unique key identifier for the tag (e.g., shabbos, yom_tov)
-	TagKey             string    `json:"tag_key"`
-	Name               string    `json:"name"`
-	DisplayNameHebrew  string    `json:"display_name_hebrew"`
-	DisplayNameEnglish string    `json:"display_name_english"`
-	TagType            string    `json:"tag_type"`
-	Description        *string   `json:"description"`
-	Color              *string   `json:"color"`
-	SortOrder          *int32    `json:"sort_order"`
-	CreatedAt          time.Time `json:"created_at"`
+	TagKey             string             `json:"tag_key"`
+	Name               string             `json:"name"`
+	DisplayNameHebrew  string             `json:"display_name_hebrew"`
+	DisplayNameEnglish string             `json:"display_name_english"`
+	TagType            string             `json:"tag_type"`
+	Description        *string            `json:"description"`
+	Color              *string            `json:"color"`
+	SortOrder          *int32             `json:"sort_order"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
 }
 
 // System-wide default zmanim formulas that publishers can copy from
@@ -638,11 +620,10 @@ type ZmanimTemplate struct {
 	HebrewName  string `json:"hebrew_name"`
 	EnglishName string `json:"english_name"`
 	// DSL formula string. proportional_hours(N, gra) returns absolute time N hours after sunrise. proportional_hours(N, mga) returns N hours after dawn (72min before sunrise).
-	FormulaDsl  string    `json:"formula_dsl"`
-	Category    string    `json:"category"`
-	Description *string   `json:"description"`
-	IsRequired  bool      `json:"is_required"`
-	SortOrder   int32     `json:"sort_order"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	FormulaDsl  string             `json:"formula_dsl"`
+	Category    string             `json:"category"`
+	Description *string            `json:"description"`
+	IsRequired  bool               `json:"is_required"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }

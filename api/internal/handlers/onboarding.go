@@ -262,25 +262,8 @@ func (h *Handlers) CompleteOnboarding(w http.ResponseWriter, r *http.Request) {
 				_, err = h.db.Pool.Exec(ctx, `
 					INSERT INTO publisher_zmanim (
 						publisher_id, zman_key, hebrew_name, english_name, formula_dsl,
-						is_enabled, is_visible, is_published, is_custom, category, sort_order,
+						is_enabled, is_visible, is_published, is_custom, category,
 						master_zman_id
-					) VALUES ($1, $2, $3, $4, $5, true, true, false, false, $6, $7, $8)
-					ON CONFLICT (publisher_id, zman_key) DO UPDATE SET
-						hebrew_name = EXCLUDED.hebrew_name,
-						english_name = EXCLUDED.english_name,
-						formula_dsl = EXCLUDED.formula_dsl,
-						is_enabled = EXCLUDED.is_enabled,
-						category = EXCLUDED.category,
-						sort_order = EXCLUDED.sort_order,
-						master_zman_id = EXCLUDED.master_zman_id
-				`, publisherID, zmanKey, hebrewName, englishName,
-					zman.Formula, category, i+1, zman.MasterZmanID)
-			} else {
-				// Legacy insert without master_zman_id
-				_, err = h.db.Pool.Exec(ctx, `
-					INSERT INTO publisher_zmanim (
-						publisher_id, zman_key, hebrew_name, english_name, formula_dsl,
-						is_enabled, is_visible, is_published, is_custom, category, sort_order
 					) VALUES ($1, $2, $3, $4, $5, true, true, false, false, $6, $7)
 					ON CONFLICT (publisher_id, zman_key) DO UPDATE SET
 						hebrew_name = EXCLUDED.hebrew_name,
@@ -288,9 +271,24 @@ func (h *Handlers) CompleteOnboarding(w http.ResponseWriter, r *http.Request) {
 						formula_dsl = EXCLUDED.formula_dsl,
 						is_enabled = EXCLUDED.is_enabled,
 						category = EXCLUDED.category,
-						sort_order = EXCLUDED.sort_order
+						master_zman_id = EXCLUDED.master_zman_id
 				`, publisherID, zmanKey, hebrewName, englishName,
-					zman.Formula, category, i+1)
+					zman.Formula, category, zman.MasterZmanID)
+			} else {
+				// Legacy insert without master_zman_id
+				_, err = h.db.Pool.Exec(ctx, `
+					INSERT INTO publisher_zmanim (
+						publisher_id, zman_key, hebrew_name, english_name, formula_dsl,
+						is_enabled, is_visible, is_published, is_custom, category
+					) VALUES ($1, $2, $3, $4, $5, true, true, false, false, $6)
+					ON CONFLICT (publisher_id, zman_key) DO UPDATE SET
+						hebrew_name = EXCLUDED.hebrew_name,
+						english_name = EXCLUDED.english_name,
+						formula_dsl = EXCLUDED.formula_dsl,
+						is_enabled = EXCLUDED.is_enabled,
+						category = EXCLUDED.category
+				`, publisherID, zmanKey, hebrewName, englishName,
+					zman.Formula, category)
 			}
 			if err != nil {
 				slog.Error("CompleteOnboarding failed to insert zman", "zman_key", zmanKey, "error", err)
@@ -304,11 +302,11 @@ func (h *Handlers) CompleteOnboarding(w http.ResponseWriter, r *http.Request) {
 		_, err = h.db.Pool.Exec(ctx, `
 			INSERT INTO publisher_zmanim (
 				publisher_id, zman_key, hebrew_name, english_name, formula_dsl,
-				is_enabled, is_visible, is_published, is_custom, category, sort_order
+				is_enabled, is_visible, is_published, is_custom, category
 			)
 			SELECT
 				$1, zman_key, hebrew_name, english_name, formula_dsl,
-				true, true, false, false, category, sort_order
+				true, true, false, false, category
 			FROM zmanim_templates
 			WHERE category = 'essential' OR is_required = true
 			ON CONFLICT (publisher_id, zman_key) DO NOTHING

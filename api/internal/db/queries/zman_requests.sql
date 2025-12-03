@@ -223,7 +223,7 @@ INSERT INTO publisher_zmanim (
     transliteration, description,
     formula_dsl, ai_explanation, publisher_comment,
     is_enabled, is_visible, is_published, is_custom, category,
-    dependencies, sort_order, current_version
+    dependencies, current_version
 )
 SELECT
     gen_random_uuid() AS id,
@@ -242,7 +242,6 @@ SELECT
     true AS is_custom,
     zrr.time_category AS category,
     '{}'::text[] AS dependencies,
-    999 AS sort_order,
     1 AS current_version
 FROM zman_registry_requests zrr
 WHERE zrr.id = $1
@@ -250,4 +249,4 @@ ON CONFLICT (publisher_id, zman_key) DO NOTHING
 RETURNING id, publisher_id, zman_key, hebrew_name, english_name,
     transliteration, description, formula_dsl, ai_explanation, publisher_comment,
     is_enabled, is_visible, is_published, is_custom, category,
-    dependencies, sort_order, created_at, updated_at, current_version;
+    dependencies, created_at, updated_at, current_version;

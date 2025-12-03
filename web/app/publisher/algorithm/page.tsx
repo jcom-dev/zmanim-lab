@@ -715,8 +715,7 @@ export default function AlgorithmEditorPage() {
       });
     }
 
-    // Sort by sort_order only (category is just a visual label, not a grouping)
-    result.sort((a, b) => a.sort_order - b.sort_order);
+    // Results are already sorted by time_category from the API
 
     return result;
   }, [everydayZmanim, eventZmanim, viewMode, searchQuery, filterType, tagFilter]);
@@ -761,10 +760,9 @@ export default function AlgorithmEditorPage() {
   const currentViewOptionalCount = currentViewZmanim.filter(z => z.category === 'optional').length;
   const currentViewHiddenCount = currentViewZmanim.filter(z => !z.is_visible).length;
 
-  // Show onboarding wizard if:
-  // 1. User clicked "Restart Wizard" (forceShowWizard), OR
-  // 2. No zmanim configured AND not completed onboarding
-  const shouldShowWizard = forceShowWizard || (zmanim.length === 0 && !hasCompletedOnboarding);
+  // Show onboarding wizard only if user explicitly clicked "Restart Wizard"
+  // Don't auto-show based on zmanim count - if there's at least one zman, skip the wizard
+  const shouldShowWizard = forceShowWizard;
 
   if (!isLoading && !onboardingLoading && shouldShowWizard) {
     return (
@@ -1375,7 +1373,6 @@ export default function AlgorithmEditorPage() {
           <div className="hidden lg:block">
             <div className="sticky top-6">
               <AlgorithmPreview
-                zmanim={everydayZmanim}
                 location={previewLocation}
                 selectedDate={previewDate}
                 displayLanguage={displayLanguage}
@@ -1388,7 +1385,6 @@ export default function AlgorithmEditorPage() {
         {/* Mobile Live Preview (shown below content on small screens) */}
         <div className="lg:hidden mt-6">
           <AlgorithmPreview
-            zmanim={everydayZmanim}
             location={previewLocation}
             selectedDate={previewDate}
             displayLanguage={displayLanguage}
@@ -1405,11 +1401,7 @@ export default function AlgorithmEditorPage() {
                 Preview calculated zmanim times for the upcoming week
               </DialogDescription>
             </DialogHeader>
-            <WeekPreview
-              zmanim={zmanim}
-              getToken={getToken}
-              location={previewLocation}
-            />
+            <WeekPreview location={previewLocation} />
           </DialogContent>
         </Dialog>
 

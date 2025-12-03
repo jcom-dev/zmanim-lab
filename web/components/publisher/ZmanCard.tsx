@@ -53,6 +53,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { ZmanTagEditor } from './ZmanTagEditor';
 
 // Infer tags from the formula DSL (same logic as Registry page)
 interface InferredTags {
@@ -108,55 +109,6 @@ function inferTagsFromFormula(formula: string): InferredTags {
   return result;
 }
 
-// Event tags for event zmanim - maps zman_key to applicable events
-// Using design tokens: primary for Shabbos/YT, destructive for fasts, muted for others
-const EVENT_ZMAN_TAGS: Record<string, string[]> = {
-  // Candle lighting - Shabbos & Yom Tov
-  candle_lighting: ['Shabbos', 'Yom Tov'],
-  candle_lighting_18: ['Shabbos', 'Yom Tov'],
-  candle_lighting_20: ['Shabbos', 'Yom Tov'],
-  candle_lighting_22: ['Shabbos', 'Yom Tov'],
-  candle_lighting_40: ['Shabbos', 'Yom Tov'],
-  // Havdalah / Shabbos ends - Shabbos & Yom Tov
-  shabbos_ends: ['Shabbos', 'Yom Tov'],
-  havdalah: ['Shabbos', 'Yom Tov'],
-  havdalah_42: ['Shabbos', 'Yom Tov'],
-  havdalah_50: ['Shabbos', 'Yom Tov'],
-  havdalah_72: ['Shabbos', 'Yom Tov'],
-  // Yom Kippur
-  yom_kippur_starts: ['Yom Kippur'],
-  yom_kippur_ends: ['Yom Kippur'],
-  // Fast days
-  fast_begins: ['Fast Day'],
-  fast_ends: ['Fast Day'],
-  fast_ends_42: ['Fast Day'],
-  fast_ends_50: ['Fast Day'],
-  // Tisha B'Av
-  tisha_bav_starts: ["Tisha B'Av"],
-  tisha_bav_ends: ["Tisha B'Av"],
-  // Pesach
-  sof_zman_achilas_chametz_gra: ['Erev Pesach'],
-  sof_zman_achilas_chametz_mga: ['Erev Pesach'],
-  sof_zman_biur_chametz_gra: ['Erev Pesach'],
-  sof_zman_biur_chametz_mga: ['Erev Pesach'],
-};
-
-// Get badge variant based on event type - uses design tokens
-function getEventBadgeVariant(event: string): 'default' | 'secondary' | 'outline' | 'destructive' {
-  switch (event) {
-    case 'Shabbos':
-    case 'Yom Tov':
-      return 'default'; // primary color
-    case 'Yom Kippur':
-    case "Tisha B'Av":
-    case 'Fast Day':
-      return 'secondary'; // muted for solemn occasions
-    case 'Erev Pesach':
-      return 'outline'; // neutral
-    default:
-      return 'outline';
-  }
-}
 
 /**
  * Get the source name for a zman (Registry or linked publisher name)
@@ -194,10 +146,24 @@ function hasNameModifications(zman: PublisherZman): {
 }
 
 /**
+ * Normalize formula for comparison (handles whitespace differences)
+ */
+function normalizeFormula(formula: string): string {
+  return formula
+    .replace(/\s+/g, ' ')     // Collapse multiple spaces to single
+    .replace(/\s*,\s*/g, ', ') // Normalize comma spacing
+    .replace(/\s*\(\s*/g, '(') // No space after opening paren
+    .replace(/\s*\)\s*/g, ')') // No space before closing paren
+    .trim();
+}
+
+/**
  * Check if the zman formula has been modified from source
  */
 function hasFormulaModification(zman: PublisherZman): boolean {
-  return zman.source_formula_dsl != null && zman.formula_dsl !== zman.source_formula_dsl;
+  if (zman.source_formula_dsl == null) return false;
+  // Normalize both formulas before comparison to handle whitespace differences
+  return normalizeFormula(zman.formula_dsl) !== normalizeFormula(zman.source_formula_dsl);
 }
 
 interface ZmanCardProps {
@@ -539,20 +505,6 @@ export function ZmanCard({ zman, category, onEdit, displayLanguage = 'both' }: Z
                 )}
               </div>
 
-              {/* Event Tags - Show which events this zman applies to */}
-              {EVENT_ZMAN_TAGS[zman.zman_key] && (
-                <div className="flex flex-wrap gap-1.5 mt-2">
-                  {EVENT_ZMAN_TAGS[zman.zman_key].map((event) => (
-                    <Badge
-                      key={event}
-                      variant={getEventBadgeVariant(event)}
-                      className="text-xs"
-                    >
-                      {event}
-                    </Badge>
-                  ))}
-                </div>
-              )}
             </div>
 
             {/* Right: Quick Actions - top row centered on mobile, right side on desktop */}
@@ -683,16 +635,18 @@ export function ZmanCard({ zman, category, onEdit, displayLanguage = 'both' }: Z
             </div>
           </div>
 
-          {/* Database Tags from Master Zman */}
-          {zman.tags && zman.tags.length > 0 && (
-            <div className="flex flex-wrap items-center gap-1.5 mt-2">
-              {zman.tags.map((tag) => (
-                <ColorBadge key={tag.id} color={getTagTypeColor(tag.tag_type)} size="sm">
-                  {tag.display_name_english}
-                </ColorBadge>
-              ))}
-            </div>
-          )}
+          {/* Publisher Zman Tags - editable */}
+          <div className="flex flex-wrap items-center gap-1.5 mt-2">
+            {zman.tags && zman.tags.map((tag) => (
+              <ColorBadge key={tag.id} color={getTagTypeColor(tag.tag_type)} size="sm">
+                {tag.display_name_english}
+              </ColorBadge>
+            ))}
+            <ZmanTagEditor
+              zmanKey={zman.zman_key}
+              currentTags={zman.tags || []}
+            />
+          </div>
 
           {/* Inferred Tags from Formula */}
           {(() => {
