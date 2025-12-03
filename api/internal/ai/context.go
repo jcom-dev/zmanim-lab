@@ -108,9 +108,9 @@ func (s *ContextService) AssembleContext(ctx context.Context, query string, opts
 		Sources:    usedResults,
 		TokenCount: currentTokens,
 		Metadata: map[string]string{
-			"query":            query,
-			"num_docs":         fmt.Sprintf("%d", len(usedResults)),
-			"token_count":      fmt.Sprintf("%d", currentTokens),
+			"query":       query,
+			"num_docs":    fmt.Sprintf("%d", len(usedResults)),
+			"token_count": fmt.Sprintf("%d", currentTokens),
 		},
 	}, nil
 }

@@ -11,10 +11,10 @@ import (
 
 // Config holds all application configuration
 type Config struct {
-	Server   ServerConfig
-	Database DatabaseConfig
-	JWT      JWTConfig
-	CORS     CORSConfig
+	Server    ServerConfig
+	Database  DatabaseConfig
+	JWT       JWTConfig
+	CORS      CORSConfig
 	RateLimit RateLimitConfig
 }
 
@@ -31,9 +31,9 @@ type DatabaseConfig struct {
 
 // JWTConfig holds JWT configuration
 type JWTConfig struct {
-	Secret   string
-	JWKSUrl  string
-	Issuer   string
+	Secret  string
+	JWKSUrl string
+	Issuer  string
 }
 
 // CORSConfig holds CORS configuration

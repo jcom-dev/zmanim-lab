@@ -8,9 +8,9 @@ import (
 
 // Validator validates DSL AST nodes
 type Validator struct {
-	errors          ErrorList
-	availableZmans  map[string]bool
-	currentZmanKey  string // The zman being validated (for circular dependency detection)
+	errors         ErrorList
+	availableZmans map[string]bool
+	currentZmanKey string // The zman being validated (for circular dependency detection)
 }
 
 // NewValidator creates a new Validator

@@ -23,10 +23,10 @@ import (
 // Astronomical primitives are static - cache them in memory
 
 var (
-	primitivesCache       []AstronomicalPrimitive
+	primitivesCache        []AstronomicalPrimitive
 	primitivesGroupedCache []AstronomicalPrimitivesGrouped
-	primitivesCacheMu     sync.RWMutex
-	primitivesCacheLoaded bool
+	primitivesCacheMu      sync.RWMutex
+	primitivesCacheLoaded  bool
 )
 
 // ============================================
@@ -1093,7 +1093,7 @@ func (h *Handlers) SoftDeletePublisherZman(w http.ResponseWriter, r *http.Reques
 	}
 
 	RespondJSON(w, r, http.StatusOK, map[string]string{
-		"message": "Zman deleted successfully",
+		"message":  "Zman deleted successfully",
 		"zman_key": zmanKey,
 	})
 }
@@ -1236,7 +1236,7 @@ func (h *Handlers) PermanentDeletePublisherZman(w http.ResponseWriter, r *http.R
 	}
 
 	RespondJSON(w, r, http.StatusOK, map[string]string{
-		"message": "Zman permanently deleted",
+		"message":  "Zman permanently deleted",
 		"zman_key": zmanKey,
 	})
 }
@@ -1791,15 +1791,15 @@ func (h *Handlers) AdminGetZmanRegistryRequestByID(w http.ResponseWriter, r *htt
 
 // ZmanRequestTagResponse represents a tag associated with a zman request
 type ZmanRequestTagResponse struct {
-	ID                 string  `json:"id"`
-	RequestID          string  `json:"request_id"`
-	TagID              *string `json:"tag_id,omitempty"`
-	RequestedTagName   *string `json:"requested_tag_name,omitempty"`
-	RequestedTagType   *string `json:"requested_tag_type,omitempty"`
-	IsNewTagRequest    bool    `json:"is_new_tag_request"`
-	ExistingTagKey     *string `json:"existing_tag_key,omitempty"`
-	ExistingTagName    *string `json:"existing_tag_name,omitempty"`
-	ExistingTagType    *string `json:"existing_tag_type,omitempty"`
+	ID               string  `json:"id"`
+	RequestID        string  `json:"request_id"`
+	TagID            *string `json:"tag_id,omitempty"`
+	RequestedTagName *string `json:"requested_tag_name,omitempty"`
+	RequestedTagType *string `json:"requested_tag_type,omitempty"`
+	IsNewTagRequest  bool    `json:"is_new_tag_request"`
+	ExistingTagKey   *string `json:"existing_tag_key,omitempty"`
+	ExistingTagName  *string `json:"existing_tag_name,omitempty"`
+	ExistingTagType  *string `json:"existing_tag_type,omitempty"`
 }
 
 // AdminGetZmanRequestTags returns all tags for a zman request
@@ -2062,11 +2062,10 @@ func generateTagKey(name string) string {
 // Helper function to check for duplicate key errors
 func isDuplicateKeyError(err error) bool {
 	return err != nil && (
-		// pgx error codes for unique violation
-		err.Error() == "duplicate key value violates unique constraint" ||
+	// pgx error codes for unique violation
+	err.Error() == "duplicate key value violates unique constraint" ||
 		// Check for common PostgreSQL error patterns
-		len(err.Error()) > 0 && (
-			err.Error()[0:23] == "ERROR: duplicate key" ||
+		len(err.Error()) > 0 && (err.Error()[0:23] == "ERROR: duplicate key" ||
 			err.Error() == "23505" ||
 			// Match partial error messages
 			containsString(err.Error(), "duplicate key") ||
@@ -2107,9 +2106,9 @@ type AstronomicalPrimitive struct {
 
 // AstronomicalPrimitivesGrouped represents primitives grouped by category
 type AstronomicalPrimitivesGrouped struct {
-	Category    string                   `json:"category"`
-	DisplayName string                   `json:"display_name"`
-	Primitives  []AstronomicalPrimitive  `json:"primitives"`
+	Category    string                  `json:"category"`
+	DisplayName string                  `json:"display_name"`
+	Primitives  []AstronomicalPrimitive `json:"primitives"`
 }
 
 // loadPrimitivesCache loads astronomical primitives into memory cache
@@ -2138,11 +2137,11 @@ func (h *Handlers) loadPrimitivesCache(ctx context.Context) error {
 	categoryMap := make(map[string][]AstronomicalPrimitive)
 	categoryOrder := []string{"horizon", "civil_twilight", "nautical_twilight", "astronomical_twilight", "solar_position"}
 	categoryDisplayNames := map[string]string{
-		"horizon":                "Horizon Events",
-		"civil_twilight":         "Civil Twilight",
-		"nautical_twilight":      "Nautical Twilight",
-		"astronomical_twilight":  "Astronomical Twilight",
-		"solar_position":         "Solar Position",
+		"horizon":               "Horizon Events",
+		"civil_twilight":        "Civil Twilight",
+		"nautical_twilight":     "Nautical Twilight",
+		"astronomical_twilight": "Astronomical Twilight",
+		"solar_position":        "Solar Position",
 	}
 
 	for _, prim := range flatList {

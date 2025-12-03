@@ -197,12 +197,12 @@ func main() {
 			r.Get("/regions", h.GetRegions)
 
 			// Zmanim calculations
-			r.Get("/zmanim", h.GetZmanimForCity)      // New: GET with cityId, date, publisherId
-			r.Post("/zmanim", h.CalculateZmanim)       // Legacy: POST with coordinates
+			r.Get("/zmanim", h.GetZmanimForCity) // New: GET with cityId, date, publisherId
+			r.Post("/zmanim", h.CalculateZmanim) // Legacy: POST with coordinates
 
 			// DSL endpoints (Epic 4)
-			r.Post("/dsl/validate", h.ValidateDSLFormula)       // Validate DSL formula
-			r.Post("/dsl/preview", h.PreviewDSLFormula)         // Preview/calculate DSL formula
+			r.Post("/dsl/validate", h.ValidateDSLFormula)        // Validate DSL formula
+			r.Post("/dsl/preview", h.PreviewDSLFormula)          // Preview/calculate DSL formula
 			r.Post("/dsl/preview-week", h.PreviewDSLFormulaWeek) // Weekly preview (Story 4-10)
 
 			// Zman definitions - bilingual naming (Story 4-3)
@@ -397,13 +397,13 @@ func main() {
 
 			// User management (unified admin + publisher roles)
 			r.Route("/users", func(r chi.Router) {
-				r.Get("/", h.AdminListAllUsers)                                       // List all users with roles
-				r.Post("/", h.AdminAddUser)                                           // Add user (create or update)
-				r.Put("/{userId}", h.AdminUpdateUser)                                 // Update user info (name)
-				r.Delete("/{userId}", h.AdminDeleteUser)                              // Delete user completely
-				r.Put("/{userId}/admin", h.AdminSetAdminRole)                         // Toggle admin status
-				r.Post("/{userId}/reset-password", h.AdminResetUserPassword)          // Trigger password reset
-				r.Post("/{userId}/publishers", h.AdminAddPublisherToUser)             // Add publisher access
+				r.Get("/", h.AdminListAllUsers)                                                // List all users with roles
+				r.Post("/", h.AdminAddUser)                                                    // Add user (create or update)
+				r.Put("/{userId}", h.AdminUpdateUser)                                          // Update user info (name)
+				r.Delete("/{userId}", h.AdminDeleteUser)                                       // Delete user completely
+				r.Put("/{userId}/admin", h.AdminSetAdminRole)                                  // Toggle admin status
+				r.Post("/{userId}/reset-password", h.AdminResetUserPassword)                   // Trigger password reset
+				r.Post("/{userId}/publishers", h.AdminAddPublisherToUser)                      // Add publisher access
 				r.Delete("/{userId}/publishers/{publisherId}", h.AdminRemovePublisherFromUser) // Remove publisher access
 			})
 		})

@@ -131,7 +131,7 @@ func (h *Handlers) AdminCreatePublisher(w http.ResponseWriter, r *http.Request) 
 
 	var req struct {
 		Name    string  `json:"name"`
-		Email   *string `json:"email"`   // Optional contact email for the publisher
+		Email   *string `json:"email"` // Optional contact email for the publisher
 		Website *string `json:"website"`
 		Bio     *string `json:"bio"`
 	}
@@ -748,8 +748,8 @@ func (h *Handlers) AdminDeletePublisher(w http.ResponseWriter, r *http.Request) 
 
 	// First, get all Clerk users with access to this publisher
 	var usersToCleanup []struct {
-		ClerkUserID     string
-		PublisherCount  int
+		ClerkUserID    string
+		PublisherCount int
 	}
 
 	if h.clerkService != nil {

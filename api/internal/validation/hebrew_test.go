@@ -32,7 +32,7 @@ func TestCountHebrewChars(t *testing.T) {
 		input string
 		want  int
 	}{
-		{"Hebrew only", "עלות השחר", 8},  // 4 + 4 Hebrew chars
+		{"Hebrew only", "עלות השחר", 8}, // 4 + 4 Hebrew chars
 		{"Hebrew with spaces", "עלות השחר", 8},
 		{"English only", "Dawn", 0},
 		{"Empty", "", 0},
@@ -96,11 +96,11 @@ func TestValidateEnglishName(t *testing.T) {
 
 func TestValidateBilingualNames(t *testing.T) {
 	tests := []struct {
-		name        string
-		hebrew      string
-		english     string
-		wantErrors  bool
-		errorCount  int
+		name       string
+		hebrew     string
+		english    string
+		wantErrors bool
+		errorCount int
 	}{
 		{"Both valid", "עלות השחר", "Dawn", false, 0},
 		{"Hebrew missing", "", "Dawn", true, 1},

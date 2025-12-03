@@ -18,9 +18,9 @@ type DSLValidateRequest struct {
 
 // DSLValidateResponse represents the response from formula validation
 type DSLValidateResponse struct {
-	Valid        bool                   `json:"valid"`
-	Errors       []dsl.ValidationError  `json:"errors,omitempty"`
-	Dependencies []string               `json:"dependencies,omitempty"`
+	Valid        bool                  `json:"valid"`
+	Errors       []dsl.ValidationError `json:"errors,omitempty"`
+	Dependencies []string              `json:"dependencies,omitempty"`
 }
 
 // DSLPreviewRequest represents a request to preview/calculate a DSL formula
@@ -30,15 +30,15 @@ type DSLPreviewRequest struct {
 	LocationID string  `json:"location_id,omitempty"` // Optional: city/location ID
 	Latitude   float64 `json:"latitude,omitempty"`    // Direct coordinates
 	Longitude  float64 `json:"longitude,omitempty"`
-	Timezone   string  `json:"timezone,omitempty"`    // e.g., "America/New_York"
-	Elevation  float64 `json:"elevation,omitempty"`   // Optional elevation in meters
+	Timezone   string  `json:"timezone,omitempty"`  // e.g., "America/New_York"
+	Elevation  float64 `json:"elevation,omitempty"` // Optional elevation in meters
 }
 
 // DSLPreviewResponse represents the response from formula preview/calculation
 type DSLPreviewResponse struct {
-	Result    string                 `json:"result"`    // Formatted time (HH:MM:SS)
-	Timestamp int64                  `json:"timestamp"` // Unix timestamp
-	Breakdown []dsl.CalculationStep  `json:"breakdown"`
+	Result    string                `json:"result"`    // Formatted time (HH:MM:SS)
+	Timestamp int64                 `json:"timestamp"` // Unix timestamp
+	Breakdown []dsl.CalculationStep `json:"breakdown"`
 }
 
 // ValidateDSLFormula validates a DSL formula

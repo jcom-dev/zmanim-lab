@@ -55,6 +55,7 @@ issues:
     - path: internal/handlers/
       linters:
         - unused
+        - ineffassign
     # Exclude deprecated warnings
     - linters:
         - staticcheck

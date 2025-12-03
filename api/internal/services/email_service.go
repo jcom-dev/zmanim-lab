@@ -832,4 +832,3 @@ func (s *EmailService) renderTemplate(templateType EmailTemplate, data map[strin
 
 	return buf.String()
 }
-

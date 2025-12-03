@@ -23,10 +23,10 @@ type AISearchResponse struct {
 
 // AIContextRequest represents a context assembly request
 type AIContextRequest struct {
-	Query           string   `json:"query"`
-	MaxTokens       int      `json:"max_tokens,omitempty"`
-	IncludeExamples bool     `json:"include_examples,omitempty"`
-	IncludeHalachic bool     `json:"include_halachic,omitempty"`
+	Query           string `json:"query"`
+	MaxTokens       int    `json:"max_tokens,omitempty"`
+	IncludeExamples bool   `json:"include_examples,omitempty"`
+	IncludeHalachic bool   `json:"include_halachic,omitempty"`
 }
 
 // SearchAI performs semantic search on the knowledge base

@@ -268,8 +268,8 @@ func (c *Cache) Stats(ctx context.Context) (map[string]interface{}, error) {
 	cityCount, _ := c.countKeys(ctx, "city:*")
 
 	return map[string]interface{}{
-		"redis_info":       info,
-		"zmanim_entries":   zmanimCount,
+		"redis_info":        info,
+		"zmanim_entries":    zmanimCount,
 		"algorithm_entries": algorithmCount,
 		"city_entries":      cityCount,
 	}, nil

@@ -27,12 +27,12 @@ type PublisherInvitation struct {
 
 // TeamMember represents a user with publisher access
 type TeamMember struct {
-	UserID    string    `json:"user_id"`
-	Email     string    `json:"email"`
-	Name      string    `json:"name"`
-	ImageURL  string    `json:"image_url,omitempty"`
-	AddedAt   time.Time `json:"added_at"`
-	IsOwner   bool      `json:"is_owner"`
+	UserID   string    `json:"user_id"`
+	Email    string    `json:"email"`
+	Name     string    `json:"name"`
+	ImageURL string    `json:"image_url,omitempty"`
+	AddedAt  time.Time `json:"added_at"`
+	IsOwner  bool      `json:"is_owner"`
 }
 
 // GetPublisherTeam returns team members and pending invitations

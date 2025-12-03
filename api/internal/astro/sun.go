@@ -17,9 +17,9 @@ type SunTimes struct {
 	Timezone  *time.Location
 
 	// Core times
-	Sunrise      time.Time
-	SolarNoon    time.Time
-	Sunset       time.Time
+	Sunrise   time.Time
+	SolarNoon time.Time
+	Sunset    time.Time
 
 	// Day length in minutes
 	DayLengthMinutes float64

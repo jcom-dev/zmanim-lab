@@ -20,18 +20,18 @@ type JewishEvent struct {
 
 // EventDayInfo contains detailed event information for a specific date
 type EventDayInfo struct {
-	GregorianDate   string         `json:"gregorian_date"`
-	HebrewDate      HebrewDate     `json:"hebrew_date"`
-	DayOfWeek       int            `json:"day_of_week"`
-	IsShabbat       bool           `json:"is_shabbat"`
-	IsYomTov        bool           `json:"is_yomtov"`
-	IsFastDay       bool           `json:"is_fast_day"`
-	IsInIsrael      bool           `json:"is_in_israel"`
-	ActiveEvents    []ActiveEvent  `json:"active_events"`     // Events happening today
-	ErevEvents      []ActiveEvent  `json:"erev_events"`       // Events starting tonight (for day_before zmanim)
-	MoetzeiEvents   []ActiveEvent  `json:"moetzei_events"`    // Events ending tonight (for day_of zmanim)
-	SpecialContexts []string       `json:"special_contexts"`  // shabbos_to_yomtov, yomtov_day2, etc.
-	Holidays        []Holiday      `json:"holidays"`          // Raw holiday info from hebcal
+	GregorianDate   string        `json:"gregorian_date"`
+	HebrewDate      HebrewDate    `json:"hebrew_date"`
+	DayOfWeek       int           `json:"day_of_week"`
+	IsShabbat       bool          `json:"is_shabbat"`
+	IsYomTov        bool          `json:"is_yomtov"`
+	IsFastDay       bool          `json:"is_fast_day"`
+	IsInIsrael      bool          `json:"is_in_israel"`
+	ActiveEvents    []ActiveEvent `json:"active_events"`    // Events happening today
+	ErevEvents      []ActiveEvent `json:"erev_events"`      // Events starting tonight (for day_before zmanim)
+	MoetzeiEvents   []ActiveEvent `json:"moetzei_events"`   // Events ending tonight (for day_of zmanim)
+	SpecialContexts []string      `json:"special_contexts"` // shabbos_to_yomtov, yomtov_day2, etc.
+	Holidays        []Holiday     `json:"holidays"`         // Raw holiday info from hebcal
 }
 
 // ActiveEvent represents an event that's active/relevant for a date
@@ -39,9 +39,9 @@ type ActiveEvent struct {
 	EventCode     string `json:"event_code"`
 	NameHebrew    string `json:"name_hebrew"`
 	NameEnglish   string `json:"name_english"`
-	DayNumber     int    `json:"day_number"`     // 1 for day 1, 2 for day 2 of multi-day events
-	TotalDays     int    `json:"total_days"`     // Total days of event (location-aware)
-	IsFinalDay    bool   `json:"is_final_day"`   // Is this the last day of the event?
+	DayNumber     int    `json:"day_number"`   // 1 for day 1, 2 for day 2 of multi-day events
+	TotalDays     int    `json:"total_days"`   // Total days of event (location-aware)
+	IsFinalDay    bool   `json:"is_final_day"` // Is this the last day of the event?
 	FastStartType string `json:"fast_start_type,omitempty"`
 }
 
@@ -437,16 +437,16 @@ func containsImpl(s, substr string) bool {
 // GetZmanimContext determines which zmanim should be displayed for a date
 // Returns the context info needed to select appropriate zmanim and display names
 type ZmanimContext struct {
-	ShowDailyZmanim          bool     `json:"show_daily_zmanim"`
-	ShowCandleLighting       bool     `json:"show_candle_lighting"`
-	ShowCandleLightingSheni  bool     `json:"show_candle_lighting_sheni"` // After tzeis
-	ShowShabbosYomTovEnds    bool     `json:"show_shabbos_yomtov_ends"`
-	ShowFastStarts           bool     `json:"show_fast_starts"`
-	FastStartType            string   `json:"fast_start_type"` // dawn or sunset
-	ShowFastEnds             bool     `json:"show_fast_ends"`
-	ShowChametzTimes         bool     `json:"show_chametz_times"`
-	DisplayContexts          []string `json:"display_contexts"` // shabbos, yom_tov, yom_kippur, etc.
-	ActiveEventCodes         []string `json:"active_event_codes"`
+	ShowDailyZmanim         bool     `json:"show_daily_zmanim"`
+	ShowCandleLighting      bool     `json:"show_candle_lighting"`
+	ShowCandleLightingSheni bool     `json:"show_candle_lighting_sheni"` // After tzeis
+	ShowShabbosYomTovEnds   bool     `json:"show_shabbos_yomtov_ends"`
+	ShowFastStarts          bool     `json:"show_fast_starts"`
+	FastStartType           string   `json:"fast_start_type"` // dawn or sunset
+	ShowFastEnds            bool     `json:"show_fast_ends"`
+	ShowChametzTimes        bool     `json:"show_chametz_times"`
+	DisplayContexts         []string `json:"display_contexts"` // shabbos, yom_tov, yom_kippur, etc.
+	ActiveEventCodes        []string `json:"active_event_codes"`
 }
 
 // GetZmanimContext determines what zmanim to show for a date

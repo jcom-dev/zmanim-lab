@@ -22,12 +22,12 @@ type ZmanimRequestParams struct {
 
 // ZmanimWithFormulaResponse represents the enhanced zmanim response
 type ZmanimWithFormulaResponse struct {
-	Date      string                    `json:"date"`
-	Location  ZmanimLocationInfo        `json:"location"`
-	Publisher *ZmanimPublisherInfo      `json:"publisher,omitempty"`
-	Zmanim    []ZmanWithFormula         `json:"zmanim"`
-	Cached    bool                      `json:"cached"`
-	CachedAt  *time.Time                `json:"cached_at,omitempty"`
+	Date      string               `json:"date"`
+	Location  ZmanimLocationInfo   `json:"location"`
+	Publisher *ZmanimPublisherInfo `json:"publisher,omitempty"`
+	Zmanim    []ZmanWithFormula    `json:"zmanim"`
+	Cached    bool                 `json:"cached"`
+	CachedAt  *time.Time           `json:"cached_at,omitempty"`
 }
 
 // ZmanimPublisherInfo contains publisher details for the response
@@ -39,13 +39,13 @@ type ZmanimPublisherInfo struct {
 
 // ZmanimLocationInfo contains location details for the response
 type ZmanimLocationInfo struct {
-	CityID    string   `json:"city_id,omitempty"`
-	CityName  string   `json:"city_name,omitempty"`
-	Country   string   `json:"country,omitempty"`
-	Region    *string  `json:"region"`
-	Latitude  float64  `json:"latitude"`
-	Longitude float64  `json:"longitude"`
-	Timezone  string   `json:"timezone"`
+	CityID    string  `json:"city_id,omitempty"`
+	CityName  string  `json:"city_name,omitempty"`
+	Country   string  `json:"country,omitempty"`
+	Region    *string `json:"region"`
+	Latitude  float64 `json:"latitude"`
+	Longitude float64 `json:"longitude"`
+	Timezone  string  `json:"timezone"`
 }
 
 // ZmanWithFormula represents a single zman with formula details
@@ -403,8 +403,8 @@ func (h *Handlers) InvalidatePublisherCache(w http.ResponseWriter, r *http.Reque
 	}
 
 	RespondJSON(w, r, http.StatusOK, map[string]interface{}{
-		"message":             "Cache invalidated",
-		"redis_invalidated":   redisDeleted > 0,
-		"db_entries_deleted":  dbDeleted,
+		"message":            "Cache invalidated",
+		"redis_invalidated":  redisDeleted > 0,
+		"db_entries_deleted": dbDeleted,
 	})
 }

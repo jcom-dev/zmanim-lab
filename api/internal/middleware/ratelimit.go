@@ -10,39 +10,39 @@ import (
 
 // RateLimiterConfig holds rate limiter configuration
 type RateLimiterConfig struct {
-	AnonymousRequestsPerHour    int
+	AnonymousRequestsPerHour     int
 	AuthenticatedRequestsPerHour int
-	CleanupInterval             time.Duration
+	CleanupInterval              time.Duration
 }
 
 // DefaultRateLimiterConfig returns default rate limiter configuration
 func DefaultRateLimiterConfig() RateLimiterConfig {
 	return RateLimiterConfig{
-		AnonymousRequestsPerHour:    10000, // AC: 10000 requests/hour for anonymous (increased for dev)
+		AnonymousRequestsPerHour:     10000,  // AC: 10000 requests/hour for anonymous (increased for dev)
 		AuthenticatedRequestsPerHour: 100000, // Higher limit for authenticated (increased for dev)
-		CleanupInterval:             5 * time.Minute,
+		CleanupInterval:              5 * time.Minute,
 	}
 }
 
 // clientInfo tracks rate limit state for a client
 type clientInfo struct {
-	count     int
+	count       int
 	windowStart time.Time
 }
 
 // RateLimiter provides rate limiting functionality
 type RateLimiter struct {
-	config     RateLimiterConfig
-	clients    map[string]*clientInfo
-	mutex      sync.RWMutex
+	config      RateLimiterConfig
+	clients     map[string]*clientInfo
+	mutex       sync.RWMutex
 	stopCleanup chan struct{}
 }
 
 // NewRateLimiter creates a new rate limiter with the given config
 func NewRateLimiter(config RateLimiterConfig) *RateLimiter {
 	rl := &RateLimiter{
-		config:     config,
-		clients:    make(map[string]*clientInfo),
+		config:      config,
+		clients:     make(map[string]*clientInfo),
 		stopCleanup: make(chan struct{}),
 	}
 
@@ -127,7 +127,7 @@ func (rl *RateLimiter) isAllowed(r *http.Request) (allowed bool, remaining int, 
 	if !exists || now.Sub(info.windowStart) > time.Hour {
 		// New window
 		rl.clients[key] = &clientInfo{
-			count:     1,
+			count:       1,
 			windowStart: now,
 		}
 		return true, limit - 1, 3600

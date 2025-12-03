@@ -7,12 +7,12 @@ import "time"
 type Method string
 
 const (
-	MethodSunrise       Method = "sunrise"
-	MethodSunset        Method = "sunset"
-	MethodSolarAngle    Method = "solar_angle"
-	MethodFixedMinutes  Method = "fixed_minutes"
-	MethodProportional  Method = "proportional"
-	MethodMidpoint      Method = "midpoint"
+	MethodSunrise      Method = "sunrise"
+	MethodSunset       Method = "sunset"
+	MethodSolarAngle   Method = "solar_angle"
+	MethodFixedMinutes Method = "fixed_minutes"
+	MethodProportional Method = "proportional"
+	MethodMidpoint     Method = "midpoint"
 )
 
 // ProportionalBase represents the base for proportional calculations
@@ -41,27 +41,27 @@ type ZmanConfig struct {
 
 // AlgorithmConfig represents a full algorithm configuration
 type AlgorithmConfig struct {
-	Name        string                 `json:"name"`
-	Description string                 `json:"description,omitempty"`
-	Version     string                 `json:"version,omitempty"`
-	Zmanim      map[string]ZmanConfig  `json:"zmanim"`
+	Name        string                `json:"name"`
+	Description string                `json:"description,omitempty"`
+	Version     string                `json:"version,omitempty"`
+	Zmanim      map[string]ZmanConfig `json:"zmanim"`
 }
 
 // ZmanResult represents the result of a single zman calculation
 type ZmanResult struct {
-	Name        string      `json:"name"`
-	Key         string      `json:"key"`
-	Time        time.Time   `json:"-"`
-	TimeString  string      `json:"time"`
-	Formula     FormulaInfo `json:"formula"`
+	Name       string      `json:"name"`
+	Key        string      `json:"key"`
+	Time       time.Time   `json:"-"`
+	TimeString string      `json:"time"`
+	Formula    FormulaInfo `json:"formula"`
 }
 
 // FormulaInfo contains details about how a zman was calculated
 type FormulaInfo struct {
-	Method       string                 `json:"method"`
-	DisplayName  string                 `json:"display_name"`
-	Parameters   map[string]interface{} `json:"parameters"`
-	Explanation  string                 `json:"explanation"`
+	Method      string                 `json:"method"`
+	DisplayName string                 `json:"display_name"`
+	Parameters  map[string]interface{} `json:"parameters"`
+	Explanation string                 `json:"explanation"`
 }
 
 // ZmanimResults contains all calculated zmanim
@@ -118,8 +118,8 @@ var ZmanDisplayNames = map[string]string{
 
 // BilingualName represents a zman name in Hebrew and English
 type BilingualName struct {
-	Hebrew         string `json:"hebrew"`
-	English        string `json:"english"`
+	Hebrew          string `json:"hebrew"`
+	English         string `json:"english"`
 	Transliteration string `json:"transliteration,omitempty"`
 }
 

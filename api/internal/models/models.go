@@ -28,15 +28,15 @@ type Publisher struct {
 
 // Algorithm represents a calculation algorithm
 type Algorithm struct {
-	ID            string    `json:"id"`
-	PublisherID   string    `json:"publisher_id"`
-	Name          string    `json:"name"`
-	Description   string    `json:"description"`
-	Version       string    `json:"version"`
+	ID            string     `json:"id"`
+	PublisherID   string     `json:"publisher_id"`
+	Name          string     `json:"name"`
+	Description   string     `json:"description"`
+	Version       string     `json:"version"`
 	Configuration pgtype.Map `json:"configuration"`
-	IsActive      bool      `json:"is_active"`
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
+	IsActive      bool       `json:"is_active"`
+	CreatedAt     time.Time  `json:"created_at"`
+	UpdatedAt     time.Time  `json:"updated_at"`
 }
 
 // GeographicRegion represents a geographic region
@@ -53,18 +53,18 @@ type GeographicRegion struct {
 
 // City represents a city in the global cities database
 type City struct {
-	ID          string   `json:"id"`
-	Name        string   `json:"name"`
-	Country     string   `json:"country"`
-	CountryCode string   `json:"country_code"`
-	Region      *string  `json:"region,omitempty"`
-	RegionType  *string  `json:"region_type,omitempty"`
-	Latitude    float64  `json:"latitude"`
-	Longitude   float64  `json:"longitude"`
-	Timezone    string   `json:"timezone"`
-	Population  *int     `json:"population,omitempty"`
-	Elevation   *int     `json:"elevation,omitempty"`  // Elevation in meters above sea level
-	Continent   *string  `json:"continent,omitempty"`  // Continent code (AF, AN, AS, EU, NA, OC, SA)
+	ID          string  `json:"id"`
+	Name        string  `json:"name"`
+	Country     string  `json:"country"`
+	CountryCode string  `json:"country_code"`
+	Region      *string `json:"region,omitempty"`
+	RegionType  *string `json:"region_type,omitempty"`
+	Latitude    float64 `json:"latitude"`
+	Longitude   float64 `json:"longitude"`
+	Timezone    string  `json:"timezone"`
+	Population  *int    `json:"population,omitempty"`
+	Elevation   *int    `json:"elevation,omitempty"` // Elevation in meters above sea level
+	Continent   *string `json:"continent,omitempty"` // Continent code (AF, AN, AS, EU, NA, OC, SA)
 	// Computed display field
 	DisplayName string `json:"display_name"`
 }
@@ -89,13 +89,13 @@ type CoverageArea struct {
 
 // UserProfile represents a user profile
 type UserProfile struct {
-	ID               string     `json:"id"`
-	Email            string     `json:"email"`
-	FullName         *string    `json:"full_name,omitempty"`
-	PreferredRegion  *string    `json:"preferred_region,omitempty"`
-	DefaultPublisher *string    `json:"default_publisher,omitempty"`
-	CreatedAt        time.Time  `json:"created_at"`
-	UpdatedAt        time.Time  `json:"updated_at"`
+	ID               string    `json:"id"`
+	Email            string    `json:"email"`
+	FullName         *string   `json:"full_name,omitempty"`
+	PreferredRegion  *string   `json:"preferred_region,omitempty"`
+	DefaultPublisher *string   `json:"default_publisher,omitempty"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
 }
 
 // UserSubscription represents a user's subscription to a publisher
@@ -110,28 +110,28 @@ type UserSubscription struct {
 
 // CalculationCache represents cached zmanim calculations
 type CalculationCache struct {
-	ID            string         `json:"id"`
-	Date          time.Time      `json:"date"`
-	Latitude      float64        `json:"latitude"`
-	Longitude     float64        `json:"longitude"`
-	AlgorithmID   string         `json:"algorithm_id"`
-	Results       pgtype.Map     `json:"results"`
-	ExpiresAt     time.Time      `json:"expires_at"`
-	CreatedAt     time.Time      `json:"created_at"`
+	ID          string     `json:"id"`
+	Date        time.Time  `json:"date"`
+	Latitude    float64    `json:"latitude"`
+	Longitude   float64    `json:"longitude"`
+	AlgorithmID string     `json:"algorithm_id"`
+	Results     pgtype.Map `json:"results"`
+	ExpiresAt   time.Time  `json:"expires_at"`
+	CreatedAt   time.Time  `json:"created_at"`
 }
 
 // AuditLog represents an audit log entry
 type AuditLog struct {
-	ID          string         `json:"id"`
-	UserID      *string        `json:"user_id,omitempty"`
-	Action      string         `json:"action"`
-	EntityType  string         `json:"entity_type"`
-	EntityID    string         `json:"entity_id"`
-	OldValues   *pgtype.Map    `json:"old_values,omitempty"`
-	NewValues   *pgtype.Map    `json:"new_values,omitempty"`
-	IPAddress   *string        `json:"ip_address,omitempty"`
-	UserAgent   *string        `json:"user_agent,omitempty"`
-	CreatedAt   time.Time      `json:"created_at"`
+	ID         string      `json:"id"`
+	UserID     *string     `json:"user_id,omitempty"`
+	Action     string      `json:"action"`
+	EntityType string      `json:"entity_type"`
+	EntityID   string      `json:"entity_id"`
+	OldValues  *pgtype.Map `json:"old_values,omitempty"`
+	NewValues  *pgtype.Map `json:"new_values,omitempty"`
+	IPAddress  *string     `json:"ip_address,omitempty"`
+	UserAgent  *string     `json:"user_agent,omitempty"`
+	CreatedAt  time.Time   `json:"created_at"`
 }
 
 // Location represents a geographic location for zmanim calculations
@@ -145,12 +145,12 @@ type Location struct {
 
 // ZmanimRequest represents a request for zmanim calculations
 type ZmanimRequest struct {
-	Date        string   `json:"date"` // YYYY-MM-DD format
-	Latitude    float64  `json:"latitude"`
-	Longitude   float64  `json:"longitude"`
-	Timezone    string   `json:"timezone"`
-	PublisherID *string  `json:"publisher_id,omitempty"`
-	Elevation   *int     `json:"elevation,omitempty"`
+	Date        string  `json:"date"` // YYYY-MM-DD format
+	Latitude    float64 `json:"latitude"`
+	Longitude   float64 `json:"longitude"`
+	Timezone    string  `json:"timezone"`
+	PublisherID *string `json:"publisher_id,omitempty"`
+	Elevation   *int    `json:"elevation,omitempty"`
 }
 
 // ZmanimResponse represents the response containing calculated zmanim
@@ -215,12 +215,12 @@ type PublisherCoverage struct {
 
 // PublisherCoverageCreateRequest represents a request to create coverage
 type PublisherCoverageCreateRequest struct {
-	CoverageLevel  string  `json:"coverage_level"` // continent, country, region, city
-	ContinentCode  *string `json:"continent_code,omitempty"`
-	CountryCode    *string `json:"country_code,omitempty"`
-	Region         *string `json:"region,omitempty"`
-	CityID         *string `json:"city_id,omitempty"`
-	Priority       *int    `json:"priority,omitempty"`
+	CoverageLevel string  `json:"coverage_level"` // continent, country, region, city
+	ContinentCode *string `json:"continent_code,omitempty"`
+	CountryCode   *string `json:"country_code,omitempty"`
+	Region        *string `json:"region,omitempty"`
+	CityID        *string `json:"city_id,omitempty"`
+	Priority      *int    `json:"priority,omitempty"`
 }
 
 // PublisherCoverageUpdateRequest represents a request to update coverage

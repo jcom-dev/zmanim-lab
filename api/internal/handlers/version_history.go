@@ -36,8 +36,8 @@ type VersionDetail struct {
 
 // DiffResponse represents the response for version diff
 type DiffResponse struct {
-	V1   int             `json:"v1"`
-	V2   int             `json:"v2"`
+	V1   int                 `json:"v1"`
+	V2   int                 `json:"v2"`
 	Diff *diff.AlgorithmDiff `json:"diff"`
 }
 

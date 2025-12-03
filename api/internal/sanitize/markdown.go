@@ -9,19 +9,19 @@ import (
 
 // Common dangerous patterns
 var (
-	scriptPattern    = regexp.MustCompile(`(?i)<script[^>]*>.*?</script>`)
-	eventPattern     = regexp.MustCompile(`(?i)\s+on\w+\s*=\s*["'][^"']*["']`)
-	stylePattern     = regexp.MustCompile(`(?i)<style[^>]*>.*?</style>`)
-	iframePattern    = regexp.MustCompile(`(?i)<iframe[^>]*>.*?</iframe>`)
-	objectPattern    = regexp.MustCompile(`(?i)<object[^>]*>.*?</object>`)
-	embedPattern     = regexp.MustCompile(`(?i)<embed[^>]*>`)
-	linkPattern      = regexp.MustCompile(`(?i)<link[^>]*>`)
-	metaPattern      = regexp.MustCompile(`(?i)<meta[^>]*>`)
-	basePattern      = regexp.MustCompile(`(?i)<base[^>]*>`)
-	dataURLPattern   = regexp.MustCompile(`(?i)data:[^"'\s]*`)
-	javascriptURL    = regexp.MustCompile(`(?i)javascript:`)
-	vbscriptURL      = regexp.MustCompile(`(?i)vbscript:`)
-	expressionCSS    = regexp.MustCompile(`(?i)expression\s*\(`)
+	scriptPattern  = regexp.MustCompile(`(?i)<script[^>]*>.*?</script>`)
+	eventPattern   = regexp.MustCompile(`(?i)\s+on\w+\s*=\s*["'][^"']*["']`)
+	stylePattern   = regexp.MustCompile(`(?i)<style[^>]*>.*?</style>`)
+	iframePattern  = regexp.MustCompile(`(?i)<iframe[^>]*>.*?</iframe>`)
+	objectPattern  = regexp.MustCompile(`(?i)<object[^>]*>.*?</object>`)
+	embedPattern   = regexp.MustCompile(`(?i)<embed[^>]*>`)
+	linkPattern    = regexp.MustCompile(`(?i)<link[^>]*>`)
+	metaPattern    = regexp.MustCompile(`(?i)<meta[^>]*>`)
+	basePattern    = regexp.MustCompile(`(?i)<base[^>]*>`)
+	dataURLPattern = regexp.MustCompile(`(?i)data:[^"'\s]*`)
+	javascriptURL  = regexp.MustCompile(`(?i)javascript:`)
+	vbscriptURL    = regexp.MustCompile(`(?i)vbscript:`)
+	expressionCSS  = regexp.MustCompile(`(?i)expression\s*\(`)
 )
 
 // AllowedHTMLTags are tags permitted in Markdown output

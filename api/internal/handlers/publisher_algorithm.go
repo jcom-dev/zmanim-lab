@@ -26,14 +26,14 @@ type AlgorithmResponse struct {
 
 // AlgorithmVersionResponse represents a version in the history
 type AlgorithmVersionResponse struct {
-	ID            string     `json:"id"`
-	Name          string     `json:"name"`
-	Version       int        `json:"version"`
-	Status        string     `json:"status"`
-	IsActive      bool       `json:"is_active"`
-	PublishedAt   *time.Time `json:"published_at,omitempty"`
-	DeprecatedAt  *time.Time `json:"deprecated_at,omitempty"`
-	CreatedAt     time.Time  `json:"created_at"`
+	ID           string     `json:"id"`
+	Name         string     `json:"name"`
+	Version      int        `json:"version"`
+	Status       string     `json:"status"`
+	IsActive     bool       `json:"is_active"`
+	PublishedAt  *time.Time `json:"published_at,omitempty"`
+	DeprecatedAt *time.Time `json:"deprecated_at,omitempty"`
+	CreatedAt    time.Time  `json:"created_at"`
 }
 
 // AlgorithmUpdateRequest represents the request to update an algorithm
@@ -54,9 +54,9 @@ type AlgorithmPreviewRequest struct {
 
 // AlgorithmPreviewResponse represents the preview calculation result
 type AlgorithmPreviewResponse struct {
-	Date      string                 `json:"date"`
-	Location  ZmanimLocationInfo     `json:"location"`
-	Zmanim    []ZmanWithFormula      `json:"zmanim"`
+	Date     string             `json:"date"`
+	Location ZmanimLocationInfo `json:"location"`
+	Zmanim   []ZmanWithFormula  `json:"zmanim"`
 }
 
 // GetPublisherAlgorithmHandler returns the current publisher's algorithm configuration

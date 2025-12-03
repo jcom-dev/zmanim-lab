@@ -1177,17 +1177,17 @@ func (h *Handlers) CreateZmanFromPublisher(w http.ResponseWriter, r *http.Reques
 
 	// Fetch source zman
 	var sourceZman struct {
-		ID            string
-		PublisherID   string
-		ZmanKey       string
-		HebrewName    string
-		EnglishName   string
-		FormulaDSL    string
-		Category      string
-		Dependencies  []string
-		SortOrder     int32
-		MasterZmanID  *string
-		IsVerified    bool
+		ID           string
+		PublisherID  string
+		ZmanKey      string
+		HebrewName   string
+		EnglishName  string
+		FormulaDSL   string
+		Category     string
+		Dependencies []string
+		SortOrder    int32
+		MasterZmanID *string
+		IsVerified   bool
 	}
 
 	err := h.db.Pool.QueryRow(ctx, `

@@ -219,11 +219,11 @@ func (h *Handlers) GetNearbyCity(w http.ResponseWriter, r *http.Request) {
 
 	// Return city with distance info
 	response := map[string]interface{}{
-		"city":             city,
-		"distance_km":      math.Round(distanceMeters/1000*10) / 10,
-		"distance_miles":   math.Round(distanceMeters/1609.34*10) / 10,
-		"searched_lat":     lat,
-		"searched_lng":     lng,
+		"city":           city,
+		"distance_km":    math.Round(distanceMeters/1000*10) / 10,
+		"distance_miles": math.Round(distanceMeters/1609.34*10) / 10,
+		"searched_lat":   lat,
+		"searched_lng":   lng,
 	}
 
 	RespondJSON(w, r, http.StatusOK, response)

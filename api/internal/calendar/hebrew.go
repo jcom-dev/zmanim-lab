@@ -57,13 +57,13 @@ type WeekInfo struct {
 
 // Hebrew day names
 var hebrewDayNames = []string{
-	"יום ראשון",  // Sunday
-	"יום שני",    // Monday
-	"יום שלישי",  // Tuesday
-	"יום רביעי",  // Wednesday
-	"יום חמישי",  // Thursday
-	"יום שישי",   // Friday
-	"שבת קודש",   // Shabbat
+	"יום ראשון", // Sunday
+	"יום שני",   // Monday
+	"יום שלישי", // Tuesday
+	"יום רביעי", // Wednesday
+	"יום חמישי", // Thursday
+	"יום שישי",  // Friday
+	"שבת קודש",  // Shabbat
 }
 
 var englishDayNames = []string{

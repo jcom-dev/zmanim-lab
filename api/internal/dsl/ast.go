@@ -33,7 +33,7 @@ type PrimitiveNode struct {
 	Pos  Position // Source position
 }
 
-func (n *PrimitiveNode) Type() NodeType    { return NodeTypePrimitive }
+func (n *PrimitiveNode) Type() NodeType     { return NodeTypePrimitive }
 func (n *PrimitiveNode) Position() Position { return n.Pos }
 func (n *PrimitiveNode) String() string     { return n.Name }
 
@@ -44,7 +44,7 @@ type FunctionNode struct {
 	Pos  Position // Source position
 }
 
-func (n *FunctionNode) Type() NodeType    { return NodeTypeFunction }
+func (n *FunctionNode) Type() NodeType     { return NodeTypeFunction }
 func (n *FunctionNode) Position() Position { return n.Pos }
 func (n *FunctionNode) String() string {
 	args := make([]string, len(n.Args))
@@ -62,7 +62,7 @@ type BinaryOpNode struct {
 	Pos   Position // Source position (operator position)
 }
 
-func (n *BinaryOpNode) Type() NodeType    { return NodeTypeBinaryOp }
+func (n *BinaryOpNode) Type() NodeType     { return NodeTypeBinaryOp }
 func (n *BinaryOpNode) Position() Position { return n.Pos }
 func (n *BinaryOpNode) String() string {
 	return fmt.Sprintf("(%s %s %s)", n.Left.String(), n.Op, n.Right.String())
@@ -75,7 +75,7 @@ type DurationNode struct {
 	Pos     Position // Source position
 }
 
-func (n *DurationNode) Type() NodeType    { return NodeTypeDuration }
+func (n *DurationNode) Type() NodeType     { return NodeTypeDuration }
 func (n *DurationNode) Position() Position { return n.Pos }
 func (n *DurationNode) String() string {
 	if n.Raw != "" {
@@ -90,7 +90,7 @@ type NumberNode struct {
 	Pos   Position // Source position
 }
 
-func (n *NumberNode) Type() NodeType    { return NodeTypeNumber }
+func (n *NumberNode) Type() NodeType     { return NodeTypeNumber }
 func (n *NumberNode) Position() Position { return n.Pos }
 func (n *NumberNode) String() string     { return fmt.Sprintf("%g", n.Value) }
 
@@ -100,7 +100,7 @@ type ReferenceNode struct {
 	Pos     Position // Source position
 }
 
-func (n *ReferenceNode) Type() NodeType    { return NodeTypeReference }
+func (n *ReferenceNode) Type() NodeType     { return NodeTypeReference }
 func (n *ReferenceNode) Position() Position { return n.Pos }
 func (n *ReferenceNode) String() string     { return "@" + n.ZmanKey }
 
@@ -110,7 +110,7 @@ type StringNode struct {
 	Pos   Position // Source position
 }
 
-func (n *StringNode) Type() NodeType    { return NodeTypeString }
+func (n *StringNode) Type() NodeType     { return NodeTypeString }
 func (n *StringNode) Position() Position { return n.Pos }
 func (n *StringNode) String() string     { return fmt.Sprintf("%q", n.Value) }
 
@@ -120,18 +120,18 @@ type DirectionNode struct {
 	Pos       Position // Source position
 }
 
-func (n *DirectionNode) Type() NodeType    { return NodeTypeString }
+func (n *DirectionNode) Type() NodeType     { return NodeTypeString }
 func (n *DirectionNode) Position() Position { return n.Pos }
 func (n *DirectionNode) String() string     { return n.Direction }
 
 // BaseNode represents a base keyword for proportional_hours function
 type BaseNode struct {
-	Base      string   // "gra", "mga", etc.
-	CustomArgs []Node  // For custom(start, end)
-	Pos       Position // Source position
+	Base       string   // "gra", "mga", etc.
+	CustomArgs []Node   // For custom(start, end)
+	Pos        Position // Source position
 }
 
-func (n *BaseNode) Type() NodeType    { return NodeTypeString }
+func (n *BaseNode) Type() NodeType     { return NodeTypeString }
 func (n *BaseNode) Position() Position { return n.Pos }
 func (n *BaseNode) String() string {
 	if n.Base == "custom" && len(n.CustomArgs) == 2 {
@@ -148,7 +148,7 @@ type ConditionalNode struct {
 	Pos         Position // Source position
 }
 
-func (n *ConditionalNode) Type() NodeType    { return NodeTypeConditional }
+func (n *ConditionalNode) Type() NodeType     { return NodeTypeConditional }
 func (n *ConditionalNode) Position() Position { return n.Pos }
 func (n *ConditionalNode) String() string {
 	if n.FalseBranch == nil {
@@ -165,7 +165,7 @@ type ConditionNode struct {
 	Pos   Position // Source position
 }
 
-func (n *ConditionNode) Type() NodeType    { return NodeTypeCondition }
+func (n *ConditionNode) Type() NodeType     { return NodeTypeCondition }
 func (n *ConditionNode) Position() Position { return n.Pos }
 func (n *ConditionNode) String() string {
 	return fmt.Sprintf("%s %s %s", n.Left.String(), n.Op, n.Right.String())
@@ -177,7 +177,7 @@ type ConditionVarNode struct {
 	Pos  Position // Source position
 }
 
-func (n *ConditionVarNode) Type() NodeType    { return NodeTypeCondition }
+func (n *ConditionVarNode) Type() NodeType     { return NodeTypeCondition }
 func (n *ConditionVarNode) Position() Position { return n.Pos }
 func (n *ConditionVarNode) String() string     { return n.Name }
 

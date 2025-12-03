@@ -171,18 +171,18 @@ func (s *AlgorithmService) PreviewAlgorithm(ctx context.Context, req *models.Alg
 			"timezone":  req.Timezone,
 		},
 		"zmanim": map[string]string{
-			"alos":               "05:23:00",
-			"misheyakir":         "05:47:00",
-			"sunrise":            "06:18:00",
-			"sof_zman_shma":      "09:18:00",
-			"sof_zman_tefillah":  "10:18:00",
-			"chatzos":            "12:30:00",
-			"mincha_gedola":      "13:00:00",
-			"mincha_ketana":      "15:30:00",
-			"plag_hamincha":      "16:45:00",
-			"sunset":             "18:42:00",
-			"tzeis":              "19:15:00",
-			"tzeis_rt":           "19:54:00",
+			"alos":              "05:23:00",
+			"misheyakir":        "05:47:00",
+			"sunrise":           "06:18:00",
+			"sof_zman_shma":     "09:18:00",
+			"sof_zman_tefillah": "10:18:00",
+			"chatzos":           "12:30:00",
+			"mincha_gedola":     "13:00:00",
+			"mincha_ketana":     "15:30:00",
+			"plag_hamincha":     "16:45:00",
+			"sunset":            "18:42:00",
+			"tzeis":             "19:15:00",
+			"tzeis_rt":          "19:54:00",
 		},
 		"note": "Preview calculation - actual engine implementation pending",
 	}
@@ -221,12 +221,12 @@ func (s *AlgorithmService) validateAlgorithmConfig(config map[string]interface{}
 
 		// Validate method is supported
 		validMethods := map[string]bool{
-			"solar_angle":     true,
-			"fixed_minutes":   true,
-			"proportional":    true,
-			"midpoint":        true,
-			"sunrise":         true,
-			"sunset":          true,
+			"solar_angle":   true,
+			"fixed_minutes": true,
+			"proportional":  true,
+			"midpoint":      true,
+			"sunrise":       true,
+			"sunset":        true,
 		}
 
 		if !validMethods[method] {

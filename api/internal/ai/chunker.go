@@ -8,10 +8,10 @@ import (
 
 // Chunk represents a piece of content for embedding
 type Chunk struct {
-	Content   string            `json:"content"`
-	Index     int               `json:"index"`
-	Metadata  map[string]string `json:"metadata"`
-	TokenCount int              `json:"token_count"`
+	Content    string            `json:"content"`
+	Index      int               `json:"index"`
+	Metadata   map[string]string `json:"metadata"`
+	TokenCount int               `json:"token_count"`
 }
 
 // Chunker splits documents into chunks suitable for embedding
