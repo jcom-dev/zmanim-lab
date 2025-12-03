@@ -49,7 +49,7 @@ func (h *Handlers) GetPublisherTeam(w http.ResponseWriter, r *http.Request) {
 
 	// Get the publisher's owner (clerk_user_id)
 	var ownerID *string
-	h.db.Pool.QueryRow(ctx,
+	_ = h.db.Pool.QueryRow(ctx,
 		"SELECT clerk_user_id FROM publishers WHERE id = $1",
 		publisherID,
 	).Scan(&ownerID)
@@ -400,7 +400,7 @@ func (h *Handlers) ResendPublisherInvitation(w http.ResponseWriter, r *http.Requ
 
 	// Get publisher name for the email
 	var publisherName string
-	h.db.Pool.QueryRow(ctx, "SELECT name FROM publishers WHERE id = $1", publisherID).Scan(&publisherName)
+	_ = h.db.Pool.QueryRow(ctx, "SELECT name FROM publishers WHERE id = $1", publisherID).Scan(&publisherName)
 
 	// Get inviter name
 	inviterName := "A team member"
@@ -421,7 +421,7 @@ func (h *Handlers) ResendPublisherInvitation(w http.ResponseWriter, r *http.Requ
 			webURL = "http://localhost:3001"
 		}
 		acceptURL := fmt.Sprintf("%s/accept-invitation?token=%s", webURL, newToken)
-		go h.emailService.SendInvitation(email, inviterName, publisherName, acceptURL)
+		go func() { _ = h.emailService.SendInvitation(email, inviterName, publisherName, acceptURL) }()
 	}
 
 	slog.Info("publisher invitation resent",
@@ -535,7 +535,7 @@ func (h *Handlers) AcceptPublisherInvitation(w http.ResponseWriter, r *http.Requ
 
 	if time.Now().After(invitation.ExpiresAt) {
 		// Mark as expired
-		h.db.Pool.Exec(ctx, "UPDATE publisher_invitations SET status = 'expired' WHERE id = $1", invitation.ID)
+		_, _ = h.db.Pool.Exec(ctx, "UPDATE publisher_invitations SET status = 'expired' WHERE id = $1", invitation.ID)
 		RespondBadRequest(w, r, "This invitation has expired. Please request a new invitation.")
 		return
 	}

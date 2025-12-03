@@ -178,7 +178,7 @@ func (h *Handlers) CreatePublisherCoverage(w http.ResponseWriter, r *http.Reques
 		// Continent display name
 		coverage.DisplayName = *req.ContinentCode
 	} else if req.CoverageLevel == "city" && req.CityID != nil {
-		h.db.Pool.QueryRow(ctx,
+		_ = h.db.Pool.QueryRow(ctx,
 			`SELECT c.name || ', ' || COALESCE(r.name, '') || ', ' || co.name
 			 FROM cities c
 			 JOIN geo_countries co ON c.country_id = co.id

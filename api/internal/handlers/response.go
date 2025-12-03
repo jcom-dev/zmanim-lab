@@ -54,7 +54,7 @@ func RespondJSON(w http.ResponseWriter, r *http.Request, status int, data interf
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(response)
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 // RespondError sends a structured error response
@@ -73,7 +73,7 @@ func RespondError(w http.ResponseWriter, r *http.Request, status int, code, mess
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(response)
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 // Helper functions for common error types

@@ -1617,7 +1617,7 @@ func (h *Handlers) AdminReviewZmanRegistryRequest(w http.ResponseWriter, r *http
 		RespondInternalError(w, r, "Failed to process request")
 		return
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	// Update request status
 	var result ZmanRegistryRequest

@@ -59,7 +59,7 @@ func (h *Handlers) RequestPasswordReset(w http.ResponseWriter, r *http.Request) 
 			webURL = "http://localhost:3001"
 		}
 		resetURL := webURL + "/reset-password?token=" + token
-		go h.emailService.SendPasswordReset(email, resetURL, "1 hour")
+		go func() { _ = h.emailService.SendPasswordReset(email, resetURL, "1 hour") }()
 	}
 
 	slog.Info("password reset requested", "email", email)

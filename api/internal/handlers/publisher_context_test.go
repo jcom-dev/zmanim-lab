@@ -213,6 +213,6 @@ func BenchmarkPublisherResolver_Resolve_FromHeader(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		resolver.Resolve(req.Context(), req)
+		_, _ = resolver.Resolve(req.Context(), req)
 	}
 }

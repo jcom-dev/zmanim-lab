@@ -84,7 +84,7 @@ func (h *Handlers) GetVersionHistory(w http.ResponseWriter, r *http.Request) {
 
 	// Get current version number
 	var currentVersion int
-	h.db.Pool.QueryRow(ctx,
+	_ = h.db.Pool.QueryRow(ctx,
 		"SELECT COALESCE(MAX(version_number), 0) FROM algorithm_version_history WHERE algorithm_id = $1",
 		algorithmID,
 	).Scan(&currentVersion)

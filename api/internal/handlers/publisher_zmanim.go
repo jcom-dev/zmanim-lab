@@ -214,7 +214,7 @@ func (h *Handlers) GetPublisherZmanim(w http.ResponseWriter, r *http.Request) {
 
 		// Parse tags JSON
 		if len(tagsJSON) > 0 {
-			json.Unmarshal(tagsJSON, &z.Tags)
+			_ = json.Unmarshal(tagsJSON, &z.Tags)
 		}
 		if z.Tags == nil {
 			z.Tags = []ZmanTag{}
@@ -289,7 +289,7 @@ func getPublisherZmanimRowToPublisherZman(z sqlcgen.GetPublisherZmanimRow) Publi
 	var tags []ZmanTag
 	if z.Tags != nil {
 		if tagsBytes, err := json.Marshal(z.Tags); err == nil {
-			json.Unmarshal(tagsBytes, &tags)
+			_ = json.Unmarshal(tagsBytes, &tags)
 		}
 	}
 

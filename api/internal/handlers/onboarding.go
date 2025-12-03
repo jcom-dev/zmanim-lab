@@ -63,7 +63,7 @@ func (h *Handlers) GetOnboardingState(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if wizardData != nil {
-		json.Unmarshal(wizardData, &state.Data)
+		_ = json.Unmarshal(wizardData, &state.Data)
 	}
 
 	if state.CompletedSteps == nil {

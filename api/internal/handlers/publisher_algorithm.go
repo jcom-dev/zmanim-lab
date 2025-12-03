@@ -627,7 +627,7 @@ func (h *Handlers) PublishAlgorithm(w http.ResponseWriter, r *http.Request) {
 		RespondInternalError(w, r, "Failed to start transaction")
 		return
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	// Archive any currently active algorithm
 	_, err = tx.Exec(ctx, `
@@ -842,7 +842,7 @@ func (h *Handlers) GetAlgorithmVersion(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var config algorithm.AlgorithmConfig
-	json.Unmarshal(configJSON, &config)
+	_ = json.Unmarshal(configJSON, &config)
 
 	RespondJSON(w, r, http.StatusOK, AlgorithmResponse{
 		ID:            algID,

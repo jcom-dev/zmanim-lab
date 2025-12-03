@@ -776,14 +776,14 @@ func (h *Handlers) GetPublisherAnalytics(w http.ResponseWriter, r *http.Request)
 
 	// Get coverage counts
 	var coverageAreas int
-	h.db.Pool.QueryRow(ctx, `
+	_ = h.db.Pool.QueryRow(ctx, `
 		SELECT COUNT(*) FROM publisher_coverage
 		WHERE publisher_id = $1 AND is_active = true
 	`, publisherID).Scan(&coverageAreas)
 
 	// Estimate cities count
 	var citiesCovered int
-	h.db.Pool.QueryRow(ctx, `
+	_ = h.db.Pool.QueryRow(ctx, `
 		SELECT COALESCE(SUM(
 			CASE coverage_level
 				WHEN 'city' THEN 1
@@ -869,7 +869,7 @@ func (h *Handlers) GetPublisherDashboardSummary(w http.ResponseWriter, r *http.R
 		UpdatedAt *string `json:"updated_at"`
 	}
 	algorithmSummary.Status = "none" // default if no algorithm
-	h.db.Pool.QueryRow(ctx, `
+	_ = h.db.Pool.QueryRow(ctx, `
 		SELECT
 			CASE WHEN is_published THEN 'published' ELSE 'draft' END,
 			name,
@@ -885,14 +885,14 @@ func (h *Handlers) GetPublisherDashboardSummary(w http.ResponseWriter, r *http.R
 		TotalAreas  int `json:"total_areas"`
 		TotalCities int `json:"total_cities"`
 	}
-	h.db.Pool.QueryRow(ctx, `
+	_ = h.db.Pool.QueryRow(ctx, `
 		SELECT COUNT(*), 0
 		FROM publisher_coverage
 		WHERE publisher_id = $1 AND is_active = true
 	`, publisherID).Scan(&coverageSummary.TotalAreas, &coverageSummary.TotalCities)
 
 	// Estimate cities count based on coverage type
-	h.db.Pool.QueryRow(ctx, `
+	_ = h.db.Pool.QueryRow(ctx, `
 		SELECT COALESCE(SUM(
 			CASE coverage_level
 				WHEN 'city' THEN 1

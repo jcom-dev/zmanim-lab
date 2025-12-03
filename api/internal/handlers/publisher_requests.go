@@ -111,11 +111,13 @@ func (h *Handlers) SubmitPublisherRequest(w http.ResponseWriter, r *http.Request
 
 	// Send confirmation email to applicant (non-blocking)
 	if h.emailService != nil {
-		go h.emailService.SendPublisherRequestReceived(
-			req.Email,
-			strings.TrimSpace(req.Name),
-			strings.TrimSpace(req.Name), // Publisher name IS the organization
-		)
+		go func() {
+			_ = h.emailService.SendPublisherRequestReceived(
+				req.Email,
+				strings.TrimSpace(req.Name),
+				strings.TrimSpace(req.Name), // Publisher name IS the organization
+			)
+		}()
 
 		// Send notification to admin (if ADMIN_EMAIL is configured)
 		adminEmail := os.Getenv("ADMIN_EMAIL")
@@ -125,14 +127,16 @@ func (h *Handlers) SubmitPublisherRequest(w http.ResponseWriter, r *http.Request
 				webURL = "http://localhost:3001"
 			}
 			adminURL := fmt.Sprintf("%s/admin/publishers", webURL)
-			go h.emailService.SendAdminNewPublisherRequest(
-				adminEmail,
-				strings.TrimSpace(req.Name),
-				strings.TrimSpace(req.Name), // Publisher name IS the organization
-				req.Email,
-				strings.TrimSpace(req.Description),
-				adminURL,
-			)
+			go func() {
+				_ = h.emailService.SendAdminNewPublisherRequest(
+					adminEmail,
+					strings.TrimSpace(req.Name),
+					strings.TrimSpace(req.Name), // Publisher name IS the organization
+					req.Email,
+					strings.TrimSpace(req.Description),
+					adminURL,
+				)
+			}()
 		}
 	}
 
@@ -186,9 +190,9 @@ func (h *Handlers) AdminGetPublisherRequests(w http.ResponseWriter, r *http.Requ
 
 	// Get counts for all statuses
 	var pendingCount, approvedCount, rejectedCount int
-	h.db.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM publisher_requests WHERE status = 'pending'").Scan(&pendingCount)
-	h.db.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM publisher_requests WHERE status = 'approved'").Scan(&approvedCount)
-	h.db.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM publisher_requests WHERE status = 'rejected'").Scan(&rejectedCount)
+	_ = h.db.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM publisher_requests WHERE status = 'pending'").Scan(&pendingCount)
+	_ = h.db.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM publisher_requests WHERE status = 'approved'").Scan(&approvedCount)
+	_ = h.db.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM publisher_requests WHERE status = 'rejected'").Scan(&rejectedCount)
 
 	RespondJSON(w, r, http.StatusOK, map[string]interface{}{
 		"data": requests,
@@ -245,7 +249,7 @@ func (h *Handlers) AdminApprovePublisherRequest(w http.ResponseWriter, r *http.R
 		RespondInternalError(w, r, "Failed to process request")
 		return
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	// Create the publisher
 	slug := generateSlug(req.Name) // Publisher name IS the organization
@@ -289,7 +293,7 @@ func (h *Handlers) AdminApprovePublisherRequest(w http.ResponseWriter, r *http.R
 			webURL = "http://localhost:3001"
 		}
 		dashboardURL := fmt.Sprintf("%s/publisher", webURL)
-		go h.emailService.SendPublisherApproved(req.Email, req.Name, dashboardURL)
+		go func() { _ = h.emailService.SendPublisherApproved(req.Email, req.Name, dashboardURL) }()
 	}
 
 	slog.Info("publisher request approved",
@@ -318,7 +322,7 @@ func (h *Handlers) AdminRejectPublisherRequest(w http.ResponseWriter, r *http.Re
 	var reqBody struct {
 		Reason string `json:"reason"`
 	}
-	json.NewDecoder(r.Body).Decode(&reqBody)
+	_ = json.NewDecoder(r.Body).Decode(&reqBody)
 
 	// Get admin user ID from context
 	adminUserID := middleware.GetUserID(ctx)
@@ -369,7 +373,7 @@ func (h *Handlers) AdminRejectPublisherRequest(w http.ResponseWriter, r *http.Re
 		if reqBody.Reason != "" {
 			reason = reqBody.Reason
 		}
-		go h.emailService.SendPublisherRejected(req.Email, req.Name, reason)
+		go func() { _ = h.emailService.SendPublisherRejected(req.Email, req.Name, reason) }()
 	}
 
 	slog.Info("publisher request rejected",
