@@ -233,6 +233,7 @@ func main() {
 			r.Get("/registry/zmanim", h.GetMasterZmanim)
 			r.Get("/registry/zmanim/grouped", h.GetMasterZmanimGrouped)
 			r.Get("/registry/zmanim/events", h.GetEventZmanimGrouped)
+			r.Get("/registry/zmanim/validate-key", h.ValidateZmanKey)
 			r.Get("/registry/zmanim/{zmanKey}", h.GetMasterZman)
 			r.Get("/registry/zmanim/{zmanKey}/day-types", h.GetZmanApplicableDayTypes)
 			r.Get("/registry/tags", h.GetAllTags)

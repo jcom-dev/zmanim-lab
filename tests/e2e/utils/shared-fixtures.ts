@@ -14,10 +14,10 @@
 import { Pool } from 'pg';
 
 // Shared publisher pool - created once, reused across tests
+// Note: organization field was removed from schema
 export interface SharedPublisher {
   id: string;
   name: string;
-  organization: string;
   email: string;
   status: string;
   type: 'verified' | 'pending' | 'suspended' | 'with_algorithm' | 'with_coverage' | 'empty';
@@ -95,9 +95,13 @@ export async function initializeSharedPublishers(): Promise<void> {
       const slug = `e2e-shared-${config.key}`;
       const email = `e2e-shared-${config.key}@test.zmanim.com`;
 
+      // Map status values (verified -> active)
+      const dbStatus = config.status === 'verified' ? 'active' : config.status;
+      const isVerified = config.status === 'verified' || dbStatus === 'active';
+
       // Check if exists
       const existing = await pool.query(
-        'SELECT id, name, organization, email, status FROM publishers WHERE slug = $1',
+        'SELECT id, name, email, status FROM publishers WHERE slug = $1',
         [slug]
       );
 
@@ -111,17 +115,17 @@ export async function initializeSharedPublishers(): Promise<void> {
         console.log(`  Reusing: ${config.name}`);
       } else {
         const result = await pool.query(
-          `INSERT INTO publishers (name, slug, email, organization, status, website, bio)
+          `INSERT INTO publishers (name, slug, email, status, website, bio, is_verified)
            VALUES ($1, $2, $3, $4, $5, $6, $7)
-           RETURNING id, name, organization, email, status`,
+           RETURNING id, name, email, status`,
           [
             config.name,
             slug,
             email,
-            `${config.name} Org`,
-            config.status,
+            dbStatus,
             'https://test.example.com',
             `Shared test publisher: ${config.type}`,
+            isVerified,
           ]
         );
         publisher = {
@@ -158,24 +162,16 @@ async function ensureAlgorithm(pool: Pool, publisherId: string): Promise<void> {
   );
 
   if (existing.rows.length === 0) {
+    // Schema: id, publisher_id, name, description, configuration, status, is_public, forked_from, attribution_text, fork_count
     await pool.query(
-      `INSERT INTO algorithms (publisher_id, name, version, description, formula_definition, calculation_type, validation_status, configuration, is_active)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      `INSERT INTO algorithms (publisher_id, name, description, configuration, status)
+       VALUES ($1, $2, $3, $4, $5)`,
       [
         publisherId,
         'E2E Shared Algorithm',
-        '1.0.0',
         'Shared algorithm for E2E testing',
-        JSON.stringify({
-          alos: { method: 'solar_angle', params: { degrees: 16.1 } },
-          sunrise: { method: 'sunrise', params: {} },
-          sunset: { method: 'sunset', params: {} },
-          tzeis: { method: 'solar_angle', params: { degrees: 8.5 } },
-        }),
-        'solar_depression',
-        'validated',
         JSON.stringify({ name: 'E2E Shared GRA Algorithm' }),
-        true,
+        'published',
       ]
     );
   }
@@ -188,8 +184,13 @@ async function ensureCoverage(pool: Pool, publisherId: string): Promise<void> {
   );
 
   if (existing.rows.length === 0) {
-    // Get a city with country code
-    const city = await pool.query('SELECT id, country_code FROM cities LIMIT 1');
+    // Get a city with its country code from geo_countries table
+    const city = await pool.query(`
+      SELECT c.id, gc.code as country_code
+      FROM cities c
+      JOIN geo_countries gc ON c.country_id = gc.id
+      LIMIT 1
+    `);
     if (city.rows.length > 0) {
       await pool.query(
         `INSERT INTO publisher_coverage (publisher_id, coverage_level, city_id, country_code, priority, is_active)
@@ -222,7 +223,7 @@ async function loadPublishersIntoCache(): Promise<void> {
 
     for (const [key, config] of Object.entries(publisherConfigs)) {
       const result = await pool.query(
-        'SELECT id, name, organization, email, status FROM publishers WHERE slug = $1',
+        'SELECT id, name, email, status FROM publishers WHERE slug = $1',
         [config.slug]
       );
 
@@ -271,9 +272,8 @@ export function getSharedPublisher(key: string): SharedPublisher {
   return {
     id: config.slug, // Will be resolved by loginAsPublisher
     name: `E2E Shared ${key}`,
-    organization: `E2E Shared ${key} Org`,
     email: `e2e-shared-${key}@test.zmanim.com`,
-    status: config.type === 'pending' ? 'pending' : config.type === 'suspended' ? 'suspended' : 'verified',
+    status: config.type === 'pending' ? 'pending' : config.type === 'suspended' ? 'suspended' : 'active',
     type: config.type,
   };
 }
@@ -324,9 +324,8 @@ export function getAllSharedPublishers(): SharedPublisher[] {
   return Object.entries(publisherConfigs).map(([key, config]) => ({
     id: config.slug,
     name: `E2E Shared ${key}`,
-    organization: `E2E Shared ${key} Org`,
     email: `e2e-shared-${key}@test.zmanim.com`,
-    status: config.type === 'pending' ? 'pending' : config.type === 'suspended' ? 'suspended' : 'verified',
+    status: config.type === 'pending' ? 'pending' : config.type === 'suspended' ? 'suspended' : 'active',
     type: config.type,
   }));
 }

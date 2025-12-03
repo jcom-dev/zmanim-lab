@@ -103,41 +103,14 @@ jobs:
           working-directory: api
           args: --timeout 5m
 
-  # E2E Tests (optional - only on main branch)
-  e2e:
-    name: E2E Tests
-    runs-on: ubuntu-latest
-    needs: [web, api]
-    if: github.ref == 'refs/heads/main'
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: tests/package-lock.json
-
-      - name: Install Playwright
-        working-directory: tests
-        run: |
-          npm ci
-          npx playwright install chromium --with-deps
-
-      - name: Run E2E tests
-        working-directory: tests
-        run: npx playwright test --reporter=html
-        env:
-          BASE_URL: ${{ secrets.E2E_BASE_URL }}
-          CLERK_TEST_USER_EMAIL: ${{ secrets.CLERK_TEST_USER_EMAIL }}
-          CLERK_TEST_USER_PASSWORD: ${{ secrets.CLERK_TEST_USER_PASSWORD }}
-
-      - name: Upload test results
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: playwright-report
-          path: tests/test-results/html-report/
-          retention-days: 30
+  # E2E Tests run in a separate workflow (e2e.yml)
+  # This allows them to run with proper service containers (PostgreSQL 17, Redis)
+  # and full local stack (API + Web) for comprehensive testing
+  #
+  # The e2e.yml workflow:
+  # - Starts PostgreSQL 17 and Redis services
+  # - Runs database migrations
+  # - Builds and starts the Go API
+  # - Builds and starts the Next.js web app
+  # - Runs Playwright tests against the local stack
+  # - Uses Clerk in test mode for authentication

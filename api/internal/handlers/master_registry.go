@@ -123,6 +123,9 @@ type ZmanRegistryRequest struct {
 	ReviewedAt           *time.Time `json:"reviewed_at,omitempty"`
 	ReviewerNotes        *string    `json:"reviewer_notes,omitempty"`
 	CreatedAt            time.Time  `json:"created_at"`
+	PublisherName        *string    `json:"publisher_name,omitempty"`
+	PublisherEmail       *string    `json:"publisher_email,omitempty"`
+	SubmitterName        *string    `json:"submitter_name,omitempty"`
 }
 
 // Request bodies
@@ -568,6 +571,113 @@ func (h *Handlers) GetMasterZman(w http.ResponseWriter, r *http.Request) {
 	}
 
 	RespondJSON(w, r, http.StatusOK, z)
+}
+
+// ValidateZmanKeyResponse is the response for key validation
+type ValidateZmanKeyResponse struct {
+	Available bool    `json:"available"`
+	Reason    *string `json:"reason,omitempty"`
+}
+
+// ValidateZmanKey checks if a zman key is available for use
+// @Summary Validate zman key availability
+// @Tags Registry
+// @Accept json
+// @Produce json
+// @Param key query string true "Zman key to validate"
+// @Success 200 {object} ValidateZmanKeyResponse
+// @Router /api/v1/registry/zmanim/validate-key [get]
+func (h *Handlers) ValidateZmanKey(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	key := r.URL.Query().Get("key")
+
+	if key == "" {
+		reason := "Key is required"
+		RespondJSON(w, r, http.StatusOK, ValidateZmanKeyResponse{
+			Available: false,
+			Reason:    &reason,
+		})
+		return
+	}
+
+	// Check format: must start with lowercase letter, contain only lowercase letters, numbers, underscores
+	if len(key) < 2 {
+		reason := "Key must be at least 2 characters"
+		RespondJSON(w, r, http.StatusOK, ValidateZmanKeyResponse{
+			Available: false,
+			Reason:    &reason,
+		})
+		return
+	}
+
+	// Validate format
+	for i, c := range key {
+		if i == 0 {
+			if c < 'a' || c > 'z' {
+				reason := "Key must start with a lowercase letter"
+				RespondJSON(w, r, http.StatusOK, ValidateZmanKeyResponse{
+					Available: false,
+					Reason:    &reason,
+				})
+				return
+			}
+		} else {
+			if !((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_') {
+				reason := "Key can only contain lowercase letters, numbers, and underscores"
+				RespondJSON(w, r, http.StatusOK, ValidateZmanKeyResponse{
+					Available: false,
+					Reason:    &reason,
+				})
+				return
+			}
+		}
+	}
+
+	// Check if key exists in master registry
+	var exists bool
+	err := h.db.Pool.QueryRow(ctx, `
+		SELECT EXISTS(SELECT 1 FROM master_zmanim_registry WHERE zman_key = $1)
+	`, key).Scan(&exists)
+
+	if err != nil {
+		slog.Error("error checking zman key availability", "error", err, "key", key)
+		RespondInternalError(w, r, "Failed to validate key")
+		return
+	}
+
+	if exists {
+		reason := "This zman key already exists in the registry"
+		RespondJSON(w, r, http.StatusOK, ValidateZmanKeyResponse{
+			Available: false,
+			Reason:    &reason,
+		})
+		return
+	}
+
+	// Also check pending requests
+	err = h.db.Pool.QueryRow(ctx, `
+		SELECT EXISTS(SELECT 1 FROM zman_registry_requests WHERE requested_key = $1 AND status = 'pending')
+	`, key).Scan(&exists)
+
+	if err != nil {
+		slog.Error("error checking pending requests", "error", err, "key", key)
+		RespondInternalError(w, r, "Failed to validate key")
+		return
+	}
+
+	if exists {
+		reason := "This key has a pending request from another publisher"
+		RespondJSON(w, r, http.StatusOK, ValidateZmanKeyResponse{
+			Available: false,
+			Reason:    &reason,
+		})
+		return
+	}
+
+	// Key is available
+	RespondJSON(w, r, http.StatusOK, ValidateZmanKeyResponse{
+		Available: true,
+	})
 }
 
 // GetAllTags returns all zman tags
@@ -1402,20 +1512,26 @@ func (h *Handlers) AdminGetZmanRegistryRequests(w http.ResponseWriter, r *http.R
 
 	if status != "" {
 		rows, err = h.db.Pool.Query(ctx, `
-			SELECT id, publisher_id, requested_key, requested_hebrew_name, requested_english_name,
-				requested_formula_dsl, time_category, description, status,
-				reviewed_by, reviewed_at, reviewer_notes, created_at
-			FROM zman_registry_requests
-			WHERE status = $1
-			ORDER BY created_at DESC
+			SELECT 
+				zrr.id, zrr.publisher_id, zrr.requested_key, zrr.requested_hebrew_name, zrr.requested_english_name,
+				zrr.requested_formula_dsl, zrr.time_category, zrr.description, zrr.status,
+				zrr.reviewed_by, zrr.reviewed_at, zrr.reviewer_notes, zrr.created_at,
+				zrr.publisher_name, zrr.publisher_email, p.name as submitter_name
+			FROM zman_registry_requests zrr
+			LEFT JOIN publishers p ON zrr.publisher_id = p.id
+			WHERE zrr.status = $1
+			ORDER BY zrr.created_at DESC
 		`, status)
 	} else {
 		rows, err = h.db.Pool.Query(ctx, `
-			SELECT id, publisher_id, requested_key, requested_hebrew_name, requested_english_name,
-				requested_formula_dsl, time_category, description, status,
-				reviewed_by, reviewed_at, reviewer_notes, created_at
-			FROM zman_registry_requests
-			ORDER BY created_at DESC
+			SELECT 
+				zrr.id, zrr.publisher_id, zrr.requested_key, zrr.requested_hebrew_name, zrr.requested_english_name,
+				zrr.requested_formula_dsl, zrr.time_category, zrr.description, zrr.status,
+				zrr.reviewed_by, zrr.reviewed_at, zrr.reviewer_notes, zrr.created_at,
+				zrr.publisher_name, zrr.publisher_email, p.name as submitter_name
+			FROM zman_registry_requests zrr
+			LEFT JOIN publishers p ON zrr.publisher_id = p.id
+			ORDER BY zrr.created_at DESC
 		`)
 	}
 
@@ -1431,7 +1547,8 @@ func (h *Handlers) AdminGetZmanRegistryRequests(w http.ResponseWriter, r *http.R
 		var req ZmanRegistryRequest
 		err := rows.Scan(&req.ID, &req.PublisherID, &req.RequestedKey, &req.RequestedHebrewName,
 			&req.RequestedEnglishName, &req.RequestedFormulaDSL, &req.TimeCategory, &req.Description,
-			&req.Status, &req.ReviewedBy, &req.ReviewedAt, &req.ReviewerNotes, &req.CreatedAt)
+			&req.Status, &req.ReviewedBy, &req.ReviewedAt, &req.ReviewerNotes, &req.CreatedAt,
+			&req.PublisherName, &req.PublisherEmail, &req.SubmitterName)
 		if err != nil {
 			slog.Error("error scanning request", "error", err)
 			continue
@@ -1527,21 +1644,9 @@ func (h *Handlers) AdminReviewZmanRegistryRequest(w http.ResponseWriter, r *http
 		return
 	}
 
-	// If approved, add to master registry
+	// If approved, the registry entry is created by the frontend via POST /admin/registry/zmanim
+	// with the admin's edits. We just need to handle auto-add to publisher's zmanim.
 	if req.Status == "approved" {
-		_, err = tx.Exec(ctx, `
-			INSERT INTO master_zmanim_registry (
-				zman_key, canonical_hebrew_name, canonical_english_name,
-				time_category, default_formula_dsl, is_core, sort_order, description
-			) VALUES ($1, $2, $3, $4, COALESCE($5, 'sunrise'), false, 999, 'Added from publisher request')
-		`, result.RequestedKey, result.RequestedHebrewName, result.RequestedEnglishName,
-			result.TimeCategory, result.RequestedFormulaDSL)
-
-		if err != nil {
-			slog.Error("error adding to master registry", "error", err)
-			RespondInternalError(w, r, "Failed to add to registry")
-			return
-		}
 
 		// Auto-add to publisher's zmanim if auto_add_on_approval is true
 		if fullRequest.AutoAddOnApproval != nil && *fullRequest.AutoAddOnApproval {
@@ -1698,6 +1803,7 @@ type ZmanRequestTagResponse struct {
 }
 
 // AdminGetZmanRequestTags returns all tags for a zman request
+// If a requested new tag already exists in zman_tags, it will be auto-linked
 // @Summary Get tags for zman request
 // @Tags Admin
 // @Produce json
@@ -1722,6 +1828,47 @@ func (h *Handlers) AdminGetZmanRequestTags(w http.ResponseWriter, r *http.Reques
 			RequestID:       t.RequestID,
 			IsNewTagRequest: t.IsNewTagRequest,
 		}
+
+		// Check if this is a new tag request that might already exist
+		if t.IsNewTagRequest && t.RequestedTagName != nil {
+			// Try to find an existing tag with the same name
+			existingTag, findErr := h.db.Queries.FindTagByName(ctx, *t.RequestedTagName)
+			if findErr == nil {
+				// Tag already exists - auto-link it
+				slog.Info("auto-linking existing tag to request",
+					"tag_request_id", t.ID,
+					"existing_tag_id", existingTag.ID,
+					"tag_name", *t.RequestedTagName)
+
+				// Convert string ID to pgtype.UUID for the link query
+				var tagUUID pgtype.UUID
+				if parseErr := tagUUID.Scan(existingTag.ID); parseErr != nil {
+					slog.Error("failed to parse tag UUID", "error", parseErr, "tag_id", existingTag.ID)
+				} else {
+					// Link the tag to the request
+					linkErr := h.db.Queries.LinkTagToRequest(ctx, db.LinkTagToRequestParams{
+						ID:    t.ID,
+						TagID: tagUUID,
+					})
+					if linkErr != nil {
+						slog.Error("failed to auto-link tag", "error", linkErr, "tag_request_id", t.ID)
+						// Continue anyway, just don't auto-link
+					} else {
+						// Update the response to reflect the linked tag
+						tagIDStr := existingTag.ID
+						tag.TagID = &tagIDStr
+						tag.IsNewTagRequest = false
+						tag.ExistingTagKey = &existingTag.TagKey
+						tag.ExistingTagName = &existingTag.Name
+						tag.ExistingTagType = &existingTag.TagType
+						result = append(result, tag)
+						continue
+					}
+				}
+			}
+			// Tag doesn't exist or find failed - keep as new tag request
+		}
+
 		// Convert pgtype.UUID to string pointer if valid
 		if t.TagID.Valid {
 			tagIDStr := t.TagID.String()

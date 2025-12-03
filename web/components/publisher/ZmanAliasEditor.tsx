@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/dialog';
 import { useApi } from '@/lib/api-client';
 import { usePublisherMutation, usePublisherQuery } from '@/lib/hooks';
-import { Pencil, Trash2, Loader2, Plus } from 'lucide-react';
+import { Pencil, Trash2, Loader2, Plus, AlertTriangle } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -68,6 +68,52 @@ export function ZmanAliasEditor({
   const [hebrewName, setHebrewName] = useState('');
   const [englishName, setEnglishName] = useState('');
   const [transliteration, setTransliteration] = useState('');
+  const [errors, setErrors] = useState<{
+    hebrewName?: string;
+    englishName?: string;
+  }>({});
+
+  // Check if a string contains Hebrew characters
+  const hasHebrewChars = (str: string): boolean => {
+    return /[\u0590-\u05FF]/.test(str);
+  };
+
+  // Validate Hebrew name
+  const validateHebrewName = (value: string): string | undefined => {
+    if (!value.trim()) return 'Hebrew name is required';
+    if (!hasHebrewChars(value)) return 'Must contain Hebrew characters';
+    return undefined;
+  };
+
+  // Validate English name
+  const validateEnglishName = (value: string): string | undefined => {
+    if (!value.trim()) return 'English name is required';
+    if (value.trim().length < 2) return 'Must be at least 2 characters';
+    return undefined;
+  };
+
+  const handleFieldChange = (
+    field: 'hebrewName' | 'englishName',
+    value: string,
+    setter: (v: string) => void
+  ) => {
+    setter(value);
+    // Clear error when user starts typing
+    if (errors[field]) {
+      setErrors(prev => ({ ...prev, [field]: undefined }));
+    }
+  };
+
+  const handleFieldBlur = (
+    field: 'hebrewName' | 'englishName',
+    value: string
+  ) => {
+    const validator = field === 'hebrewName' ? validateHebrewName : validateEnglishName;
+    const error = validator(value);
+    if (error) {
+      setErrors(prev => ({ ...prev, [field]: error }));
+    }
+  };
 
   // Fetch current alias
   const { data: alias, isLoading } = usePublisherQuery<ZmanAlias>(
@@ -115,11 +161,20 @@ export function ZmanAliasEditor({
       setEnglishName('');
       setTransliteration('');
     }
+    setErrors({});
     setShowEditDialog(true);
   };
 
   const handleSave = async () => {
-    if (!hebrewName.trim() || !englishName.trim()) {
+    // Validate all fields
+    const hebrewError = validateHebrewName(hebrewName);
+    const englishError = validateEnglishName(englishName);
+
+    if (hebrewError || englishError) {
+      setErrors({
+        hebrewName: hebrewError,
+        englishName: englishError,
+      });
       return;
     }
 
@@ -193,11 +248,18 @@ export function ZmanAliasEditor({
               <Input
                 id="hebrew-name"
                 value={hebrewName}
-                onChange={(e) => setHebrewName(e.target.value)}
-                className="font-hebrew"
+                onChange={(e) => handleFieldChange('hebrewName', e.target.value, setHebrewName)}
+                onBlur={(e) => handleFieldBlur('hebrewName', e.target.value)}
+                className={`font-hebrew ${errors.hebrewName ? 'border-red-500 focus-visible:ring-red-500' : ''}`}
                 placeholder="שם בעברית"
                 dir="rtl"
               />
+              {errors.hebrewName && (
+                <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                  <AlertTriangle className="h-3 w-3" />
+                  {errors.hebrewName}
+                </p>
+              )}
             </div>
 
             <div>
@@ -207,9 +269,17 @@ export function ZmanAliasEditor({
               <Input
                 id="english-name"
                 value={englishName}
-                onChange={(e) => setEnglishName(e.target.value)}
+                onChange={(e) => handleFieldChange('englishName', e.target.value, setEnglishName)}
+                onBlur={(e) => handleFieldBlur('englishName', e.target.value)}
+                className={errors.englishName ? 'border-red-500 focus-visible:ring-red-500' : ''}
                 placeholder="English name"
               />
+              {errors.englishName && (
+                <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                  <AlertTriangle className="h-3 w-3" />
+                  {errors.englishName}
+                </p>
+              )}
             </div>
 
             <div>
@@ -247,7 +317,7 @@ export function ZmanAliasEditor({
             </Button>
             <Button
               onClick={handleSave}
-              disabled={!hebrewName.trim() || !englishName.trim() || saveAlias.isPending}
+              disabled={!hebrewName.trim() || !englishName.trim() || !!errors.hebrewName || !!errors.englishName || saveAlias.isPending}
             >
               {saveAlias.isPending ? (
                 <>

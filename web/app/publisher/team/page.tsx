@@ -27,7 +27,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { useApi } from '@/lib/api-client';
-import { UserPlus } from 'lucide-react';
+import { UserPlus, AlertTriangle } from 'lucide-react';
 
 interface TeamMember {
   user_id: string;
@@ -53,6 +53,45 @@ export default function PublisherTeamPage() {
   const [addName, setAddName] = useState('');
   const [addLoading, setAddLoading] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<{
+    name?: string;
+    email?: string;
+  }>({});
+
+  // Email validation regex
+  const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  // Validate a single field
+  const validateField = (field: 'name' | 'email', value: string): string | undefined => {
+    switch (field) {
+      case 'name':
+        if (!value.trim()) return 'Name is required';
+        if (value.trim().length < 2) return 'Name must be at least 2 characters';
+        return undefined;
+      case 'email':
+        if (!value.trim()) return 'Email is required';
+        if (!EMAIL_REGEX.test(value)) return 'Please enter a valid email address';
+        return undefined;
+      default:
+        return undefined;
+    }
+  };
+
+  // Handle field change - clear error when user starts typing
+  const handleFieldChange = (field: 'name' | 'email', value: string, setter: (v: string) => void) => {
+    setter(value);
+    if (fieldErrors[field]) {
+      setFieldErrors(prev => ({ ...prev, [field]: undefined }));
+    }
+  };
+
+  // Handle field blur for validation
+  const handleFieldBlur = (field: 'name' | 'email', value: string) => {
+    const error = validateField(field, value);
+    if (error) {
+      setFieldErrors(prev => ({ ...prev, [field]: error }));
+    }
+  };
 
   const fetchTeam = useCallback(async () => {
     if (!selectedPublisher) return;
@@ -77,22 +116,21 @@ export default function PublisherTeamPage() {
     e.preventDefault();
     setAddError(null);
 
-    if (!addEmail.trim()) {
-      setAddError('Email is required');
-      return;
-    }
+    // Validate all fields
+    const errors = {
+      name: validateField('name', addName),
+      email: validateField('email', addEmail),
+    };
 
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addEmail)) {
-      setAddError('Please enter a valid email');
-      return;
-    }
-
-    if (!addName.trim()) {
-      setAddError('Name is required');
+    // Check if there are any errors
+    const hasErrors = Object.values(errors).some(e => e !== undefined);
+    if (hasErrors) {
+      setFieldErrors(errors);
       return;
     }
 
     setAddLoading(true);
+    setFieldErrors({});
 
     try {
       const response = await api.post<{ message: string; is_new_user: boolean }>('/publisher/team/invite', {
@@ -105,6 +143,7 @@ export default function PublisherTeamPage() {
       setAddEmail('');
       setAddName('');
       setAddDialogOpen(false);
+      setFieldErrors({});
 
       // Show success message
       if (response.is_new_user) {
@@ -185,46 +224,76 @@ export default function PublisherTeamPage() {
                 </DialogDescription>
               </DialogHeader>
               <div className="py-4 space-y-4">
-                {addError && (
-                  <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded-md text-sm dark:bg-red-950 dark:border-red-800 dark:text-red-300">
-                    {addError}
-                  </div>
-                )}
                 <div>
                   <label htmlFor="name" className="block text-sm font-medium mb-1">
-                    Name
+                    Name <span className="text-destructive">*</span>
                   </label>
                   <input
                     type="text"
                     id="name"
                     value={addName}
-                    onChange={(e) => setAddName(e.target.value)}
+                    onChange={(e) => handleFieldChange('name', e.target.value, setAddName)}
+                    onBlur={(e) => handleFieldBlur('name', e.target.value)}
                     placeholder="John Doe"
-                    className="w-full px-4 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                    className={`w-full px-4 py-2 border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary ${
+                      fieldErrors.name ? 'border-red-500 focus:ring-red-500' : 'border-border'
+                    }`}
                   />
+                  {fieldErrors.name && (
+                    <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                      <AlertTriangle className="h-3 w-3" />
+                      {fieldErrors.name}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label htmlFor="email" className="block text-sm font-medium mb-1">
-                    Email Address
+                    Email Address <span className="text-destructive">*</span>
                   </label>
                   <input
                     type="email"
                     id="email"
                     value={addEmail}
-                    onChange={(e) => setAddEmail(e.target.value)}
+                    onChange={(e) => handleFieldChange('email', e.target.value, setAddEmail)}
+                    onBlur={(e) => handleFieldBlur('email', e.target.value)}
                     placeholder="colleague@example.com"
-                    className="w-full px-4 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                    className={`w-full px-4 py-2 border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary ${
+                      fieldErrors.email ? 'border-red-500 focus:ring-red-500' : 'border-border'
+                    }`}
                   />
+                  {fieldErrors.email && (
+                    <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                      <AlertTriangle className="h-3 w-3" />
+                      {fieldErrors.email}
+                    </p>
+                  )}
                 </div>
               </div>
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setAddDialogOpen(false)}>
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={addLoading}>
-                  {addLoading ? 'Adding...' : 'Add Member'}
-                </Button>
-              </DialogFooter>
+
+              {/* Error and Actions */}
+              <div className="space-y-3">
+                {addError && (
+                  <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800 rounded-lg text-red-800 dark:text-red-200">
+                    <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+                    <span className="text-sm">{addError}</span>
+                  </div>
+                )}
+                <DialogFooter>
+                  <Button type="button" variant="outline" onClick={() => {
+                    setAddDialogOpen(false);
+                    setFieldErrors({});
+                    setAddError(null);
+                  }}>
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={addLoading || !!fieldErrors.name || !!fieldErrors.email}
+                  >
+                    {addLoading ? 'Adding...' : 'Add Member'}
+                  </Button>
+                </DialogFooter>
+              </div>
             </form>
           </DialogContent>
         </Dialog>

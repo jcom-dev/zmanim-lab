@@ -20,7 +20,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAdminApi } from '@/lib/api-client';
 import { useUser } from '@clerk/nextjs';
 import {
@@ -144,18 +143,24 @@ export default function AdminZmanRequestsPage() {
   });
 
   const openReviewDialog = async (request: ZmanRequest) => {
-    setSelectedRequest(request);
-    setLoadingRequest(true);
-    setReviewDialogOpen(true);
-
     try {
-      // Fetch full request details
-      const fullRequest = await api.get<ZmanRequest>(`/admin/zman-requests/${request.id}`);
+      setLoadingRequest(true);
+      setError(null);
+
+      // Open the dialog immediately with basic info
+      setSelectedRequest(request);
+      setReviewDialogOpen(true);
+
+      // Fetch full request details and tags in parallel
+      const [fullRequest, tags] = await Promise.all([
+        api.get<ZmanRequest>(`/admin/zman-requests/${request.id}`),
+        api.get<ZmanRequestTagResponse[]>(`/admin/zman-requests/${request.id}/tags`),
+      ]);
+
       setSelectedRequest(fullRequest);
 
-      // Fetch tag requests
-      const tags = await api.get<ZmanRequestTagResponse[]>(`/admin/zman-requests/${request.id}/tags`);
-      // Convert to PendingTagRequest format
+      // Convert to PendingTagRequest format - include ALL tag requests
+      // The form will show pending ones with approve/reject buttons
       const pendingTags: PendingTagRequest[] = (tags || []).map((t) => ({
         id: t.id,
         zman_request_id: t.request_id,
@@ -167,10 +172,13 @@ export default function AdminZmanRequestsPage() {
       setPendingTagRequests(pendingTags);
     } catch (err) {
       console.error('Failed to load request details:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load request');
+      setReviewDialogOpen(false);
     } finally {
       setLoadingRequest(false);
     }
   };
+
 
   const handleApprove = async (data: ZmanFormData, reviewerNotes: string) => {
     if (!selectedRequest || !user?.id) return;
@@ -444,10 +452,10 @@ export default function AdminZmanRequestsPage() {
                   key={request.id}
                   className="p-4 rounded-lg border hover:border-muted-foreground/50 transition-colors"
                 >
-                  {/* Header row: name + review button */}
+                  {/* Header row: name + action buttons */}
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         {getStatusBadge(request.status)}
                         <h3 className="font-semibold text-foreground">
                           <span className="font-hebrew">{request.requested_hebrew_name}</span>
@@ -510,15 +518,15 @@ export default function AdminZmanRequestsPage() {
 
       {/* Review Dialog with ZmanRegistryForm */}
       <Dialog open={reviewDialogOpen} onOpenChange={setReviewDialogOpen}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
-          <DialogHeader>
+        <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col p-0">
+          <DialogHeader className="px-6 pt-6 pb-4 border-b shrink-0">
             <DialogTitle>Review Zman Request</DialogTitle>
             <DialogDescription>
               Review and edit the request details before approving or rejecting
             </DialogDescription>
           </DialogHeader>
 
-          <ScrollArea className="flex-1 pr-4">
+          <div className="flex-1 overflow-y-auto px-6 py-4">
             {loadingRequest ? (
               <div className="flex justify-center items-center py-12">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -536,9 +544,10 @@ export default function AdminZmanRequestsPage() {
                 onCancel={() => setReviewDialogOpen(false)}
               />
             ) : null}
-          </ScrollArea>
+          </div>
         </DialogContent>
       </Dialog>
+
     </div>
   );
 }

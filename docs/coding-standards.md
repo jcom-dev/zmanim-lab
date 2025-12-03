@@ -1386,7 +1386,7 @@ When deviating:
 
 ### Running Migrations in Coder Environment
 
-When developing in the Coder cloud IDE, the database runs in a local Docker container (not Supabase). Use the following methods to run migrations:
+When developing in the Coder cloud IDE, the database runs in a local Docker container. Use the following methods to run migrations:
 
 **Method 1: Use the migrate script (Recommended)**
 ```bash
@@ -1406,7 +1406,7 @@ source api/.env
 
 # Apply a specific migration
 PGPASSWORD=<password> psql -h postgres -U zmanim -d zmanim \
-  -f supabase/migrations/20240028_rename_fundamental_to_core.sql
+  -f db/migrations/20240028_rename_fundamental_to_core.sql
 ```
 
 **Method 3: Extract and run (when you need the credentials)**
@@ -1421,9 +1421,9 @@ echo $DATABASE_URL  # See the connection string
 
 ### Creating New Migrations
 
-1. Create a new SQL file in `supabase/migrations/` with timestamp prefix:
-   ```
-   supabase/migrations/20240029_your_migration_name.sql
+1. Create a new SQL file in `db/migrations/` with timestamp prefix:
+   ```bash
+   db/migrations/20240029_your_migration_name.sql
    ```
 
 2. Write idempotent SQL (use `IF NOT EXISTS`, `ON CONFLICT DO NOTHING`):
@@ -1465,7 +1465,7 @@ echo $DATABASE_URL  # See the connection string
 
 The migrate script detects the environment:
 - **Coder**: Uses local PostgreSQL via Docker network (`postgres:5432`)
-- **Production**: Uses Supabase CLI (`npx supabase migration up`)
+- **Production**: Uses migration tool
 
 Connection info is read from `api/.env`:
 ```

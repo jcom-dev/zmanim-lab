@@ -204,6 +204,8 @@ export async function createTestPublisher(
     const user = await clerkClient.users.createUser({
       emailAddress: [email],
       password: TEST_PASSWORD,
+      firstName: 'E2E',
+      lastName: 'Test Publisher',
       publicMetadata: {
         role: 'publisher',
         publisher_access_list: [publisherId],

@@ -194,11 +194,21 @@ RETURNING id, tag_key, name, display_name_hebrew, display_name_english, tag_type
 
 -- name: LinkTagToRequest :exec
 -- Update the tag request to link the newly created tag
+-- Must also clear requested_tag_name to satisfy tag_reference_check constraint
 UPDATE zman_request_tags
 SET
     tag_id = $2,
-    is_new_tag_request = false
+    is_new_tag_request = false,
+    requested_tag_name = NULL,
+    requested_tag_type = NULL
 WHERE id = $1;
+
+-- name: FindTagByName :one
+-- Find an existing tag by name (case-insensitive match)
+SELECT id, tag_key, name, display_name_hebrew, display_name_english, tag_type, created_at
+FROM zman_tags
+WHERE LOWER(name) = LOWER($1)
+LIMIT 1;
 
 -- name: RejectTagRequest :exec
 -- Reject a new tag request by deleting it from zman_request_tags

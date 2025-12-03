@@ -148,6 +148,13 @@ export function ZmanRegistryForm({
   const [processingTagId, setProcessingTagId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Key validation state (for create mode)
+  const [keyValidation, setKeyValidation] = useState<{
+    available: boolean | null;
+    reason: string | null;
+    isValidating: boolean;
+  }>({ available: null, reason: null, isValidating: false });
+
   // Track pending tag requests that haven't been resolved yet
   const [resolvedTagIds, setResolvedTagIds] = useState<Set<string>>(new Set());
 
@@ -173,6 +180,63 @@ export function ZmanRegistryForm({
   useEffect(() => {
     fetchTags();
   }, [fetchTags]);
+
+  // Validate zman key format
+  const isValidKeyFormat = (key: string): boolean => {
+    return /^[a-z][a-z0-9_]*$/.test(key);
+  };
+
+  // Debounced key validation (for create mode only)
+  const validateKey = useCallback(async (key: string) => {
+    const trimmedKey = key.trim().toLowerCase();
+    if (!trimmedKey) {
+      setKeyValidation({ available: null, reason: null, isValidating: false });
+      return;
+    }
+
+    if (trimmedKey.length < 2) {
+      setKeyValidation({ available: false, reason: 'Key must be at least 2 characters', isValidating: false });
+      return;
+    }
+
+    if (!isValidKeyFormat(trimmedKey)) {
+      setKeyValidation({
+        available: false,
+        reason: 'Key must start with a letter and contain only lowercase letters, numbers, and underscores',
+        isValidating: false,
+      });
+      return;
+    }
+
+    setKeyValidation({ available: null, reason: null, isValidating: true });
+    try {
+      const result = await api.get<{ available: boolean; reason?: string }>(
+        `/registry/zmanim/validate-key?key=${encodeURIComponent(trimmedKey)}`
+      );
+      setKeyValidation({
+        available: result.available,
+        reason: result.available ? null : (result.reason || 'Key is not available'),
+        isValidating: false,
+      });
+    } catch {
+      setKeyValidation({ available: null, reason: 'Could not validate key', isValidating: false });
+    }
+  }, [api]);
+
+  // Debounce key validation on zman_key change (create mode only)
+  useEffect(() => {
+    if (mode !== 'create') return;
+
+    const timer = setTimeout(() => {
+      if (formData.zman_key.trim()) {
+        validateKey(formData.zman_key);
+      } else {
+        setKeyValidation({ available: null, reason: null, isValidating: false });
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [formData.zman_key, mode, validateKey]);
 
   // Check if form data has been modified from original (for review mode)
   const hasChanges = useMemo(() => {
@@ -239,8 +303,54 @@ export function ZmanRegistryForm({
 
   const handleSubmit = async () => {
     setError(null);
+
+    // Basic validation
+    const errors: string[] = [];
+
+    if (!formData.zman_key.trim()) {
+      errors.push('Zman Key is required');
+    }
+    if (!formData.canonical_hebrew_name.trim()) {
+      errors.push('Hebrew Name is required');
+    }
+    if (!formData.canonical_english_name.trim()) {
+      errors.push('English Name is required');
+    }
+    if (!formData.default_formula_dsl.trim()) {
+      errors.push('Default Formula (DSL) is required');
+    }
+
+    // Key validation check (create mode only)
+    if (mode === 'create') {
+      if (keyValidation.isValidating) {
+        errors.push('Please wait for key validation to complete');
+      } else if (keyValidation.available === false) {
+        errors.push(keyValidation.reason || 'Zman key is not available');
+      }
+    }
+
+    if (errors.length > 0) {
+      setError(errors.join('. '));
+      return;
+    }
+
     setIsSubmitting(true);
     try {
+      // Validate DSL formula before proceeding
+      const dslValidation = await api.post<{
+        valid: boolean;
+        errors?: Array<{ message: string; line?: number; column?: number }>;
+      }>('/dsl/validate', {
+        body: JSON.stringify({ formula: formData.default_formula_dsl }),
+      });
+
+      if (!dslValidation.valid) {
+        const dslErrors = dslValidation.errors?.map(e => e.message).join('; ') || 'Invalid formula syntax';
+        setError(`Formula validation failed: ${dslErrors}`);
+        setIsSubmitting(false);
+        return;
+      }
+
       if (mode === 'review' && onApprove) {
         await onApprove(formData, reviewerNotes);
       } else if (onSave) {
@@ -256,6 +366,13 @@ export function ZmanRegistryForm({
   const handleReject = async () => {
     if (!onReject) return;
     setError(null);
+
+    // Require reviewer notes for rejection
+    if (!reviewerNotes.trim()) {
+      setError('Please provide a reason for rejecting this request');
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       await onReject(reviewerNotes);
@@ -284,14 +401,6 @@ export function ZmanRegistryForm({
 
   return (
     <div className="space-y-6">
-      {/* Error Alert */}
-      {error && (
-        <div className="flex items-center gap-2 p-3 bg-destructive/10 border border-destructive/30 rounded-lg text-destructive">
-          <AlertTriangle className="h-4 w-4 flex-shrink-0" />
-          <span className="text-sm">{error}</span>
-        </div>
-      )}
-
       {/* Source Info Banner (Review Mode) */}
       {mode === 'review' && sourceInfo && (
         <div className="p-4 bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800 rounded-lg">
@@ -394,23 +503,58 @@ export function ZmanRegistryForm({
         {/* Zman Key and Time Category */}
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">
-            <Label htmlFor="zman_key">Zman Key *</Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="zman_key">Zman Key *</Label>
+              {/* Key Validation Status (create mode only) */}
+              {mode === 'create' && formData.zman_key.trim() && (
+                <div className="flex items-center gap-1.5">
+                  {keyValidation.isValidating ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                      <span className="text-xs text-muted-foreground">Checking...</span>
+                    </>
+                  ) : keyValidation.available === true ? (
+                    <>
+                      <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
+                      <span className="text-xs text-green-600">Available</span>
+                    </>
+                  ) : keyValidation.available === false ? (
+                    <>
+                      <AlertTriangle className="h-3.5 w-3.5 text-destructive" />
+                      <span className="text-xs text-destructive">Unavailable</span>
+                    </>
+                  ) : null}
+                </div>
+              )}
+            </div>
             <Input
               id="zman_key"
               value={formData.zman_key}
-              onChange={(e) => setFormData({ ...formData, zman_key: e.target.value })}
+              onChange={(e) => setFormData({ ...formData, zman_key: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '_') })}
               placeholder="e.g., candle_lighting_18"
               disabled={mode === 'edit' || disabled}
-              className="font-mono"
+              className={`font-mono ${
+                mode === 'create' && formData.zman_key.trim() && keyValidation.available === false
+                  ? 'border-destructive focus-visible:ring-destructive'
+                  : mode === 'create' && formData.zman_key.trim() && keyValidation.available === true
+                  ? 'border-green-500 focus-visible:ring-green-500'
+                  : ''
+              }`}
             />
-            {formData.zman_key && (
+            {/* Key Error Message */}
+            {mode === 'create' && keyValidation.reason ? (
+              <p className="text-xs text-destructive flex items-start gap-1">
+                <AlertTriangle className="h-3 w-3 mt-0.5 flex-shrink-0" />
+                {keyValidation.reason}
+              </p>
+            ) : formData.zman_key ? (
               <p className="text-xs text-muted-foreground">
                 DSL Reference:{' '}
                 <code className="px-1 bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200 rounded">
                   @{formData.zman_key}
                 </code>
               </p>
-            )}
+            ) : null}
           </div>
           <div className="space-y-2">
             <Label htmlFor="time_category">Time Category *</Label>
@@ -698,6 +842,14 @@ export function ZmanRegistryForm({
         )}
       </div>
 
+      {/* Error Alert (shown near buttons for visibility) */}
+      {error && (
+        <div className="flex items-center gap-2 p-3 bg-destructive/10 border border-destructive/30 rounded-lg text-destructive">
+          <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+          <span className="text-sm">{error}</span>
+        </div>
+      )}
+
       {/* Footer Buttons */}
       <div className="flex justify-end gap-2 pt-4 border-t">
         {onCancel && (
@@ -739,9 +891,23 @@ export function ZmanRegistryForm({
             </Button>
           </>
         ) : (
-          <Button onClick={handleSubmit} disabled={isSubmitting || disabled}>
-            {isSubmitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-            {mode === 'create' ? 'Create' : 'Update'}
+          <Button
+            onClick={handleSubmit}
+            disabled={
+              isSubmitting ||
+              disabled ||
+              (mode === 'create' && (keyValidation.isValidating || keyValidation.available === false))
+            }
+          >
+            {isSubmitting ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : keyValidation.isValidating ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Checking key...
+              </>
+            ) : null}
+            {!isSubmitting && !keyValidation.isValidating && (mode === 'create' ? 'Create' : 'Update')}
           </Button>
         )}
       </div>

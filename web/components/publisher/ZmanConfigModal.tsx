@@ -4,6 +4,7 @@ import { useApi } from '@/lib/api-client';
 import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { AlertTriangle } from 'lucide-react';
 
 interface ZmanConfig {
   method: string;
@@ -66,6 +67,7 @@ export function ZmanConfigModal({
   const [params, setParams] = useState<Record<string, unknown>>(currentConfig?.params || {});
   const [error, setError] = useState<string | null>(null);
   const [methodFilter, setMethodFilter] = useState('');
+  const [paramErrors, setParamErrors] = useState<Record<string, string>>({});
 
   const loadMethods = useCallback(async () => {
     try {
@@ -92,10 +94,48 @@ export function ZmanConfigModal({
     // Reset params when method changes
     setParams({});
     setError(null);
+    setParamErrors({});
+  };
+
+  // Validate a single parameter
+  const validateParam = (param: Method['parameters'][0], value: unknown): string | null => {
+    if (param.required && (value === undefined || value === null || value === '')) {
+      return `${param.name} is required`;
+    }
+
+    if (param.type === 'number' && value !== undefined && value !== '') {
+      const numValue = typeof value === 'number' ? value : parseFloat(value as string);
+      if (isNaN(numValue)) {
+        return 'Must be a valid number';
+      }
+      if (param.min !== undefined && numValue < param.min) {
+        return `Must be at least ${param.min}`;
+      }
+      if (param.max !== undefined && numValue > param.max) {
+        return `Must be at most ${param.max}`;
+      }
+    }
+
+    return null;
   };
 
   const handleParamChange = (name: string, value: unknown) => {
     setParams(prev => ({ ...prev, [name]: value }));
+    // Clear error for this param when user changes it
+    if (paramErrors[name]) {
+      setParamErrors(prev => {
+        const next = { ...prev };
+        delete next[name];
+        return next;
+      });
+    }
+  };
+
+  const handleParamBlur = (param: Method['parameters'][0], value: unknown) => {
+    const error = validateParam(param, value);
+    if (error) {
+      setParamErrors(prev => ({ ...prev, [param.name]: error }));
+    }
   };
 
   const handleSave = () => {
@@ -105,14 +145,23 @@ export function ZmanConfigModal({
       return;
     }
 
-    // Validate required parameters
+    // Validate all parameters
+    const errors: Record<string, string> = {};
     for (const param of selectedMethodObj.parameters) {
-      if (param.required && !params[param.name]) {
-        setError(`${param.name} is required`);
-        return;
+      const error = validateParam(param, params[param.name]);
+      if (error) {
+        errors[param.name] = error;
       }
     }
 
+    if (Object.keys(errors).length > 0) {
+      setParamErrors(errors);
+      setError('Please fix the errors above');
+      return;
+    }
+
+    setError(null);
+    setParamErrors({});
     onSave({
       method: selectedMethod,
       params,
@@ -184,9 +233,12 @@ export function ZmanConfigModal({
                   </label>
                   {param.type === 'select' ? (
                     <select
-                      className="w-full p-2 rounded bg-secondary text-foreground border border-border"
+                      className={`w-full p-2 rounded bg-secondary text-foreground border ${
+                        paramErrors[param.name] ? 'border-red-500' : 'border-border'
+                      }`}
                       value={(params[param.name] as string) || ''}
                       onChange={(e) => handleParamChange(param.name, e.target.value)}
+                      onBlur={() => handleParamBlur(param, params[param.name])}
                       data-testid={`param-${param.name}`}
                     >
                       <option value="">Select...</option>
@@ -204,34 +256,55 @@ export function ZmanConfigModal({
                           : e.target.value;
                         handleParamChange(param.name, value);
                       }}
+                      onBlur={(e) => {
+                        const value = param.type === 'number'
+                          ? parseFloat(e.target.value)
+                          : e.target.value;
+                        handleParamBlur(param, value);
+                      }}
                       min={param.min}
                       max={param.max}
                       placeholder={param.description}
+                      className={paramErrors[param.name] ? 'border-red-500 focus-visible:ring-red-500' : ''}
                       data-testid={`param-${param.name}`}
                     />
                   )}
-                  <p className="text-xs text-muted-foreground mt-1">{param.description}</p>
+                  {paramErrors[param.name] ? (
+                    <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
+                      <AlertTriangle className="h-3 w-3" />
+                      {paramErrors[param.name]}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground mt-1">{param.description}</p>
+                  )}
                 </div>
               ))}
             </div>
           </div>
         )}
 
-        {/* Error */}
-        {error && (
-          <div className="mb-4 p-3 bg-red-900/50 border border-red-700 rounded text-red-200 text-sm">
-            {error}
-          </div>
-        )}
+        {/* Actions and Error */}
+        <div className="space-y-3">
+          {/* Error */}
+          {error && (
+            <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800 rounded-lg text-red-800 dark:text-red-200">
+              <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+              <span className="text-sm">{error}</span>
+            </div>
+          )}
 
-        {/* Actions */}
-        <div className="flex justify-end gap-3">
-          <Button variant="outline" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button onClick={handleSave}>
-            Save
-          </Button>
+          {/* Actions */}
+          <div className="flex justify-end gap-3">
+            <Button variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSave}
+              disabled={Object.keys(paramErrors).length > 0}
+            >
+              Save
+            </Button>
+          </div>
         </div>
       </div>
     </div>

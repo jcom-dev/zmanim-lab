@@ -390,6 +390,39 @@ func (q *Queries) DeleteZmanRequestTags(ctx context.Context, requestID string) e
 	return err
 }
 
+const findTagByName = `-- name: FindTagByName :one
+SELECT id, tag_key, name, display_name_hebrew, display_name_english, tag_type, created_at
+FROM zman_tags
+WHERE LOWER(name) = LOWER($1)
+LIMIT 1
+`
+
+type FindTagByNameRow struct {
+	ID                 string    `json:"id"`
+	TagKey             string    `json:"tag_key"`
+	Name               string    `json:"name"`
+	DisplayNameHebrew  string    `json:"display_name_hebrew"`
+	DisplayNameEnglish string    `json:"display_name_english"`
+	TagType            string    `json:"tag_type"`
+	CreatedAt          time.Time `json:"created_at"`
+}
+
+// Find an existing tag by name (case-insensitive match)
+func (q *Queries) FindTagByName(ctx context.Context, lower string) (FindTagByNameRow, error) {
+	row := q.db.QueryRow(ctx, findTagByName, lower)
+	var i FindTagByNameRow
+	err := row.Scan(
+		&i.ID,
+		&i.TagKey,
+		&i.Name,
+		&i.DisplayNameHebrew,
+		&i.DisplayNameEnglish,
+		&i.TagType,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getAllZmanRequests = `-- name: GetAllZmanRequests :many
 SELECT
     zrr.id,
@@ -714,7 +747,9 @@ const linkTagToRequest = `-- name: LinkTagToRequest :exec
 UPDATE zman_request_tags
 SET
     tag_id = $2,
-    is_new_tag_request = false
+    is_new_tag_request = false,
+    requested_tag_name = NULL,
+    requested_tag_type = NULL
 WHERE id = $1
 `
 
@@ -724,6 +759,7 @@ type LinkTagToRequestParams struct {
 }
 
 // Update the tag request to link the newly created tag
+// Must also clear requested_tag_name to satisfy tag_reference_check constraint
 func (q *Queries) LinkTagToRequest(ctx context.Context, arg LinkTagToRequestParams) error {
 	_, err := q.db.Exec(ctx, linkTagToRequest, arg.ID, arg.TagID)
 	return err

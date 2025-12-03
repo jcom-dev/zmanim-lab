@@ -77,6 +77,8 @@ type Querier interface {
 	DeleteZmanRequestTags(ctx context.Context, requestID string) error
 	DeprecateAlgorithmVersion(ctx context.Context, arg DeprecateAlgorithmVersionParams) (int64, error)
 	ExpireInvitation(ctx context.Context, id string) error
+	// Find an existing tag by name (case-insensitive match)
+	FindTagByName(ctx context.Context, lower string) (FindTagByNameRow, error)
 	GetAlgorithmByID(ctx context.Context, arg GetAlgorithmByIDParams) (GetAlgorithmByIDRow, error)
 	// Algorithm versions --
 	GetAlgorithmVersions(ctx context.Context, publisherID string) ([]GetAlgorithmVersionsRow, error)
@@ -203,6 +205,7 @@ type Querier interface {
 	InsertCountry(ctx context.Context, arg InsertCountryParams) (int16, error)
 	InsertRegion(ctx context.Context, arg InsertRegionParams) (int32, error)
 	// Update the tag request to link the newly created tag
+	// Must also clear requested_tag_name to satisfy tag_reference_check constraint
 	LinkTagToRequest(ctx context.Context, arg LinkTagToRequestParams) error
 	ListCitiesByContinent(ctx context.Context, arg ListCitiesByContinentParams) ([]ListCitiesByContinentRow, error)
 	ListCitiesByCountry(ctx context.Context, arg ListCitiesByCountryParams) ([]ListCitiesByCountryRow, error)

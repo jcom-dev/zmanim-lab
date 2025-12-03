@@ -57,6 +57,7 @@ next-env.d.ts
 .vercel
 
 # Go (api/)
+api/bin/
 api-server
 api/api
 api/main

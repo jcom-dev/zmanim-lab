@@ -392,9 +392,9 @@ export default function ZmanimPage() {
       <div className="container mx-auto px-4 py-6 md:py-8">
         <div className="max-w-3xl mx-auto space-y-4">
           {/* Header Card */}
-          <div className="bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xl rounded-2xl shadow-lg border border-slate-200/50 dark:border-zinc-800/50 overflow-hidden transition-all hover:shadow-xl">
+          <div className="bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xl rounded-2xl shadow-lg border border-slate-200/50 dark:border-zinc-800/50 transition-all hover:shadow-xl">
             {/* Publisher Info Bar */}
-            <div className="bg-gradient-to-r from-primary via-primary to-blue-600 dark:from-primary dark:via-primary dark:to-blue-700 text-primary-foreground px-5 py-4">
+            <div className="bg-gradient-to-r from-primary via-primary to-blue-600 dark:from-primary dark:via-primary dark:to-blue-700 text-primary-foreground px-5 py-4 rounded-t-2xl">
               <div className="flex items-center justify-between gap-3">
                 {/* Back button + Publisher */}
                 <div className="flex items-center gap-3 min-w-0">
@@ -447,7 +447,7 @@ export default function ZmanimPage() {
             </div>
 
             {/* Date Navigation */}
-            <div className="px-5 py-4 flex items-center justify-between gap-4 border-b border-slate-200/50 dark:border-zinc-800/50">
+            <div className={`px-5 py-4 flex items-center justify-between gap-4 ${isDefault ? 'border-b border-slate-200/50 dark:border-zinc-800/50' : 'rounded-b-2xl'}`}>
               <button
                 onClick={handlePrevDay}
                 className="p-2.5 hover:bg-slate-100 dark:hover:bg-zinc-800 rounded-xl transition-all hover:scale-110 active:scale-95"
@@ -476,7 +476,7 @@ export default function ZmanimPage() {
 
             {/* Default Warning */}
             {isDefault && (
-              <div className="px-5 py-3 bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200/50 dark:border-amber-800/50">
+              <div className="px-5 py-3 bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200/50 dark:border-amber-800/50 rounded-b-2xl">
                 <p className="text-amber-800 dark:text-amber-200 text-xs md:text-sm text-center">
                   These are default calculations using standard algorithms. They are not endorsed by a local halachic authority.
                 </p>

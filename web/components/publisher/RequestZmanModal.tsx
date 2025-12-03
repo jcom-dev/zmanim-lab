@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -23,7 +23,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { usePublisherMutation, usePublisherQuery } from '@/lib/hooks';
-import { Loader2, Plus, FileText, X, Tag } from 'lucide-react';
+import { useApi } from '@/lib/api-client';
+import { Loader2, Plus, FileText, X, Tag, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
@@ -132,6 +133,22 @@ export function RequestZmanModal({ trigger, onSuccess, onOpen, open: controlledO
   const [customTagType, setCustomTagType] = useState<string>('');
   const [requestedNewTags, setRequestedNewTags] = useState<{ name: string; type: string }[]>([]);
 
+  // DSL validation state
+  const [dslValid, setDslValid] = useState<boolean | null>(null);
+  const [dslError, setDslError] = useState<string | null>(null);
+  const [isValidatingDsl, setIsValidatingDsl] = useState(false);
+
+  // Key validation state
+  const [keyExists, setKeyExists] = useState<boolean | null>(null);
+  const [isValidatingKey, setIsValidatingKey] = useState(false);
+  const [keyError, setKeyError] = useState<string | null>(null);
+
+  // Form error state
+  const [formError, setFormError] = useState<string | null>(null);
+
+  // API client for DSL validation
+  const api = useApi();
+
   // Fetch available tags from API
   const { data: tagsData, isLoading: tagsLoading } = usePublisherQuery<TagsResponse>(
     'zman-tags',
@@ -191,6 +208,114 @@ export function RequestZmanModal({ trigger, onSuccess, onOpen, open: controlledO
     }
   );
 
+  // Validate zman key format
+  const isValidKeyFormat = (key: string): boolean => {
+    // Key must be lowercase, alphanumeric with underscores only
+    return /^[a-z][a-z0-9_]*$/.test(key);
+  };
+
+  // Debounced key uniqueness validation - checks if key already exists in master registry
+  const validateKeyUniqueness = useCallback(async (key: string) => {
+    const trimmedKey = key.trim().toLowerCase();
+    if (!trimmedKey) {
+      setKeyExists(null);
+      setKeyError(null);
+      setIsValidatingKey(false);
+      return;
+    }
+
+    // Validate format first (basic check before API call)
+    if (!isValidKeyFormat(trimmedKey)) {
+      setKeyError('Key must start with a letter and contain only lowercase letters, numbers, and underscores');
+      setKeyExists(null);
+      setIsValidatingKey(false);
+      return;
+    }
+
+    setIsValidatingKey(true);
+    setKeyError(null);
+    try {
+      // Use dedicated validation endpoint
+      const result = await api.public.get<{ available: boolean; reason?: string }>(
+        `/registry/zmanim/validate-key?key=${encodeURIComponent(trimmedKey)}`
+      );
+
+      if (result.available) {
+        setKeyExists(false);
+        setKeyError(null);
+      } else {
+        setKeyExists(true);
+        setKeyError(result.reason || 'This zman key is not available');
+      }
+    } catch {
+      // Couldn't validate
+      setKeyError('Could not validate key availability');
+      setKeyExists(null);
+    } finally {
+      setIsValidatingKey(false);
+    }
+  }, [api]);
+
+  // Debounced DSL validation - validates formula on every change with 300ms debounce
+  const validateDsl = useCallback(async (formula: string) => {
+    if (!formula.trim()) {
+      setDslValid(null);
+      setDslError(null);
+      setIsValidatingDsl(false);
+      return;
+    }
+
+    setIsValidatingDsl(true);
+    try {
+      const result = await api.post<{
+        valid: boolean;
+        errors?: Array<{ message: string; line?: number; column?: number }>;
+      }>('/dsl/validate', {
+        body: JSON.stringify({ formula }),
+      });
+
+      setDslValid(result.valid);
+      if (!result.valid && result.errors && result.errors.length > 0) {
+        setDslError(result.errors.map(e => e.message).join('; '));
+      } else {
+        setDslError(null);
+      }
+    } catch {
+      setDslError('Failed to validate formula');
+      setDslValid(false);
+    } finally {
+      setIsValidatingDsl(false);
+    }
+  }, [api]);
+
+  // Debounce key validation on requestedKey change
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (requestedKey.trim()) {
+        validateKeyUniqueness(requestedKey);
+      } else {
+        setKeyExists(null);
+        setKeyError(null);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [requestedKey, validateKeyUniqueness]);
+
+  // Debounce DSL validation on formulaDsl change
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (formulaDsl.trim()) {
+        validateDsl(formulaDsl);
+      } else {
+        setDslValid(null);
+        setDslError(null);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [formulaDsl, validateDsl]);
+
   const handleReset = () => {
     setRequestedKey('');
     setHebrewName('');
@@ -206,11 +331,57 @@ export function RequestZmanModal({ trigger, onSuccess, onOpen, open: controlledO
     setCustomTagInput('');
     setCustomTagType('');
     setRequestedNewTags([]);
+    // Reset DSL validation state
+    setDslValid(null);
+    setDslError(null);
+    // Reset key validation state
+    setKeyExists(null);
+    setKeyError(null);
+    setFormError(null);
   };
 
   const handleSubmit = async () => {
-    if (!requestedKey.trim() || !hebrewName.trim() || !englishName.trim() ||
-        !timeCategory || !description.trim()) {
+    setFormError(null);
+
+    // Validate required fields
+    const errors: string[] = [];
+    if (!requestedKey.trim()) errors.push('Zman Key is required');
+    if (!hebrewName.trim()) errors.push('Hebrew Name is required');
+    if (!englishName.trim()) errors.push('English Name is required');
+    if (!timeCategory) errors.push('Time Category is required');
+    if (!description.trim()) errors.push('Description is required');
+
+    if (errors.length > 0) {
+      setFormError(errors.join('. '));
+      return;
+    }
+
+    // Validate key format and uniqueness
+    if (keyError) {
+      setFormError(keyError);
+      return;
+    }
+
+    if (keyExists === true) {
+      setFormError('This zman key already exists in the registry. Please choose a different key.');
+      return;
+    }
+
+    // If key validation is still running, wait
+    if (isValidatingKey) {
+      setFormError('Please wait for key validation to complete.');
+      return;
+    }
+
+    // Validate DSL if provided
+    if (formulaDsl.trim() && dslValid === false) {
+      setFormError('Formula is invalid. Please fix the formula before submitting.');
+      return;
+    }
+
+    // If DSL is provided but validation hasn't completed yet, wait for it
+    if (formulaDsl.trim() && isValidatingDsl) {
+      setFormError('Please wait for formula validation to complete.');
       return;
     }
 
@@ -395,19 +566,56 @@ export function RequestZmanModal({ trigger, onSuccess, onOpen, open: controlledO
                 <h3 className="font-semibold text-sm">Basic Information</h3>
 
                 <div>
-                  <Label htmlFor="requested-key">
-                    Zman Key <span className="text-destructive">*</span>
-                  </Label>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="requested-key">
+                      Zman Key <span className="text-destructive">*</span>
+                    </Label>
+                    {/* Key Validation Status */}
+                    {requestedKey.trim() && (
+                      <div className="flex items-center gap-1.5">
+                        {isValidatingKey ? (
+                          <>
+                            <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                            <span className="text-xs text-muted-foreground">Checking...</span>
+                          </>
+                        ) : keyExists === false && !keyError ? (
+                          <>
+                            <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
+                            <span className="text-xs text-green-600">Available</span>
+                          </>
+                        ) : keyError || keyExists === true ? (
+                          <>
+                            <AlertTriangle className="h-3.5 w-3.5 text-destructive" />
+                            <span className="text-xs text-destructive">Unavailable</span>
+                          </>
+                        ) : null}
+                      </div>
+                    )}
+                  </div>
                   <Input
                     id="requested-key"
                     value={requestedKey}
-                    onChange={(e) => setRequestedKey(e.target.value)}
+                    onChange={(e) => setRequestedKey(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '_'))}
                     placeholder="e.g., alos_my_minhag"
-                    className="font-mono"
+                    className={`font-mono ${
+                      requestedKey.trim() && (keyError || keyExists === true)
+                        ? 'border-destructive focus-visible:ring-destructive'
+                        : requestedKey.trim() && keyExists === false && !keyError
+                        ? 'border-green-500 focus-visible:ring-green-500'
+                        : ''
+                    }`}
                   />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Unique identifier (lowercase, underscores only)
-                  </p>
+                  {/* Key Error Message */}
+                  {keyError ? (
+                    <p className="text-xs text-destructive mt-1 flex items-start gap-1">
+                      <AlertTriangle className="h-3 w-3 mt-0.5 flex-shrink-0" />
+                      {keyError}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Unique identifier (lowercase, underscores only)
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -421,6 +629,7 @@ export function RequestZmanModal({ trigger, onSuccess, onOpen, open: controlledO
                     className="font-hebrew"
                     placeholder="שם בעברית"
                     dir="rtl"
+                    autoComplete="off"
                   />
                 </div>
 
@@ -591,18 +800,56 @@ export function RequestZmanModal({ trigger, onSuccess, onOpen, open: controlledO
                 </div>
 
                 <div>
-                  <Label htmlFor="formula-dsl">Suggested Formula (optional)</Label>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="formula-dsl">Suggested Formula (optional)</Label>
+                    {/* DSL Validation Status */}
+                    {formulaDsl.trim() && (
+                      <div className="flex items-center gap-1.5">
+                        {isValidatingDsl ? (
+                          <>
+                            <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                            <span className="text-xs text-muted-foreground">Validating...</span>
+                          </>
+                        ) : dslValid === true ? (
+                          <>
+                            <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
+                            <span className="text-xs text-green-600">Valid formula</span>
+                          </>
+                        ) : dslValid === false ? (
+                          <>
+                            <AlertTriangle className="h-3.5 w-3.5 text-destructive" />
+                            <span className="text-xs text-destructive">Invalid</span>
+                          </>
+                        ) : null}
+                      </div>
+                    )}
+                  </div>
                   <Textarea
                     id="formula-dsl"
                     value={formulaDsl}
                     onChange={(e) => setFormulaDsl(e.target.value)}
-                    placeholder='e.g., {"type": "solar", "event": "sunrise", "offset_minutes": -72}'
-                    className="font-mono text-sm"
+                    placeholder='e.g., sunrise - 72m'
+                    className={`font-mono text-sm ${
+                      formulaDsl.trim() && dslValid === false
+                        ? 'border-destructive focus-visible:ring-destructive'
+                        : formulaDsl.trim() && dslValid === true
+                        ? 'border-green-500 focus-visible:ring-green-500'
+                        : ''
+                    }`}
                     rows={2}
                   />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Optional DSL formula suggestion for this zman
-                  </p>
+                  {/* DSL Error Message */}
+                  {dslError && (
+                    <p className="text-xs text-destructive mt-1 flex items-start gap-1">
+                      <AlertTriangle className="h-3 w-3 mt-0.5 flex-shrink-0" />
+                      {dslError}
+                    </p>
+                  )}
+                  {!dslError && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Optional DSL formula suggestion for this zman
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -651,37 +898,62 @@ export function RequestZmanModal({ trigger, onSuccess, onOpen, open: controlledO
         )}
 
         {!showHistory && (
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                handleReset();
-                setOpen(false);
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleSubmit}
-              disabled={
-                !requestedKey.trim() ||
-                !hebrewName.trim() ||
-                !englishName.trim() ||
-                !timeCategory ||
-                !description.trim() ||
-                submitRequest.isPending
-              }
-            >
-              {submitRequest.isPending ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Submitting...
-                </>
-              ) : (
-                'Submit Request'
-              )}
-            </Button>
-          </DialogFooter>
+          <div className="space-y-3">
+            {/* Form Error Display */}
+            {formError && (
+              <div className="flex items-center gap-2 p-3 bg-destructive/10 border border-destructive/30 rounded-lg text-destructive">
+                <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+                <span className="text-sm">{formError}</span>
+              </div>
+            )}
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  handleReset();
+                  setOpen(false);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSubmit}
+                disabled={
+                  !requestedKey.trim() ||
+                  !hebrewName.trim() ||
+                  !englishName.trim() ||
+                  !timeCategory ||
+                  !description.trim() ||
+                  keyExists === true ||
+                  !!keyError ||
+                  isValidatingKey ||
+                  (formulaDsl.trim() && dslValid === false) ||
+                  isValidatingDsl ||
+                  submitRequest.isPending
+                }
+              >
+                {submitRequest.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Submitting...
+                  </>
+                ) : isValidatingKey ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Checking key...
+                  </>
+                ) : isValidatingDsl ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Validating formula...
+                  </>
+                ) : (
+                  'Submit Request'
+                )}
+              </Button>
+            </DialogFooter>
+          </div>
         )}
       </DialogContent>
     </Dialog>

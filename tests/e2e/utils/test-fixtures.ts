@@ -38,12 +38,28 @@ const TEST_EMAIL_DOMAIN = 'test-zmanim.example.com';
 const testEntityCache = new Map<string, any>();
 
 /**
+ * Map legacy status values to valid database values
+ * Database constraint: status IN ('pending', 'active', 'suspended')
+ */
+function mapStatus(status: string): string {
+  const statusMap: Record<string, string> = {
+    verified: 'active',
+    approved: 'active',
+    pending: 'pending',
+    suspended: 'suspended',
+    active: 'active',
+  };
+  return statusMap[status] || 'pending';
+}
+
+/**
  * Create a test publisher entity in the database
+ * Note: organization field was removed from schema
  */
 export async function createTestPublisherEntity(
   overrides: Partial<{
     name: string;
-    organization: string;
+    organization: string;  // Deprecated - kept for backwards compatibility but ignored
     email: string;
     status: string;
     website: string;
@@ -52,7 +68,6 @@ export async function createTestPublisherEntity(
 ): Promise<{
   id: string;
   name: string;
-  organization: string;
   email: string;
   status: string;
 }> {
@@ -69,10 +84,9 @@ export async function createTestPublisherEntity(
   const random = Math.random().toString(36).substring(2, 8);
   const testPublisher = {
     name: overrides.name || `${TEST_PREFIX}Publisher ${timestamp}`,
-    organization: overrides.organization || `${TEST_PREFIX}Organization`,
     email: overrides.email || `test-publisher-${timestamp}-${random}@${TEST_EMAIL_DOMAIN}`,
     slug: `test-publisher-${timestamp}-${random}`,
-    status: overrides.status || 'verified',
+    status: mapStatus(overrides.status || 'active'),
     website: overrides.website || 'https://test.example.com',
     bio: overrides.bio || 'Test publisher for E2E testing',
   };
@@ -80,17 +94,17 @@ export async function createTestPublisherEntity(
   const client = await getPool().connect();
   try {
     const result = await client.query(
-      `INSERT INTO publishers (name, organization, email, slug, status, website, bio)
+      `INSERT INTO publishers (name, email, slug, status, website, bio, is_verified)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
-       RETURNING id, name, organization, email, status`,
+       RETURNING id, name, email, status`,
       [
         testPublisher.name,
-        testPublisher.organization,
         testPublisher.email,
         testPublisher.slug,
         testPublisher.status,
         testPublisher.website,
         testPublisher.bio,
+        testPublisher.status === 'active',  // is_verified = true for active publishers
       ]
     );
 
@@ -175,18 +189,17 @@ export async function createTestAlgorithm(
 
   const client = await getPool().connect();
   try {
+    // Schema: id, publisher_id, name, description, configuration, status, is_public, forked_from, attribution_text, fork_count
     const result = await client.query(
-      `INSERT INTO algorithms (publisher_id, name, status, config, version, formula_definition, calculation_type)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
-       RETURNING id, publisher_id, name, status, config`,
+      `INSERT INTO algorithms (publisher_id, name, description, configuration, status)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, publisher_id, name, status, configuration as config`,
       [
         testAlgorithm.publisher_id,
         testAlgorithm.name,
-        testAlgorithm.status,
+        'Test algorithm for E2E testing',
         JSON.stringify(testAlgorithm.config),
-        1, // version
-        JSON.stringify(testAlgorithm.config), // formula_definition
-        'proportional', // calculation_type (valid: solar_depression, fixed_minutes, proportional, custom)
+        testAlgorithm.status,
       ]
     );
 
@@ -241,9 +254,9 @@ export async function createTestCoverage(
   const client = await getPool().connect();
   try {
     const result = await client.query(
-      `INSERT INTO publisher_coverage (publisher_id, city_id, level, priority, is_active)
+      `INSERT INTO publisher_coverage (publisher_id, city_id, coverage_level, priority, is_active)
        VALUES ($1, $2, $3, $4, $5)
-       RETURNING id, publisher_id, city_id, level, priority, is_active`,
+       RETURNING id, publisher_id, city_id, coverage_level as level, priority, is_active`,
       [
         testCoverage.publisher_id,
         testCoverage.city_id,
@@ -280,14 +293,22 @@ export async function getTestCity(
   const client = await getPool().connect();
   try {
     let result;
+    // Cities now use country_id FK to geo_countries table
     if (name) {
       result = await client.query(
-        `SELECT id, name, country FROM cities WHERE name ILIKE $1 LIMIT 1`,
+        `SELECT c.id, c.name, gc.name as country
+         FROM cities c
+         JOIN geo_countries gc ON c.country_id = gc.id
+         WHERE c.name ILIKE $1
+         LIMIT 1`,
         [`%${name}%`]
       );
     } else {
       result = await client.query(
-        `SELECT id, name, country FROM cities LIMIT 1`
+        `SELECT c.id, c.name, gc.name as country
+         FROM cities c
+         JOIN geo_countries gc ON c.country_id = gc.id
+         LIMIT 1`
       );
     }
 
@@ -316,6 +337,13 @@ export async function linkClerkUserToPublisher(
 
   const client = await getPool().connect();
   try {
+    // First, clear this clerk_user_id from any other publishers (to avoid unique constraint)
+    await client.query(
+      `UPDATE publishers SET clerk_user_id = NULL WHERE clerk_user_id = $1 AND id != $2`,
+      [clerkUserId, publisherId]
+    );
+
+    // Then assign to this publisher
     await client.query(
       `UPDATE publishers SET clerk_user_id = $1 WHERE id = $2`,
       [clerkUserId, publisherId]

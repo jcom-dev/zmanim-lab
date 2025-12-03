@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { LogoUpload } from '@/components/publisher/LogoUpload';
 import { useApi } from '@/lib/api-client';
+import { AlertTriangle } from 'lucide-react';
 
 interface PublisherProfile {
   id: string;
@@ -16,8 +17,21 @@ interface PublisherProfile {
   website?: string;
   bio?: string;
   logo_url?: string;
+  logo_data?: string;
   status: string;
 }
+
+interface FieldErrors {
+  name?: string;
+  email?: string;
+  website?: string;
+}
+
+// Email validation regex
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// URL validation regex (optional - allows empty)
+const URL_REGEX = /^(https?:\/\/)?([\da-z.-]+)\.([a-z.]{2,6})([/\w .-]*)*\/?$/i;
 
 export default function PublisherProfilePage() {
   const router = useRouter();
@@ -35,6 +49,7 @@ export default function PublisherProfilePage() {
   const [email, setEmail] = useState('');
   const [website, setWebsite] = useState('');
   const [bio, setBio] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
 
   const loadProfile = useCallback(async () => {
     if (!selectedPublisher) return;
@@ -76,18 +91,59 @@ export default function PublisherProfilePage() {
     return () => clearTimeout(timer);
   }, [contextLoading, selectedPublisher]);
 
+  // Validate a single field
+  const validateField = (field: keyof FieldErrors, value: string): string | undefined => {
+    switch (field) {
+      case 'name':
+        if (!value.trim()) return 'Name is required';
+        if (value.trim().length < 2) return 'Name must be at least 2 characters';
+        return undefined;
+      case 'email':
+        if (!value.trim()) return 'Email is required';
+        if (!EMAIL_REGEX.test(value)) return 'Please enter a valid email address';
+        return undefined;
+      case 'website':
+        if (value.trim() && !URL_REGEX.test(value)) return 'Please enter a valid URL';
+        return undefined;
+      default:
+        return undefined;
+    }
+  };
+
+  // Handle field change with validation
+  const handleFieldChange = (field: keyof FieldErrors, value: string, setter: (v: string) => void) => {
+    setter(value);
+    // Clear error when user starts typing
+    if (fieldErrors[field]) {
+      setFieldErrors(prev => ({ ...prev, [field]: undefined }));
+    }
+  };
+
+  // Handle field blur for validation
+  const handleFieldBlur = (field: keyof FieldErrors, value: string) => {
+    const error = validateField(field, value);
+    if (error) {
+      setFieldErrors(prev => ({ ...prev, [field]: error }));
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSuccess(false);
     setError(null);
 
-    // Validate required fields
-    if (!name.trim()) {
-      setError('Name is required');
-      return;
-    }
-    if (!email.trim()) {
-      setError('Email is required');
+    // Validate all fields
+    const errors: FieldErrors = {
+      name: validateField('name', name),
+      email: validateField('email', email),
+      website: validateField('website', website),
+    };
+
+    // Check if there are any errors
+    const hasErrors = Object.values(errors).some(e => e !== undefined);
+    if (hasErrors) {
+      setFieldErrors(errors);
+      setError('Please fix the errors below');
       return;
     }
 
@@ -98,6 +154,7 @@ export default function PublisherProfilePage() {
 
     try {
       setSaving(true);
+      setFieldErrors({});
 
       const updatedProfile = await api.put<PublisherProfile>('/publisher/profile', {
         body: JSON.stringify({
@@ -193,13 +250,22 @@ export default function PublisherProfilePage() {
                   id="name"
                   type="text"
                   value={name}
-                  onChange={(e) => setName(e.target.value)}
+                  onChange={(e) => handleFieldChange('name', e.target.value, setName)}
+                  onBlur={(e) => handleFieldBlur('name', e.target.value)}
                   placeholder="Congregation Beth Israel"
+                  className={fieldErrors.name ? 'border-red-500 focus-visible:ring-red-500' : ''}
                   required
                 />
-                <p className="mt-1 text-sm text-muted-foreground">
-                  This will be the name displayed to users
-                </p>
+                {fieldErrors.name ? (
+                  <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                    <AlertTriangle className="h-3 w-3" />
+                    {fieldErrors.name}
+                  </p>
+                ) : (
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    This will be the name displayed to users
+                  </p>
+                )}
               </div>
 
               {/* Email */}
@@ -211,10 +277,18 @@ export default function PublisherProfilePage() {
                   id="email"
                   type="email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => handleFieldChange('email', e.target.value, setEmail)}
+                  onBlur={(e) => handleFieldBlur('email', e.target.value)}
                   placeholder="contact@example.com"
+                  className={fieldErrors.email ? 'border-red-500 focus-visible:ring-red-500' : ''}
                   required
                 />
+                {fieldErrors.email && (
+                  <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                    <AlertTriangle className="h-3 w-3" />
+                    {fieldErrors.email}
+                  </p>
+                )}
               </div>
 
               {/* Website */}
@@ -226,9 +300,17 @@ export default function PublisherProfilePage() {
                   id="website"
                   type="url"
                   value={website}
-                  onChange={(e) => setWebsite(e.target.value)}
+                  onChange={(e) => handleFieldChange('website', e.target.value, setWebsite)}
+                  onBlur={(e) => handleFieldBlur('website', e.target.value)}
                   placeholder="https://example.com"
+                  className={fieldErrors.website ? 'border-red-500 focus-visible:ring-red-500' : ''}
                 />
+                {fieldErrors.website && (
+                  <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                    <AlertTriangle className="h-3 w-3" />
+                    {fieldErrors.website}
+                  </p>
+                )}
               </div>
 
               {/* Bio */}
@@ -252,10 +334,10 @@ export default function PublisherProfilePage() {
                   Logo
                 </label>
                 <LogoUpload
-                  currentLogoUrl={profile?.logo_url}
+                  currentLogoUrl={profile?.logo_data || profile?.logo_url}
                   publisherName={name}
-                  onUploadComplete={(logoUrl) => {
-                    setProfile(prev => prev ? { ...prev, logo_url: logoUrl } : null);
+                  onUploadComplete={(logoData) => {
+                    setProfile(prev => prev ? { ...prev, logo_data: logoData } : null);
                     setSuccess(true);
                     setTimeout(() => setSuccess(false), 3000);
                   }}
@@ -265,32 +347,39 @@ export default function PublisherProfilePage() {
                 />
               </div>
 
-              {/* Error Message */}
-              {error && (
-                <div className="bg-red-50 border border-red-200 rounded-md p-4">
-                  <p className="text-red-800 text-sm">{error}</p>
-                </div>
-              )}
+              {/* Buttons and Messages */}
+              <div className="space-y-3">
+                {/* Error Message */}
+                {error && (
+                  <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800 rounded-lg text-red-800 dark:text-red-200">
+                    <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+                    <span className="text-sm">{error}</span>
+                  </div>
+                )}
 
-              {/* Success Message */}
-              {success && (
-                <div className="bg-green-50 border border-green-200 rounded-md p-4">
-                  <p className="text-green-800 text-sm">Profile updated successfully!</p>
-                </div>
-              )}
+                {/* Success Message */}
+                {success && (
+                  <div className="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-950/50 border border-green-200 dark:border-green-800 rounded-lg text-green-800 dark:text-green-200">
+                    <span className="text-sm">Profile updated successfully!</span>
+                  </div>
+                )}
 
-              {/* Buttons */}
-              <div className="flex gap-4">
-                <Button type="submit" disabled={saving}>
-                  {saving ? 'Saving...' : 'Save Changes'}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => router.push('/publisher/dashboard')}
-                >
-                  Cancel
-                </Button>
+                {/* Buttons */}
+                <div className="flex gap-4">
+                  <Button
+                    type="submit"
+                    disabled={saving || Object.values(fieldErrors).some(e => !!e)}
+                  >
+                    {saving ? 'Saving...' : 'Save Changes'}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => router.push('/publisher/dashboard')}
+                  >
+                    Cancel
+                  </Button>
+                </div>
               </div>
             </form>
           </CardContent>

@@ -66,6 +66,78 @@ npx playwright test --ui
 
 ---
 
+## Authentication Strategy (Avoiding Rate Limits)
+
+Clerk enforces a rate limit of **5 sign-ins per 10 seconds per IP**. To avoid hitting this limit during parallel testing, we use **Playwright Storage State**:
+
+### How It Works
+
+1. **Setup Projects** - Sign in ONCE per role (admin, publisher) during global setup
+2. **Storage State Files** - Save cookies, localStorage, sessionStorage to JSON files
+3. **Project Dependencies** - Test projects depend on setup and reuse pre-authenticated state
+
+```
+┌──────────────────────┐
+│    Setup Project     │  Signs in as admin and publisher ONCE
+└──────────┬───────────┘
+           │ Creates storage state files:
+           │   • test-results/.auth/admin.json
+           │   • test-results/.auth/publisher.json
+           ▼
+┌──────────────────────────────────────────────────┐
+│        Test Projects (all run in parallel)        │
+├──────────────────────────────────────────────────┤
+│ chromium-admin         Uses admin.json           │
+│ chromium-publisher     Uses publisher.json       │
+│ chromium               No auth (public pages)    │
+│ mobile-chrome-admin    Uses admin.json           │
+│ mobile-chrome-publisher Uses publisher.json      │
+│ mobile-chrome          No auth (public pages)    │
+└──────────────────────────────────────────────────┘
+```
+
+### Test File Organization
+
+| Directory | Project Used | Auth State |
+|-----------|--------------|------------|
+| `e2e/admin/*.spec.ts` | `chromium-admin`, `mobile-chrome-admin` | Pre-authenticated as admin |
+| `e2e/publisher/*.spec.ts` | `chromium-publisher`, `mobile-chrome-publisher` | Pre-authenticated as publisher |
+| Other `e2e/*.spec.ts` | `chromium`, `mobile-chrome` | No auth (public pages) |
+
+### Benefits
+
+- **No rate limiting** - Only 2 Clerk sign-ins per entire test run
+- **Faster tests** - No authentication overhead per test
+- **Parallel safe** - All workers share the same auth state files
+
+### Writing Authenticated Tests
+
+For **admin tests** in `e2e/admin/`:
+```typescript
+import { test, expect } from '@playwright/test';
+import { getSharedPublisherAsync, BASE_URL } from '../utils';
+
+// No need to call loginAsAdmin() - storage state handles it
+test('admin can view publishers', async ({ page }) => {
+  await page.goto(`${BASE_URL}/admin/publishers`);
+  await expect(page).toHaveURL(/\/admin\/publishers/);
+});
+```
+
+For **publisher tests** in `e2e/publisher/`:
+```typescript
+import { test, expect } from '@playwright/test';
+import { BASE_URL } from '../utils';
+
+// No need to call loginAsPublisher() - storage state handles it
+test('publisher can view dashboard', async ({ page }) => {
+  await page.goto(`${BASE_URL}/publisher/dashboard`);
+  await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
+});
+```
+
+---
+
 ## Test Structure
 
 ```
@@ -73,11 +145,27 @@ tests/
 ├── playwright.config.ts      # Playwright configuration
 ├── package.json              # Test dependencies
 ├── e2e/                      # E2E test specs
-│   ├── home.spec.ts          # Home page tests
-│   ├── auth.spec.ts          # Authentication tests
-│   └── helpers/              # Test utilities
-│       └── mcp-playwright.ts # MCP helper functions
+│   ├── setup/                # Auth setup projects
+│   │   ├── auth.setup.ts     # Creates storage state files
+│   │   ├── global-setup.ts   # Database seeding
+│   │   └── global-teardown.ts
+│   ├── admin/                # Admin tests (use admin storage state)
+│   │   └── impersonation.spec.ts
+│   ├── publisher/            # Publisher tests (use publisher storage state)
+│   │   ├── dashboard.spec.ts
+│   │   ├── profile.spec.ts
+│   │   └── algorithm.spec.ts
+│   ├── public/               # Public page tests (no auth)
+│   ├── utils/                # Test utilities
+│   │   ├── shared-fixtures.ts # Pre-created publishers
+│   │   ├── clerk-auth.ts     # Clerk auth helpers
+│   │   └── index.ts          # Exports
+│   └── helpers/              # MCP helpers
+│       └── mcp-playwright.ts
 └── test-results/             # Test output (gitignored)
+    ├── .auth/                # Storage state files
+    │   ├── admin.json
+    │   └── publisher.json
     ├── html-report/          # HTML test report
     ├── results.json          # JSON results
     └── artifacts/            # Screenshots, videos, traces
@@ -286,55 +374,103 @@ Claude: [Uses MCP to navigate, fill forms, and verify results]
 
 ## CI/CD Integration
 
-### GitHub Actions Example
+E2E tests run in GitHub Actions with a full local stack including:
 
-```yaml
-name: E2E Tests
+- **PostgreSQL 17 + PostGIS** - Database with spatial extensions (`postgis/postgis:17-3.5`)
+- **Redis 7** - Required for caching (`redis:7-alpine`)
+- **Go API** - Backend server (port 8080)
+- **Next.js Web** - Frontend application (port 3001)
+- **Clerk** - Authentication via testing token (external service)
 
-on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+### Required GitHub Secrets
 
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+Configure these secrets in your repository settings:
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
+| Secret | Description | How to Obtain |
+|--------|-------------|---------------|
+| `CLERK_SECRET_KEY` | Clerk API secret key | [Clerk Dashboard](https://dashboard.clerk.com) → API Keys |
+| `CLERK_JWKS_URL` | Clerk JWKS URL for JWT verification | Clerk Dashboard → JWT Templates |
+| `CLERK_ISSUER` | Clerk issuer URL | Clerk Dashboard → JWT Templates |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Clerk publishable key | Clerk Dashboard → API Keys |
+| `MAILSLURP_API_KEY` | MailSlurp API key for email testing | [MailSlurp](https://app.mailslurp.com) |
 
-      - name: Install dependencies
-        run: |
-          cd tests
-          npm ci
-          npx playwright install --with-deps chromium
+**Note:** Create a separate Clerk "Test" application for CI/CD to avoid polluting production data.
 
-      - name: Start application
-        run: |
-          cd web && npm ci && npm run build && npm start &
-          cd api && go run ./cmd/api &
-          sleep 10
+### Workflow Files
 
-      - name: Run tests
-        run: |
-          cd tests
-          npx playwright test
-        env:
-          CI: true
-          BASE_URL: http://localhost:3001
+| Workflow | File | Description |
+|----------|------|-------------|
+| CI | `.github/workflows/ci.yml` | Linting, type-checking, unit tests, build |
+| E2E | `.github/workflows/e2e.yml` | Full E2E tests with local services |
 
-      - name: Upload test results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-report
-          path: tests/test-results/
+### E2E Workflow Architecture
+
 ```
+┌─────────────────────────────────────────────────────────────┐
+│                    GitHub Actions Runner                     │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  ┌─────────────┐    ┌─────────────┐                        │
+│  │ PostgreSQL  │    │   Redis     │                        │
+│  │17 + PostGIS │    │   7-alpine  │                        │
+│  │  :5432      │    │   :6379     │                        │
+│  └─────────────┘    └─────────────┘                        │
+│         │                  │                                │
+│         └──────────┬───────┘                                │
+│                    │                                        │
+│              ┌─────┴─────┐                                  │
+│              │  Go API   │                                  │
+│              │   :8080   │                                  │
+│              └─────┬─────┘                                  │
+│                    │                                        │
+│              ┌─────┴─────┐                                  │
+│              │ Next.js   │                                  │
+│              │   :3001   │                                  │
+│              └─────┬─────┘                                  │
+│                    │                                        │
+│              ┌─────┴─────┐    ┌─────────────┐              │
+│              │Playwright │────│   Clerk     │              │
+│              │  Tests    │    │ (External)  │              │
+│              └───────────┘    └─────────────┘              │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Running Tests Locally (Simulating CI)
+
+To test the CI environment locally:
+
+```bash
+# Start PostgreSQL and Redis (Docker)
+docker run -d --name pg-test -p 5432:5432 \
+  -e POSTGRES_USER=zmanim_test \
+  -e POSTGRES_PASSWORD=zmanim_test_password \
+  -e POSTGRES_DB=zmanim_test \
+  postgres:17
+
+docker run -d --name redis-test -p 6379:6379 redis:7-alpine
+
+# Run migrations
+for f in db/migrations/*.sql; do
+  psql postgresql://zmanim_test:zmanim_test_password@localhost:5432/zmanim_test -f "$f"
+done
+
+# Start services
+cd api && go run ./cmd/api &
+cd web && npm run build && npm start &
+
+# Run tests
+cd tests && npx playwright test
+```
+
+### Viewing Test Results
+
+After CI runs, download artifacts:
+
+1. Go to the GitHub Actions run
+2. Scroll to "Artifacts"
+3. Download `playwright-report` for full HTML report
+4. Download `test-screenshots` for failure screenshots (if any)
 
 ---
 
@@ -362,6 +498,14 @@ npx playwright install chromium
 - Check `CI=true` environment variable
 - Verify all services are fully started before tests run
 - Increase timeouts if needed
+
+**Clerk Rate Limiting (429 Too Many Requests)**
+
+If you see `Too Many Requests` errors:
+1. Tests in `e2e/admin/` and `e2e/publisher/` should NOT call `loginAsAdmin()` or `loginAsPublisher()`
+2. These tests use pre-authenticated storage state from the setup project
+3. Only tests in other directories should manually authenticate
+4. Check that tests are running with correct project (`chromium-admin`, `chromium-publisher`)
 
 **Element not found**
 
@@ -399,12 +543,19 @@ npx playwright show-report test-results/html-report
 | Feature | Test File | Status |
 |---------|-----------|--------|
 | Home Page | `home.spec.ts` | ✅ Complete |
-| Authentication | `auth.spec.ts` | ✅ Complete |
-| Publisher Dashboard | - | ⏳ Pending |
-| Algorithm Editor | - | ⏳ Pending |
-| Zmanim Display | - | ⏳ Pending |
-| Formula Reveal | - | ⏳ Pending |
-| Admin Portal | - | ⏳ Pending |
+| Authentication | `auth.spec.ts`, `auth/authentication.spec.ts` | ✅ Complete |
+| Publisher Dashboard | `publisher/dashboard.spec.ts` | ✅ Complete |
+| Publisher Profile | `publisher/profile.spec.ts` | ✅ Complete |
+| Publisher Onboarding | `publisher/onboarding.spec.ts` | ✅ Complete |
+| Algorithm Editor | `publisher/algorithm.spec.ts`, `algorithm-editor.spec.ts` | ✅ Complete |
+| Coverage Management | `publisher/coverage.spec.ts` | ✅ Complete |
+| Team Management | `publisher/team.spec.ts` | ✅ Complete |
+| Admin Dashboard | `admin.spec.ts` | ✅ Complete |
+| Admin Impersonation | `admin/impersonation.spec.ts` | ✅ Complete |
+| Error Handling | `errors/*.spec.ts` | ✅ Complete |
+| Public Pages | `public/public-pages.spec.ts` | ✅ Complete |
+| Registration Flow | `registration/*.spec.ts` | ✅ Complete |
+| Email Flows | `email/invitation-flows.spec.ts` | ✅ Complete |
 
 ---
 

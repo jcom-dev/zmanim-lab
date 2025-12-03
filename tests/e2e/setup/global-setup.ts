@@ -51,33 +51,35 @@ async function seedTestPublishers(): Promise<void> {
     console.log('Seeding test publishers in database...');
 
     // Create test publishers with different statuses
+    // Note: organization field was removed from schema
+    // Status values: 'pending', 'active', 'suspended'
     const testPublishers = [
       {
         name: 'E2E Test Publisher - Verified',
         slug: 'e2e-test-verified',
         email: 'e2e-verified@test.zmanim.com',
-        organization: 'E2E Test Organization',
-        status: 'verified',
+        status: 'active',  // 'verified' maps to 'active'
         website: 'https://test.example.com',
         bio: 'Test publisher for E2E testing - verified status',
+        is_verified: true,
       },
       {
         name: 'E2E Test Publisher - Pending',
         slug: 'e2e-test-pending',
         email: 'e2e-pending@test.zmanim.com',
-        organization: 'E2E Pending Organization',
         status: 'pending',
         website: 'https://pending.example.com',
         bio: 'Test publisher for E2E testing - pending status',
+        is_verified: false,
       },
       {
         name: 'E2E Test Publisher - Suspended',
         slug: 'e2e-test-suspended',
         email: 'e2e-suspended@test.zmanim.com',
-        organization: 'E2E Suspended Organization',
         status: 'suspended',
         website: 'https://suspended.example.com',
         bio: 'Test publisher for E2E testing - suspended status',
+        is_verified: false,
       },
     ];
 
@@ -90,38 +92,30 @@ async function seedTestPublishers(): Promise<void> {
 
       if (exists.rows.length === 0) {
         const result = await pool.query(
-          `INSERT INTO publishers (name, slug, email, organization, status, website, bio)
+          `INSERT INTO publishers (name, slug, email, status, website, bio, is_verified)
            VALUES ($1, $2, $3, $4, $5, $6, $7)
            RETURNING id`,
-          [pub.name, pub.slug, pub.email, pub.organization, pub.status, pub.website, pub.bio]
+          [pub.name, pub.slug, pub.email, pub.status, pub.website, pub.bio, pub.is_verified]
         );
         console.log(`Created test publisher: ${pub.name} (${result.rows[0].id})`);
 
-        // Create a test algorithm for verified publisher
-        if (pub.status === 'verified') {
+        // Create a test algorithm for active/verified publisher
+        if (pub.status === 'active') {
           const publisherId = result.rows[0].id;
+          // Schema: id, publisher_id, name, description, configuration, status, is_public, forked_from, attribution_text, fork_count
           await pool.query(
-            `INSERT INTO algorithms (publisher_id, name, version, description, formula_definition, calculation_type, status, config, is_active)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            `INSERT INTO algorithms (publisher_id, name, description, configuration, status)
+             VALUES ($1, $2, $3, $4, $5)
              ON CONFLICT DO NOTHING`,
             [
               publisherId,
               'E2E Test Algorithm',
-              '1.0.0',
               'Test algorithm for E2E testing',
-              JSON.stringify({
-                alos: { method: 'solar_angle', params: { degrees: 16.1 } },
-                sunrise: { method: 'sunrise', params: {} },
-                sunset: { method: 'sunset', params: {} },
-                tzeis: { method: 'solar_angle', params: { degrees: 8.5 } },
-              }),
-              'solar_depression',
-              'published',
               JSON.stringify({
                 name: 'E2E Test GRA Algorithm',
                 description: 'Test algorithm for E2E testing',
               }),
-              true,
+              'published',
             ]
           );
           console.log(`Created test algorithm for ${pub.name}`);

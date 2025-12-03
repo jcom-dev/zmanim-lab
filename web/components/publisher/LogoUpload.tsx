@@ -167,20 +167,20 @@ export function LogoUpload({ currentLogoUrl, publisherName, onUploadComplete, on
         });
       }, 100);
 
-      const data = await api.post<{ logo_url: string }>('/publisher/logo', {
+      const data = await api.post<{ logo_data: string }>('/publisher/logo', {
         body: formData,
       });
 
       clearInterval(progressInterval);
       setUploadProgress(100);
 
-      const logoUrl = data.logo_url;
-      if (!logoUrl) {
-        throw new Error('No logo URL returned from server');
+      const logoData = data.logo_data;
+      if (!logoData) {
+        throw new Error('No logo data returned from server');
       }
 
       setIsCustomLogo(false);
-      onUploadComplete(logoUrl);
+      onUploadComplete(logoData);
     } catch (err) {
       console.error('Upload error:', err);
       onUploadError(err instanceof Error ? err.message : 'Failed to upload logo');
@@ -250,21 +250,21 @@ export function LogoUpload({ currentLogoUrl, publisherName, onUploadComplete, on
         });
       }, 100);
 
-      const data = await api.post<{ logo_url: string }>('/publisher/logo', {
+      const data = await api.post<{ logo_data: string }>('/publisher/logo', {
         body: formData,
       });
 
       clearInterval(progressInterval);
       setUploadProgress(100);
 
-      const logoUrl = data.logo_url;
+      const logoData = data.logo_data;
 
-      if (!logoUrl) {
-        throw new Error('No logo URL returned from server');
+      if (!logoData) {
+        throw new Error('No logo data returned from server');
       }
 
       setIsCustomLogo(true);
-      onUploadComplete(logoUrl);
+      onUploadComplete(logoData);
     } catch (err) {
       console.error('Upload error:', err);
       onUploadError(err instanceof Error ? err.message : 'Failed to upload logo');

@@ -121,28 +121,12 @@ test.describe('Onboarding - Welcome Step', () => {
 });
 
 test.describe('Onboarding - Template Selection', () => {
-  test('shows GRA option', async ({ page }) => {
+  test('shows Standard Defaults option', async ({ page }) => {
     const publisher = getEmptyPublisher(2);
     await goToTemplateStep(page, publisher.id);
 
-    await expect(page.getByText('GRA Standard')).toBeVisible();
-    await expect(page.getByText('גר"א סטנדרטי')).toBeVisible();
-  });
-
-  test('shows MGA option', async ({ page }) => {
-    const publisher = getEmptyPublisher(2);
-    await goToTemplateStep(page, publisher.id);
-
-    await expect(page.getByText('Magen Avraham')).toBeVisible();
-    await expect(page.getByText('מגן אברהם')).toBeVisible();
-  });
-
-  test('shows Rabbeinu Tam option', async ({ page }) => {
-    const publisher = getEmptyPublisher(2);
-    await goToTemplateStep(page, publisher.id);
-
-    await expect(page.getByText('Rabbeinu Tam')).toBeVisible();
-    await expect(page.getByText('רבינו תם')).toBeVisible();
+    await expect(page.getByText('Standard Defaults')).toBeVisible();
+    await expect(page.getByText('ברירות מחדל סטנדרטיות')).toBeVisible();
   });
 
   test('shows Copy from Publisher option', async ({ page }) => {
@@ -153,14 +137,6 @@ test.describe('Onboarding - Template Selection', () => {
     await expect(page.getByText('העתק ממפרסם')).toBeVisible();
   });
 
-  test('shows Start from Scratch option', async ({ page }) => {
-    const publisher = getEmptyPublisher(2);
-    await goToTemplateStep(page, publisher.id);
-
-    await expect(page.getByText('Start from Scratch')).toBeVisible();
-    await expect(page.getByText('התחל מאפס')).toBeVisible();
-  });
-
   test('Continue disabled without selection', async ({ page }) => {
     const publisher = getEmptyPublisher(2);
     await goToTemplateStep(page, publisher.id);
@@ -168,11 +144,11 @@ test.describe('Onboarding - Template Selection', () => {
     await expect(page.getByRole('button', { name: /continue/i })).toBeDisabled();
   });
 
-  test('can select GRA template', async ({ page }) => {
+  test('can select Standard Defaults template', async ({ page }) => {
     const publisher = getEmptyPublisher(2);
     await goToTemplateStep(page, publisher.id);
 
-    await page.getByText('GRA Standard').click();
+    await page.getByText('Standard Defaults').click();
     await expect(page.getByRole('button', { name: /continue/i })).toBeEnabled();
   });
 
@@ -190,7 +166,7 @@ test.describe('Onboarding - Template Selection', () => {
     const publisher = getEmptyPublisher(2);
     await goToTemplateStep(page, publisher.id);
 
-    await page.getByText('GRA Standard').click();
+    await page.getByText('Standard Defaults').click();
     await page.getByRole('button', { name: /continue/i }).click();
 
     await page.waitForFunction(
@@ -203,21 +179,12 @@ test.describe('Onboarding - Template Selection', () => {
     expect(content?.toLowerCase()).toMatch(/customize|zmanim/);
   });
 
-  test('Copy from Publisher opens dialog', async ({ page }) => {
+  test('Standard Defaults shows zmanim list', async ({ page }) => {
     const publisher = getEmptyPublisher(2);
     await goToTemplateStep(page, publisher.id);
 
-    await page.getByText('Copy from Publisher').click();
-
-    await expect(page.getByText('Search for a publisher')).toBeVisible();
-    await expect(page.getByPlaceholder(/search publishers/i)).toBeVisible();
-  });
-
-  test('shows preview times', async ({ page }) => {
-    const publisher = getEmptyPublisher(2);
-    await goToTemplateStep(page, publisher.id);
-
-    await expect(page.getByText('Preview (today)')).toBeVisible();
+    // Verify Standard Defaults shows included zmanim
+    await expect(page.getByText('Alos HaShachar')).toBeVisible();
     await expect(page.getByText('Sunrise')).toBeVisible();
   });
 });
@@ -235,7 +202,7 @@ test.describe('Onboarding - Navigation', () => {
 
     // Step 1: Template
     await waitForTemplateStep(page);
-    await page.getByText('GRA Standard').click();
+    await page.getByText('Standard Defaults').click();
     await page.getByRole('button', { name: /continue/i }).click();
 
     // Step 2: Customize
@@ -306,7 +273,7 @@ test.describe('Onboarding - State Persistence', () => {
     await page.getByRole('button', { name: /get started/i }).click();
     await waitForTemplateStep(page);
 
-    await page.getByText('GRA Standard').click();
+    await page.getByText('Standard Defaults').click();
     await page.waitForTimeout(1000);
 
     await page.reload();
