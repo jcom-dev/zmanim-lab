@@ -543,7 +543,7 @@ func (h *Handlers) AdminVerifyPublisher(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	result := h.updatePublisherStatus(ctx, id, "verified")
+	result := h.updatePublisherStatus(ctx, id, "active")
 	if result.err != nil {
 		handlePublisherStatusError(w, r, result)
 		return
@@ -655,7 +655,7 @@ func (h *Handlers) AdminReactivatePublisher(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	result := h.updatePublisherStatus(ctx, id, "verified")
+	result := h.updatePublisherStatus(ctx, id, "active")
 	if result.err != nil {
 		handlePublisherStatusError(w, r, result)
 		return

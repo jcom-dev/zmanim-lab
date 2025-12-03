@@ -10,7 +10,7 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { loginAsAdmin, BASE_URL, getSharedPublisher } from '../utils';
+import { loginAsAdmin, BASE_URL, getSharedPublisherAsync } from '../utils';
 
 // Enable parallel mode for faster test execution
 test.describe.configure({ mode: 'parallel' });
@@ -98,7 +98,7 @@ test.describe('Admin Publisher Details', () => {
 
   test('admin can view publisher details', async ({ page }) => {
     // Use shared fixture - gets ID at runtime
-    const publisher = getSharedPublisher('verified-1');
+    const publisher = await getSharedPublisherAsync('verified-1');
     await page.goto(`${BASE_URL}/admin/publishers/${publisher.id}`);
     await page.waitForLoadState('networkidle');
 
@@ -110,7 +110,7 @@ test.describe('Admin Publisher Details', () => {
   });
 
   test('publisher details shows Quick Actions section', async ({ page }) => {
-    const publisher = getSharedPublisher('verified-1');
+    const publisher = await getSharedPublisherAsync('verified-1');
     await page.goto(`${BASE_URL}/admin/publishers/${publisher.id}`);
     await page.waitForLoadState('networkidle');
 
@@ -119,7 +119,7 @@ test.describe('Admin Publisher Details', () => {
   });
 
   test('publisher details has impersonation button', async ({ page }) => {
-    const publisher = getSharedPublisher('verified-1');
+    const publisher = await getSharedPublisherAsync('verified-1');
     await page.goto(`${BASE_URL}/admin/publishers/${publisher.id}`);
     await page.waitForLoadState('networkidle');
 
@@ -127,7 +127,7 @@ test.describe('Admin Publisher Details', () => {
   });
 
   test('publisher details shows Users section', async ({ page }) => {
-    const publisher = getSharedPublisher('verified-1');
+    const publisher = await getSharedPublisherAsync('verified-1');
     await page.goto(`${BASE_URL}/admin/publishers/${publisher.id}`);
     await page.waitForLoadState('networkidle');
 
@@ -136,7 +136,7 @@ test.describe('Admin Publisher Details', () => {
   });
 
   test('admin can open invite user dialog', async ({ page }) => {
-    const publisher = getSharedPublisher('verified-1');
+    const publisher = await getSharedPublisherAsync('verified-1');
     await page.goto(`${BASE_URL}/admin/publishers/${publisher.id}`);
     await page.waitForLoadState('networkidle');
 
@@ -152,7 +152,7 @@ test.describe('Admin Publisher Details', () => {
   });
 
   test('admin can open edit publisher dialog', async ({ page }) => {
-    const publisher = getSharedPublisher('verified-1');
+    const publisher = await getSharedPublisherAsync('verified-1');
     await page.goto(`${BASE_URL}/admin/publishers/${publisher.id}`);
     await page.waitForLoadState('networkidle');
 
@@ -168,7 +168,7 @@ test.describe('Admin Publisher Details', () => {
   });
 
   test('admin sees delete publisher option', async ({ page }) => {
-    const publisher = getSharedPublisher('verified-1');
+    const publisher = await getSharedPublisherAsync('verified-1');
     await page.goto(`${BASE_URL}/admin/publishers/${publisher.id}`);
     await page.waitForLoadState('networkidle');
 
@@ -184,48 +184,57 @@ test.describe('Admin Publisher Status Changes', () => {
   });
 
   test('pending publisher shows verify button', async ({ page }) => {
-    const publisher = getSharedPublisher('pending');
+    const publisher = await getSharedPublisherAsync('pending');
     await page.goto(`${BASE_URL}/admin/publishers/${publisher.id}`);
     await page.waitForLoadState('networkidle');
 
     // Should see verify button if still pending, or suspend button if already verified by another test
-    const verifyButton = page.getByRole('button', { name: /verify|approve/i });
-    const suspendButton = page.getByRole('button', { name: /suspend/i });
+    const verifyButton = page.getByRole('button', { name: /verify publisher/i });
+    const suspendButton = page.getByRole('button', { name: /suspend publisher/i });
 
     // Either verify or suspend button should be visible (depending on test order)
     await expect(verifyButton.or(suspendButton)).toBeVisible();
   });
 
   test('verified publisher shows suspend button', async ({ page }) => {
-    const publisher = getSharedPublisher('verified-2');
+    const publisher = await getSharedPublisherAsync('verified-2');
     await page.goto(`${BASE_URL}/admin/publishers/${publisher.id}`);
     await page.waitForLoadState('networkidle');
 
-    // Should see suspend button
-    await expect(page.getByRole('button', { name: /suspend|disable/i })).toBeVisible();
+    // Should see suspend button (text is "Suspend Publisher")
+    await expect(page.getByRole('button', { name: /suspend publisher/i })).toBeVisible();
   });
 
   test('suspended publisher shows reactivate button', async ({ page }) => {
-    const publisher = getSharedPublisher('suspended');
+    const publisher = await getSharedPublisherAsync('suspended');
     await page.goto(`${BASE_URL}/admin/publishers/${publisher.id}`);
     await page.waitForLoadState('networkidle');
 
-    // Should see reactivate button
-    await expect(page.getByRole('button', { name: /reactivate|enable|activate/i })).toBeVisible();
+    // Should see reactivate button (text is "Reactivate Publisher")
+    await expect(page.getByRole('button', { name: /reactivate publisher/i })).toBeVisible();
   });
 
   test('admin can verify a pending publisher', async ({ page }) => {
-    const publisher = getSharedPublisher('pending');
+    const publisher = await getSharedPublisherAsync('pending');
     await page.goto(`${BASE_URL}/admin/publishers/${publisher.id}`);
     await page.waitForLoadState('networkidle');
 
     // Find and click verify button
-    const verifyButton = page.getByRole('button', { name: /verify|approve/i });
+    const verifyButton = page.getByRole('button', { name: /verify publisher/i });
+    const suspendButton = page.getByRole('button', { name: /suspend publisher/i });
+
+    // If verify button is visible, click it and verify the flow
     if (await verifyButton.isVisible()) {
       await verifyButton.click();
 
-      // Wait for status to update by checking for verified status text
-      await expect(page.getByText(/verified|approved/i).first()).toBeVisible({ timeout: 10000 });
+      // Wait for network to settle after the status change
+      await page.waitForLoadState('networkidle');
+
+      // After verification, the page should re-render with suspend button
+      await expect(suspendButton).toBeVisible({ timeout: 10000 });
+    } else {
+      // Publisher was already verified - suspend button should be visible
+      await expect(suspendButton).toBeVisible({ timeout: 5000 });
     }
   });
 });

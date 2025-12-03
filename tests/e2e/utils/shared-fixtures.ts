@@ -93,9 +93,9 @@ export async function initializeSharedPublishers(): Promise<void> {
       const slug = `e2e-shared-${config.key}`;
       const email = `e2e-shared-${config.key}@test.zmanim.com`;
 
-      // Map status values (verified -> active)
+      // Map status values: DB allows pending, active, suspended - NOT 'verified'
       const dbStatus = config.status === 'verified' ? 'active' : config.status;
-      const isVerified = config.status === 'verified' || dbStatus === 'active';
+      const isVerified = config.status === 'verified';
 
       // Check if exists
       const existing = await pool.query(

@@ -198,6 +198,7 @@ export default function AdminPublisherDetailPage() {
   const getStatusBadgeClass = (status: string) => {
     switch (status) {
       case 'verified':
+      case 'active':
         return 'bg-green-100 text-green-800 border-green-300';
       case 'pending_verification':
       case 'pending':
@@ -425,7 +426,7 @@ export default function AdminPublisherDetailPage() {
                 Verify Publisher
               </Button>
             )}
-            {publisher.status === 'verified' && (
+            {(publisher.status === 'verified' || publisher.status === 'active') && (
               <Button variant="destructive" onClick={() => handleStatusChange('suspend')}>
                 Suspend Publisher
               </Button>
