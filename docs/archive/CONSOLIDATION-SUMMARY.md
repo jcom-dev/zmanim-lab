@@ -37,7 +37,7 @@
 
 ### 2. Consolidated Duplicate Files (2 files)
 
-- `ARCHITECTURE.md` (Nov 27, still referenced Supabase) → Archived
+- `ARCHITECTURE.md` (Nov 27, outdated database provider) → Archived
 - `architecture.md` (Dec 2, updated for Xata) → **KEPT** as single source of truth
 
 ### 3. Created New Structure

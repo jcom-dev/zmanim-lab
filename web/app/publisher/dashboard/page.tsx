@@ -91,10 +91,46 @@ export default function PublisherDashboardPage() {
     );
   }
 
+  // Show "No Publisher" state when user has no publisher access
+  if (!selectedPublisher && !contextLoading && !loadingTimeout) {
+    return (
+      <div className="p-4 md:p-8">
+        <div className="max-w-2xl mx-auto">
+          <div className="bg-card border border-border rounded-lg p-8 text-center">
+            <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-6">
+              <User className="w-8 h-8 text-muted-foreground" />
+            </div>
+            <h2 className="text-2xl font-bold text-foreground mb-2">No Publisher Account</h2>
+            <p className="text-muted-foreground mb-6">
+              You don&apos;t have access to any publisher accounts yet. To publish zmanim on Zmanim Lab, you need to become a publisher.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <Link
+                href="/become-publisher"
+                className="inline-flex items-center justify-center px-6 py-3 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 font-medium"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Become a Publisher
+              </Link>
+              <Link
+                href="/"
+                className="inline-flex items-center justify-center px-6 py-3 bg-secondary text-secondary-foreground rounded-md hover:bg-secondary/90 font-medium"
+              >
+                Return to Home
+              </Link>
+            </div>
+            <p className="text-sm text-muted-foreground mt-6">
+              If you believe you should have access to a publisher account, please contact support.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // Show error if context failed or timeout occurred
-  if (contextError || loadingTimeout || error || !selectedPublisher) {
-    const errorMessage = contextError || error ||
-      (!selectedPublisher ? 'No publisher account found. Please contact support if you believe this is an error.' : 'Request timed out. Please try again.');
+  if (contextError || loadingTimeout || error) {
+    const errorMessage = contextError || error || 'Request timed out. Please try again.';
 
     return (
       <div className="p-4 md:p-8">

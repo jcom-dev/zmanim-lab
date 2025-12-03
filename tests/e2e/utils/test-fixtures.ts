@@ -416,6 +416,14 @@ export async function cleanupPublisher(publisherId: string): Promise<void> {
 /**
  * Clean up all test data from the database
  * Call this in global teardown
+ *
+ * Cleans up ALL test data patterns:
+ * - TEST_% prefix (from test-fixtures.ts createTestPublisherEntity)
+ * - E2E Test% (from global-setup.ts seedTestPublishers)
+ * - E2E Shared% (from shared-fixtures.ts)
+ * - e2e-% slugs (from various E2E test sources)
+ * - @test-zmanim.example.com emails (from test-fixtures.ts)
+ * - @mailslurp.dev emails (from clerk-auth.ts generateTestEmail fallback)
  */
 export async function cleanupTestData(): Promise<void> {
   if (!isDatabaseConfigured()) {
@@ -427,39 +435,63 @@ export async function cleanupTestData(): Promise<void> {
 
   const client = await getPool().connect();
   try {
-    // First, get all test publisher IDs
+    // Find ALL test publishers using comprehensive pattern matching
+    // This catches all sources of test data:
+    // 1. TEST_% - createTestPublisherEntity
+    // 2. E2E Test% - global-setup seedTestPublishers
+    // 3. E2E Shared% - shared-fixtures
+    // 4. e2e-% slugs - all E2E sources
+    // 5. @test-zmanim.example.com - TEST_EMAIL_DOMAIN
+    // 6. @mailslurp.dev - fallback email domain from generateTestEmail
     const publisherResult = await client.query(
-      `SELECT id FROM publishers WHERE name LIKE $1 OR email LIKE $2`,
-      [`${TEST_PREFIX}%`, `%@${TEST_EMAIL_DOMAIN}`]
+      `SELECT id, name, email, slug FROM publishers
+       WHERE name LIKE $1
+          OR name LIKE $2
+          OR name LIKE $3
+          OR slug LIKE $4
+          OR email LIKE $5
+          OR email LIKE $6`,
+      [
+        `${TEST_PREFIX}%`,        // TEST_Publisher...
+        'E2E Test%',              // E2E Test Publisher - Verified, etc.
+        'E2E Shared%',            // E2E Shared Verified 1, etc.
+        'e2e-%',                  // e2e-test-verified, e2e-shared-*, etc.
+        `%@${TEST_EMAIL_DOMAIN}`, // @test-zmanim.example.com
+        '%@mailslurp.dev',        // @mailslurp.dev (fallback emails)
+      ]
     );
 
     const publisherIds = publisherResult.rows.map((p) => p.id);
 
+    console.log(`Found ${publisherIds.length} test publishers to clean up`);
+
     if (publisherIds.length > 0) {
+      // Log what we're deleting for debugging
+      for (const pub of publisherResult.rows) {
+        console.log(`  Deleting: ${pub.name} (${pub.slug || 'no-slug'}) - ${pub.email}`);
+      }
+
       // Delete test algorithms for these publishers
-      await client.query(
+      const algResult = await client.query(
         `DELETE FROM algorithms WHERE publisher_id = ANY($1)`,
         [publisherIds]
       );
+      console.log(`  Deleted ${algResult.rowCount} algorithms`);
 
       // Delete test coverage for these publishers
-      await client.query(
+      const covResult = await client.query(
         `DELETE FROM publisher_coverage WHERE publisher_id = ANY($1)`,
         [publisherIds]
       );
+      console.log(`  Deleted ${covResult.rowCount} coverage records`);
 
       // Delete test publishers
-      await client.query(
+      const pubResult = await client.query(
         `DELETE FROM publishers WHERE id = ANY($1)`,
         [publisherIds]
       );
+      console.log(`  Deleted ${pubResult.rowCount} publishers`);
     }
-
-    // Also try to delete by name pattern directly (in case some were missed)
-    await client.query(
-      `DELETE FROM publishers WHERE name LIKE $1`,
-      [`${TEST_PREFIX}%`]
-    );
 
     // Clear the cache
     testEntityCache.clear();

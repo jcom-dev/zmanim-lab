@@ -1,3 +1,6 @@
+> **ARCHIVED DOCUMENT**: This file is historical and references outdated technology (Supabase).
+> The project now uses Xata for PostgreSQL hosting. See `docs/README.md` for current documentation.
+
 # Zmanim Lab Documentation
 
 > **Halachic Zmanim Publishing Platform** - A portal for rabbinic authorities to publish customized Jewish prayer times with full algorithm control.

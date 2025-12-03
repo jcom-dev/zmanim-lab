@@ -543,37 +543,7 @@ func (h *Handlers) GetAccessiblePublishers(w http.ResponseWriter, r *http.Reques
 		})
 	}
 
-	// If IDs from Clerk don't match any records, auto-create for publisher role users
-	if len(publishers) == 0 {
-		userRole := middleware.GetUserRole(ctx)
-		if userRole == "publisher" || userRole == "admin" {
-			slog.Info("Publisher IDs from Clerk don't exist, auto-creating", "user_id", userID)
-			var id, name, status string
-			createQuery := `
-				INSERT INTO publishers (name, slug, email, clerk_user_id, status)
-				VALUES ($1, $2, $3, $4, 'active')
-				RETURNING id, name, status
-			`
-			defaultName := "My Organization"
-			slug := "pub-" + userID[5:13]
-			email := userID + "@publisher.zmanim.local"
-			err := h.db.Pool.QueryRow(ctx, createQuery, defaultName, slug, email, userID).Scan(&id, &name, &status)
-			if err != nil {
-				slog.Error("failed to auto-create publisher", "error", err)
-				RespondJSON(w, r, http.StatusOK, map[string]interface{}{
-					"publishers": []interface{}{},
-				})
-				return
-			}
-			slog.Info("auto-created publisher", "publisher_id", id, "user_id", userID)
-			publishers = append(publishers, map[string]string{
-				"id":     id,
-				"name":   name,
-				"status": status,
-			})
-		}
-	}
-
+	// Return the publishers (empty array if user has no publisher access)
 	RespondJSON(w, r, http.StatusOK, map[string]interface{}{
 		"publishers": publishers,
 	})
@@ -651,10 +621,10 @@ func (h *Handlers) UpdatePublisherProfile(w http.ResponseWriter, r *http.Request
 	var query string
 	if publisherID != "" {
 		args = append(args, publisherID)
-		query = "UPDATE publishers SET " + strings.Join(updates, ", ") + " WHERE id = $" + fmt.Sprint(argCount) + " RETURNING id, clerk_user_id, name, email, description, bio, website, logo_url, status, created_at, updated_at"
+		query = "UPDATE publishers SET " + strings.Join(updates, ", ") + " WHERE id = $" + fmt.Sprint(argCount) + " RETURNING id, clerk_user_id, name, email, COALESCE(description, ''), bio, website, logo_url, logo_data, status, created_at, updated_at"
 	} else {
 		args = append(args, userID)
-		query = "UPDATE publishers SET " + strings.Join(updates, ", ") + " WHERE clerk_user_id = $" + fmt.Sprint(argCount) + " RETURNING id, clerk_user_id, name, email, description, bio, website, logo_url, status, created_at, updated_at"
+		query = "UPDATE publishers SET " + strings.Join(updates, ", ") + " WHERE clerk_user_id = $" + fmt.Sprint(argCount) + " RETURNING id, clerk_user_id, name, email, COALESCE(description, ''), bio, website, logo_url, logo_data, status, created_at, updated_at"
 	}
 
 	var publisher models.Publisher
@@ -667,12 +637,14 @@ func (h *Handlers) UpdatePublisherProfile(w http.ResponseWriter, r *http.Request
 		&publisher.Bio,
 		&publisher.Website,
 		&publisher.LogoURL,
+		&publisher.LogoData,
 		&publisher.Status,
 		&publisher.CreatedAt,
 		&publisher.UpdatedAt,
 	)
 
 	if err != nil {
+		slog.Error("UpdatePublisherProfile query failed", "error", err, "query", query, "publisher_id", publisherID, "user_id", userID)
 		if err.Error() == "no rows in result set" {
 			RespondNotFound(w, r, "Publisher profile not found")
 			return

@@ -87,8 +87,8 @@ export function VersionHistory({ onRestore }: VersionHistoryProps) {
 
   if (error) {
     return (
-      <div className="p-4 text-red-600 bg-red-50 dark:bg-red-900/20 rounded-lg">
-        {error}
+      <div className="alert-error">
+        <p className="alert-error-text">{error}</p>
       </div>
     );
   }

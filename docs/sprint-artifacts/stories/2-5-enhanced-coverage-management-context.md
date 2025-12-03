@@ -116,7 +116,7 @@ This pattern can be adapted for the coverage picker.
 
 ## Database Migration
 
-**File to create:** `supabase/migrations/XXXXXX_add_coverage_hierarchy.sql`
+**File to create:** `db/migrations/XXXXXX_add_coverage_hierarchy.sql`
 
 ```sql
 -- Add coverage level tracking

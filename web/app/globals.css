@@ -65,6 +65,98 @@ body {
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
   }
+
+  /* ============================================
+     Alert & Notice Components - High Contrast
+     ============================================ */
+
+  /* Warning Alert - Yellow/Amber (High Contrast) */
+  .alert-warning {
+    @apply bg-amber-100 dark:bg-amber-950/60 border-2 border-amber-400 dark:border-amber-600 rounded-lg p-4;
+  }
+  .alert-warning-title {
+    @apply text-amber-900 dark:text-amber-100 font-semibold;
+  }
+  .alert-warning-text {
+    @apply text-amber-900 dark:text-amber-200;
+  }
+  .alert-warning-icon {
+    @apply text-amber-700 dark:text-amber-300;
+  }
+
+  /* Error Alert - Red (High Contrast) */
+  .alert-error {
+    @apply bg-red-50 dark:bg-red-950/60 border border-red-300 dark:border-red-700 rounded-lg p-4;
+  }
+  .alert-error-title {
+    @apply text-red-800 dark:text-red-200 font-semibold;
+  }
+  .alert-error-text {
+    @apply text-red-700 dark:text-red-300;
+  }
+  .alert-error-icon {
+    @apply text-red-600 dark:text-red-400;
+  }
+
+  /* Success Alert - Green (High Contrast) */
+  .alert-success {
+    @apply bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-700 rounded-lg p-4;
+  }
+  .alert-success-title {
+    @apply text-emerald-800 dark:text-emerald-200 font-semibold;
+  }
+  .alert-success-text {
+    @apply text-emerald-700 dark:text-emerald-300;
+  }
+  .alert-success-icon {
+    @apply text-emerald-600 dark:text-emerald-400;
+  }
+
+  /* Info Alert - Blue (High Contrast) */
+  .alert-info {
+    @apply bg-blue-50 dark:bg-blue-950/60 border border-blue-300 dark:border-blue-700 rounded-lg p-4;
+  }
+  .alert-info-title {
+    @apply text-blue-800 dark:text-blue-200 font-semibold;
+  }
+  .alert-info-text {
+    @apply text-blue-700 dark:text-blue-300;
+  }
+  .alert-info-icon {
+    @apply text-blue-600 dark:text-blue-400;
+  }
+
+  /* ============================================
+     Status Badges - High Contrast
+     ============================================ */
+  .status-badge-success {
+    @apply bg-emerald-100 dark:bg-emerald-900/50 text-emerald-800 dark:text-emerald-200 px-3 py-1 rounded-full text-sm font-medium border border-emerald-200 dark:border-emerald-700;
+  }
+  .status-badge-warning {
+    @apply bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-200 px-3 py-1 rounded-full text-sm font-medium border border-amber-200 dark:border-amber-700;
+  }
+  .status-badge-error {
+    @apply bg-red-100 dark:bg-red-900/50 text-red-800 dark:text-red-200 px-3 py-1 rounded-full text-sm font-medium border border-red-200 dark:border-red-700;
+  }
+  .status-badge-pending {
+    @apply bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-200 px-3 py-1 rounded-full text-sm font-medium border border-blue-200 dark:border-blue-700;
+  }
+  .status-badge-neutral {
+    @apply bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 px-3 py-1 rounded-full text-sm font-medium border border-gray-200 dark:border-gray-600;
+  }
+
+  /* ============================================
+     Button Variants for Alerts
+     ============================================ */
+  .btn-warning {
+    @apply inline-flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-medium rounded-lg transition-colors;
+  }
+  .btn-error {
+    @apply inline-flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg transition-colors;
+  }
+  .btn-success {
+    @apply inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-lg transition-colors;
+  }
 }
 
 /* Smooth scrolling */

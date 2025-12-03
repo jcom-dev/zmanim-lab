@@ -9,7 +9,7 @@ Zmanim Lab uses a **monorepo** structure with:
 - `api/` - Go backend
 
 **External Services:**
-- **Supabase** - PostgreSQL database (managed)
+- **Xata** - PostgreSQL database (managed)
 - **Upstash** - Redis caching (serverless REST API)
 - **Clerk** - Authentication
 
@@ -41,7 +41,7 @@ cp .env.example web/.env.local
 ```
 
 Required variables:
-- `DATABASE_URL` - Supabase PostgreSQL connection string
+- `DATABASE_URL` - PostgreSQL connection string
 - `UPSTASH_REDIS_REST_URL` - Upstash Redis REST endpoint
 - `UPSTASH_REDIS_REST_TOKEN` - Upstash Redis auth token
 - `CLERK_SECRET_KEY` - Clerk backend secret
@@ -105,7 +105,6 @@ http://localhost:8080  # API
 - Go 1.25.4 - Backend development
 - Node.js 24.x LTS (Krypton) - Frontend development
 - npm 10+ - Package manager
-- Supabase CLI (via `npx supabase`) - Database migrations
 - Playwright 1.56+ - E2E testing (Chromium)
 - tmux - Service management
 
@@ -270,7 +269,7 @@ For direct access without proxy:
 3. If using VS Code: The ports should be automatically forwarded
 
 ### Database connection fails
-Verify Supabase connection string in `DATABASE_URL` is correct.
+Verify the PostgreSQL connection string in `DATABASE_URL` is correct.
 
 ### Frontend shows "No publishers available"
 This usually means:
@@ -286,10 +285,9 @@ Coder Workspace
     ├── Go 1.25.4
     ├── Node.js 24.x LTS
     ├── Playwright 1.56+
-    └── Supabase CLI (npx)
 
 External Services:
-├── Supabase (PostgreSQL)
+├── Xata (PostgreSQL)
 ├── Upstash (Redis)
 └── Clerk (Auth)
 ```

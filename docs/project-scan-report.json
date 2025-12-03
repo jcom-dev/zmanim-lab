@@ -39,7 +39,7 @@
     ],
     "database": {
       "type": "PostgreSQL",
-      "provider": "Supabase",
+      "provider": "Xata",
       "extensions": ["PostGIS"]
     },
     "authentication": {
@@ -48,7 +48,7 @@
     "deployment": {
       "frontend": "Vercel (planned)",
       "backend": "Fly.io",
-      "database": "Supabase"
+      "database": "Xata"
     },
     "planned_changes": [
       "Restructure repo: web/ + api/ separation",

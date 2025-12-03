@@ -644,7 +644,7 @@ go test -run TestSearchCities -bench=.
 
 ## Migration Applied
 
-**File:** `supabase/migrations/00000000000020_optimize_search_indexes.sql`
+**File:** `db/migrations/00000000000020_optimize_search_indexes.sql`
 **Status:** ✅ Successfully applied on 2025-11-30
 **Database:** zmanim_dev (local PostgreSQL)
 
@@ -693,9 +693,9 @@ All 26 indexes created successfully:
 ## Related Files
 
 ### Migrations
-- `supabase/migrations/00000000000020_optimize_search_indexes.sql` - This optimization
-- `supabase/migrations/00000000000015_normalize_geography.sql` - Geography normalization
-- `supabase/migrations/00000000000013_add_linked_zmanim.sql` - Linked zmanim feature
+- `db/migrations/00000000000020_optimize_search_indexes.sql` - This optimization
+- `db/migrations/00000000000015_normalize_geography.sql` - Geography normalization
+- `db/migrations/00000000000013_add_linked_zmanim.sql` - Linked zmanim feature
 
 ### Queries
 - `api/internal/db/queries/cities.sql` - City search queries
@@ -705,7 +705,7 @@ All 26 indexes created successfully:
 
 ### Documentation
 - `docs/coding-standards.md` - Development guidelines
-- `supabase/migrations/README.md` - Migration instructions
+- `db/migrations/README.md` - Migration instructions
 
 ---
 

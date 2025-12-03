@@ -9,7 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
+import { ColorBadge, getCalculationTypeColor } from '@/components/ui/color-badge';
 import { useAstronomicalPrimitivesGrouped } from '@/lib/hooks/useZmanimList';
 import { Loader2, Clock } from 'lucide-react';
 
@@ -75,17 +75,17 @@ export function FixedZmanForm({
                       <div className="flex items-center gap-2">
                         <span className="font-medium">{primitive.display_name}</span>
                         {primitive.calculation_type && (
-                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200 border-amber-300 dark:border-amber-700">
+                          <ColorBadge color={getCalculationTypeColor(primitive.calculation_type)} size="xs">
                             {primitive.calculation_type === 'solar_angle' ? 'Solar Angle' :
                              primitive.calculation_type === 'horizon' ? 'Horizon' :
                              primitive.calculation_type === 'transit' ? 'Transit' :
                              primitive.calculation_type}
-                          </Badge>
+                          </ColorBadge>
                         )}
                         {primitive.solar_angle !== null && primitive.solar_angle !== undefined && (
-                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200 border-blue-300 dark:border-blue-700">
+                          <ColorBadge color="blue" size="xs">
                             {primitive.solar_angle}°
-                          </Badge>
+                          </ColorBadge>
                         )}
                       </div>
                       <span className="text-xs text-muted-foreground">

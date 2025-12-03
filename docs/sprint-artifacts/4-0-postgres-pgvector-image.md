@@ -6,7 +6,7 @@ Status: review
 
 As a **developer**,
 I want **a custom PostgreSQL Docker image with PostGIS and pgvector extensions**,
-so that **our local development environment matches Supabase production capabilities and supports vector embeddings for AI features**.
+so that **our local development environment matches production capabilities and supports vector embeddings for AI features**.
 
 ## Acceptance Criteria
 
@@ -111,7 +111,7 @@ CREATE EXTENSION IF NOT EXISTS vector;
 
 | Component | Version | Notes |
 |-----------|---------|-------|
-| PostgreSQL | 17 | Matches Supabase direction |
+| PostgreSQL | 17 | Latest stable version |
 | PostGIS | 3.5 | Latest stable from base image |
 | pgvector | 0.8.0 | Latest stable (Nov 2024) |
 

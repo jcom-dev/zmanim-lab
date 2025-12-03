@@ -1,3 +1,5 @@
+> **ARCHIVED DOCUMENT**: This file is historical and references outdated technology (Supabase).
+> The project now uses Xata for PostgreSQL hosting. See `docs/ARCHITECTURE.md` for current architecture.
 
 # Zmanim Lab - System Architecture Documentation
 

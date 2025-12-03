@@ -393,7 +393,7 @@ test.describe('Feature Name', () => {
 - Pattern: `setupClerkTestingToken()` → `clerk.signIn()`
 
 **Fixtures:**
-- `createTestPublisherEntity()` - TEST_ prefix, Supabase service key
+- `createTestPublisherEntity()` - TEST_ prefix, Xata | Shared dev DBservice key
 - `createTestAlgorithm(publisherId)`
 - `createTestCoverage(publisherId, cityId)`
 - `createFullTestPublisher()` - Complete setup

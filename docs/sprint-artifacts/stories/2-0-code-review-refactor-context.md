@@ -83,7 +83,7 @@ func (h *Handlers) AdminCreatePublisher(w http.ResponseWriter, r *http.Request) 
 - Validation methods
 - Draft/published status workflow
 
-### File: `supabase/migrations/20240005_update_algorithms_for_editor.sql`
+### File: `db/migrations/20240005_update_algorithms_for_editor.sql`
 
 **Status:** Good - demonstrates proper migration patterns:
 - `ADD COLUMN IF NOT EXISTS` for idempotency

@@ -15,6 +15,7 @@ import { DatePickerDropdown } from '@/components/zmanim/DatePickerDropdown';
 import { useApi } from '@/lib/api-client';
 import { formatTimeShort } from '@/lib/utils';
 import { ModeToggle } from '@/components/mode-toggle';
+import { ColorBadge } from '@/components/ui/color-badge';
 
 interface City {
   id: string;
@@ -540,10 +541,10 @@ export default function ZmanimPage() {
                                   {displayName}
                                 </span>
                                 {zman.is_beta && (
-                                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200 border border-amber-300 dark:border-amber-700 flex-shrink-0">
-                                    <FlaskConical className="h-3 w-3" />
+                                  <ColorBadge color="amber" size="xs" className="flex-shrink-0">
+                                    <FlaskConical className="h-3 w-3 mr-0.5" />
                                     Beta
-                                  </span>
+                                  </ColorBadge>
                                 )}
                                 <button
                                   onClick={() => {

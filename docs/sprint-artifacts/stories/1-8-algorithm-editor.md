@@ -24,7 +24,7 @@ so that **my community receives times according to my halachic opinions**.
 - [ ] Task 1: Create algorithms database table (AC: 1, 7)
   - [ ] 1.1 Create migration for algorithms table
   - [ ] 1.2 Add indexes for publisher_id and status
-  - [ ] 1.3 Run migration in Supabase
+  - [ ] 1.3 Run database migration
 
 - [ ] Task 2: Implement algorithm API (AC: 1, 5, 7)
   - [ ] 2.1 Create api/internal/handlers/algorithms.go
@@ -150,7 +150,7 @@ CREATE TABLE algorithms (
 - All 13 Playwright E2E tests pass
 
 ### File List
-- `supabase/migrations/20240008_update_algorithms_table.sql` - Database migration
+- `db/migrations/20240008_update_algorithms_table.sql` - Database migration
 - `api/internal/handlers/publisher_algorithm.go` - Algorithm API handlers
 - `api/cmd/migrate/main.go` - Migration utility script
 - `web/app/publisher/algorithm/page.tsx` - Algorithm editor page

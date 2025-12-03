@@ -1,34 +1,76 @@
 /**
- * Manual cleanup script to remove all MailSlurp test users from Clerk
+ * Cleanup script for test users in Clerk
+ *
  * Run with: npx tsx cleanup-clerk-users.ts
  */
 
+import { createClerkClient } from '@clerk/backend';
 import * as dotenv from 'dotenv';
-import * as path from 'path';
 
-// Load environment variables FIRST before any imports
-dotenv.config({ path: path.resolve(__dirname, '.env') });
-dotenv.config({ path: path.resolve(__dirname, '../web/.env.local') });
-dotenv.config({ path: path.resolve(__dirname, '../.env') });
+// Load environment variables
+dotenv.config();
+dotenv.config({ path: '../web/.env.local' });
 
-// Set a dummy MailSlurp key if not present (cleanup doesn't need it)
-if (!process.env.MAILSLURP_API_KEY) {
-  process.env.MAILSLURP_API_KEY = 'dummy-key-for-cleanup';
+const secretKey = process.env.CLERK_SECRET_KEY;
+if (!secretKey) {
+  console.error('CLERK_SECRET_KEY not set');
+  process.exit(1);
 }
 
-// Now import after env is loaded
-import { cleanupTestUsers } from './e2e/utils/clerk-auth';
+const clerkClient = createClerkClient({ secretKey });
 
-async function main() {
-  console.log('🧹 Starting Clerk test user cleanup...\n');
+const TEST_DOMAINS = [
+  '@clerk.test',
+  '@mailslurp.xyz',
+  '@mailslurp.world',
+  '@tempsmtp.com',
+  '@mailslurp.info',
+  '@mailslurp.dev',
+  '@mailslurp.biz',
+  '@mailslurp.net',
+  '@test-zmanim.example.com',
+];
 
-  try {
-    await cleanupTestUsers();
-    console.log('\n✅ Cleanup completed successfully!');
-  } catch (error) {
-    console.error('\n❌ Cleanup failed:', error);
-    process.exit(1);
+async function cleanupAllTestUsers() {
+  console.log('Fetching all users from Clerk...\n');
+
+  let offset = 0;
+  const limit = 100;
+  let hasMore = true;
+  let totalDeleted = 0;
+  let totalFound = 0;
+
+  while (hasMore) {
+    const response = await clerkClient.users.getUserList({ limit, offset });
+    console.log(`Fetched ${response.data.length} users (offset: ${offset})`);
+
+    const testUsers = response.data.filter((user) =>
+      user.emailAddresses.some((email) =>
+        TEST_DOMAINS.some((domain) => email.emailAddress.endsWith(domain)) ||
+        email.emailAddress.startsWith('e2e-')
+      )
+    );
+
+    totalFound += testUsers.length;
+
+    for (const user of testUsers) {
+      const email = user.emailAddresses[0]?.emailAddress || 'unknown';
+      try {
+        await clerkClient.users.deleteUser(user.id);
+        totalDeleted++;
+        console.log(`  Deleted: ${email}`);
+      } catch (error: any) {
+        console.log(`  Failed to delete ${email}: ${error.message}`);
+      }
+    }
+
+    hasMore = response.data.length === limit;
+    offset += limit;
   }
+
+  console.log(`\n========================================`);
+  console.log(`Cleanup complete: ${totalDeleted}/${totalFound} test users deleted`);
+  console.log(`========================================`);
 }
 
-main();
+cleanupAllTestUsers().catch(console.error);

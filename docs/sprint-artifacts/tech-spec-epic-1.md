@@ -63,7 +63,7 @@ This epic aligns with the documented architecture decisions:
 ```
 Frontend (Vercel)              Backend (Fly.io)              Data Layer
 ─────────────────              ────────────────              ──────────
-web/app/                       api/handlers/                 Supabase (PostgreSQL)
+web/app/                       api/handlers/                 PostgreSQL (Xata)
   ├── (auth)/                    ├── health.go               Upstash Redis
   ├── admin/                     ├── admin.go                Clerk (Auth)
   ├── publisher/                 ├── publishers.go
@@ -306,7 +306,7 @@ CREATE INDEX idx_cities_search ON cities(name, country, region);
 | Requirement | Target |
 |-------------|--------|
 | NFR13: Uptime | 99.5% |
-| NFR14: Database backups | Daily (Supabase managed) |
+| NFR14: Database backups | Daily (managed by hosting provider) |
 | NFR15: Cache unavailable | Graceful degradation to direct calculation |
 | NFR16: Error handling | Clear error messages, no silent failures |
 
@@ -355,7 +355,7 @@ CREATE INDEX idx_cities_search ON cities(name, country, region);
 | Service | Purpose | Integration |
 |---------|---------|-------------|
 | Clerk | Authentication | JWT validation, React components |
-| Supabase | Database | PostgreSQL via pgx |
+| Xata | Database | PostgreSQL via pgx |
 | Upstash | Caching | Redis REST API |
 | Fly.io | API hosting | Docker deployment |
 | Vercel | Frontend hosting | Next.js deployment |
@@ -367,7 +367,7 @@ CREATE INDEX idx_cities_search ON cities(name, country, region);
 ### Story 1.1: Coder Development Environment
 1. Coder workspace initializes with Go 1.21+, Node.js 20+, npm 10+
 2. Start script runs web (port 3000) and API (port 8080) simultaneously
-3. Supabase connection works with configured credentials
+3. PostgreSQL connection works with configured credentials
 4. Playwright browsers are installed and E2E tests execute
 5. Upstash Redis REST API is accessible from the environment
 

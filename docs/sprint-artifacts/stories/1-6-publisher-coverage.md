@@ -23,7 +23,7 @@ so that **users in those locations can find me**.
   - [x] 1.1 Create migration for publisher_cities table
   - [x] 1.2 Create migration for publisher_coverage table
   - [x] 1.3 Add indexes for publisher_id and city_id
-  - [x] 1.4 Run migrations in Supabase
+  - [x] 1.4 Run database migrations
 
 - [x] Task 2: Implement coverage API (AC: 2-6)
   - [x] 2.1 Create api/internal/handlers/coverage.go
@@ -136,7 +136,7 @@ Claude Opus 4.5 (claude-opus-4-5-20251101)
 - 21 Playwright tests pass
 
 ### File List
-- `supabase/migrations/20240007_create_publisher_coverage.sql` - Coverage table with hierarchical support
+- `db/migrations/20240007_create_publisher_coverage.sql` - Coverage table with hierarchical support
 - `api/internal/handlers/coverage.go` - Coverage CRUD handlers
 - `api/internal/models/models.go` - PublisherCoverage, PublisherForCity types added
 - `api/cmd/api/main.go` - Routes: GET/POST/PUT/DELETE /api/v1/publisher/coverage, GET /api/v1/cities/{cityId}/publishers

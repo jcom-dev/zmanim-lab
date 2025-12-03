@@ -7,6 +7,7 @@ import { MapPin, Building, ChevronRight, Loader2, AlertCircle, ArrowLeft } from 
 import Link from 'next/link';
 import { useApi } from '@/lib/api-client';
 import { ModeToggle } from '@/components/mode-toggle';
+import { Footer } from '@/components/shared/Footer';
 
 interface City {
   id: string;
@@ -120,13 +121,13 @@ export default function CityPublishersPage() {
     return (
       <main className="min-h-screen bg-background">
         <div className="container mx-auto px-4 py-12">
-          <div className="bg-red-900/50 border border-red-700 rounded-lg p-6 text-center">
-            <AlertCircle className="w-12 h-12 text-destructive mx-auto mb-4" />
-            <h2 className="text-xl font-bold text-foreground mb-2">Error</h2>
-            <p className="text-red-200 mb-4">{error}</p>
+          <div className="alert-error p-6 text-center">
+            <AlertCircle className="w-12 h-12 alert-error-icon mx-auto mb-4" />
+            <h2 className="text-xl alert-error-title mb-2">Error</h2>
+            <p className="alert-error-text mb-4">{error}</p>
             <Link
               href="/"
-              className="inline-flex items-center gap-2 text-blue-400 hover:text-blue-300"
+              className="inline-flex items-center gap-2 text-primary hover:text-primary/80"
             >
               <ArrowLeft className="w-4 h-4" />
               Back to location selection
@@ -177,21 +178,21 @@ export default function CityPublishersPage() {
 
         {/* No Coverage Warning */}
         {!hasCoverage && (
-          <div className="mb-8 bg-yellow-900/30 border border-yellow-700 rounded-lg p-6">
+          <div className="mb-8 alert-warning p-6">
             <div className="flex items-start gap-4">
-              <AlertCircle className="w-6 h-6 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-1" />
+              <AlertCircle className="w-6 h-6 alert-warning-icon flex-shrink-0 mt-1" />
               <div>
-                <h3 className="text-lg font-semibold text-yellow-600 dark:text-yellow-200 mb-2">
+                <h3 className="text-lg alert-warning-title mb-2">
                   No Local Authority Covers This Area
                 </h3>
-                <p className="text-yellow-100/80 mb-4">
+                <p className="alert-warning-text mb-4">
                   There is no halachic authority registered for this location yet.
                   You can view default zmanim calculated using standard algorithms,
                   but these are not endorsed by a local rabbi.
                 </p>
                 <button
                   onClick={handleUseDefault}
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-foreground rounded-lg transition-colors"
+                  className="btn-warning"
                 >
                   View Default Zmanim
                   <ChevronRight className="w-4 h-4" />
@@ -276,14 +277,7 @@ export default function CityPublishersPage() {
         )}
       </div>
 
-      {/* Footer */}
-      <footer className="mt-auto border-t border-border bg-card/50">
-        <div className="container mx-auto px-4 py-8 text-center">
-          <p className="text-sm text-muted-foreground">
-            Zmanim Lab - Multi-Publisher Prayer Times Platform
-          </p>
-        </div>
-      </footer>
+      <Footer />
     </main>
   );
 }

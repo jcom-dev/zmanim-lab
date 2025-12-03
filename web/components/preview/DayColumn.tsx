@@ -1,4 +1,5 @@
 import { cn } from '@/lib/utils';
+import { ColorBadge, type ColorBadgeColor } from '@/components/ui/color-badge';
 
 interface HebrewDate {
   day: number;
@@ -50,18 +51,18 @@ function formatDayOfWeek(date: string): string {
   return d.toLocaleDateString('en-US', { weekday: 'short' });
 }
 
-function getBadgeVariant(category: string): string {
+function getBadgeColor(category: string): ColorBadgeColor {
   switch (category) {
     case 'major':
-      return 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300';
+      return 'amber';
     case 'fast':
-      return 'bg-muted text-muted-foreground';
+      return 'slate';
     case 'roshchodesh':
-      return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300';
+      return 'blue';
     case 'shabbat':
-      return 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300';
+      return 'purple';
     default:
-      return 'bg-muted text-muted-foreground';
+      return 'slate';
   }
 }
 
@@ -111,16 +112,15 @@ export function DayColumn({ day, zmanim, isToday }: DayColumnProps) {
       {day.holidays.length > 0 && (
         <div className="space-y-1 mb-3">
           {day.holidays.slice(0, 3).map((holiday, idx) => (
-            <div
+            <ColorBadge
               key={`${holiday.name}-${idx}`}
-              className={cn(
-                'text-xs px-2 py-0.5 rounded-full text-center truncate',
-                getBadgeVariant(holiday.category)
-              )}
+              color={getBadgeColor(holiday.category)}
+              size="xs"
+              className="w-full justify-center truncate"
               title={`${holiday.name} - ${holiday.name_hebrew}`}
             >
               <span dir="rtl">{holiday.name_hebrew}</span>
-            </div>
+            </ColorBadge>
           ))}
           {day.holidays.length > 3 && (
             <div className="text-xs text-center text-muted-foreground">

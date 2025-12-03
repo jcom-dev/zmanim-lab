@@ -9,6 +9,7 @@ import { ModeToggle } from '@/components/mode-toggle';
 import { InfoTooltip } from '@/components/shared/InfoTooltip';
 import { USER_TOOLTIPS } from '@/lib/tooltip-content';
 import { useApi } from '@/lib/api-client';
+import { Footer } from '@/components/shared/Footer';
 
 interface Continent {
   code: string;
@@ -543,8 +544,8 @@ export default function Home() {
       {/* Main Content */}
       <div className="container mx-auto px-4 py-8">
         {error && (
-          <div className="mb-6 bg-red-900/50 border border-red-700 rounded-lg p-4">
-            <p className="text-red-200">{error}</p>
+          <div className="mb-6 alert-error">
+            <p className="alert-error-text">{error}</p>
           </div>
         )}
 
@@ -721,26 +722,7 @@ export default function Home() {
         )}
       </div>
 
-      {/* Footer */}
-      <footer className="mt-auto border-t border-border bg-card/50">
-        <div className="container mx-auto px-4 py-8 text-center">
-          <p className="text-sm text-muted-foreground">
-            Zmanim Lab - Multi-Publisher Prayer Times Platform
-          </p>
-          <p className="text-xs text-muted-foreground mt-2">
-            Times are calculated based on astronomical and halachic methods.
-            Consult your local rabbi for practical guidance.
-          </p>
-          <div className="mt-4">
-            <a
-              href="/become-publisher"
-              className="text-sm text-blue-400 hover:text-blue-300 transition-colors"
-            >
-              Become a Publisher
-            </a>
-          </div>
-        </div>
-      </footer>
+      <Footer showDisclaimer showBecomePublisher />
     </main>
   );
 }

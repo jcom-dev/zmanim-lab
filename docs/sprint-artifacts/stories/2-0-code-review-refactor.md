@@ -33,7 +33,7 @@ The last commit attempted to implement algorithm editor functionality and Clerk 
 | `api/internal/handlers/admin.go` | **Good** - AdminCreatePublisher | Keep, add publisher_access_list |
 | `api/internal/handlers/handlers.go` | **Good** - Service injection | Keep |
 | `api/data/templates/*.json` | **Good** - Algorithm templates | Keep |
-| `supabase/migrations/20240005_*.sql` | **Good** - Migration pattern | Keep |
+| `db/migrations/20240005_*.sql` | **Good** - Migration pattern | Keep |
 | `tests/e2e/algorithm-editor.spec.ts` | **Good** - E2E test pattern | Keep |
 | `api/main` | **Remove** - Binary shouldn't be committed | Delete, add to .gitignore |
 | `test.html` | **Review** - Test file in root | Move or remove |

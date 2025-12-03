@@ -1525,7 +1525,7 @@ See detailed specifications:
 - Standard logo size: 200x200px (stored), displayed at various sizes via CSS
 - Update all UI text from "Name" to "Publisher Name" where appropriate
 - Add name validation regex to detect likely personal names
-- Store cropped image to Supabase Storage or existing CDN
+- Store cropped image to cloud storage or existing CDN
 
 **FRs:** FR110 (Mandatory logo), FR111 (Logo image editor), FR112 (Initials generator), FR113 (Publisher name not personal name)
 

@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 import {
   DSL_PRIMITIVES,
   DSL_FUNCTIONS,
-  DSL_SHAOS_BASES,
+  DSL_PROPORTIONAL_BASES,
   DSL_DIRECTIONS,
   DSL_OPERATORS,
   EXAMPLE_PATTERNS,
@@ -221,11 +221,11 @@ export function DSLReferencePanel({
           searchQuery={searchQuery}
         />
 
-        {/* Proportional Hours */}
+        {/* Day Boundary Systems */}
         <Category
-          title="Proportional Hours"
-          count={DSL_SHAOS_BASES.length}
-          items={DSL_SHAOS_BASES}
+          title="Day Boundaries"
+          count={DSL_PROPORTIONAL_BASES.length}
+          items={DSL_PROPORTIONAL_BASES}
           currentFormula={currentFormula}
           onInsert={onInsert}
           defaultOpen={false}

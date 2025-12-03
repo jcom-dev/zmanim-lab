@@ -6,11 +6,8 @@
 zmanim_branch = "main"
 zmanim_repo   = "git@github.com:jcom-dev/zmanim-lab.git"
 
-# Supabase (get from Supabase Dashboard > Project Settings)
-database_url         = "postgresql://postgres:PASSWORD@db.PROJECT.supabase.co:5432/postgres"
-supabase_url         = "https://PROJECT.supabase.co"
-supabase_anon_key    = "eyJ..."
-supabase_service_key = "eyJ..."
+# Database (PostgreSQL connection string)
+database_url = "postgresql://user:password@host:5432/database"
 
 # Upstash Redis (get from Upstash Console > Redis Database > REST API)
 upstash_redis_rest_url   = "https://DATABASE.upstash.io"

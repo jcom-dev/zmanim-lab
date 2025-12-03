@@ -24,12 +24,12 @@ so that **I can onboard halachic authorities to the platform**.
 - [x] Task 1: Create publishers database table (AC: 1-6)
   - [x] 1.1 Create migration for publishers table
   - [x] 1.2 Add indexes for clerk_user_id and status
-  - [x] 1.3 Run migration in Supabase
+  - [x] 1.3 Run database migration
 
 - [x] Task 2: Create system_config database table (AC: 8)
   - [x] 2.1 Create migration for system_config table
   - [x] 2.2 Seed default configuration values
-  - [x] 2.3 Run migration in Supabase
+  - [x] 2.3 Run database migration
 
 - [x] Task 3: Implement admin API handlers (AC: 1-6)
   - [x] 3.1 Create api/internal/handlers/admin.go
@@ -185,8 +185,8 @@ claude-sonnet-4-5 (Code Mode)
 ### File List
 
 **Database Migrations:**
-- `supabase/migrations/20240003_update_publishers_for_admin.sql` (new)
-- `supabase/migrations/20240004_create_system_config.sql` (new)
+- `db/migrations/20240003_update_publishers_for_admin.sql` (new)
+- `db/migrations/20240004_create_system_config.sql` (new)
 
 **Backend API:**
 - `api/internal/handlers/admin.go` (new, 416 lines)

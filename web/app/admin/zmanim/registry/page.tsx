@@ -34,6 +34,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { ZmanRegistryForm, ZmanFormData, ZmanTag } from '@/components/admin/ZmanRegistryForm';
+import { ColorBadge, getTagTypeColor, getTimeCategoryColor, type ColorBadgeColor } from '@/components/ui/color-badge';
 
 interface MasterZman {
   id: string;
@@ -71,23 +72,7 @@ const TIME_CATEGORIES: TimeCategory[] = [
   { key: 'midnight', display_name: 'Midnight' },
 ];
 
-// Tag type colors for display
-const TAG_TYPE_COLORS: Record<string, string> = {
-  event: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200',
-  timing: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200',
-  behavior: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-200',
-};
-
-const categoryColors: Record<string, string> = {
-  dawn: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-200',
-  sunrise: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200',
-  morning: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-200',
-  midday: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-200',
-  afternoon: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-200',
-  sunset: 'bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-200',
-  nightfall: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-200',
-  midnight: 'bg-slate-100 text-slate-800 dark:bg-slate-900/30 dark:text-slate-200',
-};
+// Color mappings are now in ColorBadge component
 
 // Infer tags from the formula DSL
 interface InferredTags {
@@ -520,56 +505,53 @@ export default function AdminRegistryPage() {
                         </code>
                         <div className="flex flex-wrap items-center gap-1">
                           {/* Time category */}
-                          <span
-                            className={`px-2 py-0.5 rounded text-xs font-medium ${
-                              categoryColors[zman.time_category] || 'bg-muted text-foreground'
-                            }`}
-                          >
+                          <ColorBadge color={getTimeCategoryColor(zman.time_category)} size="sm">
                             {zman.time_category}
-                          </span>
+                          </ColorBadge>
                           {/* Inferred shita tag */}
                           {inferredTags.shita && (
-                            <span className="px-2 py-0.5 bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-200 rounded text-xs font-medium">
+                            <ColorBadge color="cyan" size="sm">
                               {inferredTags.shita}
-                            </span>
+                            </ColorBadge>
                           )}
                           {/* Inferred method tag */}
                           {inferredTags.method && (
-                            <span className="px-2 py-0.5 bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-200 rounded text-xs">
+                            <ColorBadge color="violet" size="sm">
                               {inferredTags.method}
-                            </span>
+                            </ColorBadge>
                           )}
                           {/* Relative time (before/after) */}
                           {inferredTags.relative && (
-                            <span className="px-2 py-0.5 bg-pink-100 text-pink-800 dark:bg-pink-900/30 dark:text-pink-200 rounded text-xs">
+                            <ColorBadge color="pink" size="sm">
                               {inferredTags.relative}
-                            </span>
+                            </ColorBadge>
                           )}
                           {/* Display tags from database */}
                           {zman.tags?.slice(0, 4).map((tag) => (
-                            <span
+                            <ColorBadge
                               key={tag.id}
-                              className={`px-2 py-0.5 rounded text-xs ${TAG_TYPE_COLORS[tag.tag_type] || 'bg-muted text-foreground'}`}
+                              color={getTagTypeColor(tag.tag_type)}
+                              size="sm"
                               title={`${tag.tag_type}: ${tag.display_name_english}`}
                             >
                               {tag.display_name_english}
-                            </span>
+                            </ColorBadge>
                           ))}
                           {(zman.tags?.length || 0) > 4 && (
-                            <span className="px-2 py-0.5 bg-muted text-muted-foreground rounded text-xs">
+                            <ColorBadge color="slate" size="sm">
                               +{(zman.tags?.length || 0) - 4} more
-                            </span>
+                            </ColorBadge>
                           )}
                           {/* Status tags */}
                           {zman.is_core && (
-                            <span className="px-2 py-0.5 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200 rounded text-xs">
+                            <ColorBadge color="green" size="sm">
                               Core
-                            </span>
+                            </ColorBadge>
                           )}
                           {zman.is_hidden && (
-                            <span className="px-2 py-0.5 bg-muted text-muted-foreground rounded text-xs">
+                            <ColorBadge color="slate" size="sm">
                               Hidden
-                            </span>
+                            </ColorBadge>
                           )}
                         </div>
                       </div>

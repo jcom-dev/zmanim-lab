@@ -12,7 +12,7 @@ so that **I can develop, test, and debug the application with consistent tooling
 
 1. Coder workspace initializes with Go 1.21+, Node.js 20+, npm 10+
 2. Start script runs web (port 3000) and API (port 8080) simultaneously
-3. Supabase connection works with configured credentials
+3. Xata | Shared dev DBconnection works with configured credentials
 4. Playwright browsers are installed and E2E tests execute
 5. Upstash Redis REST API is accessible from the environment
 
@@ -28,7 +28,7 @@ so that **I can develop, test, and debug the application with consistent tooling
   - [x] 2.1 Configure Go 1.21+ installation
   - [x] 2.2 Configure Node.js 20 LTS installation
   - [x] 2.3 Configure npm 10+ installation
-  - [x] 2.4 Install Supabase CLI
+  - [x] 2.4 Install PostgreSQL CLI
   - [x] 2.5 Install Playwright browsers
 
 - [x] Task 3: Create/update start-services.sh script (AC: 2)
@@ -38,7 +38,7 @@ so that **I can develop, test, and debug the application with consistent tooling
   - [x] 3.4 Add health check verification after startup
 
 - [x] Task 4: Configure environment variables (AC: 3, 5)
-  - [x] 4.1 Add DATABASE_URL (Supabase) configuration
+  - [x] 4.1 Add DATABASE_URL configuration
   - [x] 4.2 Add UPSTASH_REDIS_REST_URL configuration
   - [x] 4.3 Add UPSTASH_REDIS_REST_TOKEN configuration
   - [x] 4.4 Add CLERK_SECRET_KEY configuration
@@ -50,7 +50,7 @@ so that **I can develop, test, and debug the application with consistent tooling
   - [x] 5.3 Run sample E2E test to verify setup
 
 - [x] Task 6: Verify external service connectivity (AC: 3, 5)
-  - [x] 6.1 Test Supabase database connection
+  - [x] 6.1 Test PostgreSQL database connection
   - [x] 6.2 Test Upstash Redis REST API connectivity
   - [x] 6.3 Document troubleshooting steps for connection issues
 
@@ -87,7 +87,7 @@ README.md                  # Setup documentation (TO UPDATE)
 
 | Variable | Service | Purpose |
 |----------|---------|---------|
-| `DATABASE_URL` | Supabase | PostgreSQL connection string |
+| `DATABASE_URL` | Xata | Shared dev DB| PostgreSQL connection string |
 | `UPSTASH_REDIS_REST_URL` | Upstash | Redis REST API endpoint |
 | `UPSTASH_REDIS_REST_TOKEN` | Upstash | Redis authentication token |
 | `CLERK_SECRET_KEY` | Clerk | Backend authentication |
@@ -103,7 +103,7 @@ README.md                  # Setup documentation (TO UPDATE)
 
 | Service | Environment | Notes |
 |---------|-------------|-------|
-| Supabase | Shared dev DB | Production database for MVP |
+| Xata | Shared dev DB|Xata | Shared dev DB | Production database for MVP |
 | Upstash Redis | Shared instance | REST API for caching |
 | Clerk | Development app | Auth service |
 | Fly.io | N/A for this story | API deployment target |
@@ -139,7 +139,7 @@ Claude Opus 4.5 (claude-opus-4-5-20251101)
 
 **2025-11-25 - Implementation Plan:**
 - Adapt .coder/ from shtetl (multi-repo) to zmanim-lab (monorepo)
-- Remove local PostgreSQL/Redis containers (using Supabase/Upstash externally)
+- Remove local PostgreSQL/Redis containers (using Xata/Upstash externally)
 - Update ports: Web 3000, API 8080
 - Add Playwright browser installation for E2E testing
 - Create .env.example with all required variables
@@ -150,9 +150,9 @@ Claude Opus 4.5 (claude-opus-4-5-20251101)
 **2025-11-25 - Story Completed:**
 - Adapted .coder/ from shtetl multi-repo to zmanim-lab monorepo structure
 - Created zmanim-lab-workspace.tf (renamed from shtetl-workspace.tf)
-- Removed local PostgreSQL/Redis containers (using Supabase/Upstash externally)
+- Removed local PostgreSQL/Redis containers (using Xata/Upstash externally)
 - Updated ports: Web 3001, API 8080
-- startup.sh installs Go 1.21+, Node.js 20, Supabase CLI, Playwright
+- startup.sh installs Go 1.21+, Node.js 20, PostgreSQL CLI, Playwright
 - start-services.sh uses tmux for concurrent service management with health checks
 - Created .env.example with all required environment variables
 - Updated README.md with Coder setup instructions (Option 1) and local dev (Option 2)

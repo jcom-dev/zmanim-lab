@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { ColorBadge, getTagTypeColor } from '@/components/ui/color-badge';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -345,13 +346,13 @@ export function MasterZmanPicker({
                                 {zman.tags && zman.tags.length > 0 && (
                                   <div className="flex gap-1 mt-2">
                                     {zman.tags.slice(0, 3).map((tag) => (
-                                      <Badge
+                                      <ColorBadge
                                         key={tag.id}
-                                        variant="secondary"
-                                        className="text-xs"
+                                        color={getTagTypeColor(tag.tag_type)}
+                                        size="sm"
                                       >
                                         {tag.display_name_english}
-                                      </Badge>
+                                      </ColorBadge>
                                     ))}
                                   </div>
                                 )}

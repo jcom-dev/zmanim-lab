@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAdminApi } from '@/lib/api-client';
 import { Sun, Sunrise, Moon, Clock, Loader2 } from 'lucide-react';
+import { ColorBadge, getCalculationTypeColor } from '@/components/ui/color-badge';
 
 interface AstronomicalPrimitive {
   id: string;
@@ -169,29 +170,25 @@ export default function AdminPrimitivesPage() {
                       <td className="py-3 pr-4">
                         <div className="flex flex-wrap items-center gap-1">
                           {/* Calculation type */}
-                          <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                            primitive.calculation_type === 'horizon' ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200' :
-                            primitive.calculation_type === 'solar_angle' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200' :
-                            'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200'
-                          }`}>
+                          <ColorBadge color={getCalculationTypeColor(primitive.calculation_type)} size="sm">
                             {primitive.calculation_type.replace('_', ' ')}
-                          </span>
+                          </ColorBadge>
                           {/* Solar angle if present */}
                           {primitive.solar_angle !== null && primitive.solar_angle !== undefined && (
-                            <span className="px-2 py-0.5 bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-200 rounded text-xs font-mono">
+                            <ColorBadge color="violet" size="sm">
                               {primitive.solar_angle}°
-                            </span>
+                            </ColorBadge>
                           )}
                           {/* Dawn/Dusk indicator */}
                           {primitive.is_dawn === true && (
-                            <span className="px-2 py-0.5 bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-200 rounded text-xs">
+                            <ColorBadge color="orange" size="sm">
                               Dawn
-                            </span>
+                            </ColorBadge>
                           )}
                           {primitive.is_dawn === false && (
-                            <span className="px-2 py-0.5 bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-200 rounded text-xs">
+                            <ColorBadge color="indigo" size="sm">
                               Dusk
-                            </span>
+                            </ColorBadge>
                           )}
                         </div>
                       </td>

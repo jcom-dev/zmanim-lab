@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
+import { ColorBadge, getTagTypeColor, type ColorBadgeColor } from '@/components/ui/color-badge';
 import {
   Select,
   SelectContent,
@@ -93,11 +94,7 @@ const TIME_CATEGORIES = [
   { key: 'midnight', display_name: 'Midnight' },
 ];
 
-const TAG_TYPE_COLORS: Record<string, string> = {
-  event: 'bg-blue-500 hover:bg-blue-600',
-  timing: 'bg-green-500 hover:bg-green-600',
-  behavior: 'bg-purple-500 hover:bg-purple-600',
-};
+// Tag colors are now handled by ColorBadge component
 
 const DEFAULT_FORM_DATA: ZmanFormData = {
   zman_key: '',
@@ -673,20 +670,19 @@ export function ZmanRegistryForm({
                 const tag = allTags.find((t) => t.id === tagId);
                 if (!tag) return null;
 
-                const colorClass =
-                  TAG_TYPE_COLORS[tag.tag_type] || 'bg-gray-500 hover:bg-gray-600';
-
                 return (
                   <button
                     key={tag.id}
                     type="button"
                     onClick={() => !disabled && removeTag(tag.id)}
-                    className={`px-3 py-1 rounded-md text-sm text-white ${colorClass} transition-colors flex items-center gap-1.5 ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    className={`inline-flex items-center gap-1.5 transition-opacity ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:opacity-80'}`}
                     title={disabled ? tag.display_name_english : 'Click to remove'}
                     disabled={disabled}
                   >
-                    {tag.display_name_english}
-                    {!disabled && <span className="text-xs opacity-70">×</span>}
+                    <ColorBadge color={getTagTypeColor(tag.tag_type)} size="sm">
+                      {tag.display_name_english}
+                      {!disabled && <span className="text-xs opacity-70 ml-1">×</span>}
+                    </ColorBadge>
                   </button>
                 );
               })

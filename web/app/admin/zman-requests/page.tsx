@@ -36,6 +36,7 @@ import {
   ReviewSourceInfo,
   ZmanTag,
 } from '@/components/admin/ZmanRegistryForm';
+import { ColorBadge, getTimeCategoryColor } from '@/components/ui/color-badge';
 
 interface ZmanRequest {
   id: string;
@@ -76,21 +77,7 @@ interface ZmanRequestTagResponse {
   existing_tag_type?: string;
 }
 
-const categoryColors: Record<string, string> = {
-  dawn: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-200',
-  sunrise: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200',
-  morning: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-200',
-  midday: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-200',
-  afternoon: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-200',
-  sunset: 'bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-200',
-  nightfall: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-200',
-  midnight: 'bg-slate-100 text-slate-800 dark:bg-slate-900/30 dark:text-slate-200',
-  evening: 'bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-200',
-  night: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-200',
-  event: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200',
-  seasonal: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200',
-  other: 'bg-slate-100 text-slate-800 dark:bg-slate-900/30 dark:text-slate-200',
-};
+// Color mappings are now in ColorBadge component
 
 export default function AdminZmanRequestsPage() {
   const api = useAdminApi();
@@ -481,9 +468,9 @@ export default function AdminZmanRequestsPage() {
 
                   {/* Meta info row */}
                   <div className="flex flex-wrap items-center gap-3 mt-3 text-xs text-muted-foreground">
-                    <span className={`px-2 py-0.5 rounded ${categoryColors[request.time_category] || categoryColors.other}`}>
+                    <ColorBadge color={getTimeCategoryColor(request.time_category)} size="sm">
                       {request.time_category}
-                    </span>
+                    </ColorBadge>
                     {request.publisher_name && (
                       <span className="flex items-center gap-1">
                         <User className="h-3 w-3" />

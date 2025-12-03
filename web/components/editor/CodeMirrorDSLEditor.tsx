@@ -730,7 +730,21 @@ export const CodeMirrorDSLEditor = forwardRef<CodeMirrorDSLEditorRef, CodeMirror
           onInsert={(value) => {
             const view = editorViewRef.current;
             if (view) {
-              const { from, to } = view.state.selection.main;
+              // Use paramStart/paramEnd from context to replace the entire parameter
+              const context = tooltipState.context;
+              let from: number, to: number;
+
+              if ('paramStart' in context && 'paramEnd' in context) {
+                // Replace the entire current parameter value
+                from = context.paramStart;
+                to = context.paramEnd;
+              } else {
+                // Fallback to current selection (for empty_editor, etc.)
+                const sel = view.state.selection.main;
+                from = sel.from;
+                to = sel.to;
+              }
+
               view.dispatch({
                 changes: { from, to, insert: value },
                 selection: { anchor: from + value.length },

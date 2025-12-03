@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { ColorBadge, getTagTypeColor } from '@/components/ui/color-badge';
 import { HighlightedFormula } from '@/components/shared/HighlightedFormula';
 import {
   PublisherZman,
@@ -627,19 +628,11 @@ export function ZmanCard({ zman, category, onEdit, displayLanguage = 'both' }: Z
           {/* Database Tags from Master Zman */}
           {zman.tags && zman.tags.length > 0 && (
             <div className="flex flex-wrap items-center gap-1.5 mt-2">
-              {zman.tags.map((tag) => {
-                const colorClass = tag.tag_type === 'event'
-                  ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200 border-blue-300 dark:border-blue-700'
-                  : tag.tag_type === 'timing'
-                  ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200 border-green-300 dark:border-green-700'
-                  : 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-200 border-purple-300 dark:border-purple-700';
-
-                return (
-                  <Badge key={tag.id} variant="outline" className={`text-xs ${colorClass}`}>
-                    {tag.display_name_english}
-                  </Badge>
-                );
-              })}
+              {zman.tags.map((tag) => (
+                <ColorBadge key={tag.id} color={getTagTypeColor(tag.tag_type)} size="sm">
+                  {tag.display_name_english}
+                </ColorBadge>
+              ))}
             </div>
           )}
 
@@ -651,19 +644,19 @@ export function ZmanCard({ zman, category, onEdit, displayLanguage = 'both' }: Z
             return (
               <div className="flex flex-wrap items-center gap-1.5 mt-2">
                 {inferredTags.shita && (
-                  <Badge variant="outline" className="text-xs bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-200 border-cyan-300 dark:border-cyan-700">
+                  <ColorBadge color="cyan" size="sm">
                     {inferredTags.shita}
-                  </Badge>
+                  </ColorBadge>
                 )}
                 {inferredTags.method && (
-                  <Badge variant="outline" className="text-xs bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-200 border-violet-300 dark:border-violet-700">
+                  <ColorBadge color="violet" size="sm">
                     {inferredTags.method}
-                  </Badge>
+                  </ColorBadge>
                 )}
                 {inferredTags.relative && (
-                  <Badge variant="outline" className="text-xs bg-pink-100 text-pink-800 dark:bg-pink-900/30 dark:text-pink-200 border-pink-300 dark:border-pink-700">
+                  <ColorBadge color="pink" size="sm">
                     {inferredTags.relative}
-                  </Badge>
+                  </ColorBadge>
                 )}
               </div>
             );

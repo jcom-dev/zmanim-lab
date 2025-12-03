@@ -164,12 +164,11 @@ async function loginAsAdmin(page: Page) {
 
 ```typescript
 // test-fixtures.ts
-import { createClient } from '@supabase/supabase-js';
+import { Pool } from 'pg';
 
-const supabase = createClient(
-  process.env.SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_KEY! // Service key for admin access
-);
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL
+});
 
 export async function createTestPublisherEntity(overrides = {}) {
   const testPublisher = {
@@ -180,14 +179,14 @@ export async function createTestPublisherEntity(overrides = {}) {
     ...overrides
   };
 
-  const { data, error } = await supabase
-    .from('publishers')
-    .insert(testPublisher)
-    .select()
-    .single();
+  const result = await pool.query(
+    `INSERT INTO publishers (name, organization, email, status)
+     VALUES ($1, $2, $3, $4)
+     RETURNING *`,
+    [testPublisher.name, testPublisher.organization, testPublisher.email, testPublisher.status]
+  );
 
-  if (error) throw error;
-  return data;
+  return result.rows[0];
 }
 
 export async function createTestAlgorithm(publisherId: string) {
@@ -205,14 +204,14 @@ export async function createTestAlgorithm(publisherId: string) {
     }
   };
 
-  const { data, error } = await supabase
-    .from('algorithms')
-    .insert(testAlgorithm)
-    .select()
-    .single();
+  const result = await pool.query(
+    `INSERT INTO algorithms (publisher_id, name, status, config)
+     VALUES ($1, $2, $3, $4)
+     RETURNING *`,
+    [testAlgorithm.publisher_id, testAlgorithm.name, testAlgorithm.status, testAlgorithm.config]
+  );
 
-  if (error) throw error;
-  return data;
+  return result.rows[0];
 }
 ```
 
@@ -237,10 +236,9 @@ export async function cleanupTestUsers() {
 
 export async function cleanupTestData() {
   // Delete test publishers (cascades to algorithms, coverage)
-  await supabase
-    .from('publishers')
-    .delete()
-    .like('email', '%@test.zmanim-lab.local');
+  await pool.query(
+    `DELETE FROM publishers WHERE email LIKE '%@test.zmanim-lab.local'`
+  );
 }
 ```
 
@@ -249,8 +247,7 @@ export async function cleanupTestData() {
 ```env
 # Already configured
 CLERK_SECRET_KEY=sk_test_...
-SUPABASE_URL=https://...
-SUPABASE_SERVICE_KEY=eyJ...  # Service role key for admin DB access
+DATABASE_URL=postgresql://...
 
 # May need to add
 CLERK_PUBLISHABLE_KEY=pk_test_...
@@ -281,7 +278,7 @@ export default defineConfig({
 ### Phase 1: Setup
 - [ ] Install `@clerk/backend` package in tests
 - [ ] Create file structure under `tests/e2e/`
-- [ ] Add `SUPABASE_SERVICE_KEY` to environment
+- [ ] Add `DATABASE_URL` to environment
 - [ ] Update Playwright config with global setup/teardown
 
 ### Phase 2: Clerk Auth Helpers
@@ -347,7 +344,7 @@ Key decision: Use Clerk Backend API for programmatic auth rather than simulating
 ### Debug Log
 
 **2025-11-27:**
-- Installed @clerk/backend and @supabase/supabase-js packages in tests/
+- Installed @clerk/backend and pg packages in tests/
 - Created test utility file structure under tests/e2e/utils/
 - Implemented Clerk auth helpers with sign-in token strategy
 - Implemented database fixtures for publishers, algorithms, coverage

@@ -127,11 +127,6 @@ if [ -n "$DATABASE_URL" ]; then
 DATABASE_URL=${DATABASE_URL}
 REDIS_URL=${REDIS_URL}
 
-# Supabase (for storage/auth features)
-SUPABASE_URL=${SUPABASE_URL}
-SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
-SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
-
 # Authentication
 CLERK_SECRET_KEY=${CLERK_SECRET_KEY}
 CLERK_JWKS_URL=${CLERK_JWKS_URL}
@@ -169,9 +164,6 @@ CLERK_TEST_SECRET_KEY=${CLERK_TEST_SECRET_KEY:-}
 
 # API & Database
 NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8080}
-NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
-NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
-
 # Email
 MAILSLURP_API_KEY=${MAILSLURP_API_KEY:-}
 RESEND_API_KEY=${RESEND_API_KEY}
@@ -198,9 +190,6 @@ NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${CLERK_TEST_PUBLISHABLE_KEY:-${NEXT_PUBLIC_CL
 
 # Database (local PostgreSQL via Docker network)
 DATABASE_URL=${DATABASE_URL}
-SUPABASE_URL=${SUPABASE_URL}
-NEXT_PUBLIC_SUPABASE_URL=${SUPABASE_URL}
-SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
 
 # Cache (local Redis via Docker network)
 REDIS_URL=${REDIS_URL}
@@ -236,13 +225,21 @@ else
     print_success "nano already installed"
 fi
 
-# Step 8b: Install PostgreSQL client
-print_status "Installing PostgreSQL client..."
-if ! command -v psql &> /dev/null; then
-    sudo apt-get update -qq && sudo apt-get install -y postgresql-client > /dev/null 2>&1
-    print_success "PostgreSQL client installed"
+# Step 8b: Install PostgreSQL 17 client from official PGDG repository
+print_status "Installing PostgreSQL 17 client..."
+PSQL_VERSION=$(psql --version 2>/dev/null | grep -oP '\d+' | head -1 || echo "0")
+if [ "$PSQL_VERSION" != "17" ]; then
+    # Add PostgreSQL APT repository
+    sudo apt-get install -y curl ca-certificates > /dev/null 2>&1
+    sudo install -d /usr/share/postgresql-common/pgdg
+    sudo curl -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc --fail https://www.postgresql.org/media/keys/ACCC4CF8.asc 2>/dev/null
+    . /etc/os-release
+    sudo sh -c "echo 'deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main' > /etc/apt/sources.list.d/pgdg.list"
+    sudo apt-get update -qq
+    sudo apt-get install -y postgresql-client-17 > /dev/null 2>&1
+    print_success "PostgreSQL 17 client installed"
 else
-    print_success "PostgreSQL client already installed"
+    print_success "PostgreSQL 17 client already installed ($(psql --version))"
 fi
 
 # Step 8c: Install Redis client
@@ -452,7 +449,6 @@ echo "  - nano $(nano --version 2>/dev/null | head -n1 || echo 'not found')"
 echo "  - Claude Code $(claude --version 2>/dev/null || echo 'not found')"
 echo "  - Fly.io CLI $(flyctl version 2>/dev/null | head -n1 || echo 'not found')"
 echo "  - uv $(uv --version 2>/dev/null || echo 'not found')"
-echo "  - Supabase CLI (via npx supabase)"
 echo "  - Playwright (Chromium)"
 echo ""
 echo "🛠️  Utilities:"

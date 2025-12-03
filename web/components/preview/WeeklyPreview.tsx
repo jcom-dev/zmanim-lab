@@ -181,8 +181,8 @@ export function WeeklyPreview({
 
       {/* Error state */}
       {error && (
-        <div className="p-4 bg-red-50 dark:bg-red-900/20 rounded-lg text-center">
-          <p className="text-red-600 dark:text-red-400">{error}</p>
+        <div className="alert-error text-center">
+          <p className="alert-error-text">{error}</p>
           <Button variant="link" onClick={fetchWeekData} className="mt-2">
             Retry
           </Button>

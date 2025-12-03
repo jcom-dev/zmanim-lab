@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
 import {
   Select,
   SelectContent,
@@ -12,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { ColorBadge, getCalculationTypeColor } from '@/components/ui/color-badge';
 import { cn } from '@/lib/utils';
 import { useZmanimList, useAstronomicalPrimitivesGrouped } from '@/lib/hooks/useZmanimList';
 import { Loader2, EyeOff, Star, Clock, ChevronDown, ChevronRight } from 'lucide-react';
@@ -152,17 +152,17 @@ export function FixedOffsetForm({
                       <div className="flex items-center gap-2">
                         <span className="font-medium">{primitive.display_name}</span>
                         {primitive.calculation_type && (
-                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200 border-amber-300 dark:border-amber-700">
+                          <ColorBadge color={getCalculationTypeColor(primitive.calculation_type)} size="xs">
                             {primitive.calculation_type === 'solar_angle' ? 'Solar Angle' :
                              primitive.calculation_type === 'horizon' ? 'Horizon' :
                              primitive.calculation_type === 'transit' ? 'Transit' :
                              primitive.calculation_type}
-                          </Badge>
+                          </ColorBadge>
                         )}
                         {primitive.solar_angle !== null && primitive.solar_angle !== undefined && (
-                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200 border-blue-300 dark:border-blue-700">
+                          <ColorBadge color="blue" size="xs">
                             {primitive.solar_angle}°
-                          </Badge>
+                          </ColorBadge>
                         )}
                       </div>
                       <span className="text-xs text-muted-foreground">
@@ -233,14 +233,14 @@ export function FixedOffsetForm({
                           {(tags.shita || tags.method) && (
                             <div className="flex gap-1">
                               {tags.shita && (
-                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-200 border-cyan-300 dark:border-cyan-700">
+                                <ColorBadge color="cyan" size="xs">
                                   {tags.shita}
-                                </Badge>
+                                </ColorBadge>
                               )}
                               {tags.method && (
-                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-200 border-violet-300 dark:border-violet-700">
+                                <ColorBadge color="violet" size="xs">
                                   {tags.method}
-                                </Badge>
+                                </ColorBadge>
                               )}
                             </div>
                           )}

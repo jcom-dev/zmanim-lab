@@ -108,7 +108,6 @@ npm run test:suite
 zmanim-lab/
 ├── .env.clerk          # Clerk keys (prod + test)
 ├── .env.mailslurp      # MailSlurp API key
-├── .env.supabase       # Production database
 ├── .env.resend         # Email service
 ├── .env.upstash        # Optional (using local Redis)
 │

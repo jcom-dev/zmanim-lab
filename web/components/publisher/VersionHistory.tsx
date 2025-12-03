@@ -125,8 +125,8 @@ export function VersionHistory({ onClose }: VersionHistoryProps) {
         )}
 
         {error && (
-          <div className="bg-red-900/50 border border-red-700 rounded-md p-4 mb-4">
-            <p className="text-red-200 text-sm">{error}</p>
+          <div className="alert-error mb-4">
+            <p className="alert-error-text text-sm">{error}</p>
           </div>
         )}
 

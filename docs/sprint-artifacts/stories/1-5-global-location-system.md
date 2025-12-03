@@ -22,7 +22,7 @@ so that **I can see relevant zmanim publishers**.
   - [x] 1.1 Create migration for cities table
   - [x] 1.2 Add indexes for search (name, country, region)
   - [x] 1.3 Add spatial index for nearby queries
-  - [x] 1.4 Run migration in Supabase
+  - [x] 1.4 Run database migration
 
 - [x] Task 2: Seed city database (AC: 2, 3, 5)
   - [x] 2.1 Choose data source (GeoNames or SimpleMaps)
@@ -135,11 +135,11 @@ Claude Opus 4.5 (claude-opus-4-5-20251101)
 - 14 Playwright tests pass
 
 ### File List
-- `supabase/migrations/20240005_create_cities_table.sql` - Cities table with trigram + spatial indexes
-- `supabase/migrations/20240006_seed_cities.sql` - 120+ global cities with proper region types
+- `db/migrations/20240005_create_cities_table.sql` - Cities table with trigram + spatial indexes
+- `db/migrations/20240006_seed_cities.sql` - 120+ global cities with proper region types
 - `api/internal/handlers/cities.go` - SearchCities, GetNearbyCity handlers
 - `api/internal/models/models.go` - City, CitySearchResponse types added
 - `api/cmd/api/main.go` - Routes: GET /api/v1/cities, GET /api/v1/cities/nearby
 - `web/components/shared/LocationPicker.tsx` - City search with geolocation + localStorage
 - `web/tests/global-location-system.spec.ts` - 14 E2E tests
-- `scripts/run-migration.js` - Node.js migration runner for Supabase
+- `scripts/run-migration.js` - Node.js migration runner

@@ -225,7 +225,7 @@ func (h *Handlers) GetZmanim(w http.ResponseWriter, r *http.Request) {
 
 ### Database Migration
 
-**File to create:** `supabase/migrations/XXXXXX_create_calculation_logs.sql`
+**File to create:** `db/migrations/XXXXXX_create_calculation_logs.sql`
 
 ```sql
 -- Create calculation logs table for analytics

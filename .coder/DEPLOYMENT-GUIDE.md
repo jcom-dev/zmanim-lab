@@ -63,7 +63,6 @@ The project uses separate `.env.*` files in the project root for each service:
    ```
 
 3. **Verify existing files** (should already exist):
-   - `.env.supabase` - Database credentials
    - `.env.resend` - Email service
    - `.env.upstash` - Optional (using local Redis now)
 
@@ -115,8 +114,7 @@ The project uses separate `.env.*` files in the project root for each service:
 
    # Database (auto-configured by Coder)
    TEST_DATABASE_URL=postgresql://zmanim_test:test_password@localhost:5433/zmanim_test
-   SUPABASE_URL=postgresql://zmanim_test:test_password@localhost:5433/zmanim_test
-   SUPABASE_SERVICE_KEY=test_service_key
+   DATABASE_URL=postgresql://zmanim_test:test_password@localhost:5433/zmanim_test
 
    # Application URL
    BASE_URL=http://localhost:3001
@@ -160,7 +158,7 @@ The project uses separate `.env.*` files in the project root for each service:
 
 | Service | Production | Test (E2E) |
 |---------|-----------|------------|
-| **Database** | Supabase (external) | PostgreSQL `localhost:5433` |
+| **Database** | Xata (external) | PostgreSQL `localhost:5433` |
 | **Cache** | Upstash Redis (external) | Redis `localhost:6380` |
 | **Clerk** | Live instance (`pk_live_...`) | Test instance (`pk_test_...`) |
 | **Email** | Resend (production) | MailSlurp (testing) |

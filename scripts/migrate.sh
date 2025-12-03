@@ -8,23 +8,25 @@ set -e
 if [[ -d "/home/coder" ]] && [[ -f "/home/coder/workspace/zmanim-lab/api/.env" ]]; then
     echo "Running database migrations..."
 
-    # Extract database URL from api/.env
-    source /home/coder/workspace/zmanim-lab/api/.env
+    # Use DATABASE_URL from environment, or fall back to .env file
+    if [[ -z "$DATABASE_URL" ]]; then
+        source /home/coder/workspace/zmanim-lab/api/.env
+    fi
 
     # Parse DATABASE_URL
     # Format: postgresql://user:password@host:port/database
     if [[ -z "$DATABASE_URL" ]]; then
-        echo "Error: DATABASE_URL not set in api/.env"
+        echo "Error: DATABASE_URL not set in environment or api/.env"
         exit 1
     fi
 
     # Extract components using regex
     if [[ $DATABASE_URL =~ postgresql://([^:]+):([^@]+)@([^:]+):([0-9]+)/(.+) ]]; then
-        DB_USER="${BASH_REMATCH[1]}"
-        DB_PASS="${BASH_REMATCH[2]}"
-        DB_HOST="${BASH_REMATCH[3]}"
-        DB_PORT="${BASH_REMATCH[4]}"
-        DB_NAME="${BASH_REMATCH[5]}"
+        export DB_USER="${BASH_REMATCH[1]}"
+        export DB_PASS="${BASH_REMATCH[2]}"
+        export DB_HOST="${BASH_REMATCH[3]}"
+        export DB_PORT="${BASH_REMATCH[4]}"
+        export DB_NAME="${BASH_REMATCH[5]}"
     else
         echo "Error: Could not parse DATABASE_URL"
         exit 1

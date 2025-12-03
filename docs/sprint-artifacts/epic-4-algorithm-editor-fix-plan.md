@@ -292,7 +292,7 @@ Returns: [{key, result, breakdown}]
 | `api/cmd/api/main.go:152` | Add 4 missing routes (POST, GET/{key}, PUT, DELETE) + import route | 15 min |
 | `api/internal/handlers/publisher_zmanim.go` | Add `ImportZmanim` handler for bulk import | 45 min |
 | `api/internal/handlers/preferences.go` | NEW: User preferences handlers (Get/Update) | 30 min |
-| `supabase/migrations/XXXXXX_user_preferences.sql` | NEW: Add user_publisher_preferences table | 15 min |
+| `db/migrations/XXXXXX_user_preferences.sql` | NEW: Add user_publisher_preferences table | 15 min |
 
 ### Frontend Changes
 

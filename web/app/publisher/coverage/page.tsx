@@ -220,8 +220,8 @@ export default function PublisherCoveragePage() {
         </div>
 
         {error && (
-          <div className="mb-6 bg-red-900/50 border border-red-700 dark:bg-red-950 dark:border-red-700 rounded-lg p-4">
-            <p className="text-red-200 dark:text-red-300">{error}</p>
+          <div className="mb-6 alert-error">
+            <p className="alert-error-text">{error}</p>
           </div>
         )}
 

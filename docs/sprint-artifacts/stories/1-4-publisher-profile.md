@@ -20,7 +20,7 @@ so that **end users can identify and trust my organization**.
 
 - [x] Task 1: Extend publishers table for profile fields (AC: 2, 3)
   - [x] 1.1 Add migration for website, logo_url, bio columns
-  - [x] 1.2 Run migration in Supabase
+  - [x] 1.2 Run database migration
 
 - [x] Task 2: Implement publisher profile API (AC: 1, 2)
   - [x] 2.1 Create api/internal/handlers/publishers.go
@@ -29,7 +29,7 @@ so that **end users can identify and trust my organization**.
   - [x] 2.4 Validate required fields server-side
 
 - [x] Task 3: Implement logo upload (AC: 3)
-  - [x] 3.1 Configure Supabase Storage bucket for logos
+  - [x] 3.1 Configure Xata | Shared dev DBStorage bucket for logos
   - [x] 3.2 POST /api/publisher/logo - upload logo
   - [x] 3.3 Return logo_url after upload
   - [x] 3.4 Validate file type and size
@@ -57,7 +57,7 @@ so that **end users can identify and trust my organization**.
 ### Architecture Patterns
 
 - **Form Handling:** react-hook-form + zod validation
-- **File Storage:** Supabase Storage with public bucket
+- **File Storage:** Xata | Shared dev DBStorage with public bucket
 - **Image Optimization:** Consider next/image for logo display
 
 ### Source Tree Components
@@ -84,7 +84,7 @@ api/internal/handlers/
 | email | Yes | string | Contact email |
 | website | No | string | URL |
 | bio | No | string | Description |
-| logo_url | No | string | Supabase Storage URL |
+| logo_url | No | string | Xata | Shared dev DBStorage URL |
 
 ### References
 
@@ -103,7 +103,7 @@ Claude Opus 4.5 (claude-opus-4-5-20251101)
 
 ### Debug Log References
 - All 6 tasks found already implemented in codebase
-- Database schema: `supabase/migrations/20240001_initial_schema.sql` + `20240003_update_publishers_for_admin.sql`
+- Database schema: `db/migrations/20240001_initial_schema.sql` + `20240003_update_publishers_for_admin.sql`
 - Backend handlers: `api/internal/handlers/handlers.go` (GetPublisherProfile, UpdatePublisherProfile)
 - Upload handler: `api/internal/handlers/upload.go` (UploadPublisherLogo)
 - Frontend page: `web/app/publisher/profile/page.tsx`
@@ -124,10 +124,10 @@ Claude Opus 4.5 (claude-opus-4-5-20251101)
 - E2E tests created for publisher profile feature
 
 ### File List
-- `supabase/migrations/20240001_initial_schema.sql` - Initial schema with website, logo_url columns
-- `supabase/migrations/20240003_update_publishers_for_admin.sql` - Added bio column, clerk_user_id
+- `db/migrations/20240001_initial_schema.sql` - Initial schema with website, logo_url columns
+- `db/migrations/20240003_update_publishers_for_admin.sql` - Added bio column, clerk_user_id
 - `api/internal/handlers/handlers.go` - GetPublisherProfile, UpdatePublisherProfile handlers
-- `api/internal/handlers/upload.go` - UploadPublisherLogo handler with Supabase Storage
+- `api/internal/handlers/upload.go` - UploadPublisherLogo handler with Xata | Shared dev DBStorage
 - `api/internal/models/models.go` - Publisher model with all profile fields
 - `api/cmd/api/main.go` - Routes: GET/PUT /api/v1/publisher/profile, POST /api/v1/publisher/logo
 - `web/app/publisher/profile/page.tsx` - Profile page with form and validation

@@ -562,7 +562,7 @@ function ActivitySkeleton() {
 
 ## Database Migration
 
-**File to create:** `supabase/migrations/XXXXXX_create_activity_logs.sql`
+**File to create:** `db/migrations/XXXXXX_create_activity_logs.sql`
 
 ```sql
 -- Create activity logs table

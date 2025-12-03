@@ -11,7 +11,7 @@ Status: Draft
 
 Epic 2 transforms the Zmanim Lab platform from entity-only publisher management to full user lifecycle integration. This epic enables admins to invite real users to manage publishers via Clerk authentication, supports users managing multiple publishers with a dashboard switcher, provides admin impersonation for support, and builds a comprehensive publisher dashboard with analytics and activity logging.
 
-This builds directly on Epic 1's foundation (Clerk auth, publisher CRUD, coverage management) and leverages existing infrastructure including the Go backend with Chi router, Next.js frontend with Clerk React components, and Supabase PostgreSQL database.
+This builds directly on Epic 1's foundation (Clerk auth, publisher CRUD, coverage management) and leverages existing infrastructure including the Go backend with Chi router, Next.js frontend with Clerk React components, and PostgreSQL database.
 
 ## Objectives and Scope
 

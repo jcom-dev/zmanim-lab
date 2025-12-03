@@ -58,8 +58,8 @@ export default function PublisherAnalyticsPage() {
     return (
       <div className="p-8">
         <div className="max-w-4xl mx-auto">
-          <div className="bg-red-900/50 border border-red-700 dark:bg-red-950 dark:border-red-700 rounded-lg p-4">
-            <p className="text-red-200 dark:text-red-300">{error}</p>
+          <div className="alert-error">
+            <p className="alert-error-text">{error}</p>
           </div>
         </div>
       </div>

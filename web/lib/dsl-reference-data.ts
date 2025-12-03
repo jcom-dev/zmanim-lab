@@ -183,6 +183,9 @@ export const DSL_FUNCTIONS: ReferenceItem[] = [
         commonValues: [
           { value: 'gra', label: 'gra', description: 'GRA (sunrise to sunset)' },
           { value: 'mga', label: 'mga', description: 'MGA (72 min before/after)' },
+          { value: 'mga_90', label: 'mga_90', description: 'MGA 90 (90 min before/after)' },
+          { value: 'mga_120', label: 'mga_120', description: 'MGA 120 (120 min before/after)' },
+          { value: 'custom(@alos, @tzeis)', label: 'custom', description: 'Custom day boundaries' },
         ],
       },
     ],
@@ -246,8 +249,8 @@ export const DSL_FUNCTIONS: ReferenceItem[] = [
   },
 ];
 
-// Proportional hours bases for reference
-export const DSL_SHAOS_BASES: ReferenceItem[] = [
+// Day boundary systems for proportional_hours calculations
+export const DSL_PROPORTIONAL_BASES: ReferenceItem[] = [
   {
     name: 'gra',
     description: 'GRA method: sunrise to sunset',
@@ -271,6 +274,33 @@ export const DSL_SHAOS_BASES: ReferenceItem[] = [
     description: 'MGA 120 method: 120 min before sunrise to 120 min after sunset',
     snippet: 'mga_120',
     category: 'function',
+  },
+  {
+    name: 'custom',
+    signature: 'custom(start, end)',
+    description: 'Custom day boundaries: define your own dawn and dusk times',
+    snippet: 'custom(start, end)',
+    realWorldExample: 'custom(solar(16.1, before_sunrise), solar(8.5, after_sunset))',
+    category: 'function',
+    parameters: [
+      {
+        name: 'start',
+        type: 'time',
+        description: 'Day start time (e.g., your alos definition)',
+        defaultValue: 'solar(16.1, before_sunrise)',
+      },
+      {
+        name: 'end',
+        type: 'time',
+        description: 'Day end time (e.g., your tzeis definition)',
+        defaultValue: 'solar(8.5, after_sunset)',
+      },
+    ],
+    quickInsertChips: [
+      { value: 'custom(@alos, @tzeis)', label: 'Reference-based', description: 'Use your own alos/tzeis' },
+      { value: 'custom(solar(16.1, before_sunrise), solar(8.5, after_sunset))', label: '16.1°/8.5°', description: 'Angle-based day' },
+      { value: 'custom(sunrise - 72min, sunset + 72min)', label: '72 min offset', description: 'MGA style with fixed minutes' },
+    ],
   },
 ];
 
@@ -341,6 +371,14 @@ export const EXAMPLE_PATTERNS: ExamplePattern[] = [
   {
     formula: 'proportional_hours(4, gra)',
     description: 'End of 4th proportional hour (Sof Zman Shema)',
+  },
+  {
+    formula: 'proportional_hours(3, custom(@alos, @tzeis))',
+    description: 'Shema using custom day boundaries (references your alos/tzeis)',
+  },
+  {
+    formula: 'proportional_hours(4, custom(solar(16.1, before_sunrise), solar(8.5, after_sunset)))',
+    description: 'Tefila using 16.1°/8.5° angle-based day',
   },
   {
     formula: 'sunset - 18min',

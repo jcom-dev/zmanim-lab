@@ -19,6 +19,9 @@
     "test:errors": "playwright test --project=chromium e2e/errors/",
     "test:suite": "playwright test --project=chromium e2e/",
     "test:no-cleanup": "SKIP_CLEANUP=true playwright test",
+    "cleanup": "npx tsx cleanup-test-data.ts",
+    "cleanup:clerk": "npx tsx cleanup-clerk-users.ts",
+    "cleanup:all": "npx tsx cleanup-test-data.ts && npx tsx cleanup-clerk-users.ts",
     "report": "playwright show-report test-results/html-report",
     "install:browsers": "playwright install chromium"
   },

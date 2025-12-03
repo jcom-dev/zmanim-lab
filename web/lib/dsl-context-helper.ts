@@ -5,15 +5,15 @@
 
 export type DSLContext =
   | { type: 'empty_editor' }
-  | { type: 'solar_degrees'; position: number }
-  | { type: 'solar_direction'; position: number }
-  | { type: 'proportional_hours'; position: number }
-  | { type: 'proportional_base'; position: number }
-  | { type: 'midpoint_first'; position: number }
-  | { type: 'midpoint_second'; position: number }
-  | { type: 'min_max_first'; position: number; func: 'min' | 'max' }
-  | { type: 'min_max_second'; position: number; func: 'min' | 'max' }
-  | { type: 'reference'; position: number }
+  | { type: 'solar_degrees'; position: number; paramStart: number; paramEnd: number }
+  | { type: 'solar_direction'; position: number; paramStart: number; paramEnd: number }
+  | { type: 'proportional_hours'; position: number; paramStart: number; paramEnd: number }
+  | { type: 'proportional_base'; position: number; paramStart: number; paramEnd: number }
+  | { type: 'midpoint_first'; position: number; paramStart: number; paramEnd: number }
+  | { type: 'midpoint_second'; position: number; paramStart: number; paramEnd: number }
+  | { type: 'min_max_first'; position: number; func: 'min' | 'max'; paramStart: number; paramEnd: number }
+  | { type: 'min_max_second'; position: number; func: 'min' | 'max'; paramStart: number; paramEnd: number }
+  | { type: 'reference'; position: number; paramStart: number; paramEnd: number }
   | { type: 'primitive' }
   | { type: 'operator'; afterValue: boolean }
   | { type: 'unknown' };
@@ -38,6 +38,8 @@ function findInnermostFunction(formula: string, cursorPos: number): {
   funcName: string;
   paramIndex: number;
   funcStart: number;
+  paramStart: number;
+  paramEnd: number;
 } | null {
   const beforeCursor = formula.slice(0, cursorPos);
 
@@ -64,12 +66,44 @@ function findInnermostFunction(formula: string, cursorPos: number): {
           const textAfterParen = beforeCursor.slice(i + 1);
           commaCount = 0;
           let nestedDepth = 0;
-          for (const c of textAfterParen) {
+          let lastCommaOrParenPos = i; // Position of opening paren or last comma at our level
+          for (let j = 0; j < textAfterParen.length; j++) {
+            const c = textAfterParen[j];
             if (c === '(') nestedDepth++;
             else if (c === ')') nestedDepth--;
-            else if (c === ',' && nestedDepth === 0) commaCount++;
+            else if (c === ',' && nestedDepth === 0) {
+              commaCount++;
+              lastCommaOrParenPos = i + 1 + j; // Update to comma position
+            }
           }
-          return { funcName, paramIndex: commaCount, funcStart: i - funcMatch[1].length };
+
+          // paramStart is after the opening paren or comma (skip leading whitespace)
+          let paramStart = lastCommaOrParenPos + 1;
+          while (paramStart < cursorPos && /\s/.test(formula[paramStart])) {
+            paramStart++;
+          }
+
+          // paramEnd is before closing paren or next comma (scan forward from cursor)
+          let paramEnd = cursorPos;
+          nestedDepth = 0;
+          for (let j = cursorPos; j < formula.length; j++) {
+            const c = formula[j];
+            if (c === '(') nestedDepth++;
+            else if (c === ')') {
+              if (nestedDepth > 0) nestedDepth--;
+              else { paramEnd = j; break; }
+            }
+            else if (c === ',' && nestedDepth === 0) {
+              paramEnd = j;
+              break;
+            }
+          }
+          // Trim trailing whitespace from paramEnd
+          while (paramEnd > paramStart && /\s/.test(formula[paramEnd - 1])) {
+            paramEnd--;
+          }
+
+          return { funcName, paramIndex: commaCount, funcStart: i - funcMatch[1].length, paramStart, paramEnd };
         }
         return null;
       }
@@ -91,49 +125,56 @@ export function getDSLContext(formula: string, cursorPos: number): DSLContext {
   const beforeCursor = formula.slice(0, cursorPos);
 
   // Check if we're typing a reference (@...)
-  if (beforeCursor.match(/@\w*$/)) {
-    return { type: 'reference', position: cursorPos };
+  const refMatch = beforeCursor.match(/@\w*$/);
+  if (refMatch) {
+    const refStart = cursorPos - refMatch[0].length;
+    // Find end of reference (continue while word chars)
+    let refEnd = cursorPos;
+    while (refEnd < formula.length && /\w/.test(formula[refEnd])) {
+      refEnd++;
+    }
+    return { type: 'reference', position: cursorPos, paramStart: refStart, paramEnd: refEnd };
   }
 
   // Find innermost function context
   const funcContext = findInnermostFunction(formula, cursorPos);
 
   if (funcContext) {
-    const { funcName, paramIndex } = funcContext;
+    const { funcName, paramIndex, paramStart, paramEnd } = funcContext;
 
     // solar(degrees, direction)
     if (funcName === 'solar') {
       if (paramIndex === 0) {
-        return { type: 'solar_degrees', position: cursorPos };
+        return { type: 'solar_degrees', position: cursorPos, paramStart, paramEnd };
       } else if (paramIndex === 1) {
-        return { type: 'solar_direction', position: cursorPos };
+        return { type: 'solar_direction', position: cursorPos, paramStart, paramEnd };
       }
     }
 
     // proportional_hours(hours, base)
     if (funcName === 'proportional_hours') {
       if (paramIndex === 0) {
-        return { type: 'proportional_hours', position: cursorPos };
+        return { type: 'proportional_hours', position: cursorPos, paramStart, paramEnd };
       } else if (paramIndex === 1) {
-        return { type: 'proportional_base', position: cursorPos };
+        return { type: 'proportional_base', position: cursorPos, paramStart, paramEnd };
       }
     }
 
     // midpoint(time1, time2)
     if (funcName === 'midpoint') {
       if (paramIndex === 0) {
-        return { type: 'midpoint_first', position: cursorPos };
+        return { type: 'midpoint_first', position: cursorPos, paramStart, paramEnd };
       } else if (paramIndex === 1) {
-        return { type: 'midpoint_second', position: cursorPos };
+        return { type: 'midpoint_second', position: cursorPos, paramStart, paramEnd };
       }
     }
 
     // min(time1, time2) or max(time1, time2)
     if (funcName === 'min' || funcName === 'max') {
       if (paramIndex === 0) {
-        return { type: 'min_max_first', position: cursorPos, func: funcName };
+        return { type: 'min_max_first', position: cursorPos, func: funcName, paramStart, paramEnd };
       } else if (paramIndex === 1) {
-        return { type: 'min_max_second', position: cursorPos, func: funcName };
+        return { type: 'min_max_second', position: cursorPos, func: funcName, paramStart, paramEnd };
       }
     }
   }
@@ -212,7 +253,9 @@ export const TOOLTIP_CONTENT: Record<string, TooltipData> = {
       { value: 'mga_90', label: 'mga_90', description: 'MGA 90: 90 min before/after' },
       { value: 'mga_120', label: 'mga_120', description: 'MGA 120: 120 min before/after' },
       { value: 'alos_16_1', label: 'alos_16_1', description: 'Using 16.1° for alos/tzeis' },
+      { value: 'custom(@alos, @tzeis)', label: 'custom(...)', description: 'Define your own day boundaries' },
     ],
+    hint: 'Use custom(start, end) for arbitrary boundaries',
   },
   midpoint_first: {
     title: '📍 First Time: Starting point',

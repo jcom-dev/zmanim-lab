@@ -20,7 +20,7 @@ See `docs/coding-standards.md` sections:
 **Image Handling:**
 - `react-easy-crop` handles EXIF orientation but verify on mobile uploads
 - Output format should be PNG for transparency support (initials may need transparent bg in future)
-- Supabase Storage bucket must be configured with public access for logos
+- Xata | Shared dev DBStorage bucket must be configured with public access for logos
 
 **Personal Name Detection:**
 - The regex patterns will have false positives (e.g., "Young Israel of X" triggers "Israel" as name)
@@ -370,7 +370,7 @@ export function getNameWarning(name: string): string | null {
   - [ ] 7.3 Handle migration for existing publishers
 
 - [ ] Task 8: Image Storage
-  - [ ] 8.1 Upload cropped image to Supabase Storage
+  - [ ] 8.1 Upload cropped image to Xata | Shared dev DBStorage
   - [ ] 8.2 Generate public URL
   - [ ] 8.3 Store URL in publisher profile
 
@@ -392,7 +392,7 @@ export function getNameWarning(name: string): string | null {
 - [ ] Initials generator works
 - [ ] Personal name warning shows (non-blocking, dismissable)
 - [ ] "Publisher Name" terminology consistent across UI
-- [ ] Images stored in Supabase Storage (bucket configured with public access)
+- [ ] Images stored in Xata | Shared dev DBStorage (bucket configured with public access)
 - [ ] Mobile upload tested
 
 ---
