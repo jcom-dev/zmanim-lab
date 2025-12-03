@@ -175,12 +175,13 @@ export default defineConfig({
 
   // Run local dev server before starting the tests (disabled when using MCP)
   // The MCP server manages browser instances separately
+  // In CI, the E2E workflow starts the server separately, so we just reuse it
   webServer: process.env.PLAYWRIGHT_MCP
     ? undefined
     : {
         command: 'cd ../web && npm run dev',
         url: baseURL,
-        reuseExistingServer: !process.env.CI,
+        reuseExistingServer: true, // Always reuse - CI starts server in workflow, local dev starts separately
         timeout: 120000,
       },
 
