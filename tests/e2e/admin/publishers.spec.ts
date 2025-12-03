@@ -10,7 +10,7 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { loginAsAdmin, BASE_URL } from '../utils';
+import { loginAsAdmin, BASE_URL, getSharedPublisher } from '../utils';
 
 // Enable parallel mode for faster test execution
 test.describe.configure({ mode: 'parallel' });
@@ -96,44 +96,48 @@ test.describe('Admin Publisher Details', () => {
     await loginAsAdmin(page);
   });
 
-  // Use existing test publishers from seed data
-  const testPublisherId = process.env.TEST_PUBLISHER_VERIFIED_ID || '39e3a6d4-c601-4ea6-8dca-d67667bdc645';
-
   test('admin can view publisher details', async ({ page }) => {
-    await page.goto(`${BASE_URL}/admin/publishers/${testPublisherId}`);
+    // Use shared fixture - gets ID at runtime
+    const publisher = getSharedPublisher('verified-1');
+    await page.goto(`${BASE_URL}/admin/publishers/${publisher.id}`);
     await page.waitForLoadState('networkidle');
 
     // Should see publisher details (name might vary)
     await expect(page.getByRole('heading').first()).toBeVisible();
 
-    // Should see publisher details card
-    await expect(page.getByText(/details|information|profile/i).first()).toBeVisible();
+    // Should see publisher details card - look for "Publisher Details" title
+    await expect(page.getByText(/Publisher Details/i).first()).toBeVisible();
   });
 
   test('publisher details shows Quick Actions section', async ({ page }) => {
-    await page.goto(`${BASE_URL}/admin/publishers/${testPublisherId}`);
+    const publisher = getSharedPublisher('verified-1');
+    await page.goto(`${BASE_URL}/admin/publishers/${publisher.id}`);
     await page.waitForLoadState('networkidle');
 
-    // Quick actions or similar
-    await expect(page.getByText(/actions|quick|manage/i).first()).toBeVisible();
+    // Quick Actions is a CardTitle
+    await expect(page.getByText('Quick Actions')).toBeVisible();
   });
 
   test('publisher details has impersonation button', async ({ page }) => {
-    await page.goto(`${BASE_URL}/admin/publishers/${testPublisherId}`);
+    const publisher = getSharedPublisher('verified-1');
+    await page.goto(`${BASE_URL}/admin/publishers/${publisher.id}`);
     await page.waitForLoadState('networkidle');
 
-    await expect(page.getByRole('button', { name: /impersonate|view as/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Impersonate Publisher/i })).toBeVisible();
   });
 
   test('publisher details shows Users section', async ({ page }) => {
-    await page.goto(`${BASE_URL}/admin/publishers/${testPublisherId}`);
+    const publisher = getSharedPublisher('verified-1');
+    await page.goto(`${BASE_URL}/admin/publishers/${publisher.id}`);
     await page.waitForLoadState('networkidle');
 
-    await expect(page.getByText(/users|members|team/i).first()).toBeVisible();
+    // Users section is a CardTitle
+    await expect(page.getByText(/Users|Team Members/i).first()).toBeVisible();
   });
 
   test('admin can open invite user dialog', async ({ page }) => {
-    await page.goto(`${BASE_URL}/admin/publishers/${testPublisherId}`);
+    const publisher = getSharedPublisher('verified-1');
+    await page.goto(`${BASE_URL}/admin/publishers/${publisher.id}`);
     await page.waitForLoadState('networkidle');
 
     // Click invite user button
@@ -148,7 +152,8 @@ test.describe('Admin Publisher Details', () => {
   });
 
   test('admin can open edit publisher dialog', async ({ page }) => {
-    await page.goto(`${BASE_URL}/admin/publishers/${testPublisherId}`);
+    const publisher = getSharedPublisher('verified-1');
+    await page.goto(`${BASE_URL}/admin/publishers/${publisher.id}`);
     await page.waitForLoadState('networkidle');
 
     // Click edit button
@@ -163,7 +168,8 @@ test.describe('Admin Publisher Details', () => {
   });
 
   test('admin sees delete publisher option', async ({ page }) => {
-    await page.goto(`${BASE_URL}/admin/publishers/${testPublisherId}`);
+    const publisher = getSharedPublisher('verified-1');
+    await page.goto(`${BASE_URL}/admin/publishers/${publisher.id}`);
     await page.waitForLoadState('networkidle');
 
     // Should see delete button - use exact name since there are multiple action buttons
@@ -177,13 +183,9 @@ test.describe('Admin Publisher Status Changes', () => {
     await loginAsAdmin(page);
   });
 
-  // Use existing test publishers from seed data
-  const pendingPublisherId = process.env.TEST_PUBLISHER_PENDING_ID || '78d60053-83ce-422d-b699-1357cc10fb09';
-  const verifiedPublisherId = process.env.TEST_PUBLISHER_VERIFIED_ID || '39e3a6d4-c601-4ea6-8dca-d67667bdc645';
-  const suspendedPublisherId = process.env.TEST_PUBLISHER_SUSPENDED_ID || 'a751a5e0-5b0c-4ae4-bdf8-8021e40640a6';
-
   test('pending publisher shows verify button', async ({ page }) => {
-    await page.goto(`${BASE_URL}/admin/publishers/${pendingPublisherId}`);
+    const publisher = getSharedPublisher('pending');
+    await page.goto(`${BASE_URL}/admin/publishers/${publisher.id}`);
     await page.waitForLoadState('networkidle');
 
     // Should see verify button if still pending, or suspend button if already verified by another test
@@ -195,7 +197,8 @@ test.describe('Admin Publisher Status Changes', () => {
   });
 
   test('verified publisher shows suspend button', async ({ page }) => {
-    await page.goto(`${BASE_URL}/admin/publishers/${verifiedPublisherId}`);
+    const publisher = getSharedPublisher('verified-2');
+    await page.goto(`${BASE_URL}/admin/publishers/${publisher.id}`);
     await page.waitForLoadState('networkidle');
 
     // Should see suspend button
@@ -203,7 +206,8 @@ test.describe('Admin Publisher Status Changes', () => {
   });
 
   test('suspended publisher shows reactivate button', async ({ page }) => {
-    await page.goto(`${BASE_URL}/admin/publishers/${suspendedPublisherId}`);
+    const publisher = getSharedPublisher('suspended');
+    await page.goto(`${BASE_URL}/admin/publishers/${publisher.id}`);
     await page.waitForLoadState('networkidle');
 
     // Should see reactivate button
@@ -211,7 +215,8 @@ test.describe('Admin Publisher Status Changes', () => {
   });
 
   test('admin can verify a pending publisher', async ({ page }) => {
-    await page.goto(`${BASE_URL}/admin/publishers/${pendingPublisherId}`);
+    const publisher = getSharedPublisher('pending');
+    await page.goto(`${BASE_URL}/admin/publishers/${publisher.id}`);
     await page.waitForLoadState('networkidle');
 
     // Find and click verify button
