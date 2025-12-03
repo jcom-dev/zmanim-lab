@@ -331,6 +331,17 @@ async function performClerkSignIn(page: Page, email: string): Promise<void> {
     { timeout: 60000 }
   );
 
+  // Check if already signed in (from storage state)
+  const isAlreadySignedIn = await page.evaluate(() => {
+    const clerk = (window as any).Clerk;
+    return clerk?.user !== null && clerk?.session?.status === 'active';
+  });
+
+  if (isAlreadySignedIn) {
+    // Already signed in from storage state, skip sign-in
+    return;
+  }
+
   // Sign in using email-based approach (more reliable in test environments)
   await clerk.signIn({
     page,

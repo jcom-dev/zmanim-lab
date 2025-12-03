@@ -81,12 +81,13 @@ test.describe('Admin Dashboard', () => {
     await expect(page.getByText('Total Publishers').first()).toBeVisible({ timeout: 10000 });
   });
 
-  test('admin portal shows pending requests banner', async ({ page }) => {
+  test('admin portal shows publisher requests section', async ({ page }) => {
     await page.goto(`${BASE_URL}/admin`);
     await page.waitForLoadState('networkidle');
 
-    // Should see pending requests banner
-    await expect(page.getByText('Pending Publisher Requests')).toBeVisible();
+    // Should see publisher requests info section
+    await expect(page.getByText('Publisher Requests')).toBeVisible();
+    await expect(page.getByText('Publisher Management').first()).toBeVisible();
   });
 
   test('admin can navigate from portal to publisher management', async ({ page }) => {
