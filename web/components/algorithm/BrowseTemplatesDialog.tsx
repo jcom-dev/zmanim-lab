@@ -182,7 +182,7 @@ export function BrowseTemplatesDialog({
         <HighlightedFormula formula={zman.formula_dsl} className="text-xs" />
         {zman.publisher_comment && (
           <p className="text-xs text-muted-foreground mt-2 italic">
-            "{zman.publisher_comment}"
+            &ldquo;{zman.publisher_comment}&rdquo;
           </p>
         )}
       </CardContent>

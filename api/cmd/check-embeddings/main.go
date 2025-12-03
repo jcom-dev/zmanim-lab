@@ -17,7 +17,7 @@ func main() {
 	defer pool.Close()
 
 	var count int
-	pool.QueryRow(context.Background(), "SELECT COUNT(*) FROM embeddings").Scan(&count)
+	_ = pool.QueryRow(context.Background(), "SELECT COUNT(*) FROM embeddings").Scan(&count)
 	fmt.Printf("Total embeddings: %d\n", count)
 
 	rows, _ := pool.Query(context.Background(), "SELECT source, content_type, COUNT(*) FROM embeddings GROUP BY source, content_type ORDER BY source")
@@ -25,7 +25,7 @@ func main() {
 	for rows.Next() {
 		var s, ct string
 		var c int
-		rows.Scan(&s, &ct, &c)
+		_ = rows.Scan(&s, &ct, &c)
 		fmt.Printf("  %s (%s): %d\n", s, ct, c)
 	}
 }

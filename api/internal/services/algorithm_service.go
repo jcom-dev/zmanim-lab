@@ -126,7 +126,7 @@ func (s *AlgorithmService) SaveAlgorithm(ctx context.Context, publisherID string
 			return nil, fmt.Errorf("failed to update algorithm: %w", err)
 		}
 
-		json.Unmarshal([]byte(configStr), &algo.Config)
+		_ = json.Unmarshal([]byte(configStr), &algo.Config)
 	} else {
 		// Create new draft
 		query := `
@@ -147,7 +147,7 @@ func (s *AlgorithmService) SaveAlgorithm(ctx context.Context, publisherID string
 			return nil, fmt.Errorf("failed to create algorithm: %w", err)
 		}
 
-		json.Unmarshal([]byte(configStr), &algo.Config)
+		_ = json.Unmarshal([]byte(configStr), &algo.Config)
 	}
 
 	algo.Version = 1

@@ -462,7 +462,7 @@ func (h *Handlers) GetEventZmanimGrouped(w http.ResponseWriter, r *http.Request)
 		}
 
 		// Parse tags
-		json.Unmarshal(tagsJSON, &z.Tags)
+		_ = json.Unmarshal(tagsJSON, &z.Tags)
 
 		// Determine category from behavior tags
 		category := ""

@@ -59,7 +59,7 @@ func main() {
 	fmt.Println("\nAlgorithms table columns:")
 	for rows.Next() {
 		var name, dtype string
-		rows.Scan(&name, &dtype)
+		_ = rows.Scan(&name, &dtype)
 		fmt.Printf("  - %s (%s)\n", name, dtype)
 	}
 }

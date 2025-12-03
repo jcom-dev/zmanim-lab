@@ -43,9 +43,7 @@ function findInnermostFunction(formula: string, cursorPos: number): {
 
   // Track parenthesis depth and find the last open function
   let depth = 0;
-  let lastFuncMatch: { funcName: string; funcStart: number; openPos: number } | null = null;
   let commaCount = 0;
-  let commaPositions: number[] = [];
 
   // Scan backwards from cursor to find our function context
   for (let i = beforeCursor.length - 1; i >= 0; i--) {

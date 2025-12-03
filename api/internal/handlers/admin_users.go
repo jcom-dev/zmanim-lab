@@ -211,7 +211,7 @@ func (h *Handlers) AdminAddUser(w http.ResponseWriter, r *http.Request) {
 			go func() {
 				// Get publisher name
 				var pubName string
-				h.db.Pool.QueryRow(context.Background(),
+				_ = h.db.Pool.QueryRow(context.Background(),
 					"SELECT name FROM publishers WHERE id = $1", pubID).Scan(&pubName)
 				if pubName == "" {
 					pubName = "the publisher"

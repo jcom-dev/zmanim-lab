@@ -163,7 +163,7 @@ func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
 			w.Header().Set("Retry-After", fmt.Sprintf("%d", resetSeconds))
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusTooManyRequests)
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
 				"error": map[string]interface{}{
 					"code":    "RATE_LIMITED",
 					"message": "Rate limit exceeded. Please try again later.",

@@ -194,7 +194,7 @@ export function BilingualInput({
               <span className="text-destructive">Must contain Hebrew characters (א-ת)</span>
             ) : hebrewChanged ? (
               <span className="text-muted-foreground">
-                Changed from <span className="font-hebrew">"{sourceHebrewName}"</span>
+                Changed from <span className="font-hebrew">&ldquo;{sourceHebrewName}&rdquo;</span>
               </span>
             ) : null}
           </div>
@@ -264,7 +264,7 @@ export function BilingualInput({
             {errors?.name_english ? (
               <p className="text-destructive">{errors.name_english}</p>
             ) : englishChanged ? (
-              <p className="text-muted-foreground">Changed from "{sourceEnglishName}"</p>
+              <p className="text-muted-foreground">Changed from &ldquo;{sourceEnglishName}&rdquo;</p>
             ) : null}
           </div>
         </div>
@@ -336,7 +336,7 @@ export function BilingualInput({
             {errors?.transliteration ? (
               <p className="text-destructive">{errors.transliteration}</p>
             ) : transliterationChanged ? (
-              <p className="text-muted-foreground">Changed from "{sourceTransliteration}"</p>
+              <p className="text-muted-foreground">Changed from &ldquo;{sourceTransliteration}&rdquo;</p>
             ) : (
               <p className="text-muted-foreground">Phonetic pronunciation for non-Hebrew speakers</p>
             )}

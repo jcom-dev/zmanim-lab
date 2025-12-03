@@ -464,7 +464,7 @@ func verifyRS256(message, signature []byte, key *rsa.PublicKey) error {
 func respondAuthError(w http.ResponseWriter, status int, code, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"error": map[string]interface{}{
 			"code":    code,
 			"message": message,

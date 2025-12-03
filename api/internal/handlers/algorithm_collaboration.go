@@ -112,7 +112,7 @@ func (h *Handlers) BrowsePublicAlgorithms(w http.ResponseWriter, r *http.Request
 
 	// Get total count
 	var total int
-	h.db.Pool.QueryRow(ctx, `
+	_ = h.db.Pool.QueryRow(ctx, `
 		SELECT COUNT(*) FROM algorithms
 		WHERE is_public = true AND is_active = true
 	`).Scan(&total)

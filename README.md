@@ -237,12 +237,21 @@ For comprehensive testing documentation, see [tests/TESTING.md](./tests/TESTING.
 
 See [docs/](./docs/) for comprehensive documentation:
 
-- [Index](./docs/index.md) - Documentation overview
-- [Architecture](./docs/ARCHITECTURE.md) - System design
+- [Documentation Index](./docs/README.md) - Documentation overview and navigation
+- [Developer Guide](./docs/DEVELOPER_GUIDE.md) - Complete developer onboarding
+- [Architecture](./docs/architecture.md) - System design and patterns
+- [Coding Standards](./docs/coding-standards.md) - Development standards
 - [API Reference](./docs/api-reference.md) - REST endpoints
 - [Data Models](./docs/data-models.md) - Database schema
 - [Deployment](./docs/deployment.md) - Deployment guide
 - [Testing Guide](./tests/TESTING.md) - E2E testing with Playwright
+
+### Business Documentation
+
+For non-technical stakeholders:
+- [What is Zmanim Lab?](./docs/business/01-what-is-zmanim-lab.md) - Vision and purpose
+- [Features List](./docs/business/02-features-comprehensive-list.md) - Comprehensive feature overview
+- [Technical Overview](./docs/business/03-technical-architecture.md) - High-level architecture
 
 ## Tech Stack
 
