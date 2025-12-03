@@ -143,23 +143,11 @@ async function performSignIn(page: any, email: string): Promise<void> {
     { timeout: 60000 }
   );
 
-  // Sign in using password strategy first
-  try {
-    await clerk.signIn({
-      page,
-      signInParams: {
-        strategy: 'password',
-        identifier: email,
-        password: TEST_PASSWORD,
-      },
-    });
-  } catch (error: any) {
-    console.log('Password sign-in failed, trying email-based sign-in...');
-    await clerk.signIn({
-      page,
-      emailAddress: email,
-    });
-  }
+  // Sign in using email-based approach (more reliable in test environments)
+  await clerk.signIn({
+    page,
+    emailAddress: email,
+  });
 
   // Wait for authentication to complete
   await page.waitForFunction(
