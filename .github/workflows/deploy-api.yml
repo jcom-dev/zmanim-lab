@@ -34,13 +34,21 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
+      # Install PostgreSQL 17 client for database checks
+      - name: Install PostgreSQL 17 Client
+        run: |
+          sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
+
       # Post-deploy: Seed geographic data if not already present
       - name: Seed Geographic Data (if needed)
         run: |
           echo "Checking if geographic data exists..."
-          CITY_COUNT=$(flyctl ssh console -C "psql \$DATABASE_URL -t -c 'SELECT COUNT(*) FROM cities'" 2>/dev/null | tr -d ' \n' || echo "0")
+          CITY_COUNT=$(psql "$DATABASE_URL" -t -c 'SELECT COUNT(*) FROM cities' 2>/dev/null | tr -d ' \n' || echo "0")
           echo "Current city count: $CITY_COUNT"
-          if [ "$CITY_COUNT" -lt "1000" ]; then
+          if [ -z "$CITY_COUNT" ] || [ "$CITY_COUNT" -lt "1000" ]; then
             echo "Geographic data missing or incomplete. Running seed-geo..."
             go run ./cmd/seed-geo/
             echo "Geographic data seeded"
@@ -48,22 +56,20 @@ jobs:
             echo "Geographic data already exists ($CITY_COUNT cities). Skipping seed."
           fi
         env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
       # Post-deploy: Run RAG indexer if embeddings table is empty
       - name: Run RAG Indexer (if needed)
         run: |
           echo "Checking if RAG embeddings exist..."
-          EMBEDDING_COUNT=$(flyctl ssh console -C "psql \$DATABASE_URL -t -c 'SELECT COUNT(*) FROM embeddings'" 2>/dev/null | tr -d ' \n' || echo "0")
+          EMBEDDING_COUNT=$(psql "$DATABASE_URL" -t -c 'SELECT COUNT(*) FROM embeddings' 2>/dev/null | tr -d ' \n' || echo "0")
           echo "Current embedding count: $EMBEDDING_COUNT"
-          if [ "$EMBEDDING_COUNT" -lt "10" ]; then
+          if [ -z "$EMBEDDING_COUNT" ] || [ "$EMBEDDING_COUNT" -lt "10" ]; then
             echo "RAG embeddings missing or incomplete. Running indexer..."
             go run ./cmd/indexer/ || echo "Indexer failed - pgvector may not be available"
           else
             echo "RAG embeddings already exist ($EMBEDDING_COUNT embeddings). Skipping indexer."
           fi
         env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
