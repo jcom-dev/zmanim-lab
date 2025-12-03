@@ -33,6 +33,7 @@ linters-settings:
       - all
       - -SA1019 # Ignore deprecation warnings (strings.Title)
       - -SA1026 # Ignore marshal warnings for pgx types
+      - -SA4006 # Ignore "value never used" (common in dynamic SQL builders)
       - -SA9003 # Ignore empty branch warnings
 
 issues:
