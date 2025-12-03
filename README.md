@@ -195,41 +195,68 @@ Zmanim Lab uses **Playwright** for E2E testing with support for AI-assisted test
 ### Quick Start
 
 ```bash
-# Install test dependencies
+# Install test dependencies (first time only)
 cd tests
 npm install
 npx playwright install chromium
+```
 
-# Run all tests (requires app running on localhost:3001)
+### Run Tests (Desktop Only - ~2.5 min)
+
+```bash
+cd tests
+
+# Clean previous auth state (recommended for fresh runs)
+rm -rf test-results/.auth
+
+# Run tests
 npx playwright test
-
-# Run tests with UI mode
-npx playwright test --ui
-
-# View test report
-npx playwright show-report test-results/html-report
 ```
 
-### Test Structure
+### Run Tests Including Mobile (~7-9 min)
 
+```bash
+cd tests
+rm -rf test-results/.auth
+INCLUDE_MOBILE=true npx playwright test
 ```
-tests/
-├── playwright.config.ts    # Playwright configuration
-├── e2e/                    # E2E test specs
-│   ├── home.spec.ts        # Home page tests
-│   ├── auth.spec.ts        # Authentication tests
-│   └── helpers/            # Test utilities & MCP helpers
-└── test-results/           # Output (gitignored)
+
+### Fresh Start (If Tests Fail with Auth Errors)
+
+```bash
+cd tests
+rm -rf test-results/   # Full clean
+npx playwright test
+```
+
+### Test Execution Order
+
+Tests run automatically in this order:
+1. **Setup** - Signs in as admin & publisher (once)
+2. **chromium-admin** - Admin tests
+3. **chromium-publisher** - Publisher tests
+4. **chromium** - Public page tests
+5. **mobile-*** - Mobile tests (only with `INCLUDE_MOBILE=true`)
+
+### Services Required
+
+Ensure both services are running:
+```bash
+curl http://localhost:3001  # Web - should return HTML
+curl http://localhost:8080/health  # API - should return OK
 ```
 
 ### Common Commands
 
 | Command | Description |
 |---------|-------------|
-| `npx playwright test` | Run all tests |
-| `npx playwright test --headed` | Run with visible browser |
+| `npx playwright test` | Run all tests (desktop) |
+| `INCLUDE_MOBILE=true npx playwright test` | Run with mobile |
+| `npx playwright test --ui` | Interactive UI mode |
+| `npx playwright test --headed` | Visible browser |
 | `npx playwright test --debug` | Debug mode |
 | `npx playwright test home.spec.ts` | Run specific file |
+| `npx playwright show-report test-results/html-report` | View report |
 
 For comprehensive testing documentation, see [tests/TESTING.md](./tests/TESTING.md).
 

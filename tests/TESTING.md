@@ -51,17 +51,72 @@ npm install
 npx playwright install chromium
 ```
 
-### Run All Tests
+### Run All Tests (Desktop Only - Fastest ~2.5 min)
 
 ```bash
 cd tests
+
+# Clean previous auth state (recommended for fresh runs)
+rm -rf test-results/.auth
+
+# Run tests
 npx playwright test
+```
+
+### Run All Tests Including Mobile (~7-9 min)
+
+```bash
+cd tests
+
+# Clean previous auth state
+rm -rf test-results/.auth
+
+# Run with mobile viewports
+INCLUDE_MOBILE=true npx playwright test
 ```
 
 ### Run Tests in UI Mode
 
 ```bash
 npx playwright test --ui
+```
+
+### Fresh Start (If Tests Fail with Auth Errors)
+
+If you see auth-related errors like "already signed in" or storage state issues:
+
+```bash
+cd tests
+
+# Full clean - removes all test artifacts
+rm -rf test-results/
+
+# Run fresh
+npx playwright test
+```
+
+---
+
+## Test Execution Order
+
+Tests run automatically in this order:
+
+1. **Setup project** - Creates admin & publisher auth (signs in once)
+2. **chromium-admin** - Admin tests (uses admin auth storage)
+3. **chromium-publisher** - Publisher tests (uses publisher auth storage)
+4. **chromium** - Public/unauthenticated tests
+5. **mobile-*** - Mobile versions (only if `INCLUDE_MOBILE=true`)
+
+### Services Required
+
+Make sure these are running before tests:
+- Web app: `http://localhost:3001`
+- API: `http://localhost:8080`
+
+Verify with:
+```bash
+curl http://localhost:3001  # Should return HTML
+curl http://localhost:8080/health  # Should return OK
 ```
 
 ---
@@ -195,6 +250,7 @@ tests/
 |----------|---------|-------------|
 | `BASE_URL` | `http://localhost:3001` | Application URL |
 | `CI` | - | Set in CI environments |
+| `INCLUDE_MOBILE` | - | Set to `true` to run mobile viewport tests |
 | `PLAYWRIGHT_MCP` | - | Set when using MCP server |
 
 ### Running with Application
