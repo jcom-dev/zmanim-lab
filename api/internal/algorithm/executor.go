@@ -254,20 +254,20 @@ func (e *Executor) GetSunTimes() *astro.SunTimes {
 func getOrderedZmanimKeys(config *AlgorithmConfig) []string {
 	// Define standard order
 	standardOrder := map[string]int{
-		"alos_hashachar":    1,
-		"misheyakir":        2,
-		"sunrise":           3,
-		"sof_zman_shma_mga": 4,
-		"sof_zman_shma_gra": 5,
+		"alos_hashachar":     1,
+		"misheyakir":         2,
+		"sunrise":            3,
+		"sof_zman_shma_mga":  4,
+		"sof_zman_shma_gra":  5,
 		"sof_zman_tfila_mga": 6,
 		"sof_zman_tfila_gra": 7,
-		"chatzos":           8,
-		"mincha_gedola":     9,
-		"mincha_ketana":     10,
-		"plag_hamincha":     11,
-		"sunset":            12,
-		"tzais":             13,
-		"tzais_72":          14,
+		"chatzos":            8,
+		"mincha_gedola":      9,
+		"mincha_ketana":      10,
+		"plag_hamincha":      11,
+		"sunset":             12,
+		"tzais":              13,
+		"tzais_72":           14,
 	}
 
 	keys := make([]string, 0, len(config.Zmanim))

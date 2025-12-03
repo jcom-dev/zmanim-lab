@@ -287,7 +287,7 @@ func main() {
 			r.Get("/algorithm/methods", h.GetZmanMethods)
 			// Publisher zmanim management (Story 4-4)
 			r.Get("/zmanim", h.GetPublisherZmanim)
-			r.Get("/zmanim/week", h.GetPublisherZmanimWeek) // Batch week preview with caching
+			r.Get("/zmanim/week", h.GetPublisherZmanimWeek)      // Batch week preview with caching
 			r.Post("/zmanim", h.CreatePublisherZmanFromRegistry) // Updated: create from registry
 			r.Post("/zmanim/import", h.ImportZmanim)
 			r.Post("/zmanim/from-publisher", h.CreateZmanFromPublisher) // Copy or link from another publisher

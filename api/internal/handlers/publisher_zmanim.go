@@ -104,22 +104,22 @@ type UpdateZmanRequest struct {
 // DayContext contains day-specific information for zmanim filtering
 // This is entirely database/tag-driven - no hardcoded logic
 type DayContext struct {
-	Date                 string   `json:"date"`                   // YYYY-MM-DD
-	DayOfWeek            int      `json:"day_of_week"`            // 0=Sunday, 6=Saturday
-	DayName              string   `json:"day_name"`               // "Sunday", "Friday", etc.
-	HebrewDate           string   `json:"hebrew_date"`            // "23 Kislev 5785"
-	HebrewDateFormatted  string   `json:"hebrew_date_formatted"`  // Hebrew letters format
-	IsErevShabbos        bool     `json:"is_erev_shabbos"`        // Friday
-	IsShabbos            bool     `json:"is_shabbos"`             // Saturday
-	IsYomTov             bool     `json:"is_yom_tov"`             // Yom Tov day
-	IsFastDay            bool     `json:"is_fast_day"`            // Fast day
-	Holidays             []string `json:"holidays"`               // Holiday names
-	ActiveEventCodes     []string `json:"active_event_codes"`     // Event codes active today
-	ShowCandleLighting   bool     `json:"show_candle_lighting"`   // Should show candle lighting zmanim
-	ShowHavdalah         bool     `json:"show_havdalah"`          // Should show havdalah zmanim
-	ShowFastStart        bool     `json:"show_fast_start"`        // Should show fast start zmanim
-	ShowFastEnd          bool     `json:"show_fast_end"`          // Should show fast end zmanim
-	SpecialContexts      []string `json:"special_contexts"`       // shabbos_to_yomtov, etc.
+	Date                string   `json:"date"`                  // YYYY-MM-DD
+	DayOfWeek           int      `json:"day_of_week"`           // 0=Sunday, 6=Saturday
+	DayName             string   `json:"day_name"`              // "Sunday", "Friday", etc.
+	HebrewDate          string   `json:"hebrew_date"`           // "23 Kislev 5785"
+	HebrewDateFormatted string   `json:"hebrew_date_formatted"` // Hebrew letters format
+	IsErevShabbos       bool     `json:"is_erev_shabbos"`       // Friday
+	IsShabbos           bool     `json:"is_shabbos"`            // Saturday
+	IsYomTov            bool     `json:"is_yom_tov"`            // Yom Tov day
+	IsFastDay           bool     `json:"is_fast_day"`           // Fast day
+	Holidays            []string `json:"holidays"`              // Holiday names
+	ActiveEventCodes    []string `json:"active_event_codes"`    // Event codes active today
+	ShowCandleLighting  bool     `json:"show_candle_lighting"`  // Should show candle lighting zmanim
+	ShowHavdalah        bool     `json:"show_havdalah"`         // Should show havdalah zmanim
+	ShowFastStart       bool     `json:"show_fast_start"`       // Should show fast start zmanim
+	ShowFastEnd         bool     `json:"show_fast_end"`         // Should show fast end zmanim
+	SpecialContexts     []string `json:"special_contexts"`      // shabbos_to_yomtov, etc.
 }
 
 // PublisherZmanWithTime extends PublisherZman with calculated time
@@ -267,22 +267,22 @@ func (h *Handlers) GetPublisherZmanim(w http.ResponseWriter, r *http.Request) {
 	}
 
 	dayCtx := DayContext{
-		Date:                 dateStr,
-		DayOfWeek:            int(date.Weekday()),
-		DayName:              dayNames[date.Weekday()],
-		HebrewDate:           hebrewDate.Formatted,
-		HebrewDateFormatted:  hebrewDate.Hebrew,
-		IsErevShabbos:        date.Weekday() == time.Friday,
-		IsShabbos:            date.Weekday() == time.Saturday,
-		IsYomTov:             false, // Will be set below
-		IsFastDay:            zmanimCtx.ShowFastStarts || zmanimCtx.ShowFastEnds,
-		Holidays:             holidayNames,
-		ActiveEventCodes:     zmanimCtx.ActiveEventCodes,
-		ShowCandleLighting:   zmanimCtx.ShowCandleLighting || zmanimCtx.ShowCandleLightingSheni,
-		ShowHavdalah:         zmanimCtx.ShowShabbosYomTovEnds,
-		ShowFastStart:        zmanimCtx.ShowFastStarts,
-		ShowFastEnd:          zmanimCtx.ShowFastEnds,
-		SpecialContexts:      zmanimCtx.DisplayContexts,
+		Date:                dateStr,
+		DayOfWeek:           int(date.Weekday()),
+		DayName:             dayNames[date.Weekday()],
+		HebrewDate:          hebrewDate.Formatted,
+		HebrewDateFormatted: hebrewDate.Hebrew,
+		IsErevShabbos:       date.Weekday() == time.Friday,
+		IsShabbos:           date.Weekday() == time.Saturday,
+		IsYomTov:            false, // Will be set below
+		IsFastDay:           zmanimCtx.ShowFastStarts || zmanimCtx.ShowFastEnds,
+		Holidays:            holidayNames,
+		ActiveEventCodes:    zmanimCtx.ActiveEventCodes,
+		ShowCandleLighting:  zmanimCtx.ShowCandleLighting || zmanimCtx.ShowCandleLightingSheni,
+		ShowHavdalah:        zmanimCtx.ShowShabbosYomTovEnds,
+		ShowFastStart:       zmanimCtx.ShowFastStarts,
+		ShowFastEnd:         zmanimCtx.ShowFastEnds,
+		SpecialContexts:     zmanimCtx.DisplayContexts,
 	}
 
 	// Check for Yom Tov from holidays
@@ -1880,7 +1880,7 @@ func (h *Handlers) UpdatePublisherZmanTags(w http.ResponseWriter, r *http.Reques
 		RespondInternalError(w, r, "Failed to update tags")
 		return
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	// Delete existing tags
 	_, err = tx.Exec(ctx, "DELETE FROM publisher_zman_tags WHERE publisher_zman_id = $1", zmanID)

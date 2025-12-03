@@ -314,7 +314,7 @@ func (h *Handlers) GetZmanimForCity(w http.ResponseWriter, r *http.Request) {
 			HebrewName:   candleHebrewName,
 			Key:          "candle_lighting",
 			Time:         astro.FormatTime(candleLightingTime),
-			IsBeta:       false, // System-generated, never beta
+			IsBeta:       false,    // System-generated, never beta
 			TimeCategory: "sunset", // Candle lighting is near sunset
 			Formula: FormulaDetails{
 				Method:      "fixed_minutes",
@@ -343,7 +343,7 @@ func (h *Handlers) GetZmanimForCity(w http.ResponseWriter, r *http.Request) {
 			HebrewName:   havdalahHebrewName,
 			Key:          "havdalah",
 			Time:         astro.FormatTime(havdalahTime),
-			IsBeta:       false, // System-generated, never beta
+			IsBeta:       false,       // System-generated, never beta
 			TimeCategory: "nightfall", // Havdalah is after nightfall
 			Formula: FormulaDetails{
 				Method:      "fixed_minutes",
