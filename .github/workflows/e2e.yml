@@ -138,7 +138,8 @@ jobs:
         working-directory: web
         run: npm run build
         env:
-          # Required for Next.js build
+          # Required for Next.js build (Clerk requires secret at build time for edge runtime)
+          CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
           NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
           NEXT_PUBLIC_API_URL: http://localhost:8080
 
