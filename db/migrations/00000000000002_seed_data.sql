@@ -187,7 +187,7 @@ INSERT INTO public.master_zmanim_registry (id, zman_key, canonical_hebrew_name, 
 
 -- Midday times
 ('5c1806a7-5c5f-4231-8ea6-f2821a3f74ff', 'chatzos', 'חצות היום', 'Midday (Chatzos)', 'Chatzos', 'Solar noon - midpoint between sunrise and sunset', NULL, NULL, 'midday', 'solar_noon', true, false, 400),
-('a56cc3c5-2210-4945-8c48-85cd0b48d936', 'mincha_gedola', 'מנחה גדולה', 'Earliest Mincha', 'Mincha Gedola', 'Earliest time for Mincha - 30 minutes after chatzos', NULL, NULL, 'midday', 'solar_noon + 30min', true, false, 410),
+('a56cc3c5-2210-4945-8c48-85cd0b48d936', 'mincha_gedola', 'מנחה גדולה', 'Earliest Mincha (GRA)', 'Mincha Gedola', 'Earliest time for Mincha - 6.5 proportional hours (half shaah zmanis after chatzos)', NULL, NULL, 'midday', 'proportional_hours(6.5, gra)', true, false, 410),
 ('40fd024f-d517-495c-9862-4f49a785d6be', 'mincha_gedola_16_1', 'מנחה גדולה 16.1°', 'Earliest Mincha (16.1°)', 'Mincha Gedola 16.1', 'Earliest Mincha based on 16.1° calculation', NULL, NULL, 'midday', 'proportional_hours(6.5, alos_16_1)', false, false, 411),
 ('325eda19-591a-4c52-ae01-8f80beeab800', 'mincha_gedola_30', 'מנחה גדולה 30 דקות', 'Earliest Mincha (30 min)', 'Mincha Gedola 30', 'Earliest Mincha - exactly 30 minutes after chatzos', NULL, NULL, 'midday', 'solar_noon + 30min', false, false, 412),
 
@@ -363,7 +363,7 @@ INSERT INTO public.zmanim_templates (id, zman_key, hebrew_name, english_name, fo
 ('1b3234d7-685d-41cf-be71-a7c573f8d301', 'sof_zman_shma_mga', 'סוף זמן ק"ש מג"א', 'Latest Shema (MGA)', 'proportional_hours(3, mga)', 'essential', NULL, true, 5),
 ('b273b840-649f-48cb-b8ce-ea9f43fd27ab', 'sof_zman_tfila_gra', 'סוף זמן תפילה גר"א', 'Latest Shacharit (GRA)', 'proportional_hours(4, gra)', 'essential', NULL, true, 6),
 ('309d8eed-f819-4727-afd3-d8344e7d1a61', 'chatzos', 'חצות היום', 'Chatzos (Midday)', 'solar_noon', 'essential', NULL, true, 7),
-('d330f82b-c977-4f11-b191-9f67bd27ef44', 'mincha_gedola', 'מנחה גדולה', 'Mincha Gedola', 'solar_noon + 30min', 'essential', NULL, true, 8),
+('d330f82b-c977-4f11-b191-9f67bd27ef44', 'mincha_gedola', 'מנחה גדולה', 'Mincha Gedola', 'proportional_hours(6.5, gra)', 'essential', NULL, true, 8),
 ('4483562c-9d1d-43b0-99a5-584f2bc252e5', 'mincha_ketana', 'מנחה קטנה', 'Mincha Ketana', 'proportional_hours(9.5, gra)', 'essential', NULL, true, 9),
 ('0b19e9ea-7c4f-4097-b6ed-1a3373331fa1', 'plag_hamincha', 'פלג המנחה', 'Plag HaMincha', 'proportional_hours(10.75, gra)', 'essential', NULL, true, 10),
 ('b151c82f-ee68-4964-b0e3-590cac3270d9', 'sunset', 'שקיעה', 'Sunset', 'sunset', 'essential', NULL, true, 11),

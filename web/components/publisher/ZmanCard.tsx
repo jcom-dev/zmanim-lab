@@ -31,6 +31,7 @@ import {
   AlertTriangle,
   FlaskConical,
   Edit2,
+  Code2,
 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Switch } from '@/components/ui/switch';
@@ -192,6 +193,13 @@ function hasNameModifications(zman: PublisherZman): {
   };
 }
 
+/**
+ * Check if the zman formula has been modified from source
+ */
+function hasFormulaModification(zman: PublisherZman): boolean {
+  return zman.source_formula_dsl != null && zman.formula_dsl !== zman.source_formula_dsl;
+}
+
 interface ZmanCardProps {
   zman: PublisherZman;
   category: 'essential' | 'optional';
@@ -222,8 +230,9 @@ export function ZmanCard({ zman, category, onEdit, displayLanguage = 'both' }: Z
   );
   const rollbackVersion = useRollbackZmanVersion(zman.zman_key);
 
-  // Check for name modifications from source
+  // Check for name and formula modifications from source
   const nameModifications = hasNameModifications(zman);
+  const formulaModified = hasFormulaModification(zman);
   const sourceName = getSourceName(zman);
 
   const handleEdit = () => {
@@ -287,6 +296,15 @@ export function ZmanCard({ zman, category, onEdit, displayLanguage = 'both' }: Z
     }
     if (Object.keys(updates).length > 0) {
       await updateZman.mutateAsync(updates);
+    }
+  };
+
+  // Revert formula to source
+  const handleRevertFormula = async () => {
+    if (zman.source_formula_dsl) {
+      await updateZman.mutateAsync({
+        formula_dsl: zman.source_formula_dsl,
+      });
     }
   };
 
@@ -622,8 +640,48 @@ export function ZmanCard({ zman, category, onEdit, displayLanguage = 'both' }: Z
         </CardHeader>
 
         <CardContent className="pt-0">
-          {/* Formula Display */}
-          <HighlightedFormula formula={zman.formula_dsl} />
+          {/* Formula Display with Modification Indicator */}
+          <div className="space-y-2">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex-1 min-w-0">
+                <HighlightedFormula formula={zman.formula_dsl} />
+              </div>
+
+              {/* Formula Modified Indicator with Revert */}
+              {formulaModified && sourceName && (
+                <TooltipProvider delayDuration={0}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleRevertFormula}
+                        disabled={updateZman.isPending}
+                        className="h-7 px-2 gap-1.5 text-amber-600 hover:text-amber-700 hover:bg-amber-100 dark:text-amber-400 dark:hover:text-amber-300 dark:hover:bg-amber-900/50 flex-shrink-0"
+                      >
+                        <Code2 className="h-3 w-3" />
+                        <span className="text-xs font-medium">Formula Modified</span>
+                        <RotateCcw className="h-3 w-3 ml-0.5" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" className="max-w-sm">
+                      <div className="text-sm space-y-2">
+                        <p className="font-medium text-amber-600 dark:text-amber-400">
+                          Formula changed from {sourceName}
+                        </p>
+                        <div className="p-2 bg-muted rounded text-xs font-mono overflow-x-auto">
+                          {zman.source_formula_dsl}
+                        </div>
+                        <p className="text-xs text-muted-foreground pt-1 border-t border-border mt-1">
+                          Click to revert to {sourceName.toLowerCase()} formula
+                        </p>
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
+            </div>
+          </div>
 
           {/* Database Tags from Master Zman */}
           {zman.tags && zman.tags.length > 0 && (

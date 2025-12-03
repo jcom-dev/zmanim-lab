@@ -23,6 +23,7 @@ import {
   ArrowDownToLine,
   ChevronDown,
   MessageSquare,
+  RotateCcw,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn, formatTime, isHebrewText } from '@/lib/utils';
@@ -473,6 +474,37 @@ export default function ZmanEditorPage() {
               sourceEnglishName={zman?.source_english_name}
               sourceName={zman?.is_linked ? zman?.linked_source_publisher_name || 'Linked Publisher' : zman?.source_type === 'registry' ? 'Registry' : undefined}
             />
+
+            {/* Formula Deviation Indicator */}
+            {zman?.source_formula_dsl && formula !== zman.source_formula_dsl && (
+              <div className="rounded-lg border border-amber-500/50 bg-amber-50 dark:bg-amber-950/30 px-4 py-3">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-start gap-3">
+                    <Code2 className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+                        Formula modified from {zman.is_linked ? zman.linked_source_publisher_name || 'Linked Publisher' : 'Registry'}
+                      </p>
+                      <div className="text-xs text-amber-700/80 dark:text-amber-300/80">
+                        <span className="font-medium">Original:</span>{' '}
+                        <code className="bg-amber-100 dark:bg-amber-900/50 px-1.5 py-0.5 rounded font-mono">
+                          {zman.source_formula_dsl}
+                        </code>
+                      </div>
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setFormula(zman.source_formula_dsl!)}
+                    className="h-8 px-3 text-amber-700 border-amber-400 hover:bg-amber-100 hover:text-amber-800 dark:text-amber-300 dark:border-amber-600 dark:hover:bg-amber-900/50 dark:hover:text-amber-200 flex-shrink-0"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
+                    Revert to Original
+                  </Button>
+                </div>
+              </div>
+            )}
 
             {/* Formula Editor */}
             {mode === 'guided' ? (

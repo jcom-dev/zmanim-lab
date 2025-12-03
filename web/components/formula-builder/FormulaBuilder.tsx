@@ -237,7 +237,7 @@ export function FormulaBuilder({
           <MethodCard
             method="fixed"
             title="Fixed Offset"
-            description="Add or subtract fixed minutes from a reference time"
+            description="Add or subtract fixed clock minutes from a reference time (not proportional)"
             selected={state.method === 'fixed'}
             onSelect={() => handleMethodSelect('fixed')}
             tooltip={ALGORITHM_TOOLTIPS.fixed_offset}
