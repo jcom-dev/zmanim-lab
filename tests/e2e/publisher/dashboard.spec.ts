@@ -141,8 +141,8 @@ test.describe('Publisher Dashboard', () => {
     await page.goto(`${BASE_URL}/publisher/dashboard`);
     await page.waitForLoadState('networkidle');
 
-    // Click on Zmanim card link
-    await page.getByRole('link', { name: /Zmanim/i }).click();
+    // Click on Zmanim card link (use exact match to avoid matching "Zmanim Lab")
+    await page.getByRole('link', { name: 'Zmanim', exact: true }).click();
 
     await page.waitForURL('**/publisher/algorithm');
     expect(page.url()).toContain('/publisher/algorithm');

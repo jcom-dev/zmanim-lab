@@ -70,8 +70,8 @@ test.describe('Edge Cases - Empty States', () => {
     await page.goto(`${BASE_URL}/publisher/dashboard`);
     await page.waitForLoadState('networkidle');
 
-    // Should show Recent Activity section
-    await expect(page.getByText('Recent Activity')).toBeVisible();
+    // Should show Recent Activity section (use heading role to be specific)
+    await expect(page.getByRole('heading', { name: 'Recent Activity' })).toBeVisible();
 
     await cleanupTestData();
   });
