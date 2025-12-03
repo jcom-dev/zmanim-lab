@@ -132,15 +132,15 @@ async function performSignIn(page: any, email: string): Promise<void> {
     console.warn('Warning: setupClerkTestingToken failed:', error?.message);
   }
 
-  // Wait for Clerk to be loaded
+  // Wait for Clerk to be loaded (30s is plenty)
   await page.waitForFunction(
     () => typeof (window as any).Clerk !== 'undefined',
-    { timeout: 60000 }
+    { timeout: 30000 }
   );
 
   await page.waitForFunction(
     () => (window as any).Clerk?.loaded === true,
-    { timeout: 60000 }
+    { timeout: 30000 }
   );
 
   // Sign in using email-based approach (more reliable in test environments)
@@ -149,10 +149,10 @@ async function performSignIn(page: any, email: string): Promise<void> {
     emailAddress: email,
   });
 
-  // Wait for authentication to complete
+  // Wait for authentication to complete (30s is plenty)
   await page.waitForFunction(
     () => (window as any).Clerk?.user !== null,
-    { timeout: 60000 }
+    { timeout: 30000 }
   );
 
   // Wait for session to be fully active

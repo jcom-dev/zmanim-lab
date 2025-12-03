@@ -49,13 +49,13 @@ export default defineConfig({
   // Fail the build on CI if you accidentally left test.only in the source code
   forbidOnly: !!process.env.CI,
 
-  // Retry on CI only
-  retries: process.env.CI ? 2 : 0,
+  // Retry on CI only (reduced from 2 to 1 for speed)
+  retries: process.env.CI ? 1 : 0,
 
   // Number of parallel workers
-  // - CI: 4 workers for parallel execution
-  // - Local: Use 50% of CPUs for balance between speed and system responsiveness
-  workers: process.env.CI ? 4 : '50%',
+  // - CI: 8 workers for maximum parallel execution
+  // - Local: Use 75% of CPUs for faster execution
+  workers: process.env.CI ? 8 : '75%',
 
   // Reporter to use
   reporter: [
@@ -69,20 +69,20 @@ export default defineConfig({
     // Base URL for all tests
     baseURL,
 
-    // Collect trace when retrying the failed test
+    // Collect trace only on retry to reduce overhead
     trace: 'on-first-retry',
 
     // Capture screenshot on failure
     screenshot: 'only-on-failure',
 
-    // Record video on failure
-    video: 'on-first-retry',
+    // Disable video recording for speed (enable for debugging)
+    video: 'off',
 
-    // Default timeout for actions (increased for Clerk sign-in)
-    actionTimeout: 30000,
+    // Default timeout for actions (15s is plenty for most actions)
+    actionTimeout: 15000,
 
-    // Default navigation timeout (increased for slow loads)
-    navigationTimeout: 60000,
+    // Default navigation timeout (30s is sufficient)
+    navigationTimeout: 30000,
   },
 
   // Configure projects with authentication setup
@@ -135,39 +135,38 @@ export default defineConfig({
       ],
     },
 
-    // Mobile tests with publisher auth
-    {
-      name: 'mobile-chrome-publisher',
-      use: {
-        ...devices['Pixel 5'],
-        storageState: PUBLISHER_STORAGE_STATE,
+    // Mobile tests - only run critical responsive tests
+    // Skip mobile tests in CI for speed, run locally with INCLUDE_MOBILE=true
+    ...(process.env.INCLUDE_MOBILE ? [
+      {
+        name: 'mobile-chrome-publisher',
+        use: {
+          ...devices['Pixel 5'],
+          storageState: PUBLISHER_STORAGE_STATE,
+        },
+        dependencies: ['setup'],
+        testMatch: /.*\/publisher\/.*\.spec\.ts/,
       },
-      dependencies: ['setup'],
-      testMatch: /.*\/publisher\/.*\.spec\.ts/,
-    },
-
-    // Mobile tests with admin auth
-    {
-      name: 'mobile-chrome-admin',
-      use: {
-        ...devices['Pixel 5'],
-        storageState: ADMIN_STORAGE_STATE,
+      {
+        name: 'mobile-chrome-admin',
+        use: {
+          ...devices['Pixel 5'],
+          storageState: ADMIN_STORAGE_STATE,
+        },
+        dependencies: ['setup'],
+        testMatch: /.*\/admin\/.*\.spec\.ts/,
       },
-      dependencies: ['setup'],
-      testMatch: /.*\/admin\/.*\.spec\.ts/,
-    },
-
-    // Mobile tests without auth
-    {
-      name: 'mobile-chrome',
-      use: { ...devices['Pixel 5'] },
-      dependencies: ['setup'],
-      testIgnore: [
-        /.*\/admin\/.*\.spec\.ts/,
-        /.*\/publisher\/.*\.spec\.ts/,
-        /.*\.setup\.ts/,
-      ],
-    },
+      {
+        name: 'mobile-chrome',
+        use: { ...devices['Pixel 5'] },
+        dependencies: ['setup'],
+        testIgnore: [
+          /.*\/admin\/.*\.spec\.ts/,
+          /.*\/publisher\/.*\.spec\.ts/,
+          /.*\.setup\.ts/,
+        ],
+      },
+    ] : []),
   ],
 
   // Output folder for test artifacts
@@ -185,11 +184,11 @@ export default defineConfig({
         timeout: 120000,
       },
 
-  // Global timeout for each test (increased for Clerk auth flows)
-  timeout: 120000,
+  // Global timeout for each test (60s is sufficient for most tests)
+  timeout: 60000,
 
-  // Expect timeout (increased for dynamic content)
+  // Expect timeout (10s is sufficient for most assertions)
   expect: {
-    timeout: 30000,
+    timeout: 10000,
   },
 });

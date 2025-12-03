@@ -320,15 +320,15 @@ async function performClerkSignIn(page: Page, email: string): Promise<void> {
     console.warn('Warning: setupClerkTestingToken failed:', error?.message);
   }
 
-  // Wait for Clerk to be loaded with extended timeout
+  // Wait for Clerk to be loaded (30s is plenty)
   await page.waitForFunction(
     () => typeof (window as any).Clerk !== 'undefined',
-    { timeout: 60000 }
+    { timeout: 30000 }
   );
 
   await page.waitForFunction(
     () => (window as any).Clerk?.loaded === true,
-    { timeout: 60000 }
+    { timeout: 30000 }
   );
 
   // Check if already signed in (from storage state)
@@ -348,10 +348,10 @@ async function performClerkSignIn(page: Page, email: string): Promise<void> {
     emailAddress: email,
   });
 
-  // Wait for authentication to complete with extended timeout
+  // Wait for authentication to complete (30s is plenty)
   await page.waitForFunction(
     () => (window as any).Clerk?.user !== null,
-    { timeout: 60000 }
+    { timeout: 30000 }
   );
 
   // Wait for app to recognize the authenticated state
