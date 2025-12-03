@@ -58,17 +58,13 @@ test.describe('Become Publisher - Form Fields', () => {
     }
   });
 
-  test('form has organization field', async ({ page }) => {
+  test('form has publisher name field', async ({ page }) => {
     await page.goto(`${BASE_URL}/become-publisher`);
     await page.waitForLoadState('networkidle');
 
-    const orgInput = page.locator('input[name="organization"], input[placeholder*="organization" i]');
-    const hasOrgField = await orgInput.isVisible().catch(() => false);
-
-    if (!hasOrgField) {
-      const labeledInput = page.getByLabel(/organization/i);
-      await expect(labeledInput).toBeVisible();
-    }
+    // Check for name input by id or label
+    const nameInput = page.locator('input#name');
+    await expect(nameInput).toBeVisible();
   });
 
   test('form has email field', async ({ page }) => {
@@ -114,22 +110,16 @@ test.describe('Become Publisher - Form Validation', () => {
     await page.waitForLoadState('networkidle');
 
     // Fill name
-    const nameInput = page.getByLabel(/name/i).first();
-    if (await nameInput.isVisible()) {
-      await nameInput.fill('Test Name');
-    }
+    const nameInput = page.locator('input#name');
+    await nameInput.fill('Test Name');
 
-    // Fill organization
-    const orgInput = page.getByLabel(/organization/i);
-    if (await orgInput.isVisible()) {
-      await orgInput.fill('Test Organization');
-    }
+    // Fill description (required)
+    const descInput = page.locator('textarea#description');
+    await descInput.fill('Test description for the organization');
 
     // Fill invalid email
-    const emailInput = page.locator('input[type="email"]').first();
-    if (await emailInput.isVisible()) {
-      await emailInput.fill('invalid-email');
-    }
+    const emailInput = page.locator('input#email');
+    await emailInput.fill('invalid-email');
 
     // Try to submit
     const submitButton = page.locator('button[type="submit"]');
@@ -149,27 +139,16 @@ test.describe('Become Publisher - Successful Submission', () => {
 
     const uniqueEmail = testData.randomEmail();
 
-    // Fill all required fields
-    const nameInput = page.getByLabel(/name/i).first();
-    if (await nameInput.isVisible()) {
-      await nameInput.fill('E2E Test Publisher');
-    }
+    // Fill all required fields using specific selectors
+    const nameInput = page.locator('input#name');
+    await nameInput.fill('E2E Test Publisher');
 
-    const orgInput = page.getByLabel(/organization/i);
-    if (await orgInput.isVisible()) {
-      await orgInput.fill('E2E Test Organization');
-    }
+    const emailInput = page.locator('input#email');
+    await emailInput.fill(uniqueEmail);
 
-    const emailInput = page.locator('input[type="email"]').first();
-    if (await emailInput.isVisible()) {
-      await emailInput.fill(uniqueEmail);
-    }
-
-    // Fill description/reason if present
-    const descInput = page.locator('textarea').first();
-    if (await descInput.isVisible()) {
-      await descInput.fill('E2E test registration - please ignore');
-    }
+    // Fill description (required)
+    const descInput = page.locator('textarea#description');
+    await descInput.fill('E2E test registration - please ignore this submission');
 
     // Note: We don't actually submit to avoid creating real data
     // Just verify form is fillable

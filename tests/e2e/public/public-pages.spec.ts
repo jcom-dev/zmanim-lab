@@ -51,14 +51,17 @@ test.describe('Public Pages - Homepage', () => {
 
   test('homepage has sign in link or login option', async ({ page }) => {
     await page.goto(BASE_URL);
-    await page.waitForLoadState('domcontentloaded');
+    await page.waitForLoadState('networkidle');
 
-    // Should have sign in link, login link, or some auth action
+    // Should have sign in link, login link, button, or some auth action
+    // The Sign In is rendered as a Clerk modal button
+    const signInText = page.getByText('Sign In');
     const signInLink = page.getByRole('link', { name: /sign.?in|log.?in|get.?started/i });
     const signInButton = page.getByRole('button', { name: /sign.?in|log.?in|get.?started/i });
     const authLink = page.locator('a[href*="/sign-in"], a[href*="/login"]');
 
-    const hasSignIn = await signInLink.isVisible().catch(() => false) ||
+    const hasSignIn = await signInText.isVisible().catch(() => false) ||
+                       await signInLink.isVisible().catch(() => false) ||
                        await signInButton.isVisible().catch(() => false) ||
                        await authLink.first().isVisible().catch(() => false);
     expect(hasSignIn).toBeTruthy();

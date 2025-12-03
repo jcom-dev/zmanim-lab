@@ -22,36 +22,36 @@ test.describe('Home Page - Location Selection', () => {
     // Should see title
     await expect(page.getByRole('heading', { name: 'Zmanim Lab' })).toBeVisible();
 
-    // Should see location selection prompt
-    await expect(page.getByText('Select Country')).toBeVisible();
+    // Should see location selection prompt (starts with continent selection)
+    await expect(page.getByText('Select Continent')).toBeVisible();
   });
 
-  test('home page shows country list', async ({ page }) => {
+  test('home page shows continent list', async ({ page }) => {
     await page.goto(`${BASE_URL}/`);
     await page.waitForLoadState('networkidle');
 
-    // Should see country buttons - wait for them to load
-    const countryButtons = page.locator('button').filter({ hasText: /cities$/i });
-    await expect(countryButtons.first()).toBeVisible({ timeout: 10000 });
+    // Should see continent buttons - wait for them to load
+    const continentButtons = page.locator('button').filter({ hasText: /cities$/i });
+    await expect(continentButtons.first()).toBeVisible({ timeout: 10000 });
   });
 
-  test('clicking country shows regions or cities', async ({ page }) => {
+  test('clicking continent shows countries', async ({ page }) => {
     await page.goto(`${BASE_URL}/`);
     await page.waitForLoadState('networkidle');
 
-    // Wait for countries to load
-    const countryButtons = page.locator('button').filter({ hasText: /cities$/i });
-    await expect(countryButtons.first()).toBeVisible({ timeout: 10000 });
+    // Wait for continents to load
+    const continentButtons = page.locator('button').filter({ hasText: /cities$/i });
+    await expect(continentButtons.first()).toBeVisible({ timeout: 10000 });
 
-    // Click first country
-    await countryButtons.first().click();
+    // Click first continent
+    await continentButtons.first().click();
 
-    // Wait for next selection to appear (region or city)
-    const breadcrumb = page.locator('button').filter({ hasText: /← Back/i });
+    // Wait for country selection to appear
+    const backButton = page.getByText('← Back');
 
-    // Either we see cities directly or regions first
+    // Should see countries or back button
     await expect(
-      page.getByText('Select State').or(page.getByText('Select City')).or(breadcrumb)
+      page.getByText(/Select Country/i).or(backButton)
     ).toBeVisible({ timeout: 5000 });
   });
 
@@ -59,12 +59,12 @@ test.describe('Home Page - Location Selection', () => {
     await page.goto(`${BASE_URL}/`);
     await page.waitForLoadState('networkidle');
 
-    // Wait for countries to load
-    const countryButtons = page.locator('button').filter({ hasText: /cities$/i });
-    await expect(countryButtons.first()).toBeVisible({ timeout: 10000 });
+    // Wait for continents to load
+    const continentButtons = page.locator('button').filter({ hasText: /cities$/i });
+    await expect(continentButtons.first()).toBeVisible({ timeout: 10000 });
 
-    // Click first country
-    await countryButtons.first().click();
+    // Click first continent
+    await continentButtons.first().click();
 
     // Wait for back button to appear
     const backButton = page.getByText('← Back');
@@ -73,8 +73,8 @@ test.describe('Home Page - Location Selection', () => {
     if (await backButton.isVisible()) {
       await backButton.click();
 
-      // Should be back at country selection
-      await expect(page.getByText('Select Country')).toBeVisible({ timeout: 5000 });
+      // Should be back at continent selection
+      await expect(page.getByText('Select Continent')).toBeVisible({ timeout: 5000 });
     }
   });
 
@@ -82,25 +82,35 @@ test.describe('Home Page - Location Selection', () => {
     await page.goto(`${BASE_URL}/`);
     await page.waitForLoadState('networkidle');
 
-    // Wait for countries to load
-    const countryButtons = page.locator('button').filter({ hasText: /cities$/i });
-    await expect(countryButtons.first()).toBeVisible({ timeout: 10000 });
+    // Wait for continents to load
+    const continentButtons = page.locator('button').filter({ hasText: /cities$/i });
+    await expect(continentButtons.first()).toBeVisible({ timeout: 10000 });
 
-    // Find Israel (usually has Jerusalem which we use for testing)
-    const israelButton = page.locator('button').filter({ hasText: /Israel/i });
-    if (await israelButton.isVisible()) {
-      await israelButton.click();
+    // Click on Asia continent (contains Israel)
+    const asiaButton = page.locator('button').filter({ hasText: /Asia/i });
+    if (await asiaButton.isVisible()) {
+      await asiaButton.click();
+      await page.waitForLoadState('networkidle');
 
-      // Wait for cities to load
-      const jerusalemButton = page.locator('button').filter({ hasText: /Jerusalem/i });
-      await expect(jerusalemButton).toBeVisible({ timeout: 5000 }).catch(() => {});
+      // Find Israel
+      const israelButton = page.locator('button').filter({ hasText: /Israel/i });
+      await expect(israelButton).toBeVisible({ timeout: 5000 }).catch(() => {});
 
-      if (await jerusalemButton.isVisible()) {
-        await jerusalemButton.click();
+      if (await israelButton.isVisible()) {
+        await israelButton.click();
+        await page.waitForLoadState('networkidle');
 
-        // Should navigate to zmanim page
-        await page.waitForURL('**/zmanim/**');
-        expect(page.url()).toContain('/zmanim/');
+        // Wait for cities to load
+        const jerusalemButton = page.locator('button').filter({ hasText: /Jerusalem/i });
+        await expect(jerusalemButton).toBeVisible({ timeout: 5000 }).catch(() => {});
+
+        if (await jerusalemButton.isVisible()) {
+          await jerusalemButton.click();
+
+          // Should navigate to zmanim page
+          await page.waitForURL('**/zmanim/**');
+          expect(page.url()).toContain('/zmanim/');
+        }
       }
     }
   });
