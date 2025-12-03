@@ -328,7 +328,7 @@ export default function ZmanEditorPage() {
   }, []);
 
   // Get zman keys for autocomplete
-  const zmanimKeys = allZmanim.map(z => z.zman_key);
+  const zmanimKeys = (allZmanim || []).map(z => z.zman_key);
 
   // Handler for inserting text from reference panel
   const handleInsertAtCursor = useCallback((text: string) => {
