@@ -20,6 +20,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache-dependency-path: api/go.sum
+
       - name: Setup Fly
         uses: superfly/flyctl-actions/setup-flyctl@master
 
@@ -27,3 +33,37 @@ jobs:
         run: flyctl deploy --remote-only
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      # Post-deploy: Seed geographic data if not already present
+      - name: Seed Geographic Data (if needed)
+        run: |
+          echo "Checking if geographic data exists..."
+          CITY_COUNT=$(flyctl ssh console -C "psql \$DATABASE_URL -t -c 'SELECT COUNT(*) FROM cities'" 2>/dev/null | tr -d ' \n' || echo "0")
+          echo "Current city count: $CITY_COUNT"
+          if [ "$CITY_COUNT" -lt "1000" ]; then
+            echo "Geographic data missing or incomplete. Running seed-geo..."
+            go run ./cmd/seed-geo/
+            echo "Geographic data seeded"
+          else
+            echo "Geographic data already exists ($CITY_COUNT cities). Skipping seed."
+          fi
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+      # Post-deploy: Run RAG indexer if embeddings table is empty
+      - name: Run RAG Indexer (if needed)
+        run: |
+          echo "Checking if RAG embeddings exist..."
+          EMBEDDING_COUNT=$(flyctl ssh console -C "psql \$DATABASE_URL -t -c 'SELECT COUNT(*) FROM embeddings'" 2>/dev/null | tr -d ' \n' || echo "0")
+          echo "Current embedding count: $EMBEDDING_COUNT"
+          if [ "$EMBEDDING_COUNT" -lt "10" ]; then
+            echo "RAG embeddings missing or incomplete. Running indexer..."
+            go run ./cmd/indexer/ || echo "Indexer failed - pgvector may not be available"
+          else
+            echo "RAG embeddings already exist ($EMBEDDING_COUNT embeddings). Skipping indexer."
+          fi
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}

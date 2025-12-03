@@ -108,6 +108,20 @@ jobs:
           done
           echo "Migrations complete"
 
+      # Seed geographic data (cities, countries, regions)
+      - name: Seed Geographic Data
+        working-directory: api
+        run: |
+          echo "Seeding geographic data..."
+          go run ./cmd/seed-geo/
+          echo "Geographic data seeded"
+        env:
+          DATABASE_URL: postgresql://zmanim_test:zmanim_test_password@localhost:5432/zmanim_test?sslmode=disable
+
+      # Note: Indexer is skipped in E2E tests because:
+      # 1. pgvector extension is not available in standard PostGIS image
+      # 2. RAG features are not tested in E2E tests
+
       # Verify Redis is ready
       - name: Verify Redis Connection
         run: |
