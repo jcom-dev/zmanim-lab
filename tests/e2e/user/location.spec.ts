@@ -46,13 +46,11 @@ test.describe('Home Page - Location Selection', () => {
     // Click first continent
     await continentButtons.first().click();
 
-    // Wait for country selection to appear
-    const backButton = page.getByText('← Back');
+    // Wait for country selection to appear - look for back button which appears in country step
+    const backButton = page.getByText('← Back').first();
 
-    // Should see countries or back button
-    await expect(
-      page.getByText(/Select Country/i).or(backButton)
-    ).toBeVisible({ timeout: 5000 });
+    // Should see back button (which appears in country selection step)
+    await expect(backButton).toBeVisible({ timeout: 5000 });
   });
 
   test('breadcrumb navigation works', async ({ page }) => {
@@ -67,7 +65,7 @@ test.describe('Home Page - Location Selection', () => {
     await continentButtons.first().click();
 
     // Wait for back button to appear
-    const backButton = page.getByText('← Back');
+    const backButton = page.getByText('← Back').first();
     await expect(backButton).toBeVisible({ timeout: 5000 }).catch(() => {});
 
     if (await backButton.isVisible()) {

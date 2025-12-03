@@ -57,7 +57,8 @@ test.describe('Coverage - Page Access', () => {
     await page.goto(`${BASE_URL}/publisher/dashboard`);
     await page.waitForLoadState('networkidle');
 
-    await page.getByRole('heading', { name: 'Coverage' }).click();
+    // Click the Coverage card link (contains the h2 heading)
+    await page.getByRole('link', { name: /Coverage/i }).click();
     await page.waitForURL('**/publisher/coverage');
     expect(page.url()).toContain('/publisher/coverage');
   });

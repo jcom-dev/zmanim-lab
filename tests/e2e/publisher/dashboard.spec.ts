@@ -128,8 +128,8 @@ test.describe('Publisher Dashboard', () => {
     await page.goto(`${BASE_URL}/publisher/dashboard`);
     await page.waitForLoadState('networkidle');
 
-    // Click on Profile card (it's a link)
-    await page.getByRole('heading', { name: 'Profile' }).click();
+    // Click on Profile card link
+    await page.getByRole('link', { name: /Profile/i }).click();
 
     await page.waitForURL('**/publisher/profile');
     expect(page.url()).toContain('/publisher/profile');
@@ -141,8 +141,8 @@ test.describe('Publisher Dashboard', () => {
     await page.goto(`${BASE_URL}/publisher/dashboard`);
     await page.waitForLoadState('networkidle');
 
-    // Click on Zmanim card
-    await page.getByRole('heading', { name: 'Zmanim' }).click();
+    // Click on Zmanim card link
+    await page.getByRole('link', { name: /Zmanim/i }).click();
 
     await page.waitForURL('**/publisher/algorithm');
     expect(page.url()).toContain('/publisher/algorithm');
@@ -154,8 +154,8 @@ test.describe('Publisher Dashboard', () => {
     await page.goto(`${BASE_URL}/publisher/dashboard`);
     await page.waitForLoadState('networkidle');
 
-    // Click on Coverage card
-    await page.getByRole('heading', { name: 'Coverage' }).click();
+    // Click on Coverage card link
+    await page.getByRole('link', { name: /Coverage/i }).click();
 
     await page.waitForURL('**/publisher/coverage');
     expect(page.url()).toContain('/publisher/coverage');
