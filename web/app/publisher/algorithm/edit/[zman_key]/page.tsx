@@ -185,7 +185,7 @@ export default function ZmanEditorPage() {
     if (!result.success) {
       setMode((currentMode) => currentMode === 'guided' ? 'advanced' : currentMode);
     }
-  }, [formula]); // Removed mode from deps - we use functional update instead
+  }, [formula]);
 
   // Live preview with debounce
   useEffect(() => {
@@ -277,8 +277,6 @@ export default function ZmanEditorPage() {
 
   // Save handler
   const handleSave = async () => {
-    console.log('[Save] handleSave called', { hebrewName, englishName, formula, isNewZman, hasChanges });
-
     if (!hebrewName.trim() || !englishName.trim() || !formula.trim()) {
       toast.error('Please fill in all required fields');
       return;
@@ -290,7 +288,6 @@ export default function ZmanEditorPage() {
       if (isNewZman) {
         // Generate zman_key from english name
         const newKey = englishName.toLowerCase().replace(/[^a-z0-9]+/g, '_');
-        console.log('[Save] Creating new zman with key:', newKey);
         await createZman.mutateAsync({
           zman_key: newKey,
           hebrew_name: hebrewName,
@@ -301,7 +298,6 @@ export default function ZmanEditorPage() {
         });
         toast.success('Zman created successfully');
       } else {
-        console.log('[Save] Updating zman:', zmanKey);
         await updateZman.mutateAsync({
           hebrew_name: hebrewName,
           english_name: englishName,
@@ -391,10 +387,7 @@ export default function ZmanEditorPage() {
           {/* Save */}
           <Button
             type="button"
-            onClick={() => {
-              console.log('[Save Button] Clicked!');
-              handleSave();
-            }}
+            onClick={handleSave}
             disabled={
               (!hasChanges && !isNewZman) ||
               updateZman.isPending ||

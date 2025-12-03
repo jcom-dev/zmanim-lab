@@ -40,16 +40,16 @@ export function FormulaBuilder({
   }));
 
   const [parseError, setParseError] = useState<string | null>(null);
-  const [lastParsedFormula, setLastParsedFormula] = useState<string | null>(null);
-  const isInitialMount = useRef(true);
+  // Track the formula we've synced with - prevents calling onChange until user makes changes
+  const syncedFormulaRef = useRef<string | null>(null);
+  // Track user interactions vs programmatic state changes
+  const userHasInteracted = useRef(false);
 
   // Parse initial formula and auto-select the correct method
   // Re-parse when initialFormula changes (e.g., when data loads asynchronously)
   useEffect(() => {
-    // Skip if formula hasn't changed
-    if (initialFormula === lastParsedFormula) return;
-
-    setLastParsedFormula(initialFormula || null);
+    // Skip if we've already synced with this formula
+    if (initialFormula === syncedFormulaRef.current) return;
 
     if (initialFormula && initialFormula.trim()) {
       const result = parseFormula(initialFormula);
@@ -60,33 +60,45 @@ export function FormulaBuilder({
           generatedFormula: initialFormula,
         }));
         setParseError(null);
+        // Mark as synced AFTER setting state
+        syncedFormulaRef.current = initialFormula;
+        userHasInteracted.current = false;
       } else if (!result.success && result.error) {
         setParseError(result.error);
         onParseError?.(result.error);
+        // Still mark as synced so we don't keep retrying
+        syncedFormulaRef.current = initialFormula;
       }
+    } else {
+      // Empty formula - reset to initial state
+      syncedFormulaRef.current = initialFormula || null;
     }
-  }, [initialFormula, lastParsedFormula, onParseError]);
+  }, [initialFormula, onParseError]);
 
-  // Update formula whenever state changes (skip if we haven't parsed initial formula yet)
+  // Generate formula from state and notify parent of changes
+  // Only called when user actually interacts with the builder
   useEffect(() => {
-    if (lastParsedFormula === null && initialFormula) return;
+    // Don't generate formulas until we've synced with the initial formula
+    if (initialFormula && syncedFormulaRef.current !== initialFormula) return;
 
     const formula = generateFormula(state);
-    setState((prev) => ({
-      ...prev,
-      generatedFormula: formula,
-      // Simple validation - actual validation should call the API
-      isValid: formula.length > 0,
-      validationErrors: [],
-    }));
 
-    // Call onChange to update parent (skip on initial mount to avoid overwriting initial formula)
-    if (!isInitialMount.current && formula !== initialFormula) {
+    // Update internal state
+    setState((prev) => {
+      if (prev.generatedFormula === formula) return prev;
+      return {
+        ...prev,
+        generatedFormula: formula,
+        isValid: formula.length > 0,
+        validationErrors: [],
+      };
+    });
+
+    // Only notify parent if user has interacted AND formula differs from what we synced
+    if (userHasInteracted.current && formula !== syncedFormulaRef.current) {
       onChange?.(formula);
     }
-    isInitialMount.current = false;
   }, [
-    lastParsedFormula,
     initialFormula,
     onChange,
     state.baseTime,
@@ -103,8 +115,9 @@ export function FormulaBuilder({
     state.customEnd,
   ]);
 
-  // Handlers
+  // Handlers - all mark user interaction to enable onChange propagation
   const handleMethodSelect = useCallback((method: MethodType) => {
+    userHasInteracted.current = true;
     setState((prev) => ({
       ...prev,
       method: prev.method === method ? null : method,
@@ -112,42 +125,52 @@ export function FormulaBuilder({
   }, []);
 
   const handleFixedZmanChange = useCallback((value: string) => {
+    userHasInteracted.current = true;
     setState((prev) => ({ ...prev, selectedFixedZman: value }));
   }, []);
 
   const handleSolarDegreesChange = useCallback((value: number) => {
+    userHasInteracted.current = true;
     setState((prev) => ({ ...prev, solarDegrees: value }));
   }, []);
 
   const handleSolarDirectionChange = useCallback((direction: SolarDirection) => {
+    userHasInteracted.current = true;
     setState((prev) => ({ ...prev, solarDirection: direction }));
   }, []);
 
   const handleOffsetMinutesChange = useCallback((value: number) => {
+    userHasInteracted.current = true;
     setState((prev) => ({ ...prev, offsetMinutes: value }));
   }, []);
 
   const handleOffsetDirectionChange = useCallback((direction: OffsetDirection) => {
+    userHasInteracted.current = true;
     setState((prev) => ({ ...prev, offsetDirection: direction }));
   }, []);
 
   const handleOffsetBaseChange = useCallback((base: string) => {
+    userHasInteracted.current = true;
     setState((prev) => ({ ...prev, offsetBase: base }));
   }, []);
 
   const handleShaosHoursChange = useCallback((value: number) => {
+    userHasInteracted.current = true;
     setState((prev) => ({ ...prev, shaosHours: value }));
   }, []);
 
   const handleShaosBaseChange = useCallback((base: ShaosBase) => {
+    userHasInteracted.current = true;
     setState((prev) => ({ ...prev, shaosBase: base }));
   }, []);
 
   const handleCustomStartChange = useCallback((value: string) => {
+    userHasInteracted.current = true;
     setState((prev) => ({ ...prev, customStart: value }));
   }, []);
 
   const handleCustomEndChange = useCallback((value: string) => {
+    userHasInteracted.current = true;
     setState((prev) => ({ ...prev, customEnd: value }));
   }, []);
 

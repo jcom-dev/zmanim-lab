@@ -16,24 +16,13 @@ export const TIMEZONE_MAPPINGS: Record<string, string> = {
   'Europe/Paris': 'Europe/Paris',
 };
 
+// Alos Hashachar Calculator specific UI text (used by ZmanimDisplay.tsx)
 export const UI_TEXT = {
-  appTitle: 'Alos Hashachar Calculator',
-  appDescription: 'Calculate dawn times according to all halachic opinions',
-  locationLabel: 'Location',
-  dateLabel: 'Date',
-  latitudeLabel: 'Latitude',
-  longitudeLabel: 'Longitude',
-  useMyLocation: 'Use My Location',
   calculating: 'Calculating...',
-  noResults: 'No results to display',
-  error: 'An error occurred',
-  categories: {
-    fixed: 'Fixed Time Before Sunrise',
-    zmaniyos: 'Proportional Hours (Zmaniyos)',
-    angle: 'Solar Depression Angle',
-  },
 };
 
+// Alos Hashachar Calculator specific constants (used by MethodCard.tsx)
+// NOTE: These are different from zmanim time categories - these are calculation method types
 export const CATEGORY_COLORS = {
   fixed: {
     bg: '#007AFF',
@@ -54,3 +43,5 @@ export const CATEGORY_COLORS = {
     accent: 'bg-rose-50',
   },
 };
+
+// NOTE: Zmanim time/event categories are now database-driven via useTimeCategories/useEventCategories hooks

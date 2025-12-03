@@ -346,7 +346,7 @@ export default function PublisherTeamPage() {
                         />
                       </div>
                     ) : (
-                      <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-blue-700 dark:text-blue-300 font-medium">
+                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-medium">
                         {getInitials(member.name, member.email)}
                       </div>
                     )}
@@ -354,7 +354,7 @@ export default function PublisherTeamPage() {
                       <div className="flex items-center gap-2">
                         <span className="font-medium">{member.name || member.email}</span>
                         {member.is_owner && (
-                          <span className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 text-xs rounded-full">
+                          <span className="px-2 py-0.5 bg-primary/10 text-primary text-xs rounded-full">
                             Owner
                           </span>
                         )}

@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Input } from '@/components/ui/input';
 import { MapPin, Search, X, Loader2, Globe, Map, Globe2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useApi } from '@/lib/api-client';
 
 // Type definitions
 export interface City {
@@ -86,6 +87,7 @@ export function CoverageSelector({
   headerTitle,
   headerDescription,
 }: CoverageSelectorProps) {
+  const api = useApi();
   const [searchQuery, setSearchQuery] = useState('');
   const [searchType, setSearchType] = useState<CoverageType>('city');
   const [cityResults, setCityResults] = useState<City[]>([]);
@@ -111,47 +113,36 @@ export function CoverageSelector({
     const timeoutId = setTimeout(async () => {
       setIsSearching(true);
       setShowDropdown(true);
-      const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
       try {
         if (searchType === 'city') {
-          const response = await fetch(
-            `${apiBase}/api/v1/cities?search=${encodeURIComponent(searchQuery)}&limit=10`
+          const data = await api.public.get<{ cities: City[] }>(
+            `/cities?search=${encodeURIComponent(searchQuery)}&limit=10`
           );
-          if (response.ok) {
-            const json = await response.json();
-            setCityResults(json.data?.cities || json.cities || []);
-          }
+          setCityResults(data?.cities || []);
         } else if (searchType === 'country') {
-          const response = await fetch(`${apiBase}/api/v1/countries`);
-          if (response.ok) {
-            const json = await response.json();
-            const countries = json.data?.countries || json.countries || json.data || [];
-            // Filter by search query
-            const filtered = countries.filter((c: Country) =>
-              c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-              c.code.toLowerCase().includes(searchQuery.toLowerCase())
-            );
-            setCountryResults(filtered.slice(0, 10));
-          }
+          const data = await api.public.get<{ countries: Country[] }>('/countries');
+          const countries = data?.countries || [];
+          // Filter by search query
+          const filtered = countries.filter((c: Country) =>
+            c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            c.code.toLowerCase().includes(searchQuery.toLowerCase())
+          );
+          setCountryResults(filtered.slice(0, 10));
         } else if (searchType === 'region') {
-          const response = await fetch(`${apiBase}/api/v1/regions?search=${encodeURIComponent(searchQuery)}&limit=10`);
-          if (response.ok) {
-            const json = await response.json();
-            setRegionResults(json.data?.regions || json.regions || json.data || []);
-          }
+          const data = await api.public.get<{ regions: Region[] }>(
+            `/regions?search=${encodeURIComponent(searchQuery)}&limit=10`
+          );
+          setRegionResults(data?.regions || []);
         } else if (searchType === 'continent') {
-          const response = await fetch(`${apiBase}/api/v1/continents`);
-          if (response.ok) {
-            const json = await response.json();
-            const continents = json.data?.continents || json.continents || [];
-            // Filter by search query
-            const filtered = continents.filter((c: Continent) =>
-              c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-              c.code.toLowerCase().includes(searchQuery.toLowerCase())
-            );
-            setContinentResults(filtered);
-          }
+          const data = await api.public.get<{ continents: Continent[] }>('/continents');
+          const continents = data?.continents || [];
+          // Filter by search query
+          const filtered = continents.filter((c: Continent) =>
+            c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            c.code.toLowerCase().includes(searchQuery.toLowerCase())
+          );
+          setContinentResults(filtered);
         }
       } catch (err) {
         console.error('Search failed:', err);
@@ -161,7 +152,7 @@ export function CoverageSelector({
     }, 300);
 
     return () => clearTimeout(timeoutId);
-  }, [searchQuery, searchType]);
+  }, [searchQuery, searchType, api]);
 
   // Close dropdown when clicking outside
   useEffect(() => {

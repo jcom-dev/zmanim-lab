@@ -342,9 +342,6 @@ export function usePublisherApi() {
   return api;
 }
 
-/**
- * @deprecated Use usePublisherApi instead. This alias exists for backward compatibility.
- */
 export const useApi = usePublisherApi;
 
 /**
@@ -422,6 +419,8 @@ function normalizeEndpoint(endpoint: string): string {
       '/calendar',
       '/ai',
       '/health',
+      '/categories',
+      '/tag-types',
     ];
 
     const needsPrefix = routePrefixes.some(
@@ -441,9 +440,4 @@ function normalizeEndpoint(endpoint: string): string {
   return normalized;
 }
 
-// =============================================================================
-// Legacy Exports (for backward compatibility during migration)
-// =============================================================================
-
-// Re-export for files that imported from the old location
 export { API_BASE as API_BASE_URL };

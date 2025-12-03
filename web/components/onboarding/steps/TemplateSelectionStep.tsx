@@ -12,6 +12,7 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { useApi } from '@/lib/api-client';
 import type { OnboardingState } from '../OnboardingWizard';
 
 interface TemplateSelectionStepProps {
@@ -42,6 +43,7 @@ const DEFAULT_ZMANIM_PREVIEW = [
 ];
 
 export function TemplateSelectionStep({ state, onUpdate, onNext, onBack }: TemplateSelectionStepProps) {
+  const api = useApi();
   const selectedTemplate = state.data.template;
   const [showPublisherBrowser, setShowPublisherBrowser] = useState(false);
   const [publishers, setPublishers] = useState<PublisherInfo[]>([]);
@@ -66,13 +68,10 @@ export function TemplateSelectionStep({ state, onUpdate, onNext, onBack }: Templ
 
     setLoading(true);
     try {
-      const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
-      const response = await fetch(`${apiBase}/api/v1/publishers?q=${encodeURIComponent(query)}&has_algorithm=true`);
-      if (response.ok) {
-        const data = await response.json();
-        // Standard API response: { data: [...], meta: {...} }
-        setPublishers(data.data || []);
-      }
+      const data = await api.public.get<PublisherInfo[]>(
+        `/publishers?q=${encodeURIComponent(query)}&has_algorithm=true`
+      );
+      setPublishers(data || []);
     } catch (err) {
       console.error('Failed to search publishers:', err);
     } finally {

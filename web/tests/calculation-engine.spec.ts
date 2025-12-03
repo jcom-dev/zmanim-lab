@@ -220,8 +220,8 @@ test.describe('Story 1.7: Calculation Engine & Caching', () => {
     });
   });
 
-  test.describe('Legacy POST Endpoint', () => {
-    test('POST /api/v1/zmanim still works for backward compatibility', async ({ request }) => {
+  test.describe('POST Endpoint', () => {
+    test('POST /api/v1/zmanim returns zmanim', async ({ request }) => {
       const response = await request.post(`${API_BASE}/api/v1/zmanim`, {
         data: {
           date: '2025-11-26',

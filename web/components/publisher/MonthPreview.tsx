@@ -33,8 +33,6 @@ export interface PreviewLocation {
 
 interface MonthPreviewProps {
   configuration: AlgorithmConfig;
-  /** @deprecated No longer needed - component uses useApi internally */
-  getToken?: () => Promise<string | null>;
   location: PreviewLocation;
 }
 
@@ -214,14 +212,14 @@ export function MonthPreview({ configuration, location }: MonthPreviewProps) {
                   key={day}
                   className={`p-2 text-center rounded cursor-pointer transition-colors ${
                     hasData
-                      ? 'bg-blue-900/50 hover:bg-blue-800/50 text-foreground'
+                      ? 'bg-primary/20 hover:bg-primary/30 text-foreground'
                       : 'bg-card hover:bg-muted text-muted-foreground'
-                  } ${selectedDay?.date === dateStr ? 'ring-2 ring-blue-500' : ''}`}
+                  } ${selectedDay?.date === dateStr ? 'ring-2 ring-primary' : ''}`}
                   onClick={() => dayData && setSelectedDay(dayData)}
                 >
                   <span className="text-sm">{day}</span>
                   {hasData && (
-                    <div className="text-xs text-blue-300 mt-1">
+                    <div className="text-xs text-primary mt-1">
                       {dayData.zmanim.length} zmanim
                     </div>
                   )}
@@ -246,7 +244,7 @@ export function MonthPreview({ configuration, location }: MonthPreviewProps) {
               {selectedDay.zmanim.map(zman => (
                 <div key={zman.key} className="flex justify-between text-sm">
                   <span className="text-muted-foreground">{zman.name}</span>
-                  <span className="font-mono text-blue-400">{zman.time}</span>
+                  <span className="font-mono text-primary">{zman.time}</span>
                 </div>
               ))}
             </div>

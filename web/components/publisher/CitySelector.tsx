@@ -243,7 +243,7 @@ export default function CitySelector({ onSelect, onCancel }: CitySelectorProps) 
             value={countrySearch}
             onChange={(e) => setCountrySearch(e.target.value)}
             placeholder="Search countries..."
-            className="w-full pl-9 pr-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full pl-9 pr-4 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary bg-card text-foreground"
           />
         </div>
         {isLoadingCountries ? (
@@ -259,7 +259,7 @@ export default function CitySelector({ onSelect, onCancel }: CitySelectorProps) 
                   setCountrySearch('');
                 }}
                 className={`w-full text-left px-3 py-2 hover:bg-muted flex items-center gap-2 ${
-                  selectedCountry?.code === country.code ? 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-400' : ''
+                  selectedCountry?.code === country.code ? 'bg-primary/10 text-primary' : ''
                 }`}
               >
                 <span className="font-medium">{country.name}</span>
@@ -272,12 +272,12 @@ export default function CitySelector({ onSelect, onCancel }: CitySelectorProps) 
           </div>
         )}
         {selectedCountry && (
-          <div className="mt-2 p-2 bg-blue-50 dark:bg-blue-950 rounded-md flex items-center justify-between">
-            <span className="text-blue-700 dark:text-blue-400 font-medium">{selectedCountry.name}</span>
+          <div className="mt-2 p-2 bg-primary/10 rounded-md flex items-center justify-between">
+            <span className="text-primary font-medium">{selectedCountry.name}</span>
             <button
               type="button"
               onClick={() => setSelectedCountry(null)}
-              className="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 text-sm"
+              className="text-primary hover:text-primary/80 text-sm"
             >
               Change
             </button>
@@ -298,7 +298,7 @@ export default function CitySelector({ onSelect, onCancel }: CitySelectorProps) 
               value={regionSearch}
               onChange={(e) => setRegionSearch(e.target.value)}
               placeholder="Search regions..."
-              className="w-full pl-9 pr-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full pl-9 pr-4 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary bg-card text-foreground"
             />
           </div>
           {isLoadingRegions ? (
@@ -314,7 +314,7 @@ export default function CitySelector({ onSelect, onCancel }: CitySelectorProps) 
                     setRegionSearch('');
                   }}
                   className={`w-full text-left px-3 py-2 hover:bg-muted ${
-                    selectedRegion?.name === region.name ? 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-400' : ''
+                    selectedRegion?.name === region.name ? 'bg-primary/10 text-primary' : ''
                   }`}
                 >
                   {region.name}
@@ -327,12 +327,12 @@ export default function CitySelector({ onSelect, onCancel }: CitySelectorProps) 
             </div>
           )}
           {selectedRegion && (
-            <div className="mt-2 p-2 bg-blue-50 dark:bg-blue-950 rounded-md flex items-center justify-between">
-              <span className="text-blue-700 dark:text-blue-400 font-medium">{selectedRegion.name}</span>
+            <div className="mt-2 p-2 bg-primary/10 rounded-md flex items-center justify-between">
+              <span className="text-primary font-medium">{selectedRegion.name}</span>
               <button
                 type="button"
                 onClick={() => setSelectedRegion(null)}
-                className="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 text-sm"
+                className="text-primary hover:text-primary/80 text-sm"
               >
                 Change
               </button>
@@ -352,7 +352,7 @@ export default function CitySelector({ onSelect, onCancel }: CitySelectorProps) 
               value={citySearch}
               onChange={(e) => setCitySearch(e.target.value)}
               placeholder="Search for a city..."
-              className="w-full pl-9 pr-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full pl-9 pr-4 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary bg-card text-foreground"
             />
           </div>
           {isLoadingCities ? (

@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { useAdminApi } from '@/lib/api-client';
 import { useUser } from '@clerk/nextjs';
+import { useTagTypes } from '@/lib/hooks';
 import {
     Search,
     Loader2,
@@ -42,11 +43,8 @@ interface TagRequestWithZman extends TagRequest {
     };
 }
 
-const TAG_TYPE_COLORS: Record<string, string> = {
-    event: 'bg-blue-500/10 text-blue-700 border-blue-300 dark:bg-blue-500/20 dark:text-blue-300 dark:border-blue-700',
-    timing: 'bg-green-500/10 text-green-700 border-green-300 dark:bg-green-500/20 dark:text-green-300 dark:border-green-700',
-    behavior: 'bg-purple-500/10 text-purple-700 border-purple-300 dark:bg-purple-500/20 dark:text-purple-300 dark:border-purple-700',
-};
+// Fallback colors when database color not available
+const DEFAULT_TAG_TYPE_COLOR = 'bg-muted text-muted-foreground border-border';
 
 export default function AdminTagRequestsPage() {
     const api = useAdminApi();
@@ -56,6 +54,27 @@ export default function AdminTagRequestsPage() {
     const [error, setError] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [processingTagId, setProcessingTagId] = useState<string | null>(null);
+
+    // Fetch tag types from database for colors and labels
+    const { data: tagTypes } = useTagTypes();
+
+    // Build tag type color map from database
+    const tagTypeColors = useMemo(() => {
+        if (!tagTypes) return {} as Record<string, string>;
+        return tagTypes.reduce((acc, tt) => {
+            acc[tt.key] = tt.color || DEFAULT_TAG_TYPE_COLOR;
+            return acc;
+        }, {} as Record<string, string>);
+    }, [tagTypes]);
+
+    // Build tag type labels map from database
+    const tagTypeLabels = useMemo(() => {
+        if (!tagTypes) return {} as Record<string, string>;
+        return tagTypes.reduce((acc, tt) => {
+            acc[tt.key] = tt.display_name_english;
+            return acc;
+        }, {} as Record<string, string>);
+    }, [tagTypes]);
 
     const fetchTagRequests = useCallback(async () => {
         try {
@@ -293,9 +312,9 @@ export default function AdminTagRequestsPage() {
                                                 </h3>
                                                 <Badge
                                                     variant="outline"
-                                                    className={TAG_TYPE_COLORS[tagReq.requested_tag_type] || ''}
+                                                    className={tagTypeColors[tagReq.requested_tag_type] || DEFAULT_TAG_TYPE_COLOR}
                                                 >
-                                                    {tagReq.requested_tag_type}
+                                                    {tagTypeLabels[tagReq.requested_tag_type] || tagReq.requested_tag_type}
                                                 </Badge>
                                             </div>
                                         </div>

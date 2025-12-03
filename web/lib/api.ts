@@ -16,9 +16,6 @@
 /** Base URL for API requests. Use this instead of hardcoding URLs. */
 export const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
-// Legacy alias for backward compatibility
-const API_BASE_URL = API_BASE;
-
 export interface Publisher {
   id: string;
   name: string;
@@ -80,7 +77,7 @@ export interface Location {
 class ApiClient {
   private baseUrl: string;
 
-  constructor(baseUrl: string = API_BASE_URL) {
+  constructor(baseUrl: string = API_BASE) {
     this.baseUrl = baseUrl;
   }
 

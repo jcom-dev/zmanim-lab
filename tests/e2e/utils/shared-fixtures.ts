@@ -13,8 +13,6 @@
 
 import { Pool } from 'pg';
 
-// Shared publisher pool - created once, reused across tests
-// Note: organization field was removed from schema
 export interface SharedPublisher {
   id: string;
   name: string;

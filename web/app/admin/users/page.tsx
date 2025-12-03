@@ -397,7 +397,7 @@ export default function AdminUsersPage() {
                       <td className="py-4">
                         <a
                           href={`mailto:${user.email}`}
-                          className="text-blue-600 hover:underline"
+                          className="text-primary hover:underline"
                         >
                           {user.email}
                         </a>

@@ -328,7 +328,7 @@ CREATE TABLE public.day_types (
     sort_order integer DEFAULT 0,
     created_at timestamp with time zone DEFAULT now() NOT NULL
 );
-COMMENT ON TABLE public.day_types IS 'DEPRECATED: Use jewish_events instead. Types of days for which zmanim can be configured.';
+COMMENT ON TABLE public.day_types IS 'Types of days for which zmanim can be configured.';
 COMMENT ON COLUMN public.day_types.parent_type IS 'Parent type name for hierarchical day types';
 
 -- Embeddings
@@ -437,7 +437,7 @@ CREATE TABLE public.master_zman_day_types (
     is_default boolean DEFAULT true,
     created_at timestamp with time zone DEFAULT now() NOT NULL
 );
-COMMENT ON TABLE public.master_zman_day_types IS 'DEPRECATED: Use master_zman_events instead.';
+COMMENT ON TABLE public.master_zman_day_types IS 'Links master zmanim to day types.';
 
 -- Master Zman Events
 CREATE TABLE public.master_zman_events (
@@ -535,7 +535,7 @@ CREATE TABLE public.publisher_invitations (
     accepted_at timestamp with time zone,
     created_at timestamp with time zone DEFAULT now()
 );
-COMMENT ON TABLE public.publisher_invitations IS 'DEPRECATED: This table is no longer used. User management now creates users directly via Clerk instead of using invitations. Table kept for historical reference but will be empty.';
+COMMENT ON TABLE public.publisher_invitations IS 'Publisher team invitations.';
 
 -- Publisher Onboarding
 CREATE TABLE public.publisher_onboarding (
@@ -640,7 +640,7 @@ CREATE TABLE public.publisher_zman_day_types (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
-COMMENT ON TABLE public.publisher_zman_day_types IS 'DEPRECATED: Use publisher_zman_events instead.';
+COMMENT ON TABLE public.publisher_zman_day_types IS 'Links publisher zmanim to day types.';
 
 -- Publisher Zman Events
 CREATE TABLE public.publisher_zman_events (

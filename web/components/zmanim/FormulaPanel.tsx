@@ -20,10 +20,12 @@ export interface ZmanFormula {
 
 export interface Zman {
   name: string;
+  hebrew_name?: string;
   key: string;
   time: string;
   formula: ZmanFormula;
   is_beta?: boolean;
+  time_category?: string;
 }
 
 interface FormulaPanelProps {
@@ -93,12 +95,12 @@ export function FormulaPanel({ zman, open, onClose }: FormulaPanelProps) {
 
         <SheetHeader className="pb-4 border-b border-border">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-500/20 rounded-lg">
-              <Clock className="w-5 h-5 text-blue-400" />
+            <div className="p-2 bg-primary/20 rounded-lg">
+              <Clock className="w-5 h-5 text-primary" />
             </div>
             <div>
               <SheetTitle className="text-xl">{zman.name}</SheetTitle>
-              <SheetDescription className="text-lg font-semibold text-blue-400">
+              <SheetDescription className="text-lg font-semibold text-primary">
                 {zman.time}
               </SheetDescription>
             </div>
@@ -153,7 +155,7 @@ export function FormulaPanel({ zman, open, onClose }: FormulaPanelProps) {
                 <ul className="space-y-2">
                   {Object.entries(parameters).map(([key, value]) => (
                     <li key={key} className="flex items-center gap-2 text-muted-foreground">
-                      <span className="w-2 h-2 bg-blue-400 rounded-full" />
+                      <span className="w-2 h-2 bg-primary rounded-full" />
                       {formatParameter(key, value)}
                     </li>
                   ))}
@@ -183,13 +185,13 @@ export function FormulaPanel({ zman, open, onClose }: FormulaPanelProps) {
           {formula?.halachic_source && (
             <section>
               <div className="flex items-center gap-2 mb-3">
-                <BookOpen className="w-4 h-4 text-amber-500" />
-                <h3 className="text-sm font-semibold text-amber-400 uppercase tracking-wide">
+                <BookOpen className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                <h3 className="text-sm font-semibold text-amber-700 dark:text-amber-400 uppercase tracking-wide">
                   Halachic Source
                 </h3>
               </div>
-              <div className="bg-amber-900/20 border border-amber-700/50 rounded-lg p-4">
-                <p className="text-amber-200 leading-relaxed">
+              <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/50 rounded-lg p-4">
+                <p className="text-amber-800 dark:text-amber-200 leading-relaxed">
                   {formula.halachic_source}
                 </p>
               </div>

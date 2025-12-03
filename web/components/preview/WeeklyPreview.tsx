@@ -1,6 +1,7 @@
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { DayColumn } from './DayColumn';
+import { useApi } from '@/lib/api-client';
 
 interface HebrewDate {
   day: number;
@@ -83,37 +84,32 @@ export function WeeklyPreview({
   zmanim = {},
   className = '',
 }: WeeklyPreviewProps) {
+  const api = useApi();
   const [weekStart, setWeekStart] = useState(() => getWeekStart(new Date()));
   const [weekData, setWeekData] = useState<WeekData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Fetch week data when weekStart changes
-  const fetchWeekData = async () => {
+  const fetchWeekData = useCallback(async () => {
     setLoading(true);
     setError(null);
 
     try {
       const dateStr = formatDate(weekStart);
-      const response = await fetch(`/api/v1/calendar/week?date=${dateStr}`);
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch calendar data');
-      }
-
-      const data = await response.json();
+      const data = await api.public.get<WeekData>(`/calendar/week?date=${dateStr}`);
       setWeekData(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setLoading(false);
     }
-  };
+  }, [api, weekStart]);
 
-  // Initial fetch
-  useMemo(() => {
+  // Fetch when weekStart changes
+  useEffect(() => {
     fetchWeekData();
-  }, [weekStart]);
+  }, [fetchWeekData]);
 
   const navigateWeek = (direction: 'prev' | 'next') => {
     const days = direction === 'prev' ? -7 : 7;

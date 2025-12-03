@@ -20,6 +20,7 @@ import {
   useZmanTags,
   useUpdatePublisherZmanTags,
 } from '@/lib/hooks/useZmanimList';
+import { useTagTypes } from '@/lib/hooks';
 import { cn } from '@/lib/utils';
 
 interface ZmanTagEditorProps {
@@ -43,7 +44,14 @@ export function ZmanTagEditor({ zmanKey, currentTags, onTagsUpdated }: ZmanTagEd
   );
 
   const { data: allTags, isLoading: tagsLoading } = useZmanTags();
+  const { data: tagTypes, isLoading: tagTypesLoading } = useTagTypes();
   const updateTags = useUpdatePublisherZmanTags(zmanKey);
+
+  // Build tag type labels map from database
+  const tagTypeLabelsMap = tagTypes?.reduce((acc, tt) => {
+    acc[tt.key] = tt.display_name_english;
+    return acc;
+  }, {} as Record<string, string>) ?? {};
 
   // Reset selection when dialog opens
   useEffect(() => {
@@ -88,13 +96,6 @@ export function ZmanTagEditor({ zmanKey, currentTags, onTagsUpdated }: ZmanTagEd
     onTagsUpdated?.();
   };
 
-  const tagTypeLabels: Record<string, string> = {
-    event: 'Events',
-    timing: 'Timing',
-    behavior: 'Behavior',
-    other: 'Other',
-  };
-
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
@@ -117,7 +118,7 @@ export function ZmanTagEditor({ zmanKey, currentTags, onTagsUpdated }: ZmanTagEd
           </DialogDescription>
         </DialogHeader>
 
-        {tagsLoading ? (
+        {tagsLoading || tagTypesLoading ? (
           <div className="flex justify-center py-8">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
@@ -131,7 +132,7 @@ export function ZmanTagEditor({ zmanKey, currentTags, onTagsUpdated }: ZmanTagEd
               {Object.entries(tagsByType).map(([type, tags]) => (
                 <div key={type}>
                   <h5 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">
-                    {tagTypeLabels[type] || type}
+                    {tagTypeLabelsMap[type] || type}
                   </h5>
                   <div className="space-y-2">
                     {tags.map((tag) => {

@@ -159,6 +159,16 @@ func main() {
 		httpSwagger.DomID("swagger-ui"),
 	))
 
+	// OpenAPI specification endpoints
+	r.Get("/openapi.json", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		http.ServeFile(w, r, "./docs/swagger.json")
+	})
+	r.Get("/openapi.yaml", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/x-yaml")
+		http.ServeFile(w, r, "./docs/swagger.yaml")
+	})
+
 	// Initialize auth middleware
 	authMiddleware := custommw.NewAuthMiddleware(cfg.JWT.JWKSUrl, cfg.JWT.Issuer)
 
@@ -238,6 +248,12 @@ func main() {
 			// Astronomical Primitives (scientific times for formulas)
 			r.Get("/registry/primitives", h.GetAstronomicalPrimitives)
 			r.Get("/registry/primitives/grouped", h.GetAstronomicalPrimitivesGrouped)
+
+			// Categories (public, for UI rendering)
+			r.Get("/categories/time", h.GetTimeCategories)
+			r.Get("/categories/events", h.GetEventCategories)
+			r.Get("/categories/display-groups", h.GetDisplayGroups)
+			r.Get("/tag-types", h.GetTagTypes)
 		})
 
 		// Authenticated routes for algorithm actions (Story 4-12)

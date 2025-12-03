@@ -87,18 +87,14 @@ func (e *Executor) Execute(config *AlgorithmConfig) (*ZmanimResults, error) {
 	}
 
 	// Build ordered results
+	// Note: Display names are populated by the handler from database (master_zmanim_registry)
 	orderedKeys := getOrderedZmanimKeys(config)
 	for _, key := range orderedKeys {
 		zmanConfig := config.Zmanim[key]
 		t := e.calculated[key]
 
-		displayName := ZmanDisplayNames[key]
-		if displayName == "" {
-			displayName = key
-		}
-
 		results.Zmanim = append(results.Zmanim, ZmanResult{
-			Name:       displayName,
+			Name:       key, // Handler will override with database-driven display name
 			Key:        key,
 			Time:       t,
 			TimeString: astro.FormatTime(t),
@@ -258,20 +254,20 @@ func (e *Executor) GetSunTimes() *astro.SunTimes {
 func getOrderedZmanimKeys(config *AlgorithmConfig) []string {
 	// Define standard order
 	standardOrder := map[string]int{
-		"alos_hashachar":       1,
-		"misheyakir":           2,
-		"sunrise":              3,
-		"sof_zman_shma_mga":    4,
-		"sof_zman_shma_gra":    5,
-		"sof_zman_tefilla_mga": 6,
-		"sof_zman_tefilla_gra": 7,
-		"chatzos":              8,
-		"mincha_gedola":        9,
-		"mincha_ketana":        10,
-		"plag_hamincha":        11,
-		"sunset":               12,
-		"tzeis_hakochavim":     13,
-		"tzeis_72":             14,
+		"alos_hashachar":    1,
+		"misheyakir":        2,
+		"sunrise":           3,
+		"sof_zman_shma_mga": 4,
+		"sof_zman_shma_gra": 5,
+		"sof_zman_tfila_mga": 6,
+		"sof_zman_tfila_gra": 7,
+		"chatzos":           8,
+		"mincha_gedola":     9,
+		"mincha_ketana":     10,
+		"plag_hamincha":     11,
+		"sunset":            12,
+		"tzais":             13,
+		"tzais_72":          14,
 	}
 
 	keys := make([]string, 0, len(config.Zmanim))

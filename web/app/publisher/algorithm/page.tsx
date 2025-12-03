@@ -66,50 +66,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 
-// Event zman keys - these are shown in Events tab and Weekly Preview
-// Everyday zmanim are shown in Everyday tab and Live Preview
-const EVENT_ZMAN_KEYS = new Set([
-  // Candle lighting
-  'candle_lighting',
-  'candle_lighting_15',
-  'candle_lighting_18',
-  'candle_lighting_20',
-  'candle_lighting_22',
-  'candle_lighting_30',
-  'candle_lighting_40',
-  // Havdalah / Shabbos ends
-  'shabbos_ends',
-  'havdalah',
-  'havdalah_42',
-  'havdalah_50',
-  'havdalah_72',
-  // Yom Kippur
-  'yom_kippur_starts',
-  'yom_kippur_ends',
-  // Fast days
-  'fast_begins',
-  'fast_ends',
-  'fast_ends_20',
-  'fast_ends_42',
-  'fast_ends_50',
-  // Tisha B'Av
-  'tisha_bav_starts',
-  'tisha_bav_ends',
-  // Pesach
-  'sof_zman_achilas_chametz_gra',
-  'sof_zman_achilas_chametz_mga',
-  'sof_zman_biur_chametz_gra',
-  'sof_zman_biur_chametz_mga',
-]);
-
-/**
- * Determines if a zman is an event zman (Shabbos, holidays, fasts)
- * vs an everyday zman (daily solar calculations)
- */
-function isEventZman(zmanKey: string): boolean {
-  return EVENT_ZMAN_KEYS.has(zmanKey);
-}
-
 // Infer tags from the formula DSL for filtering
 type InferredTag = 'GRA' | 'MGA' | '16.1°' | 'Proportional Hours' | 'Solar Angle' | 'Fixed Minutes';
 
@@ -274,6 +230,7 @@ interface CoverageCity {
   longitude: number;
   timezone: string;
   country: string;
+  country_code?: string;
   region?: string;
 }
 
@@ -316,16 +273,6 @@ export default function AlgorithmEditorPage() {
     staleTime: 0, // Always refetch
   });
   const hasCompletedOnboarding = onboardingState?.completed_at != null || onboardingState?.skipped === true;
-
-  // Debug logging
-  console.log('[Algorithm Page] State:', {
-    zmanimLength: zmanim.length,
-    onboardingState,
-    hasCompletedOnboarding,
-    isLoading,
-    onboardingLoading,
-    selectedPublisher: selectedPublisher?.id,
-  });
 
   const [showMonthView, setShowMonthView] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
@@ -518,7 +465,6 @@ export default function AlgorithmEditorPage() {
             return;
           }
           // Saved location is no longer valid, fall through to use first coverage city
-          console.log('Saved location no longer in coverage, switching to first coverage city');
         } catch {
           // ignore parse errors, fall through to use coverage
         }
@@ -554,46 +500,32 @@ export default function AlgorithmEditorPage() {
     if (query.length < 2) return;
 
     try {
-      const token = await getToken();
-      let url = `${process.env.NEXT_PUBLIC_API_URL || ''}/api/v1/cities?search=${encodeURIComponent(query)}`;
+      let url = `/cities?search=${encodeURIComponent(query)}`;
 
       // Add country code filter if we have coverage
       if (coverageCountryCodes.length === 1) {
         url += `&country_code=${encodeURIComponent(coverageCountryCodes[0])}`;
       }
 
-      const response = await fetch(url, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-      });
+      const data = await api.get<{ cities: CoverageCity[] }>(url);
+      let cities = data?.cities || [];
 
-      if (response.ok) {
-        const data = await response.json();
-        let cities = data.data?.cities || data.cities || [];
-        console.log('[searchCitiesAPI] Got cities:', cities.length, cities.slice(0, 3));
-
-        // If we have multiple country codes, filter client-side by country_code field
-        if (coverageCountryCodes.length > 1) {
-          cities = cities.filter((city: { country_code?: string }) =>
-            city.country_code && coverageCountryCodes.includes(city.country_code)
-          );
-        }
-
-        setSearchResults(cities);
-      } else {
-        console.error('[searchCitiesAPI] Response not ok:', response.status);
+      // If we have multiple country codes, filter client-side by country_code field
+      if (coverageCountryCodes.length > 1) {
+        cities = cities.filter((city) =>
+          city.country_code && coverageCountryCodes.includes(city.country_code)
+        );
       }
+
+      setSearchResults(cities);
     } catch (err) {
       console.error('Failed to search cities:', err);
     }
-  }, [getToken, coverageCountryCodes]);
+  }, [api, coverageCountryCodes]);
 
   // Search for cities with debounce for API calls
   const handleCitySearch = (query: string) => {
     setCitySearch(query);
-    console.log('[handleCitySearch] Query:', query, 'Coverage cities:', coverageCities.length);
 
     // Clear any pending API search
     if (searchTimeoutRef.current) {
@@ -609,7 +541,6 @@ export default function AlgorithmEditorPage() {
     const coverageMatches = coverageCities.filter(city =>
       city.name.toLowerCase().includes(query.toLowerCase())
     );
-    console.log('[handleCitySearch] Coverage matches:', coverageMatches.length);
 
     if (coverageMatches.length > 0) {
       setSearchResults(coverageMatches);
@@ -618,36 +549,30 @@ export default function AlgorithmEditorPage() {
 
     // Debounce API search to avoid rate limiting
     searchTimeoutRef.current = setTimeout(() => {
-      console.log('[handleCitySearch] Calling API for:', query);
       searchCitiesAPI(query);
     }, 300);
   };
 
   const selectCity = (city: CoverageCity) => {
-    console.log('[selectCity] Called with:', city.name);
     const newLocation = {
       latitude: city.latitude,
       longitude: city.longitude,
       timezone: city.timezone,
       displayName: `${city.name}${city.region ? `, ${city.region}` : ''}, ${city.country}`,
     };
-    console.log('[selectCity] Setting location to:', newLocation.displayName);
     setPreviewLocation(newLocation);
     setCitySearch('');
     setSearchResults([]);
     setShowCityDropdown(false);
   };
 
-  // Separate zmanim into everyday and event categories
-  // Use is_event_zman field from API, fall back to hardcoded check for legacy data
+  // Separate zmanim into everyday and event categories using API field
   const { everydayZmanim, eventZmanim } = useMemo(() => {
     const everyday: PublisherZman[] = [];
     const events: PublisherZman[] = [];
 
     zmanim.forEach(z => {
-      // Prefer is_event_zman from API, fallback to hardcoded EVENT_ZMAN_KEYS
-      const isEvent = z.is_event_zman || isEventZman(z.zman_key);
-      if (isEvent) {
+      if (z.is_event_zman) {
         events.push(z);
       } else {
         everyday.push(z);
@@ -768,7 +693,6 @@ export default function AlgorithmEditorPage() {
     return (
       <div className="min-h-screen bg-background">
         <OnboardingWizard
-          publisherId={selectedPublisher?.id}
           onComplete={() => {
             refetch();
             refetchOnboarding();
@@ -1465,7 +1389,7 @@ export default function AlgorithmEditorPage() {
                 }}
               >
                 <div className="flex items-start gap-4">
-                  <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 group-hover:bg-blue-200 dark:group-hover:bg-blue-900/50 transition-colors">
+                  <div className="p-2 rounded-lg bg-primary/10 text-primary group-hover:bg-primary/20 transition-colors">
                     <Library className="h-5 w-5" />
                   </div>
                   <div>

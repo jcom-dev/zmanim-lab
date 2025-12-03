@@ -411,7 +411,7 @@ export default function Home() {
                     onFocus={() => setShowSearchResults(true)}
                     onBlur={() => setTimeout(() => setShowSearchResults(false), 200)}
                     placeholder="Search for a city..."
-                    className="w-full pl-10 pr-4 py-3 rounded-xl border border-border focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all outline-none text-foreground bg-card"
+                    className="w-full pl-10 pr-4 py-3 rounded-xl border border-border focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all outline-none text-foreground bg-card"
                   />
                   {isSearching && (
                     <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground animate-spin" />
@@ -450,7 +450,7 @@ export default function Home() {
                     type="button"
                     onClick={handleUseMyLocation}
                     disabled={isGeolocating}
-                    className="flex items-center gap-2 px-4 py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl transition-colors whitespace-nowrap"
+                    className="flex items-center gap-2 px-4 py-3 bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground rounded-xl transition-colors whitespace-nowrap"
                   >
                     {isGeolocating ? (
                       <Loader2 className="w-5 h-5 animate-spin" />
@@ -486,7 +486,7 @@ export default function Home() {
                 setRegions([]);
                 setCities([]);
               }}
-              className={`${!selectedContinent ? 'text-blue-400' : 'text-muted-foreground hover:text-foreground'}`}
+              className={`${!selectedContinent ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
             >
               <Globe className="w-4 h-4 inline mr-1" />
               Select Location
@@ -503,7 +503,7 @@ export default function Home() {
                     setRegions([]);
                     setCities([]);
                   }}
-                  className={`${!selectedCountry ? 'text-blue-400' : 'text-muted-foreground hover:text-foreground'}`}
+                  className={`${!selectedCountry ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
                 >
                   {selectedContinent.name}
                 </button>
@@ -519,7 +519,7 @@ export default function Home() {
                     setSelectedCity(null);
                     setCities([]);
                   }}
-                  className={`${!selectedRegion && regions.length > 0 ? 'text-blue-400' : 'text-muted-foreground hover:text-foreground'}`}
+                  className={`${!selectedRegion && regions.length > 0 ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
                 >
                   {selectedCountry.name}
                 </button>
@@ -531,7 +531,7 @@ export default function Home() {
                 <ChevronRight className="w-4 h-4 text-muted-foreground" />
                 <button
                   onClick={() => setSelectedCity(null)}
-                  className={`${!selectedCity ? 'text-blue-400' : 'text-muted-foreground hover:text-foreground'}`}
+                  className={`${!selectedCity ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
                 >
                   {selectedRegion.name}
                 </button>
@@ -556,7 +556,7 @@ export default function Home() {
 
             {loadingContinents ? (
               <div className="flex justify-center py-12">
-                <Loader2 className="w-8 h-8 text-blue-400 animate-spin" />
+                <Loader2 className="w-8 h-8 text-primary animate-spin" />
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -598,7 +598,7 @@ export default function Home() {
 
             {loadingCountries ? (
               <div className="flex justify-center py-12">
-                <Loader2 className="w-8 h-8 text-blue-400 animate-spin" />
+                <Loader2 className="w-8 h-8 text-primary animate-spin" />
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -640,7 +640,7 @@ export default function Home() {
 
             {loadingRegions ? (
               <div className="flex justify-center py-12">
-                <Loader2 className="w-8 h-8 text-blue-400 animate-spin" />
+                <Loader2 className="w-8 h-8 text-primary animate-spin" />
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -682,7 +682,7 @@ export default function Home() {
 
             {loadingCities ? (
               <div className="flex justify-center py-12">
-                <Loader2 className="w-8 h-8 text-blue-400 animate-spin" />
+                <Loader2 className="w-8 h-8 text-primary animate-spin" />
               </div>
             ) : cities.length === 0 ? (
               <div className="text-center py-12">

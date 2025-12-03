@@ -24,13 +24,12 @@ function isZmanModified(z: ZmanCustomization | SelectedZmanCustomization): boole
 
 function isZmanEnabled(z: ZmanCustomization | SelectedZmanCustomization): boolean {
   if ('enabled' in z) return z.enabled;
-  return true; // Legacy format assumes enabled
+  return true;
 }
 
 const TEMPLATE_NAMES: Record<string, { en: string; he: string }> = {
   default: { en: 'Standard Defaults', he: 'ברירות מחדל סטנדרטיות' },
   copy_publisher: { en: 'Copied from Publisher', he: 'הועתק ממפרסם' },
-  // Legacy templates (for backwards compatibility)
   gra: { en: 'GRA Standard', he: 'גר"א סטנדרטי' },
   mga: { en: 'Magen Avraham', he: 'מגן אברהם' },
   rabbeinu_tam: { en: 'Rabbeinu Tam', he: 'רבינו תם' },

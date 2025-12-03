@@ -161,16 +161,21 @@ func extractDependencies(formula string) []string {
 var dayNames = []string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"}
 
 // GetPublisherZmanim returns all zmanim for a publisher
-// GET /api/v1/publisher/zmanim
-//
-// Optional query params for filtered/preview mode:
-//   - date: YYYY-MM-DD (enables filtering and time calculation)
-//   - latitude: float (required with date for time calculation)
-//   - longitude: float (required with date for time calculation)
-//   - timezone: string (defaults to UTC)
-//
-// Without date params: returns all zmanim (for editor list)
-// With date params: returns filtered zmanim + day context + calculated times (for preview)
+// @Summary Get publisher zmanim
+// @Description Returns all zmanim formulas for a publisher. With optional date/location params, returns filtered zmanim with calculated times and day context.
+// @Tags Publisher Zmanim
+// @Produce json
+// @Security BearerAuth
+// @Param X-Publisher-Id header string true "Publisher ID"
+// @Param date query string false "Date for filtering and calculation (YYYY-MM-DD)"
+// @Param latitude query number false "Latitude for time calculation (required with date)"
+// @Param longitude query number false "Longitude for time calculation (required with date)"
+// @Param timezone query string false "Timezone for calculation (defaults to UTC)"
+// @Success 200 {object} APIResponse{data=object} "List of zmanim or filtered response with day context"
+// @Failure 401 {object} APIResponse{error=APIError} "Unauthorized"
+// @Failure 404 {object} APIResponse{error=APIError} "Publisher not found"
+// @Failure 500 {object} APIResponse{error=APIError} "Internal server error"
+// @Router /publisher/zmanim [get]
 func (h *Handlers) GetPublisherZmanim(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -635,6 +640,9 @@ func (h *Handlers) filterAndCalculateZmanim(zmanim []PublisherZman, dayCtx DayCo
 		result = append(result, zwt)
 	}
 
+	// Sort all zmanim by calculated time for chronological display
+	sortPublisherZmanimByTime(result)
+
 	return result
 }
 
@@ -942,7 +950,17 @@ func importZmanimFromTemplatesByKeysRowToPublisherZman(z sqlcgen.ImportZmanimFro
 }
 
 // GetPublisherZman returns a single zman by key
-// GET /api/v1/publisher/zmanim/{zmanKey}
+// @Summary Get single zman
+// @Description Returns a single zman formula by its unique key
+// @Tags Publisher Zmanim
+// @Produce json
+// @Security BearerAuth
+// @Param X-Publisher-Id header string true "Publisher ID"
+// @Param zmanKey path string true "Zman key"
+// @Success 200 {object} APIResponse{data=PublisherZman} "Zman details"
+// @Failure 401 {object} APIResponse{error=APIError} "Unauthorized"
+// @Failure 404 {object} APIResponse{error=APIError} "Zman not found"
+// @Router /publisher/zmanim/{zmanKey} [get]
 func (h *Handlers) GetPublisherZman(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -976,7 +994,19 @@ func (h *Handlers) GetPublisherZman(w http.ResponseWriter, r *http.Request) {
 }
 
 // CreatePublisherZman creates a new custom zman
-// POST /api/v1/publisher/zmanim
+// @Summary Create custom zman
+// @Description Creates a new custom zman formula for the publisher
+// @Tags Publisher Zmanim
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param X-Publisher-Id header string true "Publisher ID"
+// @Param request body CreateZmanRequest true "Zman data"
+// @Success 201 {object} APIResponse{data=PublisherZman} "Created zman"
+// @Failure 400 {object} APIResponse{error=APIError} "Invalid request or duplicate key"
+// @Failure 401 {object} APIResponse{error=APIError} "Unauthorized"
+// @Failure 500 {object} APIResponse{error=APIError} "Internal server error"
+// @Router /publisher/zmanim [post]
 func (h *Handlers) CreatePublisherZman(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -1049,7 +1079,21 @@ func (h *Handlers) CreatePublisherZman(w http.ResponseWriter, r *http.Request) {
 }
 
 // UpdatePublisherZman updates an existing zman
-// PUT /api/v1/publisher/zmanim/{zmanKey}
+// @Summary Update zman
+// @Description Updates an existing zman formula's properties
+// @Tags Publisher Zmanim
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param X-Publisher-Id header string true "Publisher ID"
+// @Param zmanKey path string true "Zman key"
+// @Param request body UpdateZmanRequest true "Fields to update"
+// @Success 200 {object} APIResponse{data=PublisherZman} "Updated zman"
+// @Failure 400 {object} APIResponse{error=APIError} "Invalid request"
+// @Failure 401 {object} APIResponse{error=APIError} "Unauthorized"
+// @Failure 404 {object} APIResponse{error=APIError} "Zman not found"
+// @Failure 500 {object} APIResponse{error=APIError} "Internal server error"
+// @Router /publisher/zmanim/{zmanKey} [put]
 func (h *Handlers) UpdatePublisherZman(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 

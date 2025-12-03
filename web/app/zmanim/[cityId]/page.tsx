@@ -35,7 +35,7 @@ interface Publisher {
   id: string;
   name: string;
   description: string | null;
-  logo_url: string | null;
+  logo: string | null; // Base64 data URL
   website: string | null;
   priority: number;
   is_verified: boolean;
@@ -71,7 +71,7 @@ export default function CityPublishersPage() {
         id: p.publisher_id,
         name: p.publisher_name,
         description: null,
-        logo_url: null,
+        logo: null,
         website: null,
         priority: p.priority,
         is_verified: false,
@@ -112,7 +112,7 @@ export default function CityPublishersPage() {
   if (loading) {
     return (
       <main className="min-h-screen bg-background flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-blue-400 animate-spin" />
+        <Loader2 className="w-8 h-8 text-primary animate-spin" />
       </main>
     );
   }
@@ -159,7 +159,7 @@ export default function CityPublishersPage() {
           </div>
 
           <div className="flex items-center gap-3">
-            <MapPin className="w-8 h-8 text-blue-400" />
+            <MapPin className="w-8 h-8 text-primary" />
             <div>
               <h1 className="text-2xl font-bold text-foreground">{city?.name}</h1>
               <p className="text-muted-foreground">
@@ -213,18 +213,18 @@ export default function CityPublishersPage() {
               >
                 {/* Logo */}
                 <div className="relative w-16 h-16 bg-muted rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden">
-                  {publisher.logo_url ? (
+                  {publisher.logo ? (
                     <Image
-                      src={publisher.logo_url}
+                      src={publisher.logo}
                       alt={publisher.name}
                       fill
                       className="object-cover rounded-lg"
                       unoptimized
                     />
                   ) : (
-                    <div className="w-full h-full bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center rounded-lg">
-                      <span className="text-2xl font-bold text-white">
-                        {publisher.name?.charAt(0)?.toUpperCase() || 'P'}
+                    <div className="w-full h-full bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center rounded-lg">
+                      <span className="text-lg font-bold text-primary-foreground tracking-tight">
+                        {(publisher.name || 'P').split(/\s+/).slice(0, 3).map(w => w.charAt(0).toUpperCase()).join('')}
                       </span>
                     </div>
                   )}

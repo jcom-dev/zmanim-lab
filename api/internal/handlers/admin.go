@@ -60,7 +60,16 @@ func (h *Handlers) AdminGetPublisherUsers(w http.ResponseWriter, r *http.Request
 }
 
 // AdminListPublishers returns a list of all publishers with status
-// GET /api/admin/publishers
+// @Summary List all publishers (admin)
+// @Description Returns a list of all publishers with their status, regardless of verification
+// @Tags Admin
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} APIResponse{data=object} "List of publishers"
+// @Failure 401 {object} APIResponse{error=APIError} "Unauthorized"
+// @Failure 403 {object} APIResponse{error=APIError} "Forbidden - admin role required"
+// @Failure 500 {object} APIResponse{error=APIError} "Internal server error"
+// @Router /admin/publishers [get]
 func (h *Handlers) AdminListPublishers(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -124,8 +133,20 @@ func (h *Handlers) AdminListPublishers(w http.ResponseWriter, r *http.Request) {
 }
 
 // AdminCreatePublisher creates a new publisher entity (no Clerk user)
-// POST /api/admin/publishers
-// Note: Use AdminInviteUserToPublisher to invite users to manage this publisher
+// @Summary Create publisher (admin)
+// @Description Creates a new publisher entity. Admin-created publishers are auto-approved.
+// @Tags Admin
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body object true "Publisher data (name required, email/website/bio optional)"
+// @Success 201 {object} APIResponse{data=object} "Created publisher"
+// @Failure 400 {object} APIResponse{error=APIError} "Invalid request"
+// @Failure 401 {object} APIResponse{error=APIError} "Unauthorized"
+// @Failure 403 {object} APIResponse{error=APIError} "Forbidden"
+// @Failure 409 {object} APIResponse{error=APIError} "Conflict - publisher name already exists"
+// @Failure 500 {object} APIResponse{error=APIError} "Internal server error"
+// @Router /admin/publishers [post]
 func (h *Handlers) AdminCreatePublisher(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -490,7 +511,19 @@ func (h *Handlers) AdminRemoveUserFromPublisher(w http.ResponseWriter, r *http.R
 }
 
 // AdminVerifyPublisher verifies a pending publisher
-// PUT /api/admin/publishers/{id}/verify
+// @Summary Verify publisher (admin)
+// @Description Verifies a pending publisher, sends approval email, and creates/updates Clerk user
+// @Tags Admin
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Publisher ID"
+// @Success 200 {object} APIResponse{data=object} "Verified publisher"
+// @Failure 400 {object} APIResponse{error=APIError} "Invalid request"
+// @Failure 401 {object} APIResponse{error=APIError} "Unauthorized"
+// @Failure 403 {object} APIResponse{error=APIError} "Forbidden"
+// @Failure 404 {object} APIResponse{error=APIError} "Publisher not found"
+// @Failure 500 {object} APIResponse{error=APIError} "Internal server error"
+// @Router /admin/publishers/{id}/verify [put]
 func (h *Handlers) AdminVerifyPublisher(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	id := chi.URLParam(r, "id")
@@ -853,7 +886,16 @@ func (h *Handlers) AdminDeletePublisher(w http.ResponseWriter, r *http.Request) 
 }
 
 // AdminGetStats returns usage statistics
-// GET /api/admin/stats
+// @Summary Get system statistics (admin)
+// @Description Returns usage statistics including publisher counts and calculation metrics
+// @Tags Admin
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} APIResponse{data=object} "System statistics"
+// @Failure 401 {object} APIResponse{error=APIError} "Unauthorized"
+// @Failure 403 {object} APIResponse{error=APIError} "Forbidden"
+// @Failure 500 {object} APIResponse{error=APIError} "Internal server error"
+// @Router /admin/stats [get]
 func (h *Handlers) AdminGetStats(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 

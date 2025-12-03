@@ -89,7 +89,7 @@ export default function PublisherActivityPage() {
       <div className="p-8">
         <div className="max-w-4xl mx-auto">
           <div className="text-center py-12">
-            <Loader2 className="w-8 h-8 text-blue-600 dark:text-blue-400 animate-spin mx-auto" />
+            <Loader2 className="w-8 h-8 text-primary animate-spin mx-auto" />
             <p className="mt-4 text-muted-foreground">Loading activity...</p>
           </div>
         </div>

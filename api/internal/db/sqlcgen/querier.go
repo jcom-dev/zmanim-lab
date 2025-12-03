@@ -84,12 +84,25 @@ type Querier interface {
 	// Find an existing tag by name (case-insensitive match)
 	FindTagByName(ctx context.Context, lower string) (FindTagByNameRow, error)
 	GetAlgorithmByID(ctx context.Context, arg GetAlgorithmByIDParams) (GetAlgorithmByIDRow, error)
+	GetAlgorithmTemplateByKey(ctx context.Context, templateKey string) (AlgorithmTemplate, error)
+	// Algorithm Templates --
+	GetAlgorithmTemplates(ctx context.Context) ([]AlgorithmTemplate, error)
 	// Algorithm versions --
 	GetAlgorithmVersions(ctx context.Context, publisherID string) ([]GetAlgorithmVersionsRow, error)
 	// ============================================
 	// ASTRONOMICAL PRIMITIVES QUERIES
 	// ============================================
 	GetAllAstronomicalPrimitives(ctx context.Context) ([]AstronomicalPrimitive, error)
+	// ============================================================================
+	// DISPLAY GROUPS
+	// ============================================================================
+	// Get all display groups ordered by sort_order
+	GetAllDisplayGroups(ctx context.Context) ([]DisplayGroup, error)
+	// ============================================================================
+	// EVENT CATEGORIES
+	// ============================================================================
+	// Get all event categories ordered by sort_order
+	GetAllEventCategories(ctx context.Context) ([]EventCategory, error)
 	// Master Zmanim Registry SQL Queries
 	// SQLc will generate type-safe Go code from these queries
 	// ============================================
@@ -100,10 +113,21 @@ type Querier interface {
 	// Get all active aliases for a publisher with canonical names included
 	// Orders by time_category (chronological) then hebrew_name
 	GetAllPublisherZmanAliases(ctx context.Context, publisherID string) ([]GetAllPublisherZmanAliasesRow, error)
+	// ============================================================================
+	// TAG TYPES
+	// ============================================================================
+	// Get all tag types ordered by sort_order
+	GetAllTagTypes(ctx context.Context) ([]TagType, error)
 	// ============================================
 	// TAG QUERIES
 	// ============================================
 	GetAllTags(ctx context.Context) ([]GetAllTagsRow, error)
+	// Queries for time_categories, event_categories, and tag_types tables
+	// ============================================================================
+	// TIME CATEGORIES
+	// ============================================================================
+	// Get all time categories ordered by sort_order
+	GetAllTimeCategories(ctx context.Context) ([]TimeCategory, error)
 	// Get all zman requests (for admin) with optional status filter
 	GetAllZmanRequests(ctx context.Context, dollar_1 string) ([]GetAllZmanRequestsRow, error)
 	GetAstronomicalPrimitiveByName(ctx context.Context, variableName string) (AstronomicalPrimitive, error)
@@ -121,6 +145,14 @@ type Querier interface {
 	GetCountryByCode(ctx context.Context, code string) (GeoCountry, error)
 	GetCoverageCountByPublisher(ctx context.Context, publisherID string) (int64, error)
 	GetDeletedPublisherZmanim(ctx context.Context, publisherID string) ([]GetDeletedPublisherZmanimRow, error)
+	// Get a display group by its ID
+	GetDisplayGroupByID(ctx context.Context, id string) (DisplayGroup, error)
+	// Get a display group by its key
+	GetDisplayGroupByKey(ctx context.Context, key string) (DisplayGroup, error)
+	// Get an event category by its ID
+	GetEventCategoryByID(ctx context.Context, id string) (EventCategory, error)
+	// Get an event category by its key
+	GetEventCategoryByKey(ctx context.Context, key string) (EventCategory, error)
 	GetInvitationByToken(ctx context.Context, token string) (GetInvitationByTokenRow, error)
 	GetMasterZmanByID(ctx context.Context, id string) (GetMasterZmanByIDRow, error)
 	GetMasterZmanByKey(ctx context.Context, zmanKey string) (GetMasterZmanByKeyRow, error)
@@ -184,8 +216,16 @@ type Querier interface {
 	GetRegionByCountryAndCode(ctx context.Context, arg GetRegionByCountryAndCodeParams) (GeoRegion, error)
 	GetRegionsByCountry(ctx context.Context, code string) ([]GetRegionsByCountryRow, error)
 	GetTagByName(ctx context.Context, name string) (GetTagByNameRow, error)
+	// Get a tag type by its ID
+	GetTagTypeByID(ctx context.Context, id string) (TagType, error)
+	// Get a tag type by its key
+	GetTagTypeByKey(ctx context.Context, key string) (TagType, error)
 	GetTagsByType(ctx context.Context, tagType string) ([]GetTagsByTypeRow, error)
 	GetTagsForMasterZman(ctx context.Context, masterZmanID string) ([]GetTagsForMasterZmanRow, error)
+	// Get a time category by its ID
+	GetTimeCategoryByID(ctx context.Context, id string) (TimeCategory, error)
+	// Get a time category by its key
+	GetTimeCategoryByKey(ctx context.Context, key string) (TimeCategory, error)
 	// Linked Zmanim Support --
 	// Get verified publishers that current publisher can link to (excludes self)
 	GetVerifiedPublishersForLinking(ctx context.Context, id string) ([]GetVerifiedPublishersForLinkingRow, error)

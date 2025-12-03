@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
+import { useApi } from '@/lib/api-client';
 
 interface FormulaExplanationProps {
   formula: string;
@@ -20,6 +21,7 @@ export function FormulaExplanation({
   customExplanation,
   className = '',
 }: FormulaExplanationProps) {
+  const api = useApi();
   const [explanation, setExplanation] = useState<ExplainResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,18 +46,9 @@ export function FormulaExplanation({
     setError(null);
 
     try {
-      const response = await fetch('/api/v1/ai/explain-formula', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const data = await api.public.post<ExplainResult>('/ai/explain-formula', {
         body: JSON.stringify({ formula, language }),
       });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to generate explanation');
-      }
-
       setExplanation(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');

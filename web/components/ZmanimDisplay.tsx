@@ -417,7 +417,7 @@ export default function ZmanimDisplay({ geoLocation, date }: ZmanimDisplayProps)
     <div className="space-y-6 animate-fade-in">
       {/* Header Section */}
       <div className="bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 rounded-3xl shadow-apple-xl border border-white/20 overflow-hidden max-w-7xl mx-auto">
-        <div className="bg-white/95 backdrop-blur-sm p-8 md:p-10">
+        <div className="bg-card/95 backdrop-blur-sm p-8 md:p-10">
           <div className="text-center mb-8">
             <h2 className="text-3xl font-bold text-apple-gray-900 mb-2">
               Zmanim Calculations
@@ -434,7 +434,7 @@ export default function ZmanimDisplay({ geoLocation, date }: ZmanimDisplayProps)
               <select
                 value={sunriseMethod}
                 onChange={(e) => setSunriseMethod(e.target.value as SunriseMethod)}
-                className="w-full px-3 py-2 text-sm bg-card border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-foreground"
+                className="w-full px-3 py-2 text-sm bg-card border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-foreground"
               >
                 <option value="elevation">Elevation-Adjusted</option>
                 <option value="sealevel">Sea-Level</option>
@@ -445,7 +445,7 @@ export default function ZmanimDisplay({ geoLocation, date }: ZmanimDisplayProps)
               <select
                 value={sunsetMethod}
                 onChange={(e) => setSunsetMethod(e.target.value as SunsetMethod)}
-                className="w-full px-3 py-2 text-sm bg-card border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-foreground"
+                className="w-full px-3 py-2 text-sm bg-card border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-foreground"
               >
                 <option value="elevation">Elevation-Adjusted</option>
                 <option value="sealevel">Sea-Level</option>
@@ -456,7 +456,7 @@ export default function ZmanimDisplay({ geoLocation, date }: ZmanimDisplayProps)
               <select
                 value={shaahZmanisMethod}
                 onChange={(e) => setShaahZmanisMethod(e.target.value as ShaahZmanisMethod)}
-                className="w-full px-3 py-2 text-sm bg-card border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-foreground"
+                className="w-full px-3 py-2 text-sm bg-card border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-foreground"
               >
                 <option value="gra">GRA (Sunrise to Sunset)</option>
                 <option value="mga">MGA (72-min Alos to Tzeis)</option>

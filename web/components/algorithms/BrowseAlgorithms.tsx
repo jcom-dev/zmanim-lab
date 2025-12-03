@@ -30,8 +30,6 @@ interface BrowseAlgorithmsProps {
   onCopy?: (algorithmId: string) => void;
   onFork?: (algorithmId: string) => void;
   onPreview?: (algorithm: PublicAlgorithm) => void;
-  /** @deprecated No longer needed - component uses useApi internally */
-  getToken?: () => Promise<string | null>;
 }
 
 export function BrowseAlgorithms({ onCopy, onFork, onPreview }: BrowseAlgorithmsProps) {

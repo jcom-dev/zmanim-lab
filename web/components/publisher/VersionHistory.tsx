@@ -17,8 +17,6 @@ interface AlgorithmVersion {
 
 interface VersionHistoryProps {
   onClose?: () => void;
-  /** @deprecated No longer needed - component uses useApi internally */
-  getToken?: () => Promise<string | null>;
 }
 
 export function VersionHistory({ onClose }: VersionHistoryProps) {
@@ -103,7 +101,7 @@ export function VersionHistory({ onClose }: VersionHistoryProps) {
       );
     }
     return (
-      <span className="px-2 py-1 text-xs font-medium bg-blue-600 text-white rounded">
+      <span className="px-2 py-1 text-xs font-medium bg-primary text-primary-foreground rounded">
         {version.status.toUpperCase()}
       </span>
     );

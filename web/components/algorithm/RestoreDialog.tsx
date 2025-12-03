@@ -8,8 +8,6 @@ interface RestoreDialogProps {
   version: number;
   onClose: () => void;
   onRestore: () => void;
-  /** @deprecated No longer needed - component uses useApi internally */
-  getToken?: () => Promise<string | null>;
 }
 
 export function RestoreDialog({ version, onClose, onRestore }: RestoreDialogProps) {

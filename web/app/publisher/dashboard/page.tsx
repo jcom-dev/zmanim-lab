@@ -232,7 +232,7 @@ export default function PublisherDashboardPage() {
             className="bg-card rounded-lg p-6 border border-border hover:border-primary/50 transition-colors group"
           >
             <div className="flex items-start justify-between mb-4">
-              <User className="w-8 h-8 text-blue-500" />
+              <User className="w-8 h-8 text-primary" />
               {summary && getStatusBadge(summary.profile.status)}
             </div>
             <h2 className="text-lg font-semibold mb-1 group-hover:text-primary transition-colors">Profile</h2>

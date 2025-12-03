@@ -16,12 +16,9 @@ export interface UserRoles {
 /**
  * Hook to get the current user's roles from Clerk metadata
  *
- * The metadata structure supports:
+ * The metadata structure:
  * - is_admin: boolean - indicates admin role
  * - publisher_access_list: string[] - list of publisher IDs user has access to
- *
- * Also supports legacy format for backwards compatibility:
- * - role: 'admin' | 'publisher' - old single-role format
  */
 export function useUserRoles(): UserRoles {
   const { user, isLoaded } = useUser();
@@ -38,14 +35,10 @@ export function useUserRoles(): UserRoles {
 
   const metadata = user.publicMetadata || {};
 
-  // Support both new format and legacy format
-  const isAdmin =
-    (metadata as any).is_admin === true || (metadata as any).role === 'admin';
+  const isAdmin = (metadata as any).is_admin === true;
   const publisherAccessList: string[] =
     (metadata as any).publisher_access_list || [];
-  // Legacy support: if role is 'publisher' but no publisher_access_list
-  const hasPublisherAccess =
-    publisherAccessList.length > 0 || (metadata as any).role === 'publisher';
+  const hasPublisherAccess = publisherAccessList.length > 0;
 
   return {
     isAdmin,

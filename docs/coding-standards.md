@@ -1,2119 +1,520 @@
 # Coding Standards - Zmanim Lab
 
-**Purpose:** Ensure consistent code quality and patterns across the codebase
-**Audience:** Developers (human and AI agents)
 **Status:** CAST-IRON RULES - Violations block PRs
-**Based on:** Story 3.2 Codebase Audit (2025-11-27), Codebase Review (2025-11-28)
+**Audience:** AI agents and developers
 
 ---
 
-## CRITICAL VIOLATIONS (Must Fix Immediately)
+## CRITICAL VIOLATIONS (PR Blockers)
 
-The following patterns are FORBIDDEN and must be refactored:
-
-### 1. Hardcoded Colors - NEVER USE
-
+### 1. Hardcoded Colors
 ```tsx
-// FORBIDDEN - Will be rejected in code review
-className="text-[#1e3a5f]"
-className="bg-[#0051D5]"
-className="border-[#007AFF]"
-style={{ color: '#ff0000' }}
+// FORBIDDEN
+className="text-[#1e3a5f]" | className="bg-[#0051D5]" | style={{ color: '#ff0000' }}
+
+// REQUIRED - design tokens
+className="text-primary" | className="bg-primary/90" | className="text-muted-foreground"
 ```
 
-**REQUIRED - Use design tokens:**
+### 2. Raw fetch() / API_BASE in Components
 ```tsx
-className="text-primary"
-className="bg-primary/90"
-className="text-muted-foreground"
-className="border-border"
-```
-
-### 2. Defining API_BASE in Components - NEVER DO THIS
-
-```tsx
-// FORBIDDEN - Will be rejected in code review
+// FORBIDDEN
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
-```
+const response = await fetch(`${API_BASE}/api/v1/endpoint`, { headers: {...} });
 
-**REQUIRED - Use the unified API client:**
-```tsx
+// REQUIRED - unified API client
 import { useApi } from '@/lib/api-client';
-
 const api = useApi();
-const data = await api.get('/publisher/profile');
+await api.get<DataType>('/publisher/profile');      // Auth + X-Publisher-Id automatic
+await api.public.get('/countries');                  // No auth
+await api.admin.get('/admin/stats');                 // Auth, no X-Publisher-Id
 ```
 
-### 3. Duplicated Fetch Logic - USE UNIFIED API CLIENT
-
-```tsx
-// FORBIDDEN - Raw fetch with manual auth handling
-const token = await getToken();
-const response = await fetch(`${API_BASE}/api/v1/endpoint`, {
-  headers: {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${token}`,
-    'X-Publisher-Id': selectedPublisher.id,
-  },
-});
-```
-
-**REQUIRED - Use the unified API client (useApi hook):**
-```tsx
-import { useApi } from '@/lib/api-client';
-
-// In component
-const api = useApi();
-const data = await api.get<DataType>('/publisher/profile');
-await api.post('/publisher/zmanim', { body: JSON.stringify(zman) });
-
-// For public endpoints (no auth)
-const countries = await api.public.get('/countries');
-
-// For admin endpoints (no X-Publisher-Id)
-const stats = await api.admin.get('/admin/stats');
-```
-
-**For React Query data fetching, use factory hooks:**
+### 3. React Query Pattern
 ```tsx
 import { usePublisherQuery, usePublisherMutation } from '@/lib/hooks';
-
-// Query with automatic caching and publisher context
-const { data, isLoading, error } = usePublisherQuery<ProfileData>(
-  'publisher-profile',
-  '/publisher/profile'
-);
-
-// Mutation with automatic cache invalidation
-const updateProfile = usePublisherMutation<Profile, UpdateRequest>(
-  '/publisher/profile',
-  'PUT',
-  { invalidateKeys: ['publisher-profile'] }
-);
+const { data, isLoading, error } = usePublisherQuery<ProfileData>('publisher-profile', '/publisher/profile');
+const mutation = usePublisherMutation<Profile, UpdateRequest>('/publisher/profile', 'PUT', { invalidateKeys: ['publisher-profile'] });
 ```
 
-### 4. Authentication - CORRECT PATTERNS (No Broken Code)
-
-**RULE: Always check Clerk loading state BEFORE accessing auth:**
+### 4. Clerk Auth - MUST check isLoaded first
 ```tsx
 const { isLoaded, isSignedIn, user } = useUser();
-const { getToken } = useAuth();
-
-// NEVER access user or call getToken before isLoaded is true
-if (!isLoaded) {
-  return <LoadingSpinner />;
-}
-
-if (!isSignedIn) {
-  redirect('/sign-in');
-}
-
-// NOW safe to use
-const token = await getToken();
+if (!isLoaded) return <LoadingSpinner />;
+if (!isSignedIn) redirect('/sign-in');
+// NOW safe to access user/token
 ```
 
-**RULE: Token MUST be awaited and checked:**
-```tsx
-// WRONG - token may be null/undefined, sends "Bearer null" causing 401
-const token = await getToken();
-fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-
-// CORRECT - handle missing token gracefully
-const token = await getToken();
-if (!token) {
-  setError('Not authenticated. Please sign in.');
-  setLoading(false);
-  return;
-}
-fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-```
-
-**Common 401 Error Patterns to Avoid:**
-1. Making fetch requests before checking if token is null
-2. Not handling the case where `getToken()` returns null
-3. Sending `Authorization: Bearer null` or `Authorization: Bearer undefined`
-4. Making authenticated requests before Clerk's `isLoaded` is true
-
-**RULE: X-Publisher-Id header required for publisher endpoints:**
-```tsx
-// WRONG - missing publisher context
-fetch(`${API_BASE}/api/v1/publisher/profile`, {
-  headers: { Authorization: `Bearer ${token}` }
-});
-
-// CORRECT - include publisher ID
-fetch(`${API_BASE}/api/v1/publisher/profile`, {
-  headers: {
-    Authorization: `Bearer ${token}`,
-    'X-Publisher-Id': selectedPublisher.id,  // REQUIRED
-  }
-});
-```
-
-**RULE: Use the unified API client to prevent mistakes:**
-```tsx
-// This hook handles all auth correctly - USE IT
-import { useApi } from '@/lib/api-client';
-
-const api = useApi();
-const data = await api.get('/publisher/profile');
-// Token and X-Publisher-Id handled automatically
-```
-
-**DEBUGGING CHECKLIST (when auth is broken):**
-
-1. Is `isLoaded` true before calling `getToken()`?
-2. Is the token being sent in the Authorization header?
-3. Is `X-Publisher-Id` header set for publisher routes?
-4. Are environment variables correct? (`CLERK_SECRET_KEY`, `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`)
-5. Is the backend running? (`tmux attach -t zmanim`)
-
-**COMMON MISTAKES:**
-
-| Mistake | Fix |
-|---------|-----|
-| Calling `getToken()` before `isLoaded` | Add loading check |
-| Missing Authorization header | Use centralized fetch hook |
-| Missing X-Publisher-Id | Use centralized fetch hook |
-| Token is null/undefined | Check `isSignedIn` first |
-| Wrong env variables | Both must be from same Clerk instance |
+**Common 401 causes:** Token null before isLoaded=true | Missing X-Publisher-Id header | Bearer null/undefined
 
 ---
 
-## General Principles
+## Clean Code Policy - ZERO TOLERANCE
 
-1. **Consistency over cleverness** - Follow established patterns even if you know a "better" way
-2. **Explicit over implicit** - Be clear and obvious in your intent
-3. **Tested over untested** - E2E tests are mandatory for user-facing changes
-4. **Documented over undocumented** - Capture decisions and patterns
+**FORBIDDEN patterns - delete, don't mark:**
+- `@deprecated` annotations
+- `// Legacy`, `// Backward compat`, `// TODO: remove`, `// FIXME` comments
+- Fallback logic for old formats
+- Dual-format support (`status == 'verified' || status == 'active'`)
+- Re-exports "for compatibility"
+
+**Rule:** One format only. Migrate data, update code, delete old code.
 
 ---
 
 ## Frontend Standards
 
-### File Organization
-
+### File Structure
 ```
 web/
-├── app/                    # Next.js App Router pages
-│   ├── (auth)/            # Auth routes (Clerk sign-in/sign-up)
-│   ├── admin/             # Admin pages (/admin/*)
-│   ├── publisher/         # Publisher pages (/publisher/*)
-│   └── zmanim/            # User-facing pages (/zmanim/*)
+├── app/                    # Next.js App Router (admin/, publisher/, zmanim/)
 ├── components/
-│   ├── ui/                # shadcn/ui components (don't modify directly)
-│   ├── admin/             # Admin-specific components
-│   ├── publisher/         # Publisher-specific components
-│   ├── shared/            # Shared components (ProfileDropdown, etc.)
-│   ├── home/              # Home page components
-│   └── zmanim/            # Zmanim display components
-├── lib/                   # Utilities and helpers
-│   ├── api.ts            # API client (to be created)
-│   └── utils.ts          # General utilities
-├── types/                 # TypeScript type definitions
-│   └── clerk.ts          # Clerk metadata types (to be created)
-└── providers/             # React context providers
-    ├── PublisherContext.tsx
-    └── QueryProvider.tsx
+│   ├── ui/                # shadcn/ui (don't modify)
+│   ├── admin/ | publisher/ | shared/ | zmanim/
+├── lib/
+│   ├── api-client.ts      # Unified API client
+│   └── hooks/             # React Query factory hooks
+├── providers/             # PublisherContext, QueryProvider
+└── types/
 ```
 
-### Component Structure
-
-**DO: Use this pattern for client components**
-
+### Component Pattern
 ```tsx
 'use client';
-
-// 1. React and framework imports
+// 1. React/framework → 2. Third-party → 3. Internal → 4. Types
 import { useState, useEffect, useCallback } from 'react';
-import Link from 'next/link';
+import { useUser } from '@clerk/nextjs';
+import { useApi } from '@/lib/api-client';
 
-// 2. Third-party libraries
-import { useUser, useAuth } from '@clerk/nextjs';
-import { Settings, Building2 } from 'lucide-react';
-
-// 3. Internal components and utilities
-import { Button } from '@/components/ui/button';
-import { usePublisherContext } from '@/providers/PublisherContext';
-
-// 4. Types (inline or imported)
-interface ComponentProps {
-  prop1: string;
-  prop2?: number;
-}
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
-
-export function ComponentName({ prop1, prop2 }: ComponentProps) {
-  // 1. Hooks first (Clerk, state, context)
+export function Component() {
+  // 1. Hooks (Clerk, context, state)
   const { user, isLoaded } = useUser();
-  const { getToken } = useAuth();
-  const { selectedPublisher } = usePublisherContext();
-  const [data, setData] = useState<DataType | null>(null);
+  const api = useApi();
+  const [data, setData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState(null);
 
-  // 2. useCallback for async operations
+  // 2. Callbacks
   const fetchData = useCallback(async () => {
-    if (!selectedPublisher) return;
     try {
-      setIsLoading(true);
-      const token = await getToken();
-      const response = await fetch(`${API_BASE}/api/v1/endpoint`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'X-Publisher-Id': selectedPublisher.id,
-        },
-      });
-      const result = await response.json();
-      setData(result.data || result);
+      setData(await api.get('/endpoint'));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load');
+      setError(err.message);
     } finally {
       setIsLoading(false);
     }
-  }, [getToken, selectedPublisher]);
+  }, [api]);
 
-  // 3. useEffect for data fetching
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  // 3. Effects
+  useEffect(() => { if (isLoaded) fetchData(); }, [isLoaded, fetchData]);
 
-  // 4. Loading state (early return)
-  if (!isLoaded || isLoading) {
-    return (
-      <div className="flex justify-center p-8">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-400" />
-      </div>
-    );
-  }
-
-  // 5. Error state (early return)
-  if (error) {
-    return (
-      <div className="bg-red-900/50 border border-red-700 rounded-lg p-4">
-        <p className="text-red-200">{error}</p>
-      </div>
-    );
-  }
-
-  // 6. Main render
-  return (
-    <div className="p-8">
-      <div className="max-w-6xl mx-auto">
-        {/* Content */}
-      </div>
-    </div>
-  );
+  // 4. Early returns: Loading → Error → Content
+  if (!isLoaded || isLoading) return <Loader2 className="animate-spin" />;
+  if (error) return <div className="text-destructive">{error}</div>;
+  return <div>{/* content */}</div>;
 }
 ```
 
-**Reference:** `web/app/publisher/dashboard/page.tsx`
-
-**DON'T:**
-- Don't use `'use client'` unless necessary (hooks, event handlers, browser APIs)
-- Don't put business logic in components - extract to hooks or utilities
-- Don't forget loading and error states
-
 ### Client vs Server Components
+| Client (`'use client'`) | Server (default) |
+|------------------------|------------------|
+| React hooks, Clerk hooks, event handlers, browser APIs | Static content, server data fetching, SEO-critical |
 
-| Use Client Components (`'use client'`) when: | Use Server Components (default) when: |
-|---------------------------------------------|---------------------------------------|
-| Using React hooks (useState, useEffect) | Rendering static content |
-| Using Clerk hooks (useUser, useAuth) | Fetching data on the server |
-| Adding event listeners (onClick, onChange) | No interactivity needed |
-| Accessing browser APIs (localStorage, window) | SEO-critical content |
-
-### Clerk Metadata Access
-
-**DO: Type-cast publicMetadata**
-
+### Clerk Metadata
 ```tsx
-// Define the type (ideally in web/types/clerk.ts)
 interface ClerkPublicMetadata {
   role?: 'admin' | 'publisher' | 'user';
   publisher_access_list?: string[];
   primary_publisher_id?: string;
 }
-
-// In component
-const { user, isLoaded } = useUser();
-
-if (!isLoaded || !user) return null;
-
 const metadata = user.publicMetadata as ClerkPublicMetadata;
-const isAdmin = metadata.role === 'admin';
-const hasPublisherAccess = (metadata.publisher_access_list?.length || 0) > 0;
 ```
 
-**Reference:** `web/components/home/RoleNavigation.tsx:12-19`
-
-### State Management
-
-**Clerk User State:**
+### PublisherContext
 ```tsx
-import { useUser, useAuth } from '@clerk/nextjs';
-
-// Always check isLoaded before accessing user
-const { user, isLoaded } = useUser();
-const { getToken } = useAuth();
-
-if (!isLoaded) return <LoadingSpinner />;
-if (!user) return <SignInPrompt />;
+const { selectedPublisher, publishers, setSelectedPublisherId, isImpersonating } = usePublisherContext();
 ```
 
-**PublisherContext:**
+### Design Tokens (MANDATORY)
+
+**Semantic tokens (use first):**
+| Token | Usage |
+|-------|-------|
+| `foreground` / `background` | Primary text / page bg |
+| `card` / `card-foreground` | Card bg / text |
+| `primary` / `primary-foreground` | CTAs, links / text on primary |
+| `muted` / `muted-foreground` | Disabled bg / secondary text |
+| `destructive` | Errors, delete |
+| `border` / `input` / `ring` | Borders / form inputs / focus |
+
+**Correct:**
 ```tsx
-import { usePublisherContext } from '@/providers/PublisherContext';
-
-const {
-  selectedPublisher,      // Current publisher (or impersonated)
-  publishers,             // All accessible publishers
-  setSelectedPublisherId, // Change publisher
-  isImpersonating,        // Admin impersonation mode
-  startImpersonation,     // Begin impersonation
-  exitImpersonation,      // End impersonation
-} = usePublisherContext();
+className="text-foreground bg-card border-border text-muted-foreground bg-primary/90"
 ```
 
-**Reference:** `web/providers/PublisherContext.tsx`
-
-### API Integration
-
-**RULE: Use the unified API client (useApi hook) - NEVER raw fetch**
-
+**Forbidden:**
 ```tsx
-import { useApi } from '@/lib/api-client';
-
-function MyComponent() {
-  const api = useApi();
-
-  // GET request (auth + X-Publisher-Id automatic)
-  const profile = await api.get<ProfileData>('/publisher/profile');
-
-  // POST request
-  await api.post('/publisher/zmanim', {
-    body: JSON.stringify(zmanData),
-  });
-
-  // Public endpoint (no auth)
-  const countries = await api.public.get<Country[]>('/countries');
-
-  // Admin endpoint (auth but no X-Publisher-Id)
-  const stats = await api.admin.get('/admin/stats');
-}
+className="text-[#111827]" | className="bg-white" | style={{ color: '#ff0000' }}
 ```
 
-**RULE: Use React Query hooks for data fetching**
+**Exceptions (require dark: variant):**
+- Status: `text-green-600 dark:text-green-400`
+- Syntax highlighting: `text-blue-600 dark:text-blue-400`
 
-```tsx
-import {
-  usePublisherQuery,
-  usePublisherMutation,
-  useGlobalQuery,
-} from '@/lib/hooks';
+**Status badges:** `status-badge-success` | `status-badge-warning` | `status-badge-error`
+**Alerts:** `alert-warning` | `alert-error` | `alert-success` | `alert-info`
 
-// Publisher-scoped query (auto-includes X-Publisher-Id)
-const { data, isLoading, error } = usePublisherQuery<ProfileData>(
-  'publisher-profile',
-  '/publisher/profile'
-);
-
-// Global query (no publisher context)
-const { data: templates } = useGlobalQuery<Template[]>(
-  'templates',
-  '/zmanim/templates',
-  { staleTime: 1000 * 60 * 60 } // 1 hour cache
-);
-
-// Mutation with cache invalidation
-const updateProfile = usePublisherMutation<Profile, UpdateRequest>(
-  '/publisher/profile',
-  'PUT',
-  { invalidateKeys: ['publisher-profile'] }
-);
-
-// Usage
-await updateProfile.mutateAsync(formData);
-```
-
-**Reference:** `web/lib/api-client.ts`, `web/lib/hooks/useApiQuery.ts`
-
-**DON'T:**
-- Don't use raw `fetch()` - use `useApi()` hook
-- Don't define API_BASE in components - it's in api-client.ts
-- Don't manually add auth headers - useApi handles it
-- Don't forget to handle loading/error states
-
-### Styling (Tailwind CSS) - MANDATORY DESIGN TOKEN USAGE
-
-**RULE: NO HARDCODED COLORS**
-
-All colors MUST come from the design system defined in `tailwind.config.ts` and `globals.css`:
-
-| Usage | CORRECT | FORBIDDEN |
-|-------|---------|-----------|
-| Primary text | `text-foreground` | `text-[#111827]` |
-| Muted text | `text-muted-foreground` | `text-gray-400` |
-| Primary button | `bg-primary` | `bg-[#007AFF]` |
-| Button hover | `bg-primary/90` | `bg-[#0051D5]` |
-| Card background | `bg-card` | `bg-white` |
-| Borders | `border-border` | `border-gray-300` |
-| Status success | `bg-green-100 text-green-800` | (allowed - semantic) |
-| Status error | `bg-destructive/10 text-destructive` | `bg-red-100` |
-
-**Reusable Status Badge Classes (add to globals.css):**
-```css
-@layer utilities {
-  .status-badge-success { @apply bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-medium; }
-  .status-badge-warning { @apply bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-sm font-medium; }
-  .status-badge-error { @apply bg-red-100 text-red-800 px-3 py-1 rounded-full text-sm font-medium; }
-  .status-badge-pending { @apply bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium; }
-}
-```
-
-**Layout Pattern:**
-```tsx
-<div className="p-8">
-  <div className="max-w-6xl mx-auto">
-    {/* Header */}
-    <div className="mb-8">
-      <h1 className="text-3xl font-bold text-foreground">Page Title</h1>
-      <p className="text-muted-foreground mt-1">Subtitle</p>
-    </div>
-
-    {/* Grid content */}
-    <div className="grid gap-6 md:grid-cols-2">
-      {/* Cards */}
-    </div>
-  </div>
-</div>
-```
-
-**MANDATORY Design Token Hierarchy (use in this order):**
-1. Semantic tokens: `primary`, `secondary`, `destructive`, `muted`, `accent`, `foreground`, `background`
-2. Extended colors from config: `apple-blue`, `apple-gray-500`
-3. Tailwind defaults: `green-100`, `red-800` (for status colors only)
-4. **NEVER**: Arbitrary values like `[#hex]` or inline styles
-
-**Responsive Design:**
-```tsx
-// Grid columns
-<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-
-// Spacing
-<div className="p-4 md:p-6 lg:p-8">
-
-// Hide/show
-<div className="hidden md:block">
-```
-
-### Time Formatting - MANDATORY 12-HOUR FORMAT
-
-**RULE: All times displayed to users MUST use 12-hour AM/PM format**
-
-```tsx
-// FORBIDDEN - 24-hour format confuses users
-<span>14:30:36</span>
-<span>{result.time}</span>  // If backend returns "14:30:36"
-
-// REQUIRED - 12-hour AM/PM format
-<span>2:30:36 PM</span>
-<span>{formatTime(result.time)}</span>
-```
-
-**Use the shared time formatting utility:**
+### Time Formatting - 12-hour ONLY
 ```tsx
 import { formatTime, formatTimeShort } from '@/lib/utils';
-
-// Full format with seconds: "2:30:36 PM"
-formatTime('14:30:36')
-
-// Short format without seconds: "2:30 PM"
-formatTimeShort('14:30:36')
+formatTime('14:30:36')      // "2:30:36 PM"
+formatTimeShort('14:30:36') // "2:30 PM"
+// FORBIDDEN: <span>14:30:36</span>
 ```
 
-**Implementation (add to lib/utils.ts if not present):**
+### Icons - Lucide React only
 ```tsx
-export function formatTime(time: string): string {
-  // Handle HH:MM:SS or HH:MM format
-  const [hours, minutes, seconds] = time.split(':').map(Number);
-  const period = hours >= 12 ? 'PM' : 'AM';
-  const hour12 = hours % 12 || 12;
-
-  if (seconds !== undefined) {
-    return `${hour12}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')} ${period}`;
-  }
-  return `${hour12}:${minutes.toString().padStart(2, '0')} ${period}`;
-}
-
-export function formatTimeShort(time: string): string {
-  const [hours, minutes] = time.split(':').map(Number);
-  const period = hours >= 12 ? 'PM' : 'AM';
-  const hour12 = hours % 12 || 12;
-  return `${hour12}:${minutes.toString().padStart(2, '0')} ${period}`;
-}
-```
-
-**Where this applies:**
-- Calculated zman times (Formula Builder, Algorithm Editor)
-- Preview results
-- Weekly preview dialog
-- Any time display in the UI
-
----
-
-### Icons (Lucide React)
-
-**DO:**
-```tsx
-import { Settings, Building2, UserPlus, Loader2 } from 'lucide-react';
-
-// Standard sizes
-<Icon className="w-4 h-4" />   // Small (inline, buttons)
-<Icon className="w-5 h-5" />   // Medium (navigation)
-<Icon className="w-8 h-8" />   // Large (cards, empty states)
-
-// With text
-<Button>
-  <Settings className="w-4 h-4 mr-2" />
-  Settings
-</Button>
-```
-
-**DON'T:**
-- Don't use inline SVGs (use Lucide icons instead)
-- Don't mix icon libraries (stick to Lucide React)
-
-**Reference:** `web/components/home/RoleNavigation.tsx`
-
-### Form Handling
-
-**Standard Pattern:**
-```tsx
-const [formData, setFormData] = useState({
-  name: '',
-  email: '',
-});
-const [isSubmitting, setIsSubmitting] = useState(false);
-const [error, setError] = useState<string | null>(null);
-
-const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
-  setIsSubmitting(true);
-  setError(null);
-
-  try {
-    const token = await getToken();
-    const response = await fetch(`${API_BASE}/api/v1/endpoint`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-      body: JSON.stringify(formData),
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to submit');
-    }
-
-    // Success handling
-    router.push('/success');
-  } catch (err) {
-    setError(err instanceof Error ? err.message : 'An error occurred');
-  } finally {
-    setIsSubmitting(false);
-  }
-};
+import { Settings, Loader2 } from 'lucide-react';
+<Icon className="w-4 h-4" />  // Small
+<Icon className="w-5 h-5" />  // Medium
+<Icon className="w-8 h-8" />  // Large
 ```
 
 ---
 
 ## Backend Standards
 
-### Handler Structure (6-Step Pattern)
-
-**DO: Follow this template using PublisherResolver**
-
+### Handler Pattern (6 Steps)
 ```go
-package handlers
-
-import (
-    "encoding/json"
-    "log/slog"
-    "net/http"
-
-    "github.com/go-chi/chi/v5"
-)
-
-// HandlerName handles [description]
-// METHOD /api/v1/path/{param}
 func (h *Handlers) HandlerName(w http.ResponseWriter, r *http.Request) {
     ctx := r.Context()
 
-    // Step 1: Resolve publisher context (handles X-Publisher-Id, auth, errors)
+    // 1. Resolve publisher context
     pc := h.publisherResolver.MustResolve(w, r)
-    if pc == nil {
-        return // Response already sent
-    }
+    if pc == nil { return }
     publisherID := pc.PublisherID
 
-    // Step 2: Extract URL parameters
+    // 2. Extract URL params
     id := chi.URLParam(r, "id")
-    if id == "" {
-        RespondValidationError(w, r, "ID is required", nil)
-        return
-    }
+    if id == "" { RespondValidationError(w, r, "ID required", nil); return }
 
-    // Step 3: Parse request body (for POST/PUT)
-    var req struct {
-        Name  string `json:"name"`
-        Email string `json:"email"`
-    }
+    // 3. Parse body (POST/PUT)
+    var req struct { Name string `json:"name"` }
     if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-        RespondBadRequest(w, r, "Invalid request body")
-        return
+        RespondBadRequest(w, r, "Invalid request body"); return
     }
 
-    // Step 4: Validate request fields
-    validationErrors := make(map[string]string)
-    if req.Name == "" {
-        validationErrors["name"] = "Name is required"
-    }
-    if len(validationErrors) > 0 {
-        RespondValidationError(w, r, "Validation failed", validationErrors)
-        return
-    }
+    // 4. Validate
+    if req.Name == "" { RespondValidationError(w, r, "Validation failed", map[string]string{"name": "required"}); return }
 
-    // Step 5: Use SQLc generated queries (preferred) or service layer
-    result, err := h.db.Queries.GetSomething(ctx, sqlcgen.GetSomethingParams{
-        PublisherID: publisherID,
-        ID:          id,
-    })
+    // 5. SQLc query
+    result, err := h.db.Queries.GetSomething(ctx, sqlcgen.GetSomethingParams{PublisherID: publisherID})
     if err != nil {
         slog.Error("operation failed", "error", err, "id", id)
-        RespondInternalError(w, r, "Failed to process request")
-        return
+        RespondInternalError(w, r, "Failed to process request"); return
     }
 
-    // Step 6: Respond with success
-    RespondJSON(w, r, http.StatusOK, map[string]interface{}{
-        "data": result,
-    })
+    // 6. Respond
+    RespondJSON(w, r, http.StatusOK, result)
 }
 ```
 
-**Reference:** `api/internal/handlers/publisher_zmanim.go`
-
-### PublisherResolver Pattern (REQUIRED for publisher endpoints)
-
-**RULE: Use PublisherResolver instead of manual auth checks**
-
+### PublisherResolver (REQUIRED for publisher endpoints)
 ```go
-// FORBIDDEN - Manual publisher ID extraction (verbose, error-prone)
+// FORBIDDEN - manual extraction
 userID := middleware.GetUserID(ctx)
-if userID == "" {
-    RespondUnauthorized(w, r, "User ID not found")
-    return
-}
-requestedID := r.Header.Get("X-Publisher-Id")
-publisherID := middleware.GetValidatedPublisherID(ctx, requestedID)
-if publisherID == "" {
-    RespondForbidden(w, r, "No access")
-    return
-}
+publisherID := r.Header.Get("X-Publisher-Id")
 
-// REQUIRED - Use PublisherResolver (handles all cases)
-pc := h.publisherResolver.MustResolve(w, r)
-if pc == nil {
-    return // Response already sent
-}
-publisherID := pc.PublisherID
+// REQUIRED
+pc := h.publisherResolver.MustResolve(w, r)  // Returns nil + sends error if fails
+pc, err := h.publisherResolver.Resolve(ctx, r)  // Custom error handling
+pc := h.publisherResolver.ResolveOptional(ctx, r)  // Mixed endpoints
 ```
 
-**PublisherResolver methods:**
+### SQLc (REQUIRED - no raw SQL in handlers)
 ```go
-// MustResolve - Returns nil and sends error response if resolution fails
-pc := h.publisherResolver.MustResolve(w, r)
+// FORBIDDEN
+query := `SELECT * FROM publishers WHERE id = $1`
+rows, _ := h.db.Pool.Query(ctx, query, id)
 
-// Resolve - Returns PublisherContext or error (for custom error handling)
-pc, err := h.publisherResolver.Resolve(ctx, r)
-
-// ResolveOptional - Doesn't fail if publisher not found (for mixed endpoints)
-pc := h.publisherResolver.ResolveOptional(ctx, r)
-```
-
-**Reference:** `api/internal/handlers/publisher_context.go`
-
-### SQLc for Database Queries (REQUIRED)
-
-**RULE: Use SQLc generated queries instead of raw SQL**
-
-```go
-// FORBIDDEN - Raw SQL in handlers (error-prone, no type safety)
-query := `SELECT id, name FROM publishers WHERE id = $1`
-rows, err := h.db.Pool.Query(ctx, query, publisherID)
-
-// REQUIRED - SQLc generated queries (type-safe, maintainable)
+// REQUIRED
 result, err := h.db.Queries.GetPublisher(ctx, publisherID)
-
-// For complex results, convert SQLc types to handler types
-zmanim := make([]PublisherZman, len(sqlcZmanim))
-for i, z := range sqlcZmanim {
-    zmanim[i] = sqlcZmanToPublisherZman(z)
-}
 ```
-
-**Reference:** `api/internal/db/queries/*.sql`, `api/internal/handlers/publisher_zmanim.go`
-
-**DON'T:**
-- Don't put business logic in handlers (use services)
-- Don't forget to log errors with context
-- Don't expose internal error messages to users
 
 ### Response Helpers
-
-**Location:** `api/internal/handlers/response.go`
-
 ```go
-// Success responses
-RespondJSON(w, r, http.StatusOK, data)           // 200 with data
-RespondJSON(w, r, http.StatusCreated, data)      // 201 created
-
-// Error responses
-RespondValidationError(w, r, "msg", details)     // 400 validation
-RespondBadRequest(w, r, "msg")                   // 400 bad request
-RespondUnauthorized(w, r, "msg")                 // 401 unauthorized
-RespondForbidden(w, r, "msg")                    // 403 forbidden
-RespondNotFound(w, r, "msg")                     // 404 not found
-RespondConflict(w, r, "msg")                     // 409 conflict
-RespondInternalError(w, r, "msg")                // 500 internal error
-RespondServiceUnavailable(w, r, "msg")           // 503 unavailable
+RespondJSON(w, r, http.StatusOK, data)        // 200
+RespondJSON(w, r, http.StatusCreated, data)   // 201
+RespondValidationError(w, r, "msg", details)  // 400
+RespondBadRequest(w, r, "msg")                // 400
+RespondUnauthorized(w, r, "msg")              // 401
+RespondForbidden(w, r, "msg")                 // 403
+RespondNotFound(w, r, "msg")                  // 404
+RespondConflict(w, r, "msg")                  // 409
+RespondInternalError(w, r, "msg")             // 500
 ```
 
-### Service Layer Pattern
-
-**DO:**
+### Logging - slog only
 ```go
-package services
-
-import (
-    "context"
-    "fmt"
-    "log/slog"
-)
-
-type MyService struct {
-    db           *db.Database
-    clerkService *ClerkService
-}
-
-func NewMyService(db *db.Database, clerk *ClerkService) *MyService {
-    return &MyService{
-        db:           db,
-        clerkService: clerk,
-    }
-}
-
-// DoSomething performs [description]
-func (s *MyService) DoSomething(ctx context.Context, id string) (*Result, error) {
-    // Business logic here
-
-    if err != nil {
-        return nil, fmt.Errorf("failed to do something: %w", err)
-    }
-
-    slog.Info("operation successful", "id", id)
-    return result, nil
-}
+slog.Error("operation failed", "error", err, "user_id", userID, "publisher_id", publisherID)
+slog.Info("user created", "user_id", userID)
+// FORBIDDEN: fmt.Println, log.Println, log.Printf
 ```
 
-**Reference:** `api/internal/services/clerk_service.go`
-
-### Logging (slog)
-
-**DO:**
+### Error Handling
 ```go
-import "log/slog"
+// REQUIRED - wrap with context
+return nil, fmt.Errorf("failed to fetch publisher: %w", err)
 
-// Error - always include error and context
-slog.Error("operation failed",
-    "error", err,
-    "user_id", userId,
-    "publisher_id", publisherId,
-)
+// FORBIDDEN - naked returns
+return nil, err
 
-// Info - for successful operations
-slog.Info("user created",
-    "user_id", userId,
-    "email", email,
-)
-
-// Warn - for recoverable issues
-slog.Warn("deprecated endpoint called",
-    "endpoint", r.URL.Path,
-)
+// Log at handler boundary, not in services
+// User messages: generic for 500s, never expose internals
 ```
-
-**DON'T:**
-```go
-// Don't use fmt.Println or log.Println
-fmt.Println("This is bad")        // Bad
-log.Println("Also bad")           // Bad
-slog.Info("This is good")         // Good
-```
-
-### Database Access (pgx)
-
-**Single Row:**
-```go
-var result Type
-err := h.db.Pool.QueryRow(ctx, query, params...).Scan(&field1, &field2)
-if err == pgx.ErrNoRows {
-    RespondNotFound(w, r, "Resource not found")
-    return
-}
-if err != nil {
-    slog.Error("query failed", "error", err)
-    RespondInternalError(w, r, "Failed to retrieve data")
-    return
-}
-```
-
-**Multiple Rows:**
-```go
-rows, err := h.db.Pool.Query(ctx, query, params...)
-if err != nil {
-    slog.Error("query failed", "error", err)
-    RespondInternalError(w, r, "Failed to retrieve data")
-    return
-}
-defer rows.Close()
-
-results := make([]map[string]interface{}, 0)
-for rows.Next() {
-    var field1, field2 string
-    var optionalField *string
-
-    err := rows.Scan(&field1, &field2, &optionalField)
-    if err != nil {
-        slog.Error("scan failed", "error", err)
-        continue
-    }
-
-    result := map[string]interface{}{
-        "field1": field1,
-        "field2": field2,
-    }
-    if optionalField != nil {
-        result["optional_field"] = *optionalField
-    }
-    results = append(results, result)
-}
-```
-
-### Clerk Integration
-
-**Service Setup:**
-```go
-import (
-    "github.com/clerk/clerk-sdk-go/v2"
-    clerkUser "github.com/clerk/clerk-sdk-go/v2/user"
-)
-
-func NewClerkService() (*ClerkService, error) {
-    secretKey := os.Getenv("CLERK_SECRET_KEY")
-    if secretKey == "" {
-        return nil, fmt.Errorf("CLERK_SECRET_KEY not set")
-    }
-    clerk.SetKey(secretKey)
-    return &ClerkService{initialized: true}, nil
-}
-```
-
-**User Operations:**
-```go
-// Create user
-params := &clerkUser.CreateParams{
-    EmailAddresses:          &[]string{email},
-    FirstName:               clerk.String(name),
-    PublicMetadata:          clerk.JSONRawMessage(metadataJSON),
-    SkipPasswordRequirement: clerk.Bool(true),
-}
-user, err := clerkUser.Create(ctx, params)
-
-// Update metadata
-params := &clerkUser.UpdateMetadataParams{
-    PublicMetadata: clerk.JSONRawMessage(metadataJSON),
-}
-_, err = clerkUser.UpdateMetadata(ctx, clerkUserID, params)
-```
-
-**Reference:** `api/internal/services/clerk_service.go`
-
----
-
-## Testing Standards
-
-### CRITICAL: Parallel Test Execution
-
-Tests MUST be designed for parallel execution. This is a non-negotiable requirement for fast CI/CD pipelines.
-
-**RULE: Use shared fixtures, not per-test data creation**
-```typescript
-// FORBIDDEN - Creates data per test (slow, causes conflicts)
-test.beforeEach(async () => {
-  testPublisher = await createTestPublisherEntity({ name: 'Test' });
-});
-test.afterEach(async () => {
-  await cleanupTestData();
-});
-
-// REQUIRED - Use pre-created shared publishers
-import { getSharedPublisher, getPublisherWithAlgorithm } from '../utils';
-
-test('can access dashboard', async ({ page }) => {
-  const publisher = getSharedPublisher('verified-1');
-  await loginAsPublisher(page, publisher.id);
-  // Test logic...
-});
-```
-
-**RULE: Enable parallel mode in all test files**
-```typescript
-// REQUIRED at top of every spec file
-test.describe.configure({ mode: 'parallel' });
-```
-
-### Test File Organization
-
-```
-tests/
-├── e2e/
-│   ├── admin/              # Admin flow tests
-│   │   ├── dashboard.spec.ts
-│   │   ├── publishers.spec.ts
-│   │   └── impersonation.spec.ts
-│   ├── publisher/          # Publisher flow tests
-│   │   ├── dashboard.spec.ts
-│   │   ├── algorithm-editor.spec.ts
-│   │   ├── coverage.spec.ts
-│   │   ├── team.spec.ts
-│   │   └── onboarding.spec.ts
-│   ├── auth/               # Authentication tests
-│   │   └── authentication.spec.ts
-│   ├── public/             # Public page tests
-│   │   └── public-pages.spec.ts
-│   ├── setup/              # Global setup/teardown
-│   │   ├── global-setup.ts
-│   │   └── global-teardown.ts
-│   └── utils/              # Shared utilities
-│       ├── clerk-auth.ts       # Auth helpers
-│       ├── test-fixtures.ts    # DB fixtures
-│       ├── shared-fixtures.ts  # Shared publisher pool
-│       ├── algorithm-fixtures.ts # Algorithm test data
-│       ├── wait-helpers.ts     # Wait utilities
-│       ├── test-builders.ts    # Entity builders
-│       └── index.ts            # Unified exports
-```
-
-### Test File Pattern
-
-**DO: Use shared fixtures for parallel execution**
-```typescript
-/**
- * E2E Tests: Feature Name
- *
- * Optimized for parallel execution using shared fixtures.
- */
-import { test, expect } from '@playwright/test';
-import {
-  loginAsPublisher,
-  getSharedPublisher,
-  getPublisherWithAlgorithm,
-  BASE_URL,
-} from '../utils';
-
-// REQUIRED: Enable parallel mode
-test.describe.configure({ mode: 'parallel' });
-
-test.describe('Feature Name - Section', () => {
-  test('test case description', async ({ page }) => {
-    // Get pre-created shared publisher (NO creation/deletion)
-    const publisher = getSharedPublisher('verified-1');
-    await loginAsPublisher(page, publisher.id);
-
-    // Navigate
-    await page.goto(`${BASE_URL}/publisher/dashboard`);
-    await page.waitForLoadState('networkidle');
-
-    // Assert
-    await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
-  });
-
-  test('another independent test', async ({ page }) => {
-    // Each test is completely independent - can run in parallel
-    const publisher = getSharedPublisher('verified-2'); // Use different publisher
-    await loginAsPublisher(page, publisher.id);
-    // Test logic...
-  });
-});
-```
-
-**Reference:** `tests/e2e/publisher/team.spec.ts`
-
-### Shared Publisher Types
-
-The shared fixture pool provides these pre-created publishers:
-
-| Key | Type | Use Case |
-|-----|------|----------|
-| `verified-1` through `verified-5` | verified | General tests needing auth |
-| `pending` | pending | Testing pending status flows |
-| `suspended` | suspended | Testing suspended status flows |
-| `with-algorithm-1`, `with-algorithm-2` | verified + algorithm | Algorithm editor tests |
-| `with-coverage` | verified + coverage | Coverage page tests |
-| `empty-1` through `empty-3` | verified (no data) | Onboarding/empty state tests |
-
-```typescript
-// Get specific publisher by key
-const publisher = getSharedPublisher('verified-1');
-
-// Get publisher with algorithm pre-created
-const publisher = getPublisherWithAlgorithm();
-
-// Get empty publisher for onboarding tests
-const publisher = getEmptyPublisher(1);
-
-// Get any available verified publisher
-const publisher = getAnyVerifiedPublisher();
-```
-
-### Test Data Conventions
-
-**DO:**
-```typescript
-// Use shared fixtures - data is pre-created
-const publisher = getSharedPublisher('verified-1');
-
-// When you must create data, use TEST_ prefix and unique identifiers
-const name = `TEST_E2E_${Date.now()}_Feature`;
-
-// Test emails - use zmanim.com domain or MailSlurp
-const email = `e2e-test-${Date.now()}@test.zmanim.com`;
-```
-
-**DON'T:**
-```typescript
-// Don't create/delete data in individual tests (breaks parallelism)
-test.beforeEach(async () => {
-  testPublisher = await createTestPublisherEntity({...}); // BAD
-});
-
-// Don't use .local domains (Clerk rejects them)
-const email = 'test@test.zmanim-lab.local';  // BAD
-
-// Don't use non-unique names (causes conflicts in parallel)
-const publisher = { name: 'Test Publisher' };  // BAD - collides
-```
-
-### Auth Injection
-
-**DO: Use Clerk testing library**
-```typescript
-import { loginAsAdmin, loginAsPublisher, loginAsUser } from '../utils';
-
-// Admin test
-test('admin can view dashboard', async ({ page }) => {
-  await loginAsAdmin(page);
-  await page.goto(`${BASE_URL}/admin/dashboard`);
-});
-
-// Publisher test
-test('publisher can view profile', async ({ page }) => {
-  await loginAsPublisher(page, testPublisher.id);
-  await page.goto(`${BASE_URL}/publisher/profile`);
-});
-
-// User test
-test('user can search locations', async ({ page }) => {
-  await loginAsUser(page);
-  await page.goto(`${BASE_URL}/`);
-});
-```
-
-**Reference:** `tests/e2e/utils/clerk-auth.ts`
-
-### Assertions
-
-**DO:**
-```typescript
-// Role-based selectors (preferred)
-await expect(page.getByRole('heading', { name: 'Title' })).toBeVisible();
-await expect(page.getByRole('button', { name: 'Submit' })).toBeEnabled();
-
-// Text-based selectors
-await expect(page.getByText('Success message')).toBeVisible();
-
-// Wait for network before assertions
-await page.waitForLoadState('networkidle');
-```
-
-**DON'T:**
-```typescript
-// Don't use fragile CSS selectors
-await page.locator('.some-class > div:nth-child(2)').click();  // Bad
-
-// Don't forget to wait for page to load
-await expect(page.getByText('Content')).toBeVisible();  // May flake
-```
-
-### Cleanup
-
-**DO: Always cleanup test data**
-```typescript
-test.afterAll(async () => {
-  await cleanupTestData();  // Idempotent - safe to run multiple times
-});
-```
-
-**Reference:** `tests/e2e/utils/cleanup.ts`
 
 ---
 
 ## API Standards
 
-### Endpoint Naming
-
-```
-GET    /api/v1/publishers              # List publishers
-GET    /api/v1/publishers/{id}         # Get single publisher
-POST   /api/v1/publishers              # Create publisher
-PUT    /api/v1/publishers/{id}         # Update publisher
-DELETE /api/v1/publishers/{id}         # Delete publisher
-
-GET    /api/v1/publishers/{id}/users   # Nested resource
-POST   /api/v1/publishers/{id}/invite  # Action endpoint
+### Response Format
+```json
+{ "data": <payload>, "meta": { "timestamp": "...", "request_id": "..." } }
 ```
 
-### Request Headers
+**RULE:** Pass data directly to RespondJSON - NEVER double-wrap
+```go
+RespondJSON(w, r, 200, publishers)  // CORRECT: { "data": [...] }
+RespondJSON(w, r, 200, map[string]interface{}{"publishers": publishers})  // FORBIDDEN
+```
 
+### Headers
 | Header | Required | Description |
 |--------|----------|-------------|
-| `Authorization` | Yes (protected) | `Bearer {token}` |
-| `Content-Type` | Yes (POST/PUT) | `application/json` |
-| `X-Publisher-Id` | Sometimes | Publisher context for multi-tenant |
-
-### Response Format - CRITICAL CONSISTENCY RULE
-
-**ALL API responses are wrapped by `RespondJSON()` with this structure:**
-```json
-{
-  "data": <your_data>,
-  "meta": {
-    "timestamp": "2025-11-27T10:30:00Z",
-    "request_id": "uuid"
-  }
-}
-```
-
-**RULE: Pass data directly to RespondJSON - NEVER double-wrap**
-
-```go
-// CORRECT - Return array/object directly (gets wrapped automatically)
-RespondJSON(w, r, http.StatusOK, publishers)
-// Result: { "data": [...], "meta": {...} }
-
-RespondJSON(w, r, http.StatusOK, publisher)
-// Result: { "data": { "id": "...", "name": "..." }, "meta": {...} }
-
-// FORBIDDEN - Double-wrapping creates inconsistent response format
-RespondJSON(w, r, http.StatusOK, map[string]interface{}{
-    "publishers": publishers,  // BAD: Creates { "data": { "publishers": [...] }, "meta": {...} }
-})
-
-// FORBIDDEN - Frontend code trying to handle multiple formats
-data.data?.publishers || data.publishers || data.data || []  // MESSY - indicates backend inconsistency
-```
-
-**Frontend Access Pattern:**
-
-When using raw `fetch()`:
-```tsx
-const response = await fetch(url);
-const json = await response.json();
-const items = json.data;  // Always access .data
-```
-
-When using `useApi()` hook (recommended):
-```tsx
-const api = useApi();
-const items = await api.get('/publishers');  // Already unwrapped - returns data directly
-```
-
-**Success Response Examples:**
-
-List endpoint:
-```json
-{
-  "data": [
-    { "id": "uuid-1", "name": "Publisher 1" },
-    { "id": "uuid-2", "name": "Publisher 2" }
-  ],
-  "meta": { "timestamp": "...", "request_id": "..." }
-}
-```
-
-Single resource endpoint:
-```json
-{
-  "data": {
-    "id": "uuid",
-    "name": "Publisher Name"
-  },
-  "meta": { "timestamp": "...", "request_id": "..." }
-}
-```
-
-**Error Response:**
-```json
-{
-  "error": {
-    "code": "VALIDATION_ERROR",
-    "message": "Name is required",
-    "details": {
-      "name": "This field is required"
-    }
-  },
-  "meta": {
-    "timestamp": "2025-11-27T10:30:00Z",
-    "request_id": "uuid"
-  }
-}
-```
+| `Authorization` | Protected endpoints | `Bearer {token}` |
+| `Content-Type` | POST/PUT | `application/json` |
+| `X-Publisher-Id` | Publisher endpoints | Publisher context |
 
 ### Status Codes
-
-| Code | Meaning | When to Use |
-|------|---------|-------------|
-| 200 | OK | Successful GET, PUT |
-| 201 | Created | Successful POST |
-| 204 | No Content | Successful DELETE |
-| 400 | Bad Request | Validation error, malformed request |
-| 401 | Unauthorized | Not authenticated |
-| 403 | Forbidden | Not authorized for this action |
-| 404 | Not Found | Resource doesn't exist |
-| 409 | Conflict | Duplicate, state conflict |
-| 500 | Internal Error | Server error (log details, return generic message) |
+200 OK | 201 Created | 204 No Content | 400 Bad Request | 401 Unauthorized | 403 Forbidden | 404 Not Found | 409 Conflict | 500 Internal Error
 
 ---
 
-## Code Review Checklist
+## Testing Standards
 
-### Frontend
-
-- [ ] Client components use `'use client'` only when needed
-- [ ] Clerk `isLoaded` check before accessing user
-- [ ] Proper loading and error states
-- [ ] Tailwind classes used consistently
-- [ ] Lucide icons (not inline SVG)
-- [ ] Imports organized properly
-- [ ] API calls include auth token and error handling
-
-### Backend
-
-- [ ] Handler follows 6-step pattern
-- [ ] Business logic in service layer
-- [ ] Response helpers used (RespondJSON, RespondError, etc.)
-- [ ] Structured logging with slog
-- [ ] Errors logged with context (error, user_id, etc.)
-- [ ] Error messages don't expose internals
-
-### Testing
-
-- [ ] E2E test for user-facing changes
-- [ ] Test data uses TEST_ prefix
-- [ ] Test emails use example.com domain
-- [ ] Cleanup in afterAll
-- [ ] Auth injection uses loginAsAdmin/loginAsPublisher
-- [ ] Assertions use getByRole/getByText
-
----
-
-## When to Deviate
-
-These standards are guidelines, not laws. Deviate when:
-
-1. **There's a good reason** - Document it in a comment
-2. **The pattern doesn't fit** - Some cases are genuinely different
-3. **A better pattern emerges** - Update this document!
-
-When deviating:
-```tsx
-// Deviation: Using inline SVG because [specific reason]
-<svg>...</svg>
+### Parallel Execution (REQUIRED)
+```typescript
+test.describe.configure({ mode: 'parallel' });  // REQUIRED at top of every spec file
 ```
 
----
+### Shared Fixtures (REQUIRED - no per-test data creation)
+```typescript
+// FORBIDDEN
+test.beforeEach(async () => { testPublisher = await createTestPublisherEntity({...}); });
 
-## Quick Reference
+// REQUIRED
+import { getSharedPublisher, getPublisherWithAlgorithm } from '../utils';
+const publisher = getSharedPublisher('verified-1');
+```
 
-### Frontend Checklist
-1. `'use client'` only if using hooks/events
-2. Type-cast Clerk metadata
-3. Loading → Error → Content pattern
-4. Tailwind for styling
-5. Lucide for icons
+### Shared Publisher Types
+| Key | Use Case |
+|-----|----------|
+| `verified-1` to `verified-5` | General auth tests |
+| `pending` / `suspended` | Status flow tests |
+| `with-algorithm-1`, `with-algorithm-2` | Algorithm editor |
+| `with-coverage` | Coverage page |
+| `empty-1` to `empty-3` | Onboarding/empty state |
 
-### Backend Checklist
-1. Extract params → Validate → Service → Respond
-2. slog for logging
-3. Response helpers for all responses
-4. Context-first parameters
-5. Error wrapping with fmt.Errorf
+### Test Pattern
+```typescript
+import { test, expect } from '@playwright/test';
+import { loginAsPublisher, getSharedPublisher, BASE_URL } from '../utils';
 
-### Testing Checklist
-1. beforeAll for shared data
-2. afterAll for cleanup
-3. beforeEach for auth
-4. TEST_ prefix for entities
-5. example.com for emails
+test.describe.configure({ mode: 'parallel' });
+
+test.describe('Feature', () => {
+  test('description', async ({ page }) => {
+    const publisher = getSharedPublisher('verified-1');
+    await loginAsPublisher(page, publisher.id);
+    await page.goto(`${BASE_URL}/publisher/dashboard`);
+    await page.waitForLoadState('networkidle');
+    await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
+  });
+});
+```
+
+### Auth Helpers
+```typescript
+await loginAsAdmin(page);
+await loginAsPublisher(page, publisherId);
+await loginAsUser(page);
+```
+
+### Assertions
+```typescript
+// CORRECT - role/text selectors
+await expect(page.getByRole('heading', { name: 'Title' })).toBeVisible();
+await expect(page.getByText('Success')).toBeVisible();
+await page.waitForLoadState('networkidle');
+
+// FORBIDDEN - fragile CSS selectors
+await page.locator('.some-class > div:nth-child(2)').click();
+```
+
+### Test Data
+- Use shared fixtures (pre-created)
+- If creating: `TEST_E2E_${Date.now()}_Feature`
+- Emails: `e2e-test-${Date.now()}@test.zmanim.com`
+- FORBIDDEN: `.local` domains, non-unique names
 
 ---
 
 ## Database Migrations
 
-### Running Migrations in Coder Environment
-
-When developing in the Coder cloud IDE, the database runs in a local Docker container. Use the following methods to run migrations:
-
-**Method 1: Use the migrate script (Recommended)**
+### Run Migrations
 ```bash
-./scripts/migrate.sh
+./scripts/migrate.sh  # Auto-detects environment, tracks in schema_migrations
 ```
 
-This script:
-- Auto-detects if you're in Coder environment
-- Uses local PostgreSQL from `api/.env` DATABASE_URL
-- Tracks applied migrations in `schema_migrations` table
-- Skips already-applied migrations
-
-**Method 2: Direct psql (for single migrations)**
+### Create Migration
 ```bash
-# Source the database credentials
-source api/.env
-
-# Apply a specific migration
-PGPASSWORD=<password> psql -h postgres -U zmanim -d zmanim \
-  -f db/migrations/20240028_rename_fundamental_to_core.sql
-```
-
-**Method 3: Extract and run (when you need the credentials)**
-```bash
-# The DATABASE_URL format is: postgresql://user:password@host:port/database
-# Example: postgresql://zmanim:zmanim_dev_xxx@postgres:5432/zmanim
-
-# Parse from api/.env and run
-source api/.env
-echo $DATABASE_URL  # See the connection string
-```
-
-### Creating New Migrations
-
-1. Create a new SQL file in `db/migrations/` with timestamp prefix:
-   ```bash
-   db/migrations/20240029_your_migration_name.sql
-   ```
-
-2. Write idempotent SQL (use `IF NOT EXISTS`, `ON CONFLICT DO NOTHING`):
-   ```sql
-   -- Migration: Description of what this does
-
-   ALTER TABLE your_table ADD COLUMN IF NOT EXISTS new_column TEXT;
-
-   -- For column renames (not idempotent, be careful)
-   ALTER TABLE your_table RENAME COLUMN old_name TO new_name;
-   ```
-
-3. Run the migration:
-   ```bash
-   ./scripts/migrate.sh
-   ```
-
-4. Update SQLc queries if schema changed:
-   ```bash
-   cd api && go run github.com/sqlc-dev/sqlc/cmd/sqlc@latest generate
-   ```
-
-5. Rebuild Go code:
-   ```bash
-   cd api && go build ./...
-   ```
-
-### Migration Best Practices
-
-| Do | Don't |
-|----|-------|
-| Use timestamp prefixes (20240029_) | Use sequential numbers (001_) |
-| Make migrations idempotent when possible | Assume clean state |
-| Test migrations locally first | Push untested migrations |
-| Update SQLc queries after schema changes | Forget to regenerate sqlc |
-| Include rollback comments | Leave migrations undocumented |
-
-### Environment Detection
-
-The migrate script detects the environment:
-- **Coder**: Uses local PostgreSQL via Docker network (`postgres:5432`)
-- **Production**: Uses migration tool
-
-Connection info is read from `api/.env`:
-```
-DATABASE_URL=postgresql://zmanim:password@postgres:5432/zmanim
+# 1. Create: db/migrations/20240029_description.sql
+# 2. Write idempotent SQL (IF NOT EXISTS, ON CONFLICT DO NOTHING)
+# 3. Run: ./scripts/migrate.sh
+# 4. Regenerate SQLc: cd api && sqlc generate
+# 5. Rebuild: go build ./...
 ```
 
 ---
 
 ## Development Workflow
 
-### Service Restart - ALWAYS USE restart.sh
-
-**REQUIRED:** When restarting services (API, Web), ALWAYS use the restart script:
-
+### Service Restart
 ```bash
-./restart.sh
+./restart.sh  # ALWAYS use this - handles migrations, cleanup, tmux
+# FORBIDDEN: manual go run, npm run dev, pkill
 ```
 
-**Why this matters:**
-- Ensures migrations run before services start
-- Properly kills stray processes on ports 8080 and 3001
-- Manages tmux session correctly
-- Provides consistent startup sequence
+### Service URLs
+| Service | Port |
+|---------|------|
+| Web | 3001 |
+| API | 8080 |
 
-**FORBIDDEN patterns:**
+### Redis Cache
 ```bash
-# DON'T do this manually:
-cd api && go run ./cmd/api          # Missing migrations, orphan processes
-cd web && npm run dev               # Port conflicts, no coordination
-pkill -f "go run" && go run ...     # Race conditions, missed cleanup
+redis-cli -h redis KEYS "zmanim:*" | xargs -r redis-cli -h redis DEL  # Clear zmanim
+redis-cli -h redis FLUSHDB  # Clear all
 ```
 
-**What restart.sh does:**
-1. Kills existing tmux session `zmanim`
-2. Kills any stray Go API or Next.js processes
-3. Force-kills processes on ports 8080 and 3001 if still occupied
-4. Runs database migrations via `./scripts/migrate.sh`
-5. Starts services in tmux via `.coder/start-services.sh`
-
-**After restart, access services:**
+### Code Changes
 ```bash
-# View service logs
-tmux attach -t zmanim
-# Ctrl+B then 0 -> API logs
-# Ctrl+B then 1 -> Web logs
-# Ctrl+B then D -> Detach
-
-# Quick log check
-tail -f logs/api.log
-```
-
-**Service URLs:**
-| Service | Port | URL |
-|---------|------|-----|
-| Web App | 3001 | http://localhost:3001 |
-| Go API  | 8080 | http://localhost:8080 |
-
-### Redis Cache Management
-
-The Zmanim Lab uses Redis for caching calculation results (24-hour TTL). When making changes that affect cached data, you need to clear the cache.
-
-**Clearing Zmanim Cache:**
-```bash
-# Clear all zmanim cache entries
-redis-cli -h redis KEYS "zmanim:*" | xargs -r redis-cli -h redis DEL
-
-# Clear cache for a specific publisher
-redis-cli -h redis KEYS "zmanim:PUBLISHER_ID:*" | xargs -r redis-cli -h redis DEL
-
-# Clear cache for a specific city
-redis-cli -h redis KEYS "zmanim:*:CITY_ID:*" | xargs -r redis-cli -h redis DEL
-
-# Clear algorithm cache (when algorithm JSON structure changes)
-redis-cli -h redis KEYS "algorithm:*" | xargs -r redis-cli -h redis DEL
-
-# Clear all cache (nuclear option)
-redis-cli -h redis FLUSHDB
-```
-
-**When to Clear Cache:**
-| Scenario | Cache to Clear |
-|----------|----------------|
-| API response format changes | `zmanim:*` |
-| Publisher algorithm updated | `zmanim:PUBLISHER_ID:*` |
-| New zmanim added to calculations | `zmanim:*` |
-| Testing calculation changes | `zmanim:*` |
-| Algorithm configuration schema changes | `algorithm:*` |
-
-**Programmatic Cache Invalidation (in code):**
-```go
-// In handlers, use the cache methods
-if h.cache != nil {
-    // Invalidate specific publisher's zmanim
-    h.cache.InvalidateZmanim(ctx, publisherID)
-
-    // Invalidate algorithm cache
-    h.cache.InvalidateAlgorithm(ctx, publisherID)
-}
-```
-
-**Debug: Check Cache Contents:**
-```bash
-# List all cached keys
-redis-cli -h redis KEYS "*"
-
-# Count zmanim cache entries
-redis-cli -h redis KEYS "zmanim:*" | wc -l
-
-# View a specific cached entry
-redis-cli -h redis GET "zmanim:PUBLISHER_ID:CITY_ID:2025-12-05"
-
-# Check TTL of a cached entry
-redis-cli -h redis TTL "zmanim:PUBLISHER_ID:CITY_ID:2025-12-05"
-```
-
-### Code Changes Workflow
-
-After making code changes, follow this workflow:
-
-**Backend changes (Go):**
-```bash
-# 1. Build to check for compile errors
-cd api && go build ./...
-
-# 2. Run tests
-go test ./...
-
-# 3. Restart services
-cd .. && ./restart.sh
-```
-
-**Frontend changes (Next.js):**
-```bash
-# 1. Type check
-cd web && npm run type-check
-
-# 2. Lint
-npm run lint
-
-# 3. Services auto-reload (hot reload), but if issues:
-cd .. && ./restart.sh
-```
-
-**Schema changes (Database):**
-```bash
-# 1. Create migration in db/migrations/
-# 2. Run migration
-./scripts/migrate.sh
-
-# 3. Regenerate SQLc
-cd api && sqlc generate
-
-# 4. Rebuild and restart
-go build ./... && cd .. && ./restart.sh
-```
-
----
-
-## Error Handling Standards
-
-### Backend Error Handling
-
-**Pattern: Wrap errors with context**
-```go
-// REQUIRED - wrap with context using fmt.Errorf
-if err != nil {
-    return nil, fmt.Errorf("failed to fetch publisher: %w", err)
-}
-
-// FORBIDDEN - naked error returns
-if err != nil {
-    return nil, err  // No context, hard to debug
-}
-```
-
-**Pattern: Log at the boundary, not everywhere**
-```go
-// In service layer - return error, don't log
-func (s *Service) DoSomething() error {
-    if err != nil {
-        return fmt.Errorf("failed to do something: %w", err)
-    }
-}
-
-// In handler layer - log the error with context
-if err != nil {
-    slog.Error("operation failed", "error", err, "user_id", userID)
-    RespondInternalError(w, r, "Failed to process request")
-    return
-}
-```
-
-**Pattern: User-friendly error messages**
-```go
-// REQUIRED - generic messages for 500 errors
-RespondInternalError(w, r, "Failed to process request")
-
-// FORBIDDEN - exposing internals
-RespondInternalError(w, r, err.Error())  // Exposes database errors!
-RespondInternalError(w, r, "SQL: duplicate key constraint violation")
-```
-
-### Frontend Error Handling
-
-**Pattern: Use ApiError class**
-```tsx
-import { ApiError } from '@/lib/api-client';
-
-try {
-  await api.post('/endpoint', { body: JSON.stringify(data) });
-} catch (error) {
-  if (error instanceof ApiError) {
-    if (error.isUnauthorized) {
-      // Handle 401
-    } else if (error.isNotFound) {
-      // Handle 404
-    } else if (error.isServerError) {
-      // Handle 500+
-    }
-    setError(error.message);
-  } else {
-    setError('An unexpected error occurred');
-  }
-}
-```
-
-**Pattern: Toast notifications for mutations**
-```tsx
-const mutation = usePublisherMutation<Data, Request>(
-  '/endpoint',
-  'POST',
-  {
-    invalidateKeys: ['query-key'],
-    onError: (error) => {
-      toast.error(error.message);
-    },
-    onSuccess: () => {
-      toast.success('Operation completed');
-    }
-  }
-);
-```
-
----
-
-## Performance Standards
-
-### Backend Performance
-
-**Pattern: Use database indexes for common queries**
-```sql
--- Index columns used in WHERE clauses
-CREATE INDEX idx_publisher_zmanim_publisher_id ON publisher_zmanim(publisher_id);
-CREATE INDEX idx_publisher_zmanim_zman_key ON publisher_zmanim(zman_key);
-
--- Composite indexes for multi-column filters
-CREATE INDEX idx_publisher_zmanim_publisher_key
-  ON publisher_zmanim(publisher_id, zman_key);
-```
-
-**Pattern: Paginate large result sets**
-```go
-// REQUIRED for endpoints returning many rows
-params := sqlcgen.ListItemsParams{
-    Limit:  int32(limit),
-    Offset: int32(offset),
-}
-```
-
-**Pattern: Use caching for expensive operations**
-```go
-// Cache zman calculations (24-hour TTL)
-cacheKey := fmt.Sprintf("zman:%s:%s:%s", publisherID, zmanKey, date)
-if cached, ok := h.cache.Get(cacheKey); ok {
-    return cached
-}
-```
-
-### Frontend Performance
-
-**Pattern: Memoize expensive computations**
-```tsx
-const expensiveResult = useMemo(() => {
-  return calculateSomethingExpensive(data);
-}, [data]);
-```
-
-**Pattern: Debounce user input**
-```tsx
-const debouncedSearch = useMemo(
-  () => debounce((value: string) => setSearch(value), 300),
-  []
-);
-```
-
-**Pattern: Use React Query staleTime for static data**
-```tsx
-const { data } = useGlobalQuery<Template[]>('templates', '/zmanim/templates', {
-  staleTime: 1000 * 60 * 60, // 1 hour - templates rarely change
-});
+# Backend: cd api && go build ./... && go test ./... && cd .. && ./restart.sh
+# Frontend: cd web && npm run type-check && npm run lint (hot reload works)
+# Schema: ./scripts/migrate.sh && cd api && sqlc generate && go build ./... && cd .. && ./restart.sh
 ```
 
 ---
 
 ## Security Standards
 
-### Input Validation
-
-**Backend: Validate all inputs**
-```go
-// REQUIRED - validate request fields
-validationErrors := make(map[string]string)
-
-if req.Name == "" {
-    validationErrors["name"] = "Name is required"
-}
-if len(req.Name) > 255 {
-    validationErrors["name"] = "Name must be 255 characters or less"
-}
-if !isValidEmail(req.Email) {
-    validationErrors["email"] = "Invalid email format"
-}
-
-if len(validationErrors) > 0 {
-    RespondValidationError(w, r, "Validation failed", validationErrors)
-    return
-}
-```
-
-**Frontend: Validate before submission**
-```tsx
-const [errors, setErrors] = useState<Record<string, string>>({});
-
-const validate = () => {
-  const newErrors: Record<string, string> = {};
-  if (!formData.name) newErrors.name = 'Name is required';
-  if (!isValidEmail(formData.email)) newErrors.email = 'Invalid email';
-  setErrors(newErrors);
-  return Object.keys(newErrors).length === 0;
-};
-
-const handleSubmit = async () => {
-  if (!validate()) return;
-  // Proceed with submission
-};
-```
-
-### SQL Injection Prevention
-
-**REQUIRED: Use parameterized queries (SQLc handles this)**
-```go
-// SQLc generates safe parameterized queries
-result, err := h.db.Queries.GetPublisher(ctx, publisherID)
-```
-
-**FORBIDDEN: String concatenation in queries**
-```go
-// NEVER DO THIS
-query := fmt.Sprintf("SELECT * FROM publishers WHERE id = '%s'", publisherID)
-```
-
-### XSS Prevention
-
-**Pattern: React escapes by default - don't bypass**
-```tsx
-// SAFE - React escapes content
-<div>{userProvidedContent}</div>
-
-// DANGEROUS - bypass escaping (avoid unless absolutely necessary)
-<div dangerouslySetInnerHTML={{ __html: content }} />
-```
-
-### Authentication Checks
-
-**Backend: Always verify auth before operations**
-```go
-// Use middleware.RequireAuth or middleware.RequireRole
-r.With(middleware.RequireRole("admin")).Get("/admin/stats", h.AdminStats)
-r.With(middleware.RequireAuth).Get("/publisher/profile", h.GetProfile)
-```
-
-**Frontend: Check auth state before rendering protected content**
-```tsx
-if (!isLoaded) return <Loading />;
-if (!isSignedIn) return redirect('/sign-in');
-if (!hasPublisherAccess) return redirect('/');
-```
+- **Input validation:** Backend validates all fields, frontend validates before submit
+- **SQL injection:** SQLc handles parameterization - NEVER string concat in queries
+- **XSS:** React escapes by default - avoid `dangerouslySetInnerHTML`
+- **Auth:** Use middleware.RequireAuth/RequireRole, check isLoaded before rendering protected content
 
 ---
 
-## Code Organization Standards
+## Code Organization
 
-### File Naming Conventions
-
+### File Naming
 | Type | Convention | Example |
 |------|------------|---------|
-| Go handlers | snake_case | `publisher_zmanim.go` |
-| Go services | snake_case | `clerk_service.go` |
+| Go handlers/services | snake_case | `publisher_zmanim.go` |
 | React components | PascalCase | `WeeklyPreviewDialog.tsx` |
-| React hooks | camelCase with use prefix | `useApiQuery.ts` |
+| React hooks | camelCase + use | `useApiQuery.ts` |
 | Utilities | kebab-case | `api-client.ts` |
-| Types | camelCase | `types/clerk.ts` |
 
-### Import Organization
+### Import Order
+**Go:** stdlib → third-party → internal (blank lines between)
+**TypeScript:** React/framework → third-party → internal → types
 
-**Go imports (3 groups, blank line between)**
-```go
-import (
-    // Standard library
-    "context"
-    "encoding/json"
-    "net/http"
-
-    // Third-party packages
-    "github.com/go-chi/chi/v5"
-    "github.com/jackc/pgx/v5"
-
-    // Internal packages
-    "github.com/jcom-dev/zmanim-lab/internal/db"
-    "github.com/jcom-dev/zmanim-lab/internal/middleware"
-)
-```
-
-**TypeScript imports (4 groups)**
-```tsx
-// 1. React and framework imports
-import { useState, useEffect } from 'react';
-import Link from 'next/link';
-
-// 2. Third-party libraries
-import { useUser } from '@clerk/nextjs';
-import { Loader2 } from 'lucide-react';
-
-// 3. Internal components and utilities
-import { Button } from '@/components/ui/button';
-import { useApi } from '@/lib/api-client';
-
-// 4. Types
-import type { Publisher } from '@/types';
-```
-
-### Function/Method Ordering
-
-**Go files**
-1. Type definitions
-2. Constructor functions (New*)
-3. Public methods (exported)
-4. Private methods (unexported)
-5. Helper functions
-
-**React components**
-1. Imports
-2. Types/Interfaces
-3. Component function
-   - Hooks (Clerk, context, state)
-   - Callbacks (useCallback)
-   - Effects (useEffect)
-   - Early returns (loading, error)
-   - Main render
-4. Helper functions (if not extracted)
+### Function Order
+**Go:** Types → Constructors → Public → Private → Helpers
+**React:** Imports → Types → Component (hooks → callbacks → effects → early returns → render) → Helpers
 
 ---
 
-## Git Workflow Standards
+## Git Standards
 
-### Branch Naming
+### Branches
+`feature/epic-{n}-{description}` | `fix/{description}` | `refactor/{scope}-{description}`
 
-```
-feature/epic-{n}-{short-description}
-fix/{issue-or-short-description}
-refactor/{scope}-{description}
-docs/{what-documented}
-```
-
-### Commit Messages
-
+### Commits
 ```
 <type>(<scope>): <description>
-
-[optional body]
 
 🤖 Generated with Claude Code
 Co-Authored-By: Claude <noreply@anthropic.com>
 ```
-
-**Types**: feat, fix, refactor, docs, test, chore, style, perf
-
-**Examples**:
-```
-feat(algorithm): add weekly preview dialog
-fix(auth): handle expired tokens gracefully
-refactor(handlers): migrate to PublisherResolver pattern
-docs(readme): update deployment instructions
-```
-
-### Pull Request Checklist
-
-- [ ] All tests pass (`npm test`, `go test ./...`)
-- [ ] No new hardcoded colors (use design tokens)
-- [ ] No raw fetch() calls (use useApi hook)
-- [ ] Handlers use PublisherResolver pattern
-- [ ] SQLc queries used (no raw SQL in handlers)
-- [ ] Errors logged with slog and context
-- [ ] E2E tests added for new features
-- [ ] Times displayed in 12-hour format
+Types: feat, fix, refactor, docs, test, chore, style, perf
 
 ---
 
-## Technical Debt Audit - 2025-12-02
+## Technical Debt (2025-12-02)
 
-This section documents current violations and tracks remediation progress. **Risk-based prioritization**: Fix high-impact violations first.
+| Category | Count | Severity |
+|----------|-------|----------|
+| Raw `fetch()` in .tsx | 73 | CRITICAL |
+| `log.Printf/fmt.Printf` in Go | ~100 | HIGH |
+| `waitForTimeout` in tests | 52 | HIGH |
+| Double-wrapped API responses | 80+ | MEDIUM |
+| Test files missing parallel mode | 23/29 | MEDIUM |
 
-### Current Violation Counts
-
-| Category | Count | Severity | Target | Status |
-|----------|-------|----------|--------|--------|
-| Raw `fetch()` in .tsx files | 73 | 🔴 CRITICAL | 0 | ❌ Active Debt |
-| `log.Printf/fmt.Printf` in Go | ~100 | 🟠 HIGH | 0 (cmd/ exempt) | ❌ Active Debt |
-| `waitForTimeout` in tests | 52 | 🟠 HIGH | 0 | ❌ Active Debt |
-| Double-wrapped API responses | 80+ | 🟡 MEDIUM | 0 | ❌ Active Debt |
-| Test files missing parallel mode | 23/29 | 🟡 MEDIUM | 0 | ❌ Active Debt |
-| Naked `return nil, err` | ~90 | 🟡 MEDIUM | 0 | ❌ Active Debt |
-
-### Violation Detection Rules
-
-**CRITICAL - Block PRs:**
+### Detection Commands
 ```bash
-# No raw fetch in components (must use useApi hook)
 grep -r "await fetch\(" web/app web/components --include="*.tsx" | wc -l  # Should be 0
-
-# No log.Printf in handlers/services (must use slog)
-grep -rE "log\.Printf|fmt\.Printf|fmt\.Println" api/internal/handlers api/internal/services --include="*.go" | wc -l  # Should be 0
-
-# No waitForTimeout in tests (must use deterministic waits)
+grep -rE "log\.Printf|fmt\.Printf" api/internal/handlers api/internal/services --include="*.go" | wc -l  # Should be 0
 grep -r "waitForTimeout" tests/e2e --include="*.ts" | wc -l  # Should be 0
 ```
 
-**HIGH - Fix within sprint:**
-```bash
-# All test files should have parallel mode
-# Check each spec file for: test.describe.configure({ mode: 'parallel' })
-
-# API responses should not double-wrap
-# Pattern: RespondJSON(w, r, status, map[string]interface{}{"key": data})
-# Should be: RespondJSON(w, r, status, data)
-```
-
 ### Exemptions
-
-The following locations are EXEMPT from standards (CLI tools, seed scripts):
-- `api/cmd/` - CLI tools can use log.Printf for user feedback
-- `api/internal/db/sqlcgen/` - Auto-generated code
-
-### Remediation Priority
-
-**Phase 1 - Critical (Epic 5.11):**
-1. Migrate remaining raw `fetch()` to `useApi()` hook
-2. Replace `log.Printf` with `slog` in handlers/services
-3. Replace `waitForTimeout` with deterministic waits
-
-**Phase 2 - High (Next Sprint):**
-4. Add parallel mode to all test files
-5. Fix double-wrapped API responses
-6. Add error context to naked returns
+`api/cmd/` (CLI tools) | `api/internal/db/sqlcgen/` (auto-generated)
 
 ---
 
-## Enforcement Mechanisms
+## Quick Reference Checklists
 
-### Pre-commit Hooks (Recommended)
+### Frontend
+1. `'use client'` only for hooks/events
+2. `useApi()` for all API calls
+3. Design tokens for colors
+4. 12-hour time format
+5. Loading → Error → Content pattern
+6. Check `isLoaded` before Clerk access
 
-Add to `.husky/pre-commit`:
-```bash
-#!/bin/sh
+### Backend
+1. PublisherResolver for publisher endpoints
+2. SQLc for all queries
+3. slog for logging
+4. Response helpers for all responses
+5. Wrap errors with context
+6. Generic messages for 500s
 
-# Block raw fetch in components
-if grep -rq "await fetch\(" web/app web/components --include="*.tsx" 2>/dev/null; then
-  echo "❌ ERROR: Raw fetch() found. Use useApi() hook instead."
-  exit 1
-fi
+### Testing
+1. `test.describe.configure({ mode: 'parallel' })`
+2. Shared fixtures only
+3. `waitForLoadState('networkidle')` before assertions
+4. Role/text selectors
+5. `TEST_` prefix if creating data
 
-# Block log.Printf in handlers (allow cmd/)
-if grep -rEq "log\.Printf|fmt\.Printf" api/internal/handlers api/internal/services --include="*.go" 2>/dev/null; then
-  echo "❌ ERROR: log.Printf found. Use slog instead."
-  exit 1
-fi
-
-echo "✅ Coding standards check passed"
-```
-
-### CI Linting (Required for PRs)
-
-Add GitHub Action step:
-```yaml
-- name: Coding Standards Check
-  run: |
-    FETCH_COUNT=$(grep -r "await fetch(" web/app web/components --include="*.tsx" 2>/dev/null | wc -l)
-    if [ "$FETCH_COUNT" -gt 0 ]; then
-      echo "::error::Found $FETCH_COUNT raw fetch() calls. Use useApi() hook."
-      exit 1
-    fi
-```
-
-### IDE Integration
-
-For VSCode, add to `.vscode/settings.json`:
-```json
-{
-  "editor.rulers": [100],
-  "search.exclude": {
-    "**/node_modules": true,
-    "**/sqlcgen": true
-  }
-}
-```
-
----
-
-_Last Updated: 2025-12-02_
-_Based on: Story 3.2 Codebase Audit, Epic 1-4 Implementation, Production Refactoring, Architect Review, Test Architect Audit_
-
----
-
-## Changelog
-
-### 2025-12-02 - Test Architect Compliance Audit
-- Added **Technical Debt Audit** section with current violation counts
-- Added **Violation Detection Rules** with CLI commands
-- Added **Enforcement Mechanisms** section (pre-commit hooks, CI linting)
-- Identified 73 raw fetch() violations, 100 log.Printf violations, 52 waitForTimeout violations
-- Created remediation priority plan for Epic 5.11
-
-### 2025-11-30 - Architect Review Updates
-- Added **Error Handling Standards** section with backend/frontend patterns
-- Added **Performance Standards** section (caching, pagination, memoization)
-- Added **Security Standards** section (validation, SQL injection, XSS, auth)
-- Added **Code Organization Standards** section (naming, imports, ordering)
-- Added **Git Workflow Standards** section (branches, commits, PR checklist)
-- Updated changelog to reflect comprehensive review
-
-### 2025-11-30 - Database Migration Tooling
-- Added `scripts/migrate.sh` for environment-aware migrations
-- Added documentation for running migrations in Coder environment
-
-### 2025-11-29 - Production Refactoring
-- **Frontend**: Replaced `useAuthenticatedFetch` with unified `useApi` hook from `@/lib/api-client`
-- **Frontend**: Added React Query factory hooks (`usePublisherQuery`, `usePublisherMutation`)
-- **Backend**: Added `PublisherResolver` pattern for consistent auth/publisher extraction
-- **Backend**: Migrated to SQLc generated queries for type-safe database access
-- **Testing**: Added shared fixtures system for parallel test execution
-- **Testing**: Added `test.describe.configure({ mode: 'parallel' })` requirement
+### PR Checklist
+- [ ] No hardcoded colors
+- [ ] No raw fetch()
+- [ ] PublisherResolver pattern
+- [ ] SQLc queries
+- [ ] slog logging
+- [ ] 12-hour time format
+- [ ] E2E tests for new features
+- [ ] Parallel mode in test files

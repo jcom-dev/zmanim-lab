@@ -86,7 +86,7 @@ export function PublisherCard({
                 href={website}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="hover:text-blue-600 dark:hover:text-blue-400 hover:underline truncate"
+                className="hover:text-primary hover:underline truncate"
                 onClick={(e) => e.stopPropagation()}
               >
                 {website.replace(/^https?:\/\//, '')}
@@ -98,7 +98,7 @@ export function PublisherCard({
               <Mail className="w-4 h-4 flex-shrink-0" />
               <a
                 href={`mailto:${email}`}
-                className="hover:text-blue-600 dark:hover:text-blue-400 hover:underline truncate"
+                className="hover:text-primary hover:underline truncate"
                 onClick={(e) => e.stopPropagation()}
               >
                 {email}

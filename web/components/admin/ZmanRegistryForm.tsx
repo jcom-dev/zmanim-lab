@@ -7,7 +7,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
-import { ColorBadge, getTagTypeColor, type ColorBadgeColor } from '@/components/ui/color-badge';
+import { ColorBadge, getTagTypeColor } from '@/components/ui/color-badge';
+import { useTimeCategories } from '@/lib/hooks/useCategories';
 import {
   Select,
   SelectContent,
@@ -82,18 +83,8 @@ interface ZmanRegistryFormProps {
   onTagReject?: (tagRequest: PendingTagRequest) => Promise<void>;
 }
 
-const TIME_CATEGORIES = [
-  { key: 'dawn', display_name: 'Dawn' },
-  { key: 'sunrise', display_name: 'Sunrise' },
-  { key: 'morning', display_name: 'Morning' },
-  { key: 'midday', display_name: 'Midday' },
-  { key: 'afternoon', display_name: 'Afternoon' },
-  { key: 'sunset', display_name: 'Sunset' },
-  { key: 'nightfall', display_name: 'Nightfall' },
-  { key: 'midnight', display_name: 'Midnight' },
-];
-
 // Tag colors are now handled by ColorBadge component
+// Time categories are fetched from database via useTimeCategories hook
 
 const DEFAULT_FORM_DATA: ZmanFormData = {
   zman_key: '',
@@ -132,6 +123,7 @@ export function ZmanRegistryForm({
   onTagReject,
 }: ZmanRegistryFormProps) {
   const api = useAdminApi();
+  const { data: timeCategories, isLoading: loadingTimeCategories } = useTimeCategories();
   const [formData, setFormData] = useState<ZmanFormData>({
     ...DEFAULT_FORM_DATA,
     ...initialData,
@@ -436,7 +428,7 @@ export function ZmanRegistryForm({
                 {unresolvedTagRequests.map((tagReq) => (
                   <div
                     key={tagReq.id}
-                    className="flex items-center justify-between p-2 bg-white dark:bg-gray-900 rounded border"
+                    className="flex items-center justify-between p-2 bg-card rounded border border-border"
                   >
                     <div>
                       <span className="font-medium">{tagReq.requested_tag_name}</span>
@@ -556,15 +548,15 @@ export function ZmanRegistryForm({
             <Select
               value={formData.time_category}
               onValueChange={(v) => setFormData({ ...formData, time_category: v })}
-              disabled={disabled}
+              disabled={disabled || loadingTimeCategories}
             >
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {TIME_CATEGORIES.map((cat) => (
+                {timeCategories?.map((cat) => (
                   <SelectItem key={cat.key} value={cat.key}>
-                    {cat.display_name}
+                    {cat.display_name_english}
                   </SelectItem>
                 ))}
               </SelectContent>

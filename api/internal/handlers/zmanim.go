@@ -32,9 +32,9 @@ type ZmanimWithFormulaResponse struct {
 
 // ZmanimPublisherInfo contains publisher details for the response
 type ZmanimPublisherInfo struct {
-	ID      string  `json:"id"`
-	Name    string  `json:"name"`
-	LogoURL *string `json:"logo_url,omitempty"`
+	ID   string  `json:"id"`
+	Name string  `json:"name"`
+	Logo *string `json:"logo,omitempty"` // Base64 data URL
 }
 
 // ZmanimLocationInfo contains location details for the response
@@ -50,11 +50,13 @@ type ZmanimLocationInfo struct {
 
 // ZmanWithFormula represents a single zman with formula details
 type ZmanWithFormula struct {
-	Name    string         `json:"name"`
-	Key     string         `json:"key"`
-	Time    string         `json:"time"`
-	IsBeta  bool           `json:"is_beta"`
-	Formula FormulaDetails `json:"formula"`
+	Name         string         `json:"name"`
+	HebrewName   string         `json:"hebrew_name,omitempty"`
+	Key          string         `json:"key"`
+	Time         string         `json:"time"`
+	IsBeta       bool           `json:"is_beta"`
+	TimeCategory string         `json:"time_category,omitempty"`
+	Formula      FormulaDetails `json:"formula"`
 }
 
 // FormulaDetails contains information about how a zman was calculated
@@ -66,7 +68,19 @@ type FormulaDetails struct {
 }
 
 // GetZmanimForCity calculates zmanim for a city with formula details
-// GET /api/v1/zmanim?cityId={cityId}&publisherId={publisherId}&date={date}
+// @Summary Get zmanim for a city
+// @Description Calculates Jewish prayer times (zmanim) for a specific city and date, optionally using a publisher's custom algorithm
+// @Tags Zmanim
+// @Accept json
+// @Produce json
+// @Param cityId query string true "City ID from the cities database"
+// @Param publisherId query string false "Publisher ID for custom algorithm (uses default if not specified)"
+// @Param date query string false "Date in YYYY-MM-DD format (defaults to today)"
+// @Success 200 {object} APIResponse{data=ZmanimWithFormulaResponse} "Calculated zmanim with formula details"
+// @Failure 400 {object} APIResponse{error=APIError} "Invalid parameters"
+// @Failure 404 {object} APIResponse{error=APIError} "City not found"
+// @Failure 500 {object} APIResponse{error=APIError} "Internal server error"
+// @Router /zmanim [get]
 func (h *Handlers) GetZmanimForCity(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -147,16 +161,16 @@ func (h *Handlers) GetZmanimForCity(w http.ResponseWriter, r *http.Request) {
 	var algorithmConfig *algorithm.AlgorithmConfig
 	var publisherInfo *ZmanimPublisherInfo
 	if publisherID != "" {
-		// First, get publisher info
-		pubQuery := `SELECT name, logo_url FROM publishers WHERE id = $1`
+		// First, get publisher info (logo_data is the base64 embedded logo)
+		pubQuery := `SELECT name, logo_data FROM publishers WHERE id = $1`
 		var pubName string
 		var pubLogo *string
 		err = h.db.Pool.QueryRow(ctx, pubQuery, publisherID).Scan(&pubName, &pubLogo)
 		if err == nil {
 			publisherInfo = &ZmanimPublisherInfo{
-				ID:      publisherID,
-				Name:    pubName,
-				LogoURL: pubLogo,
+				ID:   publisherID,
+				Name: pubName,
+				Logo: pubLogo,
 			}
 		}
 
@@ -208,6 +222,29 @@ func (h *Handlers) GetZmanimForCity(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Fetch metadata for all zmanim from master registry (database is source of truth)
+	type zmanMetadata struct {
+		TimeCategory string
+		HebrewName   string
+		EnglishName  string
+	}
+	zmanMetadataMap := make(map[string]zmanMetadata)
+	metadataQuery := `SELECT zman_key, COALESCE(time_category, ''), COALESCE(canonical_hebrew_name, ''), COALESCE(canonical_english_name, '') FROM master_zmanim_registry`
+	metadataRows, metadataErr := h.db.Pool.Query(ctx, metadataQuery)
+	if metadataErr == nil {
+		defer metadataRows.Close()
+		for metadataRows.Next() {
+			var zmanKey, timeCategory, hebrewName, englishName string
+			if err := metadataRows.Scan(&zmanKey, &timeCategory, &hebrewName, &englishName); err == nil {
+				zmanMetadataMap[zmanKey] = zmanMetadata{
+					TimeCategory: timeCategory,
+					HebrewName:   hebrewName,
+					EnglishName:  englishName,
+				}
+			}
+		}
+	}
+
 	// Build response
 	response := ZmanimWithFormulaResponse{
 		Date: dateStr,
@@ -226,11 +263,20 @@ func (h *Handlers) GetZmanimForCity(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for _, zman := range results.Zmanim {
+		metadata := zmanMetadataMap[zman.Key]
+		// Use database English name if available, otherwise log warning and use key
+		englishName := metadata.EnglishName
+		if englishName == "" {
+			slog.Warn("missing english name in master_zmanim_registry", "zman_key", zman.Key)
+			englishName = zman.Key // Fallback to key (no hardcoded names)
+		}
 		response.Zmanim = append(response.Zmanim, ZmanWithFormula{
-			Name:   zman.Name,
-			Key:    zman.Key,
-			Time:   zman.TimeString,
-			IsBeta: betaStatusMap[zman.Key],
+			Name:         englishName,
+			HebrewName:   metadata.HebrewName,
+			Key:          zman.Key,
+			Time:         zman.TimeString,
+			IsBeta:       betaStatusMap[zman.Key],
+			TimeCategory: metadata.TimeCategory,
 			Formula: FormulaDetails{
 				Method:      zman.Formula.Method,
 				DisplayName: zman.Formula.DisplayName,
@@ -257,11 +303,19 @@ func (h *Handlers) GetZmanimForCity(w http.ResponseWriter, r *http.Request) {
 	if zmanimContext.ShowCandleLighting {
 		// Default: 18 minutes before sunset
 		candleLightingTime := astro.SubtractMinutes(sunTimes.Sunset, 18)
+		// Get Hebrew name from master registry - NO FALLBACK (database is source of truth)
+		candleMetadata := zmanMetadataMap["candle_lighting"]
+		candleHebrewName := candleMetadata.HebrewName
+		if candleHebrewName == "" {
+			slog.Warn("missing hebrew name in master_zmanim_registry", "zman_key", "candle_lighting")
+		}
 		response.Zmanim = append(response.Zmanim, ZmanWithFormula{
-			Name:   "Candle Lighting",
-			Key:    "candle_lighting",
-			Time:   astro.FormatTime(candleLightingTime),
-			IsBeta: false, // System-generated, never beta
+			Name:         "Candle Lighting",
+			HebrewName:   candleHebrewName,
+			Key:          "candle_lighting",
+			Time:         astro.FormatTime(candleLightingTime),
+			IsBeta:       false, // System-generated, never beta
+			TimeCategory: "sunset", // Candle lighting is near sunset
 			Formula: FormulaDetails{
 				Method:      "fixed_minutes",
 				DisplayName: "18 minutes before sunset",
@@ -278,11 +332,19 @@ func (h *Handlers) GetZmanimForCity(w http.ResponseWriter, r *http.Request) {
 	if zmanimContext.ShowShabbosYomTovEnds {
 		// Default: 42 minutes after sunset (8.5° below horizon approximation)
 		havdalahTime := astro.AddMinutes(sunTimes.Sunset, 42)
+		// Get Hebrew name from master registry - NO FALLBACK (database is source of truth)
+		havdalahMetadata := zmanMetadataMap["havdalah"]
+		havdalahHebrewName := havdalahMetadata.HebrewName
+		if havdalahHebrewName == "" {
+			slog.Warn("missing hebrew name in master_zmanim_registry", "zman_key", "havdalah")
+		}
 		response.Zmanim = append(response.Zmanim, ZmanWithFormula{
-			Name:   "Havdalah",
-			Key:    "havdalah",
-			Time:   astro.FormatTime(havdalahTime),
-			IsBeta: false, // System-generated, never beta
+			Name:         "Havdalah",
+			HebrewName:   havdalahHebrewName,
+			Key:          "havdalah",
+			Time:         astro.FormatTime(havdalahTime),
+			IsBeta:       false, // System-generated, never beta
+			TimeCategory: "nightfall", // Havdalah is after nightfall
 			Formula: FormulaDetails{
 				Method:      "fixed_minutes",
 				DisplayName: "42 minutes after sunset",
@@ -295,6 +357,9 @@ func (h *Handlers) GetZmanimForCity(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	// Sort all zmanim by calculated time for chronological display
+	sortZmanimByTime(response.Zmanim)
+
 	// Cache the result (if cache available)
 	if h.cache != nil {
 		if err := h.cache.SetZmanim(ctx, cachePublisherID, cityID, dateStr, response); err != nil {
@@ -305,8 +370,17 @@ func (h *Handlers) GetZmanimForCity(w http.ResponseWriter, r *http.Request) {
 	RespondJSON(w, r, http.StatusOK, response)
 }
 
-// GetZmanimByCoordinates calculates zmanim for coordinates
-// POST /api/v1/zmanim - existing endpoint, kept for backward compatibility
+// GetZmanimByCoordinates calculates zmanim for coordinates (legacy)
+// @Summary Calculate zmanim by coordinates (legacy)
+// @Description Calculates zmanim using raw latitude/longitude coordinates. Prefer the GET /zmanim endpoint with cityId for better accuracy.
+// @Tags Zmanim
+// @Accept json
+// @Produce json
+// @Param request body models.ZmanimRequest true "Coordinates and date"
+// @Success 200 {object} APIResponse{data=ZmanimWithFormulaResponse} "Calculated zmanim"
+// @Failure 400 {object} APIResponse{error=APIError} "Invalid request"
+// @Failure 500 {object} APIResponse{error=APIError} "Internal server error"
+// @Router /zmanim [post]
 func (h *Handlers) GetZmanimByCoordinates(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -346,7 +420,16 @@ func (h *Handlers) GetZmanimByCoordinates(w http.ResponseWriter, r *http.Request
 }
 
 // InvalidatePublisherCache invalidates cached calculations for a publisher
-// DELETE /api/v1/publisher/cache
+// @Summary Invalidate publisher cache
+// @Description Clears all cached zmanim calculations for the authenticated publisher
+// @Tags Publisher
+// @Produce json
+// @Security BearerAuth
+// @Param X-Publisher-Id header string true "Publisher ID"
+// @Success 200 {object} APIResponse{data=object} "Cache invalidated"
+// @Failure 401 {object} APIResponse{error=APIError} "Unauthorized"
+// @Failure 404 {object} APIResponse{error=APIError} "Publisher not found"
+// @Router /publisher/cache [delete]
 func (h *Handlers) InvalidatePublisherCache(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 

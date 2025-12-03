@@ -243,7 +243,7 @@ export default function AdminPublisherDetailPage() {
       <div className="flex justify-between items-center mb-6">
         <div>
           <div className="flex items-center gap-2 mb-2">
-            <Link href="/admin/publishers" className="text-blue-600 dark:text-blue-400 hover:underline text-sm">
+            <Link href="/admin/publishers" className="text-primary hover:underline text-sm">
               Publishers
             </Link>
             <span className="text-muted-foreground">/</span>
@@ -529,7 +529,7 @@ export default function AdminPublisherDetailPage() {
                         </div>
                       </td>
                       <td className="py-4">
-                        <a href={`mailto:${user.email}`} className="text-blue-600 dark:text-blue-400 hover:underline">
+                        <a href={`mailto:${user.email}`} className="text-primary hover:underline">
                           {user.email}
                         </a>
                       </td>

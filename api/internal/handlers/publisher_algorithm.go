@@ -377,94 +377,46 @@ func (h *Handlers) PreviewAlgorithm(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	// Sort all zmanim by calculated time for chronological display
+	sortZmanimByTime(response.Zmanim)
+
 	RespondJSON(w, r, http.StatusOK, response)
 }
 
-// GetAlgorithmTemplates returns the available algorithm templates
+// GetAlgorithmTemplates returns the available algorithm templates from the database
 // GET /api/v1/publisher/algorithm/templates
 func (h *Handlers) GetAlgorithmTemplates(w http.ResponseWriter, r *http.Request) {
-	templates := []map[string]interface{}{
-		{
-			"id":          "gra",
-			"name":        "GRA (Vilna Gaon)",
-			"description": "Standard calculation based on the Vilna Gaon. Uses sunrise to sunset for proportional hours.",
-			"configuration": map[string]interface{}{
-				"name":        "GRA",
-				"description": "Vilna Gaon standard calculation",
-				"zmanim": map[string]interface{}{
-					"alos_hashachar":       map[string]interface{}{"method": "solar_angle", "params": map[string]interface{}{"degrees": 16.1}},
-					"misheyakir":           map[string]interface{}{"method": "solar_angle", "params": map[string]interface{}{"degrees": 11.5}},
-					"sunrise":              map[string]interface{}{"method": "sunrise", "params": map[string]interface{}{}},
-					"sof_zman_shma_gra":    map[string]interface{}{"method": "proportional", "params": map[string]interface{}{"hours": 3.0, "base": "gra"}},
-					"sof_zman_tefilla_gra": map[string]interface{}{"method": "proportional", "params": map[string]interface{}{"hours": 4.0, "base": "gra"}},
-					"chatzos":              map[string]interface{}{"method": "midpoint", "params": map[string]interface{}{"start": "sunrise", "end": "sunset"}},
-					"mincha_gedola":        map[string]interface{}{"method": "proportional", "params": map[string]interface{}{"hours": 6.5, "base": "gra"}},
-					"mincha_ketana":        map[string]interface{}{"method": "proportional", "params": map[string]interface{}{"hours": 9.5, "base": "gra"}},
-					"plag_hamincha":        map[string]interface{}{"method": "proportional", "params": map[string]interface{}{"hours": 10.75, "base": "gra"}},
-					"sunset":               map[string]interface{}{"method": "sunset", "params": map[string]interface{}{}},
-					"tzeis_hakochavim":     map[string]interface{}{"method": "solar_angle", "params": map[string]interface{}{"degrees": 8.5}},
-				},
-			},
-		},
-		{
-			"id":          "mga",
-			"name":        "MGA (Magen Avraham)",
-			"description": "Magen Avraham calculation. Uses 72 minutes before sunrise to 72 minutes after sunset for proportional hours.",
-			"configuration": map[string]interface{}{
-				"name":        "MGA",
-				"description": "Magen Avraham calculation",
-				"zmanim": map[string]interface{}{
-					"alos_hashachar":       map[string]interface{}{"method": "fixed_minutes", "params": map[string]interface{}{"minutes": -72.0, "from": "sunrise"}},
-					"misheyakir":           map[string]interface{}{"method": "solar_angle", "params": map[string]interface{}{"degrees": 11.5}},
-					"sunrise":              map[string]interface{}{"method": "sunrise", "params": map[string]interface{}{}},
-					"sof_zman_shma_mga":    map[string]interface{}{"method": "proportional", "params": map[string]interface{}{"hours": 3.0, "base": "mga"}},
-					"sof_zman_tefilla_mga": map[string]interface{}{"method": "proportional", "params": map[string]interface{}{"hours": 4.0, "base": "mga"}},
-					"chatzos":              map[string]interface{}{"method": "midpoint", "params": map[string]interface{}{"start": "sunrise", "end": "sunset"}},
-					"mincha_gedola":        map[string]interface{}{"method": "proportional", "params": map[string]interface{}{"hours": 6.5, "base": "mga"}},
-					"mincha_ketana":        map[string]interface{}{"method": "proportional", "params": map[string]interface{}{"hours": 9.5, "base": "mga"}},
-					"plag_hamincha":        map[string]interface{}{"method": "proportional", "params": map[string]interface{}{"hours": 10.75, "base": "mga"}},
-					"sunset":               map[string]interface{}{"method": "sunset", "params": map[string]interface{}{}},
-					"tzeis_72":             map[string]interface{}{"method": "fixed_minutes", "params": map[string]interface{}{"minutes": 72.0, "from": "sunset"}},
-				},
-			},
-		},
-		{
-			"id":          "rabbeinu_tam",
-			"name":        "Rabbeinu Tam",
-			"description": "Uses 72 minutes after sunset for tzeis based on Rabbeinu Tam's opinion.",
-			"configuration": map[string]interface{}{
-				"name":        "Rabbeinu Tam",
-				"description": "Rabbeinu Tam calculation for tzeis",
-				"zmanim": map[string]interface{}{
-					"alos_hashachar":       map[string]interface{}{"method": "solar_angle", "params": map[string]interface{}{"degrees": 16.1}},
-					"misheyakir":           map[string]interface{}{"method": "solar_angle", "params": map[string]interface{}{"degrees": 11.5}},
-					"sunrise":              map[string]interface{}{"method": "sunrise", "params": map[string]interface{}{}},
-					"sof_zman_shma_gra":    map[string]interface{}{"method": "proportional", "params": map[string]interface{}{"hours": 3.0, "base": "gra"}},
-					"sof_zman_tefilla_gra": map[string]interface{}{"method": "proportional", "params": map[string]interface{}{"hours": 4.0, "base": "gra"}},
-					"chatzos":              map[string]interface{}{"method": "midpoint", "params": map[string]interface{}{"start": "sunrise", "end": "sunset"}},
-					"mincha_gedola":        map[string]interface{}{"method": "proportional", "params": map[string]interface{}{"hours": 6.5, "base": "gra"}},
-					"mincha_ketana":        map[string]interface{}{"method": "proportional", "params": map[string]interface{}{"hours": 9.5, "base": "gra"}},
-					"plag_hamincha":        map[string]interface{}{"method": "proportional", "params": map[string]interface{}{"hours": 10.75, "base": "gra"}},
-					"sunset":               map[string]interface{}{"method": "sunset", "params": map[string]interface{}{}},
-					"tzeis_hakochavim":     map[string]interface{}{"method": "solar_angle", "params": map[string]interface{}{"degrees": 8.5}},
-					"tzeis_72":             map[string]interface{}{"method": "fixed_minutes", "params": map[string]interface{}{"minutes": 72.0, "from": "sunset"}},
-				},
-			},
-		},
-		{
-			"id":          "custom",
-			"name":        "Custom",
-			"description": "Start with basic times and customize each zman according to your minhag.",
-			"configuration": map[string]interface{}{
-				"name":        "Custom",
-				"description": "Custom algorithm",
-				"zmanim": map[string]interface{}{
-					"sunrise": map[string]interface{}{"method": "sunrise", "params": map[string]interface{}{}},
-					"chatzos": map[string]interface{}{"method": "midpoint", "params": map[string]interface{}{"start": "sunrise", "end": "sunset"}},
-					"sunset":  map[string]interface{}{"method": "sunset", "params": map[string]interface{}{}},
-				},
-			},
-		},
+	ctx := r.Context()
+
+	// Fetch templates from database
+	dbTemplates, err := h.db.Queries.GetAlgorithmTemplates(ctx)
+	if err != nil {
+		slog.Error("failed to fetch algorithm templates", "error", err)
+		RespondInternalError(w, r, "Failed to fetch algorithm templates")
+		return
+	}
+
+	// Transform database rows to API response format
+	templates := make([]map[string]interface{}, 0, len(dbTemplates))
+	for _, t := range dbTemplates {
+		// Parse configuration JSON
+		var config map[string]interface{}
+		if err := json.Unmarshal(t.Configuration, &config); err != nil {
+			slog.Error("failed to parse template configuration", "template_key", t.TemplateKey, "error", err)
+			continue
+		}
+
+		description := ""
+		if t.Description != nil {
+			description = *t.Description
+		}
+
+		templates = append(templates, map[string]interface{}{
+			"id":            t.TemplateKey,
+			"name":          t.Name,
+			"description":   description,
+			"configuration": config,
+		})
 	}
 
 	RespondJSON(w, r, http.StatusOK, map[string]interface{}{

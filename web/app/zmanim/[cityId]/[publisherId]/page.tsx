@@ -1,20 +1,21 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import Image from 'next/image';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import {
   MapPin, ChevronLeft, ChevronRight,
   Loader2, AlertCircle, ArrowLeft, Info, Search, X, Sun, Moon, Sunset, Clock,
-  Flame, Star, Calendar, FlaskConical
+  Star, FlaskConical
 } from 'lucide-react';
 import Link from 'next/link';
 import { DateTime } from 'luxon';
 import { FormulaPanel, type Zman } from '@/components/zmanim/FormulaPanel';
 import { DatePickerDropdown } from '@/components/zmanim/DatePickerDropdown';
 import { useApi } from '@/lib/api-client';
+import { useDisplayGroupMapping, type DisplayGroup } from '@/lib/hooks';
 import { formatTimeShort } from '@/lib/utils';
-import { ModeToggle } from '@/components/mode-toggle';
+import { useTheme } from 'next-themes';
 import { ColorBadge } from '@/components/ui/color-badge';
 
 interface City {
@@ -37,7 +38,7 @@ interface SearchCity {
 interface Publisher {
   id: string;
   name: string;
-  logo_url: string | null;
+  logo: string | null; // Base64 data URL
 }
 
 interface ZmanimData {
@@ -48,159 +49,36 @@ interface ZmanimData {
   is_default: boolean;
 }
 
-// Format zman names for display
-const formatZmanName = (key: string): string => {
-  const names: Record<string, string> = {
-    alos_hashachar: 'Alos HaShachar',
-    misheyakir: 'Misheyakir',
-    sunrise: 'Sunrise (Netz HaChama)',
-    sof_zman_shma_gra: 'Sof Zman Shma (GRA)',
-    sof_zman_shma_mga: 'Sof Zman Shma (MGA)',
-    sof_zman_tefilla_gra: 'Sof Zman Tefilla (GRA)',
-    sof_zman_tefilla_mga: 'Sof Zman Tefilla (MGA)',
-    chatzos: 'Chatzos (Midday)',
-    mincha_gedola: 'Mincha Gedola',
-    mincha_ketana: 'Mincha Ketana',
-    plag_hamincha: 'Plag HaMincha',
-    sunset: 'Sunset (Shkiah)',
-    tzeis_hakochavim: 'Tzeis HaKochavim',
-    tzeis_72: 'Tzeis (72 minutes)',
-  };
-  return names[key] || key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+// Format zman key to human-readable name (used as fallback when API doesn't provide name)
+const formatZmanKey = (key: string): string => {
+  return key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 };
 
-// Zman key patterns for categorization
-const ZMAN_CATEGORIES = {
-  dawn: ['alos_hashachar', 'alos_', 'misheyakir'],
-  morning: ['sunrise', 'netz', 'sof_zman_shma', 'sof_zman_tfila', 'sof_zman_tefilla', 'sof_zman_achilas_chametz', 'sof_zman_biur_chametz'],
-  midday: ['chatzos', 'mincha_gedola', 'mincha_ketana', 'plag_hamincha', 'samuch_lmincha'],
-  evening: ['sunset', 'shkiah', 'tzeis', 'tzais', 'nightfall'],
-  // Special occasion categories
-  shabbos_yomtov: ['candle_lighting', 'hadlakas_neiros', 'shabbos_ends', 'havdalah', 'motzei'],
-  fast: ['fast_begins', 'fast_ends', 'tzom_', 'taanis_'],
-};
-
-// Check if a zman key matches any pattern in a category
-const matchesCategory = (key: string, patterns: string[]) => {
-  return patterns.some(pattern =>
-    key === pattern || key.startsWith(pattern) || key.includes(pattern)
-  );
-};
-
-// Group zmanim by time of day and occasion
-interface GroupedZmanim {
-  dawn: Zman[];
-  morning: Zman[];
-  midday: Zman[];
-  evening: Zman[];
-  shabbos_yomtov: Zman[];
-  fast: Zman[];
-}
-
-const groupZmanim = (zmanim: Zman[]): GroupedZmanim => {
-  const result: GroupedZmanim = {
-    dawn: [],
-    morning: [],
-    midday: [],
-    evening: [],
-    shabbos_yomtov: [],
-    fast: [],
-  };
-
-  for (const zman of zmanim) {
-    const key = zman.key.toLowerCase();
-
-    // Check occasion-based categories first (they take priority)
-    if (matchesCategory(key, ZMAN_CATEGORIES.shabbos_yomtov)) {
-      result.shabbos_yomtov.push(zman);
-    } else if (matchesCategory(key, ZMAN_CATEGORIES.fast)) {
-      result.fast.push(zman);
-    }
-    // Then check time-of-day categories
-    else if (matchesCategory(key, ZMAN_CATEGORIES.dawn)) {
-      result.dawn.push(zman);
-    } else if (matchesCategory(key, ZMAN_CATEGORIES.morning)) {
-      result.morning.push(zman);
-    } else if (matchesCategory(key, ZMAN_CATEGORIES.midday)) {
-      result.midday.push(zman);
-    } else if (matchesCategory(key, ZMAN_CATEGORIES.evening)) {
-      result.evening.push(zman);
-    }
-    // Uncategorized zmanim go to evening as fallback (most likely nightfall variants)
-    else {
-      result.evening.push(zman);
-    }
-  }
-
-  return result;
-};
-
-// Get icon for zman group
-const getSectionIcon = (section: string) => {
-  switch (section) {
-    case 'dawn':
+// Get icon component for a display group based on icon_name from database
+const getIconComponent = (iconName?: string) => {
+  switch (iconName) {
+    case 'Moon':
       return <Moon className="w-4 h-4" />;
-    case 'morning':
+    case 'Sun':
       return <Sun className="w-4 h-4" />;
-    case 'midday':
+    case 'Clock':
       return <Clock className="w-4 h-4" />;
-    case 'evening':
+    case 'Sunset':
       return <Sunset className="w-4 h-4" />;
-    case 'shabbos_yomtov':
-      return <Flame className="w-4 h-4" />;
-    case 'fast':
-      return <Calendar className="w-4 h-4" />;
     default:
       return <Star className="w-4 h-4" />;
   }
 };
-
-// Get section title
-const getSectionTitle = (section: string, hebrew: boolean = false) => {
-  if (hebrew) {
-    switch (section) {
-      case 'dawn':
-        return 'שחר';
-      case 'morning':
-        return 'בוקר';
-      case 'midday':
-        return 'צהריים';
-      case 'evening':
-        return 'ערב';
-      case 'shabbos_yomtov':
-        return 'שבת / יום טוב';
-      case 'fast':
-        return 'יום צום';
-      default:
-        return 'מיוחד';
-    }
-  }
-  switch (section) {
-    case 'dawn':
-      return 'Dawn';
-    case 'morning':
-      return 'Morning';
-    case 'midday':
-      return 'Midday';
-    case 'evening':
-      return 'Evening';
-    case 'shabbos_yomtov':
-      return 'Shabbos / Yom Tov';
-    case 'fast':
-      return 'Fast Day';
-    default:
-      return 'Special';
-  }
-};
-
-// Define the order sections should appear
-const SECTION_ORDER = ['dawn', 'morning', 'midday', 'evening', 'shabbos_yomtov', 'fast'] as const;
 
 export default function ZmanimPage() {
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
   const api = useApi();
+  const { theme, setTheme } = useTheme();
+
+  // Database-driven display groups for UI section rendering
+  const { timeCategoryToDisplayGroup, displayGroupsMap, displayGroups, isLoading: displayGroupsLoading } = useDisplayGroupMapping();
 
   const cityId = params.cityId as string;
   const publisherId = params.publisherId as string;
@@ -229,23 +107,26 @@ export default function ZmanimPage() {
   const [searchResults, setSearchResults] = useState<SearchCity[]>([]);
   const [searching, setSearching] = useState(false);
 
-  // Hebrew names for zmanim
-  const hebrewNames: Record<string, string> = {
-    alos_hashachar: 'עלות השחר',
-    misheyakir: 'משיכיר',
-    sunrise: 'הנץ החמה',
-    sof_zman_shma_gra: 'סוף זמן ק״ש גר״א',
-    sof_zman_shma_mga: 'סוף זמן ק״ש מג״א',
-    sof_zman_tefilla_gra: 'סוף זמן תפלה גר״א',
-    sof_zman_tefilla_mga: 'סוף זמן תפלה מג״א',
-    chatzos: 'חצות היום',
-    mincha_gedola: 'מנחה גדולה',
-    mincha_ketana: 'מנחה קטנה',
-    plag_hamincha: 'פלג המנחה',
-    sunset: 'שקיעה',
-    tzeis_hakochavim: 'צאת הכוכבים',
-    tzeis_72: 'צאת (72 דקות)',
-  };
+  // Group zmanim by display group using database-driven mapping
+  const groupedZmanim = useMemo(() => {
+    const result: Record<string, Zman[]> = {};
+
+    // Initialize all display groups with empty arrays
+    for (const group of displayGroups || []) {
+      result[group.key] = [];
+    }
+
+    // Group zmanim by their display group
+    for (const zman of data?.zmanim || []) {
+      const displayGroupKey = timeCategoryToDisplayGroup[zman.time_category || ''] || 'evening';
+      if (!result[displayGroupKey]) {
+        result[displayGroupKey] = [];
+      }
+      result[displayGroupKey].push(zman);
+    }
+
+    return result;
+  }, [data?.zmanim, displayGroups, timeCategoryToDisplayGroup]);
 
   const loadZmanim = useCallback(async () => {
     try {
@@ -351,9 +232,9 @@ export default function ZmanimPage() {
     router.push(`/zmanim/${newCityId}/${publisherId}${selectedDate ? `?date=${selectedDate.toISODate()}` : ''}`);
   };
 
-  if (loading) {
+  if (loading || displayGroupsLoading) {
     return (
-      <main className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50 dark:from-zinc-950 dark:via-zinc-900 dark:to-blue-950/20 flex items-center justify-center">
+      <main className="min-h-screen bg-background flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
           <Loader2 className="w-8 h-8 text-primary animate-spin" />
           <p className="text-sm text-muted-foreground">Loading zmanim...</p>
@@ -364,7 +245,7 @@ export default function ZmanimPage() {
 
   if (error) {
     return (
-      <main className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50 dark:from-zinc-950 dark:via-zinc-900 dark:to-blue-950/20">
+      <main className="min-h-screen bg-background">
         <div className="container mx-auto px-4 py-12">
           <div className="max-w-md mx-auto bg-destructive/10 border border-destructive/20 rounded-xl p-8 text-center backdrop-blur-sm">
             <AlertCircle className="w-12 h-12 text-destructive mx-auto mb-4" />
@@ -386,72 +267,87 @@ export default function ZmanimPage() {
   const city = data?.city;
   const publisher = data?.publisher;
   const zmanim = data?.zmanim || [];
-  const groupedZmanim = groupZmanim(zmanim);
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50 dark:from-zinc-950 dark:via-zinc-900 dark:to-blue-950/20">
+    <main className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-6 md:py-8">
         <div className="max-w-3xl mx-auto space-y-4">
           {/* Header Card */}
-          <div className="bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xl rounded-2xl shadow-lg border border-slate-200/50 dark:border-zinc-800/50 transition-all hover:shadow-xl overflow-visible">
+          <div className="bg-card/80 backdrop-blur-xl rounded-2xl shadow-lg border border-border/50 transition-all hover:shadow-xl overflow-visible">
             {/* Publisher Info Bar */}
-            <div className="bg-gradient-to-r from-primary via-primary to-blue-600 dark:from-primary dark:via-primary dark:to-blue-700 text-primary-foreground px-5 py-4 rounded-t-2xl">
-              <div className="flex items-center justify-between gap-3">
+            <div className="bg-gradient-to-r from-primary via-primary to-blue-600 dark:from-primary dark:via-primary dark:to-blue-700 text-primary-foreground px-4 py-3.5 md:px-5 md:py-4 rounded-t-2xl">
+              <div className="flex items-center justify-between gap-2 md:gap-3">
                 {/* Back button + Publisher */}
-                <div className="flex items-center gap-3 min-w-0">
+                <div className="flex items-center gap-2.5 md:gap-3 min-w-0 flex-1">
                   <Link
                     href={`/zmanim/${cityId}`}
-                    className="p-2 hover:bg-white/20 rounded-lg transition-all hover:scale-105 active:scale-95 flex-shrink-0"
+                    className="p-1.5 md:p-2 hover:bg-white/20 rounded-lg transition-all hover:scale-105 active:scale-95 flex-shrink-0 -ml-1"
                     aria-label="Back to publisher selection"
                   >
-                    <ArrowLeft className="w-4 h-4" />
+                    <ArrowLeft className="w-5 h-5" />
                   </Link>
-                  {!isDefault && publisher?.logo_url ? (
-                    <div className="relative w-10 h-10 rounded-lg overflow-hidden bg-white/10 backdrop-blur-sm border border-white/20 flex-shrink-0">
-                      <Image
-                        src={publisher.logo_url}
-                        alt={publisher.name}
-                        fill
-                        className="object-cover"
-                        unoptimized
-                      />
+
+                  {/* Publisher Logo or Fallback */}
+                  {!isDefault && (
+                    <div className="relative w-9 h-9 md:w-10 md:h-10 rounded-lg overflow-hidden bg-white/15 backdrop-blur-sm border border-white/25 flex-shrink-0 flex items-center justify-center">
+                      {publisher?.logo ? (
+                        <Image
+                          src={publisher.logo}
+                          alt={publisher.name}
+                          fill
+                          className="object-cover"
+                          unoptimized
+                        />
+                      ) : (
+                        <span className="text-white/90 font-bold text-[10px] md:text-xs tracking-tight">
+                          {(publisher?.name || 'P').split(/\s+/).slice(0, 3).map(w => w.charAt(0).toUpperCase()).join('')}
+                        </span>
+                      )}
                     </div>
-                  ) : null}
-                  <div className="min-w-0">
-                    <h1 className="font-bold text-base md:text-lg tracking-tight truncate">
+                  )}
+
+                  <div className="min-w-0 flex-1">
+                    <h1 className="font-bold text-sm md:text-lg tracking-tight truncate leading-tight">
                       {isDefault ? 'Default Zmanim' : publisher?.name || 'Zmanim'}
                     </h1>
                     <button
                       onClick={() => setLocationSearchOpen(true)}
-                      className="flex items-center gap-1.5 text-primary-foreground/90 text-xs md:text-sm hover:text-white transition-all group"
+                      className="flex items-center gap-1 md:gap-1.5 text-primary-foreground/90 text-xs hover:text-white transition-all group mt-0.5"
                     >
-                      <MapPin className="w-3.5 h-3.5 flex-shrink-0" />
+                      <MapPin className="w-3 h-3 md:w-3.5 md:h-3.5 flex-shrink-0" />
                       <span className="group-hover:underline underline-offset-2 truncate">
                         {city?.name}, {city?.region ? `${city.region}, ` : ''}{city?.country}
                       </span>
-                      <Search className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+                      <Search className="w-2.5 h-2.5 md:w-3 md:h-3 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
                     </button>
                   </div>
                 </div>
 
                 {/* Language toggle + Theme toggle */}
-                <div className="flex items-center gap-2 flex-shrink-0">
+                <div className="flex items-center gap-1.5 md:gap-2 flex-shrink-0">
                   <button
                     onClick={() => setShowHebrew(!showHebrew)}
-                    className="px-4 py-2 text-xs md:text-sm font-medium bg-white/20 hover:bg-white/30 rounded-lg transition-all hover:scale-105 active:scale-95 backdrop-blur-sm border border-white/20"
+                    className="px-2.5 md:px-4 py-1.5 md:py-2 text-xs font-medium bg-white/20 hover:bg-white/30 rounded-lg transition-all hover:scale-105 active:scale-95 backdrop-blur-sm border border-white/20"
                   >
                     {showHebrew ? 'English' : 'עברית'}
                   </button>
-                  <ModeToggle />
+                  <button
+                    onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                    className="relative p-1.5 md:p-2 bg-white/20 hover:bg-white/30 rounded-lg transition-all hover:scale-105 active:scale-95 backdrop-blur-sm border border-white/20"
+                    aria-label="Toggle theme"
+                  >
+                    <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+                    <Moon className="absolute top-1.5 left-1.5 md:top-2 md:left-2 h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+                  </button>
                 </div>
               </div>
             </div>
 
             {/* Date Navigation */}
-            <div className={`px-5 py-4 flex items-center justify-between gap-4 relative z-20 ${isDefault ? 'border-b border-slate-200/50 dark:border-zinc-800/50' : 'rounded-b-2xl'}`}>
+            <div className={`px-5 py-4 flex items-center justify-between gap-4 ${isDefault ? 'border-b border-border/50' : 'rounded-b-2xl'}`}>
               <button
                 onClick={handlePrevDay}
-                className="p-2.5 hover:bg-slate-100 dark:hover:bg-zinc-800 rounded-xl transition-all hover:scale-110 active:scale-95"
+                className="p-2.5 hover:bg-accent rounded-xl transition-all hover:scale-110 active:scale-95"
                 aria-label="Previous day"
               >
                 <ChevronLeft className="w-5 h-5 text-muted-foreground" />
@@ -468,7 +364,7 @@ export default function ZmanimPage() {
 
               <button
                 onClick={handleNextDay}
-                className="p-2.5 hover:bg-slate-100 dark:hover:bg-zinc-800 rounded-xl transition-all hover:scale-110 active:scale-95"
+                className="p-2.5 hover:bg-accent rounded-xl transition-all hover:scale-110 active:scale-95"
                 aria-label="Next day"
               >
                 <ChevronRight className="w-5 h-5 text-muted-foreground" />
@@ -487,41 +383,41 @@ export default function ZmanimPage() {
 
           {/* Zmanim Content */}
           {zmanim.length === 0 ? (
-            <div className="bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xl rounded-2xl shadow-lg border border-slate-200/50 dark:border-zinc-800/50 p-12 text-center">
+            <div className="bg-card/80 backdrop-blur-xl rounded-2xl shadow-lg border border-border/50 p-12 text-center">
               <Clock className="w-16 h-16 text-muted-foreground/30 mx-auto mb-4" />
               <p className="text-muted-foreground text-lg">No zmanim available for this date.</p>
             </div>
           ) : (
             <div className="space-y-4">
-              {/* Render sections in defined order */}
-              {SECTION_ORDER.map((section) => {
-                const sectionZmanim = groupedZmanim[section];
+              {/* Render sections using database-driven display groups */}
+              {(displayGroups || []).map((displayGroup) => {
+                const sectionZmanim = groupedZmanim[displayGroup.key];
                 if (!sectionZmanim || sectionZmanim.length === 0) return null;
 
                 return (
                   <div
-                    key={section}
-                    className="bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xl rounded-2xl shadow-lg border border-slate-200/50 dark:border-zinc-800/50 overflow-hidden transition-all hover:shadow-xl"
+                    key={displayGroup.key}
+                    className="bg-card/80 backdrop-blur-xl rounded-2xl shadow-lg border border-border/50 overflow-hidden transition-all hover:shadow-xl"
                   >
                     {/* Section Header */}
-                    <div className="px-5 py-3 bg-slate-50 dark:bg-zinc-800/50 border-b border-slate-200/50 dark:border-zinc-800/50" dir={showHebrew ? 'rtl' : 'ltr'}>
+                    <div className="px-5 py-3 bg-muted/50 border-b border-border/50" dir={showHebrew ? 'rtl' : 'ltr'}>
                       <div className="flex items-center gap-2">
                         <div className="p-1.5 bg-primary/10 text-primary rounded-lg">
-                          {getSectionIcon(section)}
+                          {getIconComponent(displayGroup.icon_name ?? undefined)}
                         </div>
                         <h2 className={`text-sm font-semibold text-foreground tracking-wide uppercase ${showHebrew ? 'font-hebrew' : ''}`}>
-                          {getSectionTitle(section, showHebrew)}
+                          {showHebrew ? displayGroup.display_name_hebrew : displayGroup.display_name_english}
                         </h2>
                       </div>
                     </div>
 
                     {/* Zmanim List */}
-                    <div className={`divide-y divide-slate-200/50 dark:divide-zinc-800/50 ${showHebrew ? 'text-right' : ''}`} dir={showHebrew ? 'rtl' : 'ltr'}>
+                    <div className={`divide-y divide-border/50 ${showHebrew ? 'text-right' : ''}`} dir={showHebrew ? 'rtl' : 'ltr'}>
                       {sectionZmanim.map((zman, idx) => {
-                        const englishName = zman.name || formatZmanName(zman.key);
-                        const displayName = showHebrew
-                          ? (hebrewNames[zman.key] || englishName)
-                          : englishName;
+                        // Use API-provided names - no hardcoded fallbacks
+                        const englishName = zman.name || formatZmanKey(zman.key);
+                        const hebrewName = zman.hebrew_name || englishName;
+                        const displayName = showHebrew ? hebrewName : englishName;
                         const zmanWithName = {
                           ...zman,
                           name: englishName,
@@ -530,31 +426,30 @@ export default function ZmanimPage() {
                         return (
                           <div
                             key={zman.key}
-                            className="px-5 py-4 hover:bg-slate-50/80 dark:hover:bg-zinc-800/50 transition-all group"
+                            className="px-5 py-4 hover:bg-accent/50 transition-all group"
                             style={{
                               animation: `fadeSlideIn 0.3s ease-out ${idx * 0.05}s both`
                             }}
                           >
                             <div className="flex items-center justify-between gap-4">
-                              <div className="flex items-center gap-2 min-w-0">
-                                <span className={`text-foreground font-medium text-base md:text-lg ${showHebrew ? 'font-hebrew' : ''} truncate`}>
+                              <div className="flex items-center gap-3 min-w-0 flex-1">
+                                <span className={`text-foreground font-medium text-base md:text-lg ${showHebrew ? 'font-hebrew' : ''}`}>
                                   {displayName}
                                 </span>
                                 {zman.is_beta && (
-                                  <ColorBadge color="amber" size="xs" className="flex-shrink-0">
-                                    <FlaskConical className="h-3 w-3 mr-0.5" />
+                                  <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400 bg-amber-100 dark:bg-amber-900/40 px-1.5 py-0.5 rounded flex-shrink-0">
                                     Beta
-                                  </ColorBadge>
+                                  </span>
                                 )}
                                 <button
                                   onClick={() => {
                                     setSelectedZman(zmanWithName);
                                     setFormulaPanelOpen(true);
                                   }}
-                                  className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-all opacity-60 group-hover:opacity-100 hover:scale-110 active:scale-95 flex-shrink-0"
+                                  className="p-1 text-muted-foreground/50 hover:text-primary hover:bg-primary/10 rounded-md transition-all opacity-0 group-hover:opacity-100 hover:scale-110 active:scale-95 flex-shrink-0"
                                   aria-label={`Show formula details for ${englishName}`}
                                 >
-                                  <Info className="w-4 h-4" />
+                                  <Info className="w-3.5 h-3.5" />
                                 </button>
                               </div>
                               <div
@@ -607,9 +502,9 @@ export default function ZmanimPage() {
           />
 
           {/* Modal */}
-          <div className="relative w-full max-w-lg bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl overflow-hidden border border-slate-200/50 dark:border-zinc-800/50 animate-in slide-in-from-top-4 duration-300">
+          <div className="relative w-full max-w-lg bg-card rounded-2xl shadow-2xl overflow-hidden border border-border/50 animate-in slide-in-from-top-4 duration-300">
             {/* Search Header */}
-            <div className="p-5 border-b border-slate-200 dark:border-zinc-800">
+            <div className="p-5 border-b border-border">
               <div className="flex items-center gap-3">
                 <Search className="w-5 h-5 text-muted-foreground flex-shrink-0" />
                 <input
@@ -626,7 +521,7 @@ export default function ZmanimPage() {
                     setSearchQuery('');
                     setSearchResults([]);
                   }}
-                  className="p-2 hover:bg-slate-100 dark:hover:bg-zinc-800 rounded-lg transition-all hover:scale-110 active:scale-95 flex-shrink-0"
+                  className="p-2 hover:bg-accent rounded-lg transition-all hover:scale-110 active:scale-95 flex-shrink-0"
                 >
                   <X className="w-5 h-5 text-muted-foreground" />
                 </button>
@@ -658,7 +553,7 @@ export default function ZmanimPage() {
                 <button
                   key={result.id}
                   onClick={() => handleSelectCity(result.id)}
-                  className="w-full px-5 py-4 text-left hover:bg-slate-50 dark:hover:bg-zinc-800/50 transition-all flex items-center gap-3 border-b border-slate-200/50 dark:border-zinc-800/50 last:border-0 group"
+                  className="w-full px-5 py-4 text-left hover:bg-accent/50 transition-all flex items-center gap-3 border-b border-border/50 last:border-0 group"
                   style={{
                     animation: `fadeSlideIn 0.2s ease-out ${idx * 0.03}s both`
                   }}

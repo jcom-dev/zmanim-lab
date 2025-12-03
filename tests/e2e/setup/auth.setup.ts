@@ -26,7 +26,6 @@ import {
   STORAGE_STATE,
 } from '../../config';
 
-// Re-export storage state paths for backward compatibility
 export const ADMIN_STORAGE_STATE = STORAGE_STATE.ADMIN;
 export const PUBLISHER_STORAGE_STATE = STORAGE_STATE.PUBLISHER;
 

@@ -14,6 +14,17 @@ import (
 )
 
 // GetPublisherCoverage returns the current publisher's coverage areas
+// @Summary Get publisher coverage areas
+// @Description Returns all geographic coverage areas configured for the authenticated publisher
+// @Tags Coverage
+// @Produce json
+// @Security BearerAuth
+// @Param X-Publisher-Id header string true "Publisher ID"
+// @Success 200 {object} APIResponse{data=models.PublisherCoverageListResponse} "List of coverage areas"
+// @Failure 401 {object} APIResponse{error=APIError} "Unauthorized"
+// @Failure 404 {object} APIResponse{error=APIError} "Publisher not found"
+// @Failure 500 {object} APIResponse{error=APIError} "Internal server error"
+// @Router /publisher/coverage [get]
 func (h *Handlers) GetPublisherCoverage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -81,6 +92,19 @@ func (h *Handlers) GetPublisherCoverage(w http.ResponseWriter, r *http.Request) 
 }
 
 // CreatePublisherCoverage adds a new coverage area for the publisher
+// @Summary Create coverage area
+// @Description Adds a new geographic coverage area (continent, country, region, or city level)
+// @Tags Coverage
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param X-Publisher-Id header string true "Publisher ID"
+// @Param request body models.PublisherCoverageCreateRequest true "Coverage area configuration"
+// @Success 201 {object} APIResponse{data=models.PublisherCoverage} "Created coverage area"
+// @Failure 400 {object} APIResponse{error=APIError} "Invalid request or duplicate coverage"
+// @Failure 401 {object} APIResponse{error=APIError} "Unauthorized"
+// @Failure 500 {object} APIResponse{error=APIError} "Internal server error"
+// @Router /publisher/coverage [post]
 func (h *Handlers) CreatePublisherCoverage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -214,6 +238,21 @@ func (h *Handlers) CreatePublisherCoverage(w http.ResponseWriter, r *http.Reques
 }
 
 // UpdatePublisherCoverage updates a coverage area's priority or active status
+// @Summary Update coverage area
+// @Description Updates an existing coverage area's priority or active status
+// @Tags Coverage
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param X-Publisher-Id header string true "Publisher ID"
+// @Param id path string true "Coverage area ID"
+// @Param request body models.PublisherCoverageUpdateRequest true "Fields to update"
+// @Success 200 {object} APIResponse{data=models.PublisherCoverage} "Updated coverage area"
+// @Failure 400 {object} APIResponse{error=APIError} "Invalid request"
+// @Failure 401 {object} APIResponse{error=APIError} "Unauthorized"
+// @Failure 404 {object} APIResponse{error=APIError} "Coverage area not found"
+// @Failure 500 {object} APIResponse{error=APIError} "Internal server error"
+// @Router /publisher/coverage/{id} [put]
 func (h *Handlers) UpdatePublisherCoverage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	coverageID := chi.URLParam(r, "id")
@@ -300,6 +339,19 @@ func (h *Handlers) UpdatePublisherCoverage(w http.ResponseWriter, r *http.Reques
 }
 
 // DeletePublisherCoverage removes a coverage area
+// @Summary Delete coverage area
+// @Description Removes a geographic coverage area from the publisher
+// @Tags Coverage
+// @Produce json
+// @Security BearerAuth
+// @Param X-Publisher-Id header string true "Publisher ID"
+// @Param id path string true "Coverage area ID"
+// @Success 200 {object} APIResponse{data=object} "Deletion confirmation"
+// @Failure 400 {object} APIResponse{error=APIError} "Invalid request"
+// @Failure 401 {object} APIResponse{error=APIError} "Unauthorized"
+// @Failure 404 {object} APIResponse{error=APIError} "Coverage area not found"
+// @Failure 500 {object} APIResponse{error=APIError} "Internal server error"
+// @Router /publisher/coverage/{id} [delete]
 func (h *Handlers) DeletePublisherCoverage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	coverageID := chi.URLParam(r, "id")
@@ -337,6 +389,15 @@ func (h *Handlers) DeletePublisherCoverage(w http.ResponseWriter, r *http.Reques
 }
 
 // GetPublishersForCity returns publishers serving a specific city
+// @Summary Get publishers for city
+// @Description Returns all publishers that have coverage for the specified city (via city, region, country, or continent level)
+// @Tags Cities
+// @Produce json
+// @Param cityId path string true "City ID"
+// @Success 200 {object} APIResponse{data=models.PublishersForCityResponse} "Publishers serving this city"
+// @Failure 400 {object} APIResponse{error=APIError} "Invalid request"
+// @Failure 500 {object} APIResponse{error=APIError} "Internal server error"
+// @Router /cities/{cityId}/publishers [get]
 func (h *Handlers) GetPublishersForCity(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	cityID := chi.URLParam(r, "cityId")
@@ -378,6 +439,13 @@ func (h *Handlers) GetPublishersForCity(w http.ResponseWriter, r *http.Request) 
 }
 
 // GetContinents returns list of continents with city counts using normalized schema
+// @Summary List continents
+// @Description Returns all continents with their city counts
+// @Tags Geography
+// @Produce json
+// @Success 200 {object} APIResponse{data=object} "List of continents"
+// @Failure 500 {object} APIResponse{error=APIError} "Internal server error"
+// @Router /continents [get]
 func (h *Handlers) GetContinents(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -429,6 +497,14 @@ func (h *Handlers) GetContinents(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetCountries returns list of countries using normalized schema
+// @Summary List countries
+// @Description Returns all countries with their city counts, optionally filtered by continent
+// @Tags Geography
+// @Produce json
+// @Param continent query string false "Filter by continent code or name"
+// @Success 200 {object} APIResponse{data=object} "List of countries"
+// @Failure 500 {object} APIResponse{error=APIError} "Internal server error"
+// @Router /countries [get]
 func (h *Handlers) GetCountries(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -493,6 +569,17 @@ func (h *Handlers) GetCountries(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetRegions returns regions using normalized schema, optionally filtered by country_code or search
+// @Summary List regions
+// @Description Returns regions/states with their city counts, filtered by country code or search query
+// @Tags Geography
+// @Produce json
+// @Param country_code query string false "Filter by ISO country code (required if search not provided)"
+// @Param search query string false "Search query for region name (min 2 chars)"
+// @Param limit query int false "Max results (default 20, max 100)"
+// @Success 200 {object} APIResponse{data=object} "List of regions"
+// @Failure 400 {object} APIResponse{error=APIError} "Either country_code or search required"
+// @Failure 500 {object} APIResponse{error=APIError} "Internal server error"
+// @Router /regions [get]
 func (h *Handlers) GetRegions(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	countryCode := strings.TrimSpace(r.URL.Query().Get("country_code"))

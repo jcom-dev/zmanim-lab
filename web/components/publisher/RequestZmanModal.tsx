@@ -22,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { usePublisherMutation, usePublisherQuery } from '@/lib/hooks';
+import { usePublisherMutation, usePublisherQuery, useTagTypes } from '@/lib/hooks';
 import { useApi } from '@/lib/api-client';
 import { Loader2, Plus, FileText, X, Tag, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -71,18 +71,6 @@ interface RequestZmanModalProps {
   /** Controlled mode: callback when open state changes */
   onOpenChange?: (open: boolean) => void;
 }
-
-// Tag type labels for display
-const TAG_TYPE_LABELS: Record<string, string> = {
-  event: 'Event Type',
-  timing: 'Time of Day',
-  behavior: 'Behavior',
-  shita: 'Shita (Halachic Opinion)',
-  method: 'Calculation Method',
-};
-
-// Tag type order for display
-const TAG_TYPE_ORDER = ['timing', 'event', 'shita', 'method', 'behavior'];
 
 /**
  * RequestZmanModal - Modal for requesting a new zman to be added to the master registry
@@ -148,6 +136,24 @@ export function RequestZmanModal({ trigger, onSuccess, onOpen, open: controlledO
 
   // API client for DSL validation
   const api = useApi();
+
+  // Fetch tag types from database for labels and ordering
+  const { data: tagTypesData, isLoading: tagTypesLoading } = useTagTypes();
+
+  // Build tag type labels and order from database
+  const tagTypeLabelsMap = useMemo(() => {
+    if (!tagTypesData) return {} as Record<string, string>;
+    return tagTypesData.reduce((acc, tt) => {
+      acc[tt.key] = tt.display_name_english;
+      return acc;
+    }, {} as Record<string, string>);
+  }, [tagTypesData]);
+
+  // Use database sort_order for consistent ordering
+  const tagTypeOrder = useMemo(() => {
+    if (!tagTypesData) return [];
+    return [...tagTypesData].sort((a, b) => a.sort_order - b.sort_order).map(tt => tt.key);
+  }, [tagTypesData]);
 
   // Fetch available tags from API
   const { data: tagsData, isLoading: tagsLoading } = usePublisherQuery<TagsResponse>(
@@ -686,21 +692,21 @@ export function RequestZmanModal({ trigger, onSuccess, onOpen, open: controlledO
                   Select tags that describe this zman. You can also request new tags.
                 </p>
 
-                {tagsLoading ? (
+                {tagsLoading || tagTypesLoading ? (
                   <div className="flex justify-center py-4">
                     <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                   </div>
                 ) : (
                   <>
                     {/* Tags by Type */}
-                    {TAG_TYPE_ORDER.map(tagType => {
+                    {tagTypeOrder.map(tagType => {
                       const tags = tagsByType[tagType];
                       if (!tags || tags.length === 0) return null;
 
                       return (
                         <div key={tagType} className="space-y-1.5">
                           <Label className="text-xs text-muted-foreground">
-                            {TAG_TYPE_LABELS[tagType] || tagType}
+                            {tagTypeLabelsMap[tagType] || tagType}
                           </Label>
                           <div className="flex flex-wrap gap-1.5">
                             {tags.map(tag => (
@@ -736,11 +742,11 @@ export function RequestZmanModal({ trigger, onSuccess, onOpen, open: controlledO
                         <SelectValue placeholder="Type" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="event">Event</SelectItem>
-                        <SelectItem value="timing">Timing</SelectItem>
-                        <SelectItem value="behavior">Behavior</SelectItem>
-                        <SelectItem value="shita">Shita</SelectItem>
-                        <SelectItem value="method">Method</SelectItem>
+                        {tagTypesData?.map(tt => (
+                          <SelectItem key={tt.key} value={tt.key}>
+                            {tt.display_name_english}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                     <Button
@@ -767,7 +773,7 @@ export function RequestZmanModal({ trigger, onSuccess, onOpen, open: controlledO
                           className="bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700"
                         >
                           {formatTagLabel(tag.name)}
-                          <span className="ml-1 text-xs opacity-70">({TAG_TYPE_LABELS[tag.type] || tag.type})</span>
+                          <span className="ml-1 text-xs opacity-70">({tagTypeLabelsMap[tag.type] || tag.type})</span>
                           <button
                             type="button"
                             onClick={() => removeRequestedTag(tag.name)}

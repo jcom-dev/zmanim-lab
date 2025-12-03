@@ -50,15 +50,12 @@ async function seedTestPublishers(): Promise<void> {
 
     console.log('Seeding test publishers in database...');
 
-    // Create test publishers with different statuses
-    // Note: organization field was removed from schema
-    // Status values: 'pending', 'active', 'suspended'
     const testPublishers = [
       {
         name: 'E2E Test Publisher - Verified',
         slug: 'e2e-test-verified',
         email: 'e2e-verified@test.zmanim.com',
-        status: 'active',  // 'verified' maps to 'active'
+        status: 'active',
         website: 'https://test.example.com',
         bio: 'Test publisher for E2E testing - verified status',
         is_verified: true,

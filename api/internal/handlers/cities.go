@@ -12,7 +12,19 @@ import (
 )
 
 // SearchCities handles city search with autocomplete and filtering
-// GET /api/v1/cities?search={query}&country_code={code}&region={region}&continent_code={code}&limit={limit}
+// @Summary Search cities
+// @Description Search for cities by name with optional filtering by country, region, or continent. Uses fuzzy matching for typo tolerance.
+// @Tags Cities
+// @Produce json
+// @Param search query string false "Search query (min 2 chars for fuzzy match)"
+// @Param country_code query string false "ISO 3166-1 alpha-2 country code"
+// @Param region query string false "Region/state name"
+// @Param continent_code query string false "Continent code (AF, AS, EU, NA, OC, SA, AN)"
+// @Param limit query int false "Max results (default 10, max 100)"
+// @Success 200 {object} APIResponse{data=models.CitySearchResponse} "List of matching cities"
+// @Failure 400 {object} APIResponse{error=APIError} "Invalid parameters"
+// @Failure 500 {object} APIResponse{error=APIError} "Internal server error"
+// @Router /cities [get]
 func (h *Handlers) SearchCities(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -151,7 +163,16 @@ func (h *Handlers) SearchCities(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetNearbyCity finds the nearest city to given coordinates
-// GET /api/v1/cities/nearby?lat={lat}&lng={lng}
+// @Summary Find nearest city
+// @Description Finds the nearest city to the given GPS coordinates using PostGIS spatial queries
+// @Tags Cities
+// @Produce json
+// @Param lat query number true "Latitude (-90 to 90)"
+// @Param lng query number true "Longitude (-180 to 180)"
+// @Success 200 {object} APIResponse{data=object} "Nearest city with distance"
+// @Failure 400 {object} APIResponse{error=APIError} "Invalid coordinates"
+// @Failure 500 {object} APIResponse{error=APIError} "Internal server error"
+// @Router /cities/nearby [get]
 func (h *Handlers) GetNearbyCity(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 

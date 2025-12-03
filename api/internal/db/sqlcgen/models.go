@@ -61,6 +61,23 @@ type Algorithm struct {
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }
 
+// System-wide algorithm templates that publishers can use as starting points
+type AlgorithmTemplate struct {
+	ID string `json:"id"`
+	// Unique identifier (e.g., gra, mga, rabbeinu_tam, custom)
+	TemplateKey string  `json:"template_key"`
+	Name        string  `json:"name"`
+	Description *string `json:"description"`
+	// Full algorithm JSON configuration with name, description, and zmanim map
+	Configuration []byte `json:"configuration"`
+	// Display order in the template picker
+	SortOrder int32 `json:"sort_order"`
+	// Whether this template is available for selection
+	IsActive  bool               `json:"is_active"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
 // Canonical registry of astronomical times that can be referenced in DSL formulas. These are pure astronomical calculations with no halachic interpretation.
 type AstronomicalPrimitive struct {
 	ID string `json:"id"`
@@ -114,7 +131,7 @@ type Country struct {
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
-// DEPRECATED: Use jewish_events instead. Types of days for which zmanim can be configured.
+// Types of days for which zmanim can be configured.
 type DayType struct {
 	ID                 string  `json:"id"`
 	Name               string  `json:"name"`
@@ -125,6 +142,23 @@ type DayType struct {
 	ParentType *string            `json:"parent_type"`
 	SortOrder  *int32             `json:"sort_order"`
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+}
+
+// UI display groups that aggregate multiple time_categories for visual presentation
+type DisplayGroup struct {
+	ID string `json:"id"`
+	// Unique identifier for the display group (dawn, morning, midday, evening)
+	Key                string  `json:"key"`
+	DisplayNameHebrew  string  `json:"display_name_hebrew"`
+	DisplayNameEnglish string  `json:"display_name_english"`
+	Description        *string `json:"description"`
+	// Lucide icon name (e.g., Moon, Sun, Clock, Sunset)
+	IconName  *string `json:"icon_name"`
+	Color     *string `json:"color"`
+	SortOrder int32   `json:"sort_order"`
+	// Array of time_category keys that belong to this display group
+	TimeCategories []string           `json:"time_categories"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 }
 
 // Vector embeddings for RAG semantic search
@@ -141,6 +175,22 @@ type Embedding struct {
 	Embedding interface{}      `json:"embedding"`
 	CreatedAt pgtype.Timestamp `json:"created_at"`
 	UpdatedAt pgtype.Timestamp `json:"updated_at"`
+}
+
+// Event-based categories for special zmanim (candles, havdalah, fasts, etc.)
+type EventCategory struct {
+	ID string `json:"id"`
+	// Unique identifier for the event category
+	Key                string  `json:"key"`
+	DisplayNameHebrew  string  `json:"display_name_hebrew"`
+	DisplayNameEnglish string  `json:"display_name_english"`
+	Description        *string `json:"description"`
+	// Lucide icon name
+	IconName *string `json:"icon_name"`
+	// Tailwind color class
+	Color     *string            `json:"color"`
+	SortOrder int32              `json:"sort_order"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
 // Cache for AI-generated formula explanations
@@ -201,7 +251,7 @@ type JewishEvent struct {
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 }
 
-// DEPRECATED: Use master_zman_events instead.
+// Links master zmanim to day types.
 type MasterZmanDayType struct {
 	MasterZmanID string             `json:"master_zman_id"`
 	DayTypeID    string             `json:"day_type_id"`
@@ -332,7 +382,7 @@ type PublisherCoverage struct {
 	ContinentCode *string            `json:"continent_code"`
 }
 
-// DEPRECATED: This table is no longer used. User management now creates users directly via Clerk instead of using invitations. Table kept for historical reference but will be empty.
+// Publisher team invitations.
 type PublisherInvitation struct {
 	ID          string             `json:"id"`
 	PublisherID pgtype.UUID        `json:"publisher_id"`
@@ -391,7 +441,7 @@ type PublisherZmanAlias struct {
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }
 
-// DEPRECATED: Use publisher_zman_events instead.
+// Links publisher zmanim to day types.
 type PublisherZmanDayType struct {
 	PublisherZmanID string             `json:"publisher_zman_id"`
 	DayTypeID       string             `json:"day_type_id"`
@@ -539,6 +589,37 @@ type SystemConfig struct {
 	Description *string            `json:"description"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+// Types of tags used to categorize zmanim (timing, event, shita, method, behavior)
+type TagType struct {
+	ID string `json:"id"`
+	// Unique identifier matching zman_tags.tag_type
+	Key                string `json:"key"`
+	DisplayNameHebrew  string `json:"display_name_hebrew"`
+	DisplayNameEnglish string `json:"display_name_english"`
+	// Tailwind CSS classes for badge styling
+	Color     *string            `json:"color"`
+	SortOrder int32              `json:"sort_order"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+// Time of day categories for grouping zmanim (dawn, sunrise, morning, etc.)
+type TimeCategory struct {
+	ID string `json:"id"`
+	// Unique identifier matching master_zmanim_registry.time_category
+	Key                string  `json:"key"`
+	DisplayNameHebrew  string  `json:"display_name_hebrew"`
+	DisplayNameEnglish string  `json:"display_name_english"`
+	Description        *string `json:"description"`
+	// Lucide icon name (e.g., Sunrise, Moon, Clock)
+	IconName *string `json:"icon_name"`
+	// Tailwind color class (e.g., purple, amber, indigo)
+	Color     *string `json:"color"`
+	SortOrder int32   `json:"sort_order"`
+	// True if this category applies to everyday zmanim
+	IsEveryday *bool              `json:"is_everyday"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 }
 
 // Context-specific display names for zmanim with the same calculation but different labels

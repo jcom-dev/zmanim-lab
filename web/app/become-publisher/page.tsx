@@ -264,7 +264,7 @@ export default function BecomePublisherPage() {
         <div className="mt-8 text-center text-sm text-muted-foreground">
           <p>
             Already have an account?{' '}
-            <Link href="/sign-in" className="text-blue-600 dark:text-blue-400 hover:underline">
+            <Link href="/sign-in" className="text-primary hover:underline">
               Sign in
             </Link>
           </p>

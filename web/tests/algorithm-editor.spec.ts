@@ -101,7 +101,7 @@ test.describe('Story 1.8: Algorithm Editor', () => {
       }
     });
 
-    test('POST /api/v1/zmanim returns zmanim object (legacy format)', async ({ request }) => {
+    test('POST /api/v1/zmanim returns zmanim object', async ({ request }) => {
       const response = await request.post(`${API_BASE}/api/v1/zmanim`, {
         data: {
           date: '2025-11-26',
@@ -113,7 +113,6 @@ test.describe('Story 1.8: Algorithm Editor', () => {
       expect(response.ok()).toBeTruthy();
 
       const data = await response.json();
-      // Legacy POST returns zmanim as object with time strings
       const zmanim = data.data?.zmanim || data.zmanim;
       expect(zmanim).toBeDefined();
       // Check it's an object with sunrise/sunset keys

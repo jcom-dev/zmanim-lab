@@ -47,8 +47,6 @@ interface LogoUploadProps {
   publisherName?: string;
   onUploadComplete: (logoUrl: string) => void;
   onUploadError: (error: string) => void;
-  /** @deprecated No longer needed - component uses useApi internally */
-  getToken?: () => Promise<string | null>;
 }
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
@@ -411,7 +409,7 @@ export function LogoUpload({ currentLogoUrl, publisherName, onUploadComplete, on
               </div>
               <div className="w-full bg-muted rounded-full h-2">
                 <div
-                  className="bg-blue-500 h-2 rounded-full transition-all duration-300"
+                  className="bg-primary h-2 rounded-full transition-all duration-300"
                   style={{ width: `${uploadProgress}%` }}
                 />
               </div>

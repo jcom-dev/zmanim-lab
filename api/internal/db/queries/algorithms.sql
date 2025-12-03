@@ -118,3 +118,22 @@ SET skipped = true,
     last_updated_at = NOW()
 WHERE publisher_id = $1
 RETURNING id;
+
+-- Algorithm Templates --
+
+-- name: GetAlgorithmTemplates :many
+SELECT
+    id, template_key, name, description,
+    configuration, sort_order, is_active,
+    created_at, updated_at
+FROM algorithm_templates
+WHERE is_active = true
+ORDER BY sort_order ASC;
+
+-- name: GetAlgorithmTemplateByKey :one
+SELECT
+    id, template_key, name, description,
+    configuration, sort_order, is_active,
+    created_at, updated_at
+FROM algorithm_templates
+WHERE template_key = $1 AND is_active = true;

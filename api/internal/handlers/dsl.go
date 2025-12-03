@@ -42,7 +42,15 @@ type DSLPreviewResponse struct {
 }
 
 // ValidateDSLFormula validates a DSL formula
-// POST /api/dsl/validate
+// @Summary Validate DSL formula
+// @Description Validates a zmanim formula written in the DSL syntax, returning any errors and dependencies
+// @Tags DSL
+// @Accept json
+// @Produce json
+// @Param request body DSLValidateRequest true "Formula to validate"
+// @Success 200 {object} APIResponse{data=DSLValidateResponse} "Validation result"
+// @Failure 400 {object} APIResponse{error=APIError} "Invalid request"
+// @Router /dsl/validate [post]
 func (h *Handlers) ValidateDSLFormula(w http.ResponseWriter, r *http.Request) {
 	var req DSLValidateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -81,7 +89,16 @@ func (h *Handlers) ValidateDSLFormula(w http.ResponseWriter, r *http.Request) {
 }
 
 // PreviewDSLFormula calculates the result of a DSL formula
-// POST /api/dsl/preview
+// @Summary Preview DSL formula
+// @Description Calculates the result of a zmanim formula for a specific date and location, returning the time and calculation breakdown
+// @Tags DSL
+// @Accept json
+// @Produce json
+// @Param request body DSLPreviewRequest true "Formula, date, and location"
+// @Success 200 {object} APIResponse{data=DSLPreviewResponse} "Calculation result with breakdown"
+// @Failure 400 {object} APIResponse{error=APIError} "Invalid request or formula error"
+// @Failure 404 {object} APIResponse{error=APIError} "Location not found"
+// @Router /dsl/preview [post]
 func (h *Handlers) PreviewDSLFormula(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -228,7 +245,16 @@ type DSLPreviewWeekResponse struct {
 }
 
 // PreviewDSLFormulaWeek calculates formula for 7 consecutive days
-// POST /api/v1/dsl/preview-week
+// @Summary Preview DSL formula for a week
+// @Description Calculates a zmanim formula for 7 consecutive days starting from the specified date, including Hebrew dates and Shabbat/holiday markers
+// @Tags DSL
+// @Accept json
+// @Produce json
+// @Param request body DSLPreviewWeekRequest true "Formula, start date, and location"
+// @Success 200 {object} APIResponse{data=DSLPreviewWeekResponse} "Weekly calculation results"
+// @Failure 400 {object} APIResponse{error=APIError} "Invalid request"
+// @Failure 404 {object} APIResponse{error=APIError} "Location not found"
+// @Router /dsl/preview-week [post]
 func (h *Handlers) PreviewDSLFormulaWeek(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 

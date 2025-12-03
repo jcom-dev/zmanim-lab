@@ -7,8 +7,6 @@ import { Button } from '@/components/ui/button';
 interface VisibilityToggleProps {
   isPublic: boolean;
   onChange?: (isPublic: boolean) => void;
-  /** @deprecated No longer needed - component uses useApi internally */
-  getToken?: () => Promise<string | null>;
 }
 
 export function VisibilityToggle({ isPublic: initialPublic, onChange }: VisibilityToggleProps) {

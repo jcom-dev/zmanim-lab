@@ -175,14 +175,14 @@ export default function AdminPublishersPage() {
                   filteredPublishers.map((publisher) => (
                     <tr key={publisher.id} className="border-b hover:bg-accent/50">
                       <td className="py-4">
-                        <Link href={`/admin/publishers/${publisher.id}`} className="font-medium text-blue-600 hover:underline">
+                        <Link href={`/admin/publishers/${publisher.id}`} className="font-medium text-primary hover:underline">
                           {publisher.name}
                         </Link>
                       </td>
                       <td className="py-4">
                         <a
                           href={`mailto:${publisher.email}`}
-                          className="text-blue-600 hover:underline block max-w-[150px] md:max-w-[250px] truncate"
+                          className="text-primary hover:underline block max-w-[150px] md:max-w-[250px] truncate"
                           title={publisher.email}
                         >
                           {publisher.email}

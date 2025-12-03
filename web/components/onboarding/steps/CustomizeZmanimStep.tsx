@@ -25,14 +25,7 @@ import {
   Loader2,
   CalendarDays,
   Flame,
-  Sunrise,
-  Sun,
-  Sunset,
-  Moon,
   Clock,
-  CandlestickChart,
-  Timer,
-  Utensils,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useApi } from '@/lib/api-client';
@@ -42,6 +35,8 @@ import {
   MasterZman,
   GroupedMasterZmanim,
 } from '@/lib/hooks/useZmanimList';
+import { useTimeCategories, useEventCategories } from '@/lib/hooks/useCategories';
+import { getIcon } from '@/lib/icons';
 import type { OnboardingState, SelectedZmanCustomization } from '../OnboardingWizard';
 
 // Default preview location (Jerusalem)
@@ -81,67 +76,6 @@ interface CustomizeZmanimStepProps {
 // Use the exported type from OnboardingWizard
 type SelectedZman = SelectedZmanCustomization;
 
-// Time category config for everyday zmanim
-const TIME_CATEGORY_CONFIG: Record<
-  string,
-  { icon: React.ElementType; label: string; description: string }
-> = {
-  dawn: { icon: Sunrise, label: 'Dawn', description: 'Alos HaShachar variants' },
-  sunrise: { icon: Sun, label: 'Sunrise', description: 'Sunrise and early morning' },
-  morning: { icon: Clock, label: 'Morning', description: 'Shema and Tefillah times' },
-  midday: { icon: Sun, label: 'Midday', description: 'Chatzos and Mincha Gedolah' },
-  afternoon: { icon: Clock, label: 'Afternoon', description: 'Mincha and Plag times' },
-  sunset: { icon: Sunset, label: 'Sunset', description: 'Shkiah' },
-  nightfall: { icon: Moon, label: 'Nightfall', description: 'Tzeis HaKochavim variants' },
-  midnight: { icon: Moon, label: 'Midnight', description: 'Chatzos Layla' },
-};
-
-// Event category config
-const EVENT_CATEGORY_CONFIG: Record<
-  string,
-  { icon: React.ElementType; label: string; hebrewLabel: string; description: string }
-> = {
-  candles: {
-    icon: CandlestickChart,
-    label: 'Candle Lighting',
-    hebrewLabel: 'הדלקת נרות',
-    description: 'Shabbos, Yom Tov, and Yom Kippur',
-  },
-  havdalah: {
-    icon: Flame,
-    label: 'Havdalah',
-    hebrewLabel: 'הבדלה',
-    description: 'End of Shabbos and Yom Tov',
-  },
-  yom_kippur: {
-    icon: Moon,
-    label: 'Yom Kippur',
-    hebrewLabel: 'יום כיפור',
-    description: 'Fast start and end times',
-  },
-  fast_day: {
-    icon: Timer,
-    label: 'Fast Days',
-    hebrewLabel: 'תענית',
-    description: 'Fast end times (regular fasts)',
-  },
-  tisha_bav: {
-    icon: Moon,
-    label: "Tisha B'Av",
-    hebrewLabel: 'תשעה באב',
-    description: 'Fast starts at sunset, ends at nightfall',
-  },
-  pesach: {
-    icon: Utensils,
-    label: 'Pesach',
-    hebrewLabel: 'פסח',
-    description: 'Chametz eating and burning times',
-  },
-};
-
-const EVERYDAY_CATEGORY_ORDER = ['dawn', 'sunrise', 'morning', 'midday', 'afternoon', 'sunset', 'nightfall', 'midnight'];
-const EVENT_CATEGORY_ORDER = ['candles', 'havdalah', 'yom_kippur', 'fast_day', 'tisha_bav', 'pesach'];
-
 export function CustomizeZmanimStep({ state, onUpdate, onNext, onBack }: CustomizeZmanimStepProps) {
   const api = useApi();
   const [viewMode, setViewMode] = useState<'everyday' | 'events'>('everyday');
@@ -174,14 +108,55 @@ export function CustomizeZmanimStep({ state, onUpdate, onNext, onBack }: Customi
   // Track if initial selection has been done
   const initializedRef = useRef(false);
 
+  // Fetch categories from database
+  const { data: timeCategories, isLoading: loadingTimeCategories } = useTimeCategories();
+  const { data: eventCategories, isLoading: loadingEventCategories } = useEventCategories();
+
   // Fetch zmanim from registry (no day_types filter - gets all zmanim)
   const { data: everydayZmanim, isLoading: loadingEveryday } = useMasterZmanimGrouped();
   const { data: eventZmanim, isLoading: loadingEvents } = useEventZmanimGrouped();
 
-  const isLoading = viewMode === 'everyday' ? loadingEveryday : loadingEvents;
+  // Build category config maps from database data
+  const timeCategoryMap = useMemo(() => {
+    if (!timeCategories) return {};
+    return timeCategories.reduce((acc, tc) => {
+      acc[tc.key] = {
+        icon: getIcon(tc.icon_name),
+        label: tc.display_name_english,
+        description: tc.description || '',
+      };
+      return acc;
+    }, {} as Record<string, { icon: React.ElementType; label: string; description: string }>);
+  }, [timeCategories]);
+
+  const eventCategoryMap = useMemo(() => {
+    if (!eventCategories) return {};
+    return eventCategories.reduce((acc, ec) => {
+      acc[ec.key] = {
+        icon: getIcon(ec.icon_name),
+        label: ec.display_name_english,
+        hebrewLabel: ec.display_name_hebrew,
+        description: ec.description || '',
+      };
+      return acc;
+    }, {} as Record<string, { icon: React.ElementType; label: string; hebrewLabel: string; description: string }>);
+  }, [eventCategories]);
+
+  // Category order from database (sorted by sort_order)
+  const everydayCategoryOrder = useMemo(() => {
+    return timeCategories?.map(tc => tc.key) || [];
+  }, [timeCategories]);
+
+  const eventCategoryOrder = useMemo(() => {
+    return eventCategories?.map(ec => ec.key) || [];
+  }, [eventCategories]);
+
+  const isLoading = viewMode === 'everyday'
+    ? loadingEveryday || loadingTimeCategories
+    : loadingEvents || loadingEventCategories;
   const rawGroups = viewMode === 'everyday' ? everydayZmanim : eventZmanim;
-  const categoryOrder = viewMode === 'everyday' ? EVERYDAY_CATEGORY_ORDER : EVENT_CATEGORY_ORDER;
-  const categoryConfig = viewMode === 'everyday' ? TIME_CATEGORY_CONFIG : EVENT_CATEGORY_CONFIG;
+  const categoryOrder = viewMode === 'everyday' ? everydayCategoryOrder : eventCategoryOrder;
+  const categoryConfig = viewMode === 'everyday' ? timeCategoryMap : eventCategoryMap;
 
   // Initialize default selections when both data sources have loaded
   // Uses is_core flag from master registry instead of hardcoded list
@@ -342,15 +317,10 @@ export function CustomizeZmanimStep({ state, onUpdate, onNext, onBack }: Customi
     const timeoutId = setTimeout(async () => {
       setCitySearchLoading(true);
       try {
-        const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
-        const url = `${apiBase}/api/v1/cities?search=${encodeURIComponent(citySearch)}&limit=10`;
-        const response = await fetch(url);
-        if (!response.ok) {
-          throw new Error(`Search failed: ${response.status}`);
-        }
-        const json = await response.json();
-        const cities = json.data?.cities || json.cities || [];
-        setCityResults(cities);
+        const data = await api.public.get<{ cities: City[] }>(
+          `/cities?search=${encodeURIComponent(citySearch)}&limit=10`
+        );
+        setCityResults(data?.cities || []);
       } catch (err) {
         console.error('[CitySearch] Error:', err);
         setCityResults([]);
@@ -360,7 +330,7 @@ export function CustomizeZmanimStep({ state, onUpdate, onNext, onBack }: Customi
     }, 300);
 
     return () => clearTimeout(timeoutId);
-  }, [citySearch]);
+  }, [citySearch, api]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -640,9 +610,9 @@ export function CustomizeZmanimStep({ state, onUpdate, onNext, onBack }: Customi
                       <Icon className="h-4 w-4 text-muted-foreground" />
                       <div className="text-left">
                         <span className="font-medium">{config.label}</span>
-                        {'hebrewLabel' in config && (
+                        {'hebrewLabel' in config && (config as { hebrewLabel?: string }).hebrewLabel && (
                           <span className="text-muted-foreground ml-2 text-sm">
-                            {(config as (typeof EVENT_CATEGORY_CONFIG)[string]).hebrewLabel}
+                            {(config as { hebrewLabel: string }).hebrewLabel}
                           </span>
                         )}
                       </div>

@@ -17,10 +17,7 @@ interface Version {
 }
 
 interface VersionHistoryProps {
-  algorithmId?: string;
   onRestore?: () => void;
-  /** @deprecated No longer needed - component uses useApi internally */
-  getToken?: () => Promise<string | null>;
 }
 
 export function VersionHistory({ onRestore }: VersionHistoryProps) {

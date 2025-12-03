@@ -18,5 +18,4 @@ export {
   type CodeMirrorDSLEditorRef as DSLEditorRef,
 } from './CodeMirrorDSLEditor';
 
-// Re-export as default for backward compatibility
 export { CodeMirrorDSLEditor as default } from './CodeMirrorDSLEditor';

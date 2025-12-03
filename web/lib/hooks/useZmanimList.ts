@@ -1,15 +1,9 @@
 /**
- * Zmanim List Hooks - Refactored Version
+ * Zmanim List Hooks
  *
- * This file contains the refactored hooks using the new factory patterns.
- * It replaces the legacy useAuthenticatedFetch-based hooks with cleaner,
- * more maintainable implementations using usePublisherQuery and usePublisherMutation.
- *
- * Key improvements:
- * - Reduced boilerplate from ~15 lines per hook to ~3 lines
- * - Consistent error handling via factory
- * - Automatic cache invalidation
- * - Type-safe throughout
+ * Hooks for managing publisher zmanim using factory patterns.
+ * Uses usePublisherQuery and usePublisherMutation for consistent
+ * error handling, automatic cache invalidation, and type safety.
  */
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -496,22 +490,8 @@ export const useZmanTags = () =>
     staleTime: 1000 * 60 * 60, // 1 hour
   });
 
-/**
- * Hook: Get all day types
- * @deprecated Use useJewishEvents instead for the new event model
- */
-export const useDayTypes = (parentType?: string) =>
-  useGlobalQuery<DayType[]>(
-    ['day-types', parentType],
-    '/registry/day-types',
-    {
-      params: { parent: parentType },
-      staleTime: 1000 * 60 * 60, // 1 hour
-    }
-  );
-
 // =============================================================================
-// Jewish Events Types & Hooks (New Event Model)
+// Jewish Events Types & Hooks
 // =============================================================================
 
 export interface JewishEvent {

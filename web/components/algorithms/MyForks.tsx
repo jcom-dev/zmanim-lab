@@ -16,8 +16,6 @@ interface Fork {
 
 interface MyForksProps {
   onEdit?: (algorithmId: string) => void;
-  /** @deprecated No longer needed - component uses useApi internally */
-  getToken?: () => Promise<string | null>;
 }
 
 export function MyForks({ onEdit }: MyForksProps) {

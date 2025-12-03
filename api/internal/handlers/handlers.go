@@ -70,6 +70,13 @@ func (h *Handlers) SetCache(c *cache.Cache) {
 }
 
 // HealthCheck returns the health status of the API
+// @Summary Health check
+// @Description Returns the health status of the API and database connection
+// @Tags System
+// @Produce json
+// @Success 200 {object} APIResponse{data=object} "Service healthy"
+// @Failure 503 {object} APIResponse{error=APIError} "Service unavailable"
+// @Router /health [get]
 func (h *Handlers) HealthCheck(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -89,6 +96,18 @@ func (h *Handlers) HealthCheck(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetPublishers returns a list of publishers
+// @Summary List publishers
+// @Description Returns a paginated list of verified publishers, optionally filtered by region or search query
+// @Tags Publishers
+// @Produce json
+// @Param page query int false "Page number (default 1)"
+// @Param page_size query int false "Items per page (default 20, max 100)"
+// @Param region_id query string false "Filter by region ID"
+// @Param q query string false "Search query"
+// @Param has_algorithm query bool false "Filter to publishers with published algorithms"
+// @Success 200 {object} APIResponse{data=object} "List of publishers"
+// @Failure 500 {object} APIResponse{error=APIError} "Internal server error"
+// @Router /publishers [get]
 func (h *Handlers) GetPublishers(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -214,6 +233,15 @@ func (h *Handlers) searchPublishers(w http.ResponseWriter, r *http.Request, ctx 
 }
 
 // GetPublisher returns a single publisher by ID
+// @Summary Get publisher
+// @Description Returns details for a specific publisher by ID
+// @Tags Publishers
+// @Produce json
+// @Param id path string true "Publisher ID"
+// @Success 200 {object} APIResponse{data=models.Publisher} "Publisher details"
+// @Failure 400 {object} APIResponse{error=APIError} "Invalid request"
+// @Failure 404 {object} APIResponse{error=APIError} "Publisher not found"
+// @Router /publishers/{id} [get]
 func (h *Handlers) GetPublisher(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	id := chi.URLParam(r, "id")
@@ -347,6 +375,16 @@ func parseIntParam(s string) (int, error) {
 }
 
 // GetPublisherProfile returns the current publisher's profile
+// @Summary Get publisher profile
+// @Description Returns the authenticated publisher's profile
+// @Tags Publisher
+// @Produce json
+// @Security BearerAuth
+// @Param X-Publisher-Id header string false "Publisher ID (optional, uses default if not specified)"
+// @Success 200 {object} APIResponse{data=models.Publisher} "Publisher profile"
+// @Failure 401 {object} APIResponse{error=APIError} "Unauthorized"
+// @Failure 404 {object} APIResponse{error=APIError} "Publisher not found"
+// @Router /publisher/profile [get]
 func (h *Handlers) GetPublisherProfile(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -427,7 +465,14 @@ func (h *Handlers) GetPublisherProfile(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetAccessiblePublishers returns publishers the current user has access to
-// GET /api/publisher/accessible
+// @Summary Get accessible publishers
+// @Description Returns a list of publishers the authenticated user has access to
+// @Tags Publisher
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} APIResponse{data=object} "List of accessible publishers"
+// @Failure 401 {object} APIResponse{error=APIError} "Unauthorized"
+// @Router /publisher/accessible [get]
 func (h *Handlers) GetAccessiblePublishers(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -550,6 +595,19 @@ func (h *Handlers) GetAccessiblePublishers(w http.ResponseWriter, r *http.Reques
 }
 
 // UpdatePublisherProfile updates the current publisher's profile
+// @Summary Update publisher profile
+// @Description Updates the authenticated publisher's profile information
+// @Tags Publisher
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param X-Publisher-Id header string false "Publisher ID"
+// @Param request body models.PublisherProfileUpdateRequest true "Profile update data"
+// @Success 200 {object} APIResponse{data=models.Publisher} "Updated publisher profile"
+// @Failure 400 {object} APIResponse{error=APIError} "Invalid request"
+// @Failure 401 {object} APIResponse{error=APIError} "Unauthorized"
+// @Failure 404 {object} APIResponse{error=APIError} "Publisher not found"
+// @Router /publisher/profile [put]
 func (h *Handlers) UpdatePublisherProfile(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -790,7 +848,16 @@ func (h *Handlers) GetPublisherAnalytics(w http.ResponseWriter, r *http.Request)
 }
 
 // GetPublisherDashboardSummary returns a summary of the publisher's dashboard data
-// GET /api/publisher/dashboard
+// @Summary Get dashboard summary
+// @Description Returns a summary of the publisher's profile, algorithm, coverage, and analytics
+// @Tags Publisher
+// @Produce json
+// @Security BearerAuth
+// @Param X-Publisher-Id header string false "Publisher ID"
+// @Success 200 {object} APIResponse{data=object} "Dashboard summary"
+// @Failure 401 {object} APIResponse{error=APIError} "Unauthorized"
+// @Failure 404 {object} APIResponse{error=APIError} "Publisher not found"
+// @Router /publisher/dashboard [get]
 func (h *Handlers) GetPublisherDashboardSummary(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 

@@ -217,19 +217,12 @@ export function ZmanCard({ zman, category, onEdit, displayLanguage = 'both' }: Z
 
   const handleToggleCategory = async () => {
     const newCategory = zman.category === 'essential' ? 'optional' : 'essential';
-    console.log('[ZmanCard] Toggling category from', zman.category, 'to', newCategory, 'for', zman.zman_key);
     try {
-      const result = await updateZman.mutateAsync({
+      await updateZman.mutateAsync({
         category: newCategory,
       });
-      console.log('[ZmanCard] Update result:', result);
     } catch (error: unknown) {
-      console.error('[ZmanCard] Update error:', error);
-      // Log more details about the error
-      if (error && typeof error === 'object') {
-        const e = error as { status?: number; message?: string; data?: unknown };
-        console.error('[ZmanCard] Error details - status:', e.status, 'message:', e.message, 'data:', e.data);
-      }
+      console.error('Failed to update category:', error);
     }
   };
 
@@ -308,6 +301,7 @@ export function ZmanCard({ zman, category, onEdit, displayLanguage = 'both' }: Z
           ${!zman.is_enabled ? 'opacity-60' : ''}
           ${!zman.is_visible ? 'border-dashed border-muted-foreground/30' : ''}
           ${zman.is_beta ? 'border-amber-400 dark:border-amber-600 bg-amber-50/50 dark:bg-amber-950/20' : ''}
+          ${formulaModified && !zman.is_beta ? 'border-l-4 border-l-amber-500 dark:border-l-amber-400' : ''}
         `}
       >
         <CardHeader className="pb-3">
@@ -594,13 +588,16 @@ export function ZmanCard({ zman, category, onEdit, displayLanguage = 'both' }: Z
         <CardContent className="pt-0">
           {/* Formula Display with Modification Indicator */}
           <div className="space-y-2">
-            <div className="flex items-start justify-between gap-2">
-              <div className="flex-1 min-w-0">
-                <HighlightedFormula formula={zman.formula_dsl} />
-              </div>
-
-              {/* Formula Modified Indicator with Revert */}
-              {formulaModified && sourceName && (
+            {/* Formula Modified Banner - prominent display */}
+            {formulaModified && sourceName && (
+              <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-md bg-amber-100/80 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Code2 className="h-4 w-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+                  <span className="text-sm font-medium text-amber-700 dark:text-amber-300">Modified</span>
+                  <span className="text-xs text-amber-600/80 dark:text-amber-400/80 truncate">
+                    Original: <code className="font-mono">{zman.source_formula_dsl}</code>
+                  </span>
+                </div>
                 <TooltipProvider delayDuration={0}>
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -609,28 +606,30 @@ export function ZmanCard({ zman, category, onEdit, displayLanguage = 'both' }: Z
                         size="sm"
                         onClick={handleRevertFormula}
                         disabled={updateZman.isPending}
-                        className="h-7 px-2 gap-1.5 text-amber-600 hover:text-amber-700 hover:bg-amber-100 dark:text-amber-400 dark:hover:text-amber-300 dark:hover:bg-amber-900/50 flex-shrink-0"
+                        className="h-7 px-2 gap-1 text-amber-700 hover:text-amber-800 hover:bg-amber-200 dark:text-amber-300 dark:hover:text-amber-200 dark:hover:bg-amber-800/50 flex-shrink-0"
                       >
-                        <Code2 className="h-3 w-3" />
-                        <span className="text-xs font-medium">Formula Modified</span>
-                        <RotateCcw className="h-3 w-3 ml-0.5" />
+                        <RotateCcw className="h-3.5 w-3.5" />
+                        <span className="text-xs font-medium">Revert</span>
                       </Button>
                     </TooltipTrigger>
-                    <TooltipContent side="bottom" className="max-w-sm">
-                      <div className="text-sm space-y-2">
-                        <p className="font-medium text-amber-600 dark:text-amber-400">
-                          Formula changed from {sourceName}
-                        </p>
-                        <div className="p-2 bg-muted rounded text-xs font-mono overflow-x-auto">
-                          {zman.source_formula_dsl}
-                        </div>
-                        <p className="text-xs text-muted-foreground pt-1 border-t border-border mt-1">
-                          Click to revert to {sourceName.toLowerCase()} formula
-                        </p>
-                      </div>
+                    <TooltipContent side="bottom">
+                      Revert to {sourceName.toLowerCase()} formula
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
+              </div>
+            )}
+
+            <div className="flex items-center gap-2">
+              <div className="flex-1 min-w-0">
+                <HighlightedFormula formula={zman.formula_dsl} />
+              </div>
+              {/* Inline Modified badge next to formula */}
+              {formulaModified && (
+                <Badge variant="outline" className="text-xs bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-700 flex-shrink-0">
+                  <Code2 className="h-3 w-3 mr-1" />
+                  Modified
+                </Badge>
               )}
             </div>
           </div>

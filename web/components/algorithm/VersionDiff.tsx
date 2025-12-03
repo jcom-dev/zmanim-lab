@@ -23,8 +23,6 @@ interface AlgorithmDiff {
 interface VersionDiffProps {
   v1: number;
   v2: number;
-  /** @deprecated No longer needed - component uses useApi internally */
-  getToken?: () => Promise<string | null>;
 }
 
 export function VersionDiff({ v1, v2 }: VersionDiffProps) {

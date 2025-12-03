@@ -159,6 +159,74 @@ func (q *Queries) GetAlgorithmByID(ctx context.Context, arg GetAlgorithmByIDPara
 	return i, err
 }
 
+const getAlgorithmTemplateByKey = `-- name: GetAlgorithmTemplateByKey :one
+SELECT
+    id, template_key, name, description,
+    configuration, sort_order, is_active,
+    created_at, updated_at
+FROM algorithm_templates
+WHERE template_key = $1 AND is_active = true
+`
+
+func (q *Queries) GetAlgorithmTemplateByKey(ctx context.Context, templateKey string) (AlgorithmTemplate, error) {
+	row := q.db.QueryRow(ctx, getAlgorithmTemplateByKey, templateKey)
+	var i AlgorithmTemplate
+	err := row.Scan(
+		&i.ID,
+		&i.TemplateKey,
+		&i.Name,
+		&i.Description,
+		&i.Configuration,
+		&i.SortOrder,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getAlgorithmTemplates = `-- name: GetAlgorithmTemplates :many
+
+SELECT
+    id, template_key, name, description,
+    configuration, sort_order, is_active,
+    created_at, updated_at
+FROM algorithm_templates
+WHERE is_active = true
+ORDER BY sort_order ASC
+`
+
+// Algorithm Templates --
+func (q *Queries) GetAlgorithmTemplates(ctx context.Context) ([]AlgorithmTemplate, error) {
+	rows, err := q.db.Query(ctx, getAlgorithmTemplates)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AlgorithmTemplate{}
+	for rows.Next() {
+		var i AlgorithmTemplate
+		if err := rows.Scan(
+			&i.ID,
+			&i.TemplateKey,
+			&i.Name,
+			&i.Description,
+			&i.Configuration,
+			&i.SortOrder,
+			&i.IsActive,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getAlgorithmVersions = `-- name: GetAlgorithmVersions :many
 
 SELECT id, name,

@@ -186,3 +186,107 @@ export function getDualDateDisplay(date: Date): { gregorian: string; hebrew: str
     hebrew: hebrewDate.formattedWithDayOfWeek,
   };
 }
+
+/**
+ * Get Hebrew months for a given Hebrew year
+ * Returns array of { month: number, name: string }
+ * Handles leap years (13 months) vs regular years (12 months)
+ */
+export function getHebrewMonthsForYear(hebrewYear: number): { month: number; name: string }[] {
+  const isLeapYear = HDate.isLeapYear(hebrewYear);
+
+  // Hebrew calendar month order (starting from Tishrei for civil year)
+  const monthOrder: number[] = [
+    months.TISHREI,
+    months.CHESHVAN,
+    months.KISLEV,
+    months.TEVET,
+    months.SHVAT,
+  ];
+
+  if (isLeapYear) {
+    monthOrder.push(months.ADAR_I, months.ADAR_II);
+  } else {
+    // In non-leap years, ADAR_I is the regular Adar
+    monthOrder.push(months.ADAR_I);
+  }
+
+  monthOrder.push(
+    months.NISAN,
+    months.IYYAR,
+    months.SIVAN,
+    months.TAMUZ,
+    months.AV,
+    months.ELUL
+  );
+
+  return monthOrder.map(month => ({
+    month,
+    name: HEBREW_MONTHS[month] || `Month ${month}`,
+  }));
+}
+
+/**
+ * Convert Hebrew year number to Hebrew letters
+ */
+export function hebrewYearToLetters(year: number): string {
+  // For years 5700-5999 (1940-2239)
+  const thousands = Math.floor(year / 1000);
+  const hundreds = Math.floor((year % 1000) / 100);
+  const tens = Math.floor((year % 100) / 10);
+  const ones = year % 10;
+
+  const thousandsLetters = ['', 'א', 'ב', 'ג', 'ד', 'ה'];
+  const hundredsLetters = ['', 'ק', 'ר', 'ש', 'ת', 'תק', 'תר', 'תש', 'תת', 'תתק'];
+  const tensLetters = ['', 'י', 'כ', 'ל', 'מ', 'נ', 'ס', 'ע', 'פ', 'צ'];
+  const onesLetters = ['', 'א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ז', 'ח', 'ט'];
+
+  // Special cases for 15 and 16
+  if (tens === 1 && ones === 5) {
+    return `${thousandsLetters[thousands]}${hundredsLetters[hundreds]}ט״ו`;
+  }
+  if (tens === 1 && ones === 6) {
+    return `${thousandsLetters[thousands]}${hundredsLetters[hundreds]}ט״ז`;
+  }
+
+  let result = thousandsLetters[thousands] + hundredsLetters[hundreds] + tensLetters[tens] + onesLetters[ones];
+
+  // Add gershayim before last letter
+  if (result.length > 1) {
+    result = result.slice(0, -1) + '״' + result.slice(-1);
+  } else if (result.length === 1) {
+    result = result + '׳';
+  }
+
+  return result;
+}
+
+/**
+ * Generate a range of Hebrew years around a given year
+ */
+export function generateHebrewYearRange(centerYear: number, range: number = 10): { year: number; display: string }[] {
+  const years: { year: number; display: string }[] = [];
+  for (let i = centerYear - range; i <= centerYear + range; i++) {
+    years.push({
+      year: i,
+      display: hebrewYearToLetters(i),
+    });
+  }
+  return years;
+}
+
+/**
+ * Get the first day of a Hebrew month as a JavaScript Date
+ */
+export function getHebrewMonthStartDate(hebrewYear: number, hebrewMonth: number): Date {
+  const hdate = new HDate(1, hebrewMonth, hebrewYear);
+  return hdate.greg();
+}
+
+/**
+ * Get Hebrew date info from Hebrew year/month/day
+ */
+export function fromHebrewDate(hebrewYear: number, hebrewMonth: number, hebrewDay: number): Date {
+  const hdate = new HDate(hebrewDay, hebrewMonth, hebrewYear);
+  return hdate.greg();
+}

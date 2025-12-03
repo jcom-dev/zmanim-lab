@@ -45,4 +45,20 @@ export {
 // User Roles Hook (dual-role support)
 export { useUserRoles, useHasPublisherAccess, type UserRoles } from './useUserRoles';
 
-// All legacy useAuthenticatedFetch usages have been migrated to useApi
+// Category Hooks (database-driven zmanim configuration)
+export {
+  useTimeCategories,
+  useEventCategories,
+  useTagTypes,
+  useDisplayGroups,
+  useAllCategories,
+  useTimeCategoryByKey,
+  useEventCategoryByKey,
+  useTagTypeByKey,
+  useCategoryMaps,
+  useDisplayGroupMapping,
+  type TimeCategory,
+  type EventCategory,
+  type TagType,
+  type DisplayGroup,
+} from './useCategories';

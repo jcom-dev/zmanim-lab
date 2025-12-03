@@ -59,7 +59,6 @@ function stateToApi(state: OnboardingState): OnboardingStateAPI {
   };
 }
 
-// Legacy format (still accepted for backwards compatibility)
 export interface ZmanCustomization {
   key: string;
   nameHebrew: string;
@@ -68,7 +67,6 @@ export interface ZmanCustomization {
   modified: boolean;
 }
 
-// New registry-based format
 export interface SelectedZmanCustomization {
   master_zman_id: string;
   zman_key: string;
@@ -82,7 +80,6 @@ export interface SelectedZmanCustomization {
   modified: boolean;
 }
 
-// Re-export CoverageSelection from shared component for backwards compatibility
 export type { CoverageSelection } from '@/components/shared/CoverageSelector';
 
 interface StepDefinition {
@@ -100,8 +97,6 @@ const STEPS: StepDefinition[] = [
 ];
 
 interface OnboardingWizardProps {
-  /** @deprecated No longer used - publisher ID is determined from auth context */
-  publisherId?: string;
   onComplete?: () => void;
   onSkip?: () => void;
 }
@@ -206,15 +201,12 @@ export function OnboardingWizard({ onComplete, onSkip }: OnboardingWizardProps) 
   };
 
   const handleComplete = async () => {
-    console.log('[OnboardingWizard] handleComplete called');
     try {
-      console.log('[OnboardingWizard] Calling POST /publisher/onboarding/complete');
-      const result = await api.post('/publisher/onboarding/complete');
-      console.log('[OnboardingWizard] Complete result:', result);
+      await api.post('/publisher/onboarding/complete');
       // Don't call onComplete here - let the ReviewPublishStep show the success screen
       // The user will click "Go to Dashboard" to navigate away
     } catch (error) {
-      console.error('[OnboardingWizard] Failed to complete onboarding:', error);
+      console.error('Failed to complete onboarding:', error);
       throw error; // Re-throw so ReviewPublishStep knows it failed
     }
   };

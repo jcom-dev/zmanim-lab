@@ -38,7 +38,7 @@ const TEST_EMAIL_DOMAIN = 'test-zmanim.example.com';
 const testEntityCache = new Map<string, any>();
 
 /**
- * Map legacy status values to valid database values
+ * Map status values to valid database values
  * Database constraint: status IN ('pending', 'active', 'suspended')
  */
 function mapStatus(status: string): string {
@@ -54,12 +54,10 @@ function mapStatus(status: string): string {
 
 /**
  * Create a test publisher entity in the database
- * Note: organization field was removed from schema
  */
 export async function createTestPublisherEntity(
   overrides: Partial<{
     name: string;
-    organization: string;  // Deprecated - kept for backwards compatibility but ignored
     email: string;
     status: string;
     website: string;
