@@ -20,7 +20,13 @@
 -- ============================================
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "postgis";
-CREATE EXTENSION IF NOT EXISTS "vector";
+-- pgvector extension is optional (for RAG features) - may not be available in all environments
+DO $$
+BEGIN
+    CREATE EXTENSION IF NOT EXISTS "vector";
+EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'pgvector extension not available - RAG features will be disabled';
+END $$;
 CREATE EXTENSION IF NOT EXISTS "pg_trgm";  -- For fuzzy text search (similarity function)
 
 -- ============================================
@@ -748,24 +754,31 @@ COMMENT ON COLUMN astronomical_primitives.edge_type IS 'Which part of the sun: c
 -- PART 16: AI FEATURES
 -- ============================================
 
--- Embeddings table for RAG
-CREATE TABLE embeddings (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    source VARCHAR(255) NOT NULL,
-    content_type VARCHAR(50) NOT NULL,
-    chunk_index INT NOT NULL,
-    content TEXT NOT NULL,
-    metadata JSONB DEFAULT '{}',
-    embedding vector(1536) NOT NULL,
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW(),
+-- Embeddings table for RAG (only created if pgvector extension is available)
+DO $$
+BEGIN
+    -- Check if vector type exists (pgvector extension loaded)
+    IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'vector') THEN
+        CREATE TABLE IF NOT EXISTS embeddings (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            source VARCHAR(255) NOT NULL,
+            content_type VARCHAR(50) NOT NULL,
+            chunk_index INT NOT NULL,
+            content TEXT NOT NULL,
+            metadata JSONB DEFAULT '{}',
+            embedding vector(1536) NOT NULL,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW(),
+            UNIQUE(source, chunk_index)
+        );
 
-    UNIQUE(source, chunk_index)
-);
-
-CREATE INDEX embeddings_vector_idx ON embeddings USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
-CREATE INDEX embeddings_source_idx ON embeddings(source);
-CREATE INDEX embeddings_content_type_idx ON embeddings(content_type);
+        CREATE INDEX IF NOT EXISTS embeddings_vector_idx ON embeddings USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+        CREATE INDEX IF NOT EXISTS embeddings_source_idx ON embeddings(source);
+        CREATE INDEX IF NOT EXISTS embeddings_content_type_idx ON embeddings(content_type);
+    ELSE
+        RAISE NOTICE 'Skipping embeddings table - pgvector extension not available';
+    END IF;
+END $$;
 
 CREATE OR REPLACE FUNCTION update_embeddings_updated_at()
 RETURNS TRIGGER AS $$
@@ -775,15 +788,22 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER embeddings_updated_at
-    BEFORE UPDATE ON embeddings
-    FOR EACH ROW
-    EXECUTE FUNCTION update_embeddings_updated_at();
+-- Create trigger only if embeddings table exists
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'embeddings') THEN
+        DROP TRIGGER IF EXISTS embeddings_updated_at ON embeddings;
+        CREATE TRIGGER embeddings_updated_at
+            BEFORE UPDATE ON embeddings
+            FOR EACH ROW
+            EXECUTE FUNCTION update_embeddings_updated_at();
 
-COMMENT ON TABLE embeddings IS 'Vector embeddings for RAG semantic search';
-COMMENT ON COLUMN embeddings.source IS 'Source document identifier (dsl-spec, kosher-java, halacha)';
-COMMENT ON COLUMN embeddings.content_type IS 'Type of content (documentation, example, source)';
-COMMENT ON COLUMN embeddings.embedding IS 'OpenAI text-embedding-3-small 1536-dimensional vector';
+        COMMENT ON TABLE embeddings IS 'Vector embeddings for RAG semantic search';
+        COMMENT ON COLUMN embeddings.source IS 'Source document identifier (dsl-spec, kosher-java, halacha)';
+        COMMENT ON COLUMN embeddings.content_type IS 'Type of content (documentation, example, source)';
+        COMMENT ON COLUMN embeddings.embedding IS 'OpenAI text-embedding-3-small 1536-dimensional vector';
+    END IF;
+END $$;
 
 -- AI Index Status
 CREATE TABLE ai_index_status (

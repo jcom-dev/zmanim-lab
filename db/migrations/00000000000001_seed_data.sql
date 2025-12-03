@@ -24,15 +24,16 @@ ON CONFLICT (code) DO NOTHING;
 -- ============================================
 -- ZMAN TAGS SEED DATA
 -- ============================================
-INSERT INTO zman_tags (name, display_name_hebrew, display_name_english, tag_type, color, sort_order) VALUES
-    ('gra', 'גר"א', 'GRA (Vilna Gaon)', 'shita', '#3B82F6', 1),
-    ('mga', 'מג"א', 'MGA (Magen Avraham)', 'shita', '#8B5CF6', 2),
-    ('rabbeinu_tam', 'ר"ת', 'Rabbeinu Tam', 'shita', '#F59E0B', 3),
-    ('baal_hatanya', 'בעל התניא', 'Baal HaTanya', 'shita', '#10B981', 4),
-    ('fixed_minutes', 'דקות קבועות', 'Fixed Minutes', 'calculation_method', '#6366F1', 10),
-    ('solar_angle', 'זווית שמש', 'Solar Angle', 'calculation_method', '#EC4899', 11),
-    ('proportional_hours', 'שעות זמניות', 'Proportional Hours', 'calculation_method', '#14B8A6', 12)
+INSERT INTO zman_tags (tag_key, name, display_name_hebrew, display_name_english, tag_type, color, sort_order) VALUES
+    ('gra', 'gra', 'גר"א', 'GRA (Vilna Gaon)', 'shita', '#3B82F6', 1),
+    ('mga', 'mga', 'מג"א', 'MGA (Magen Avraham)', 'shita', '#8B5CF6', 2),
+    ('rabbeinu_tam', 'rabbeinu_tam', 'ר"ת', 'Rabbeinu Tam', 'shita', '#F59E0B', 3),
+    ('baal_hatanya', 'baal_hatanya', 'בעל התניא', 'Baal HaTanya', 'shita', '#10B981', 4),
+    ('fixed_minutes', 'fixed_minutes', 'דקות קבועות', 'Fixed Minutes', 'method', '#6366F1', 10),
+    ('solar_angle', 'solar_angle', 'זווית שמש', 'Solar Angle', 'method', '#EC4899', 11),
+    ('proportional_hours', 'proportional_hours', 'שעות זמניות', 'Proportional Hours', 'method', '#14B8A6', 12)
 ON CONFLICT (name) DO UPDATE SET
+    tag_key = EXCLUDED.tag_key,
     display_name_hebrew = EXCLUDED.display_name_hebrew,
     display_name_english = EXCLUDED.display_name_english,
     tag_type = EXCLUDED.tag_type,

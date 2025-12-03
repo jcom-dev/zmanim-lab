@@ -151,6 +151,9 @@ jobs:
           echo "Web server is ready"
         env:
           PORT: 3001
+          CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+          NEXT_PUBLIC_API_URL: http://localhost:8080
 
       # Install Playwright
       - name: Install Playwright
