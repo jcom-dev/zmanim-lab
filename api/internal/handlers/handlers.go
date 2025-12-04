@@ -25,6 +25,7 @@ type Handlers struct {
 	zmanimService    *services.ZmanimService
 	clerkService     *services.ClerkService
 	emailService     *services.EmailService
+	snapshotService  *services.SnapshotService
 	// PublisherResolver consolidates publisher ID resolution logic
 	publisherResolver *PublisherResolver
 	// AI services (optional - may be nil if not configured)
@@ -44,6 +45,7 @@ func New(database *db.DB) *Handlers {
 		fmt.Printf("Warning: Clerk service initialization failed: %v\n", err)
 	}
 	emailService := services.NewEmailService()
+	snapshotService := services.NewSnapshotService(database)
 	publisherResolver := NewPublisherResolver(database)
 
 	return &Handlers{
@@ -52,6 +54,7 @@ func New(database *db.DB) *Handlers {
 		zmanimService:     zmanimService,
 		clerkService:      clerkService,
 		emailService:      emailService,
+		snapshotService:   snapshotService,
 		publisherResolver: publisherResolver,
 	}
 }
@@ -143,6 +146,7 @@ func (h *Handlers) GetPublishers(w http.ResponseWriter, r *http.Request) {
 
 	publishers, err := h.publisherService.GetPublishers(ctx, page, pageSize, regionPtr)
 	if err != nil {
+		slog.Error("failed to get publishers", "error", err)
 		RespondInternalError(w, r, "Failed to get publishers")
 		return
 	}
@@ -409,7 +413,7 @@ func (h *Handlers) GetPublisherProfile(w http.ResponseWriter, r *http.Request) {
 		query = `
 			SELECT id, clerk_user_id, name, email,
 			       COALESCE(description, ''), COALESCE(bio, ''),
-			       website, logo_url, logo_data, status, created_at, updated_at
+			       website, logo_url, logo_data, status, is_official, created_at, updated_at
 			FROM publishers
 			WHERE id = $1
 		`
@@ -419,7 +423,7 @@ func (h *Handlers) GetPublisherProfile(w http.ResponseWriter, r *http.Request) {
 		query = `
 			SELECT id, clerk_user_id, name, email,
 			       COALESCE(description, ''), COALESCE(bio, ''),
-			       website, logo_url, logo_data, status, created_at, updated_at
+			       website, logo_url, logo_data, status, is_official, created_at, updated_at
 			FROM publishers
 			WHERE clerk_user_id = $1
 		`
@@ -439,6 +443,7 @@ func (h *Handlers) GetPublisherProfile(w http.ResponseWriter, r *http.Request) {
 		&publisher.LogoURL,
 		&publisher.LogoData,
 		&publisher.Status,
+		&publisher.IsOfficial,
 		&publisher.CreatedAt,
 		&publisher.UpdatedAt,
 	)

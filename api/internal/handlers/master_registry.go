@@ -63,6 +63,7 @@ type ZmanTag struct {
 	Description        *string   `json:"description,omitempty"`
 	Color              *string   `json:"color,omitempty"`
 	SortOrder          int       `json:"sort_order"`
+	IsNegated          bool      `json:"is_negated"` // When true, zman should NOT appear on days matching this tag
 	CreatedAt          time.Time `json:"created_at"`
 }
 
@@ -697,7 +698,7 @@ func (h *Handlers) GetAllTags(w http.ResponseWriter, r *http.Request) {
 
 	if tagType != "" {
 		rows, err = h.db.Pool.Query(ctx, `
-			SELECT id, name, display_name_hebrew, display_name_english,
+			SELECT id, tag_key, name, display_name_hebrew, display_name_english,
 				tag_type, description, color, sort_order, created_at
 			FROM zman_tags
 			WHERE tag_type = $1
@@ -705,10 +706,21 @@ func (h *Handlers) GetAllTags(w http.ResponseWriter, r *http.Request) {
 		`, tagType)
 	} else {
 		rows, err = h.db.Pool.Query(ctx, `
-			SELECT id, name, display_name_hebrew, display_name_english,
+			SELECT id, tag_key, name, display_name_hebrew, display_name_english,
 				tag_type, description, color, sort_order, created_at
 			FROM zman_tags
-			ORDER BY tag_type, sort_order, name
+			ORDER BY
+				CASE tag_type
+					WHEN 'behavior' THEN 1
+					WHEN 'event' THEN 2
+					WHEN 'jewish_day' THEN 3
+					WHEN 'timing' THEN 4
+					WHEN 'shita' THEN 5
+					WHEN 'calculation' THEN 6
+					WHEN 'category' THEN 7
+					ELSE 8
+				END,
+				sort_order, name
 		`)
 	}
 
@@ -721,7 +733,7 @@ func (h *Handlers) GetAllTags(w http.ResponseWriter, r *http.Request) {
 
 	for rows.Next() {
 		var tag ZmanTag
-		err := rows.Scan(&tag.ID, &tag.Name, &tag.DisplayNameHebrew, &tag.DisplayNameEnglish,
+		err := rows.Scan(&tag.ID, &tag.TagKey, &tag.Name, &tag.DisplayNameHebrew, &tag.DisplayNameEnglish,
 			&tag.TagType, &tag.Description, &tag.Color, &tag.SortOrder, &tag.CreatedAt)
 		if err != nil {
 			slog.Error("error scanning tag", "error", err)
@@ -1354,6 +1366,13 @@ func (h *Handlers) CreatePublisherZmanFromRegistry(w http.ResponseWriter, r *htt
 	if err != nil {
 		slog.Error("error creating initial version", "error", err)
 		// Don't fail - the zman was created successfully
+	}
+
+	// Invalidate cache - new zman from registry affects calculations
+	if h.cache != nil {
+		if err := h.cache.InvalidatePublisherCache(ctx, publisherID); err != nil {
+			slog.Warn("failed to invalidate cache after creating zman from registry", "error", err, "publisher_id", publisherID)
+		}
 	}
 
 	RespondJSON(w, r, http.StatusCreated, result)
@@ -2742,6 +2761,29 @@ func (h *Handlers) AdminUpdateMasterZman(w http.ResponseWriter, r *http.Request)
 			}
 		}
 		result.TagIDs = req.TagIDs
+	}
+
+	// If default_formula_dsl changed, invalidate cache for ALL publishers using this master zman
+	if req.DefaultFormulaDSL != nil && h.cache != nil {
+		// Convert string ID to pgtype.UUID
+		var masterZmanUUID pgtype.UUID
+		if parseErr := masterZmanUUID.Scan(id); parseErr != nil {
+			slog.Error("failed to parse master zman UUID for cache invalidation", "error", parseErr, "zman_id", id)
+		} else {
+			publisherIDs, err := h.db.Queries.GetPublishersUsingMasterZman(ctx, masterZmanUUID)
+			if err != nil {
+				slog.Error("failed to get publishers using master zman", "error", err, "zman_id", id)
+			} else if len(publisherIDs) > 0 {
+				for _, pubID := range publisherIDs {
+					if err := h.cache.InvalidatePublisherCache(ctx, pubID); err != nil {
+						slog.Warn("failed to invalidate publisher cache after registry update",
+							"error", err, "publisher_id", pubID, "zman_id", id)
+					}
+				}
+				slog.Info("invalidated caches for publishers using updated master zman",
+					"zman_id", id, "publisher_count", len(publisherIDs))
+			}
+		}
 	}
 
 	RespondJSON(w, r, http.StatusOK, result)

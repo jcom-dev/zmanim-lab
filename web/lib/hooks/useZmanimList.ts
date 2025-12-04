@@ -27,7 +27,11 @@ export interface ZmanTag {
   name: string;
   display_name_hebrew: string;
   display_name_english: string;
-  tag_type: 'event' | 'timing' | 'behavior';
+  tag_type: 'event' | 'timing' | 'behavior' | 'shita' | 'calculation' | 'category' | 'jewish_day';
+  description?: string | null;
+  color?: string | null;
+  sort_order?: number;
+  is_negated?: boolean; // When true, zman should NOT appear on days matching this tag
 }
 
 export interface PublisherZman {
@@ -262,10 +266,19 @@ export const usePublisherZmanTags = (zmanKey: string | null) =>
   );
 
 /**
+ * Tag assignment with optional negation
+ */
+export interface TagAssignment {
+  tag_id: string;
+  is_negated: boolean;
+}
+
+/**
  * Hook: Update tags for a publisher zman (replace all tags)
+ * Supports negated tags for exclusion logic (e.g., "show on Yom Tov except Pesach")
  */
 export function useUpdatePublisherZmanTags(zmanKey: string) {
-  return useDynamicMutation<ZmanTag[], { tag_ids: string[] }>(
+  return useDynamicMutation<ZmanTag[], { tags: TagAssignment[] }>(
     () => `/publisher/zmanim/${zmanKey}/tags`,
     'PUT',
     (data) => data,
@@ -485,10 +498,17 @@ export const useEventZmanimGrouped = () =>
 /**
  * Hook: Get all tags
  */
-export const useZmanTags = () =>
-  useGlobalQuery<ZmanTag[]>('zman-tags', '/registry/tags', {
+export const useZmanTags = () => {
+  const query = useGlobalQuery<{ tags: ZmanTag[] }>('zman-tags', '/registry/tags', {
     staleTime: 1000 * 60 * 60, // 1 hour
   });
+
+  // Extract tags array from response
+  return {
+    ...query,
+    data: query.data?.tags ?? [],
+  };
+};
 
 // =============================================================================
 // Jewish Events Types & Hooks

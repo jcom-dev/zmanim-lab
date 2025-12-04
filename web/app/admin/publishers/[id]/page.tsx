@@ -26,8 +26,21 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import Link from 'next/link';
 import { useApi } from '@/lib/api-client';
+import {
+  Shield, ShieldAlert, ShieldCheck,
+  Ban, CheckCircle2,
+  Eye, Pencil, Trash2,
+  RotateCcw, Mail, Globe, Calendar, Clock,
+  UserPlus
+} from 'lucide-react';
 
 interface Publisher {
   id: string;
@@ -36,6 +49,10 @@ interface Publisher {
   status: string;
   website?: string;
   bio?: string;
+  is_official?: boolean;
+  suspension_reason?: string;
+  deleted_at?: string;
+  deleted_by?: string;
   created_at: string;
   updated_at: string;
 }
@@ -70,10 +87,17 @@ export default function AdminPublisherDetailPage() {
     bio: '',
   });
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [officialLoading, setOfficialLoading] = useState(false);
+  const [suspendDialogOpen, setSuspendDialogOpen] = useState(false);
+  const [suspendReason, setSuspendReason] = useState('');
+  const [suspendLoading, setSuspendLoading] = useState(false);
+  const [reactivateLoading, setReactivateLoading] = useState(false);
+  const [restoreLoading, setRestoreLoading] = useState(false);
 
   const fetchPublisher = useCallback(async () => {
     try {
-      const data = await api.admin.get<{ publishers: Publisher[] }>('/admin/publishers');
+      // Include deleted publishers to allow viewing/restoring them
+      const data = await api.admin.get<{ publishers: Publisher[] }>('/admin/publishers?include_deleted=true');
       const publishers = data?.publishers || [];
       const found = publishers.find((p: Publisher) => p.id === id);
 
@@ -147,12 +171,47 @@ export default function AdminPublisherDetailPage() {
     }
   };
 
-  const handleStatusChange = async (action: 'verify' | 'suspend' | 'reactivate') => {
+  const handleStatusChange = async (action: 'verify' | 'reactivate') => {
     try {
+      if (action === 'reactivate') {
+        setReactivateLoading(true);
+      }
       await api.admin.put(`/admin/publishers/${id}/${action}`);
       await fetchPublisher();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      if (action === 'reactivate') {
+        setReactivateLoading(false);
+      }
+    }
+  };
+
+  const handleSuspend = async () => {
+    try {
+      setSuspendLoading(true);
+      await api.admin.put(`/admin/publishers/${id}/suspend`, {
+        body: JSON.stringify({ reason: suspendReason }),
+      });
+      await fetchPublisher();
+      setSuspendDialogOpen(false);
+      setSuspendReason('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setSuspendLoading(false);
+    }
+  };
+
+  const handleRestore = async () => {
+    try {
+      setRestoreLoading(true);
+      await api.admin.put(`/admin/publishers/${id}/restore`);
+      await fetchPublisher();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setRestoreLoading(false);
     }
   };
 
@@ -183,6 +242,21 @@ export default function AdminPublisherDetailPage() {
     }
   };
 
+  const handleToggleOfficial = async () => {
+    if (!publisher) return;
+    try {
+      setOfficialLoading(true);
+      await api.admin.put(`/admin/publishers/${id}/official`, {
+        body: JSON.stringify({ is_official: !publisher.is_official }),
+      });
+      await fetchPublisher();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setOfficialLoading(false);
+    }
+  };
+
   const openEditDialog = () => {
     if (publisher) {
       setEditForm({
@@ -192,21 +266,6 @@ export default function AdminPublisherDetailPage() {
         bio: publisher.bio || '',
       });
       setEditDialogOpen(true);
-    }
-  };
-
-  const getStatusBadgeClass = (status: string) => {
-    switch (status) {
-      case 'verified':
-      case 'active':
-        return 'bg-green-100 text-green-800 border-green-300';
-      case 'pending_verification':
-      case 'pending':
-        return 'bg-yellow-100 text-yellow-800 border-yellow-300';
-      case 'suspended':
-        return 'bg-red-100 text-red-800 border-red-300';
-      default:
-        return 'bg-muted text-muted-foreground border-border';
     }
   };
 
@@ -238,209 +297,435 @@ export default function AdminPublisherDetailPage() {
     );
   }
 
+  const isDeleted = !!publisher.deleted_at;
+
   return (
     <div className="container mx-auto py-8">
-      {/* Header */}
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <div className="flex items-center gap-2 mb-2">
-            <Link href="/admin/publishers" className="text-primary hover:underline text-sm">
-              Publishers
-            </Link>
-            <span className="text-muted-foreground">/</span>
-            <span className="text-muted-foreground">{publisher.name}</span>
+      {/* Deleted Banner */}
+      {isDeleted && (
+        <div className="mb-6 p-4 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-red-100 dark:bg-red-900/50">
+              <svg className="w-5 h-5 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </div>
+            <div>
+              <p className="font-semibold text-red-800 dark:text-red-200">This publisher has been deleted</p>
+              <p className="text-sm text-red-700 dark:text-red-300">
+                Deleted on {new Date(publisher.deleted_at!).toLocaleDateString()}
+              </p>
+            </div>
           </div>
-          <h1 className="text-3xl font-bold">{publisher.name}</h1>
+          <Button
+            onClick={handleRestore}
+            disabled={restoreLoading}
+            className="bg-green-600 hover:bg-green-700 text-white"
+          >
+            {restoreLoading ? 'Restoring...' : 'Restore Publisher'}
+          </Button>
         </div>
-        <span
-          className={`inline-block px-4 py-2 rounded-full text-sm font-semibold border ${getStatusBadgeClass(
-            publisher.status
-          )}`}
-        >
-          {publisher.status.replace('_', ' ')}
-        </span>
+      )}
+
+      {/* Header */}
+      <div className="mb-6">
+        <div className="flex items-center gap-2 mb-2">
+          <Link href="/admin/publishers" className="text-primary hover:underline text-sm">
+            Publishers
+          </Link>
+          <span className="text-muted-foreground">/</span>
+          <span className="text-muted-foreground">{publisher.name}</span>
+        </div>
+        <h1 className={`text-3xl font-bold ${isDeleted ? 'line-through text-muted-foreground' : ''}`}>{publisher.name}</h1>
       </div>
 
-      {/* Actions Card */}
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle>Quick Actions</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Button
-            onClick={() => {
-              // Store impersonation state in sessionStorage
-              sessionStorage.setItem('impersonating', JSON.stringify({
-                publisherId: publisher.id,
-                publisher: {
-                  id: publisher.id,
-                  name: publisher.name,
-                  status: publisher.status,
-                }
-              }));
-              router.push('/publisher/dashboard');
-            }}
-            className="bg-yellow-700 hover:bg-yellow-800 dark:bg-yellow-700 dark:hover:bg-yellow-800 text-white"
-          >
-            <svg className="w-4 h-4 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-            </svg>
-            Impersonate Publisher
-          </Button>
-          <p className="text-sm text-muted-foreground mt-2">
-            View the dashboard as this publisher to troubleshoot issues
-          </p>
-        </CardContent>
-      </Card>
+      {/* Unified Publisher Card */}
+      <TooltipProvider delayDuration={200}>
+        <Card className="mb-6 overflow-hidden">
+          {/* Card Header with Status Indicators */}
+          <div className="relative">
+            {/* Status Bar - Visual indicator at top */}
+            <div className={`h-1 ${
+              publisher.status === 'suspended'
+                ? 'bg-destructive'
+                : publisher.status === 'pending' || publisher.status === 'pending_verification'
+                  ? 'bg-amber-500'
+                  : 'bg-emerald-500'
+            }`} />
 
-      {/* Publisher Details Card */}
-      <Card className="mb-6">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Publisher Details</CardTitle>
-          <div className="flex gap-2">
-            <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-              <DialogTrigger asChild>
-                <Button variant="outline" size="sm" onClick={openEditDialog}>
-                  Edit
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-md">
-                <DialogHeader>
-                  <DialogTitle>Edit Publisher</DialogTitle>
-                  <DialogDescription>
-                    Update the publisher&apos;s information.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4 py-4">
-                  <div>
-                    <label className="text-sm font-medium">Publisher / Organization Name</label>
-                    <Input
-                      value={editForm.name}
-                      onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-                      placeholder="Congregation Beth Israel"
-                    />
+            <CardHeader className="pb-4">
+              <div className="flex items-start justify-between">
+                {/* Status Badges */}
+                <div className="flex flex-wrap items-center gap-2">
+                  {/* Official/Unofficial Badge */}
+                  <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                    publisher.is_official
+                      ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+                      : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+                  }`}>
+                    {publisher.is_official ? (
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                    ) : (
+                      <ShieldAlert className="w-3.5 h-3.5" />
+                    )}
+                    {publisher.is_official ? 'Official' : 'Community'}
                   </div>
-                  <div>
-                    <label className="text-sm font-medium">Email</label>
-                    <Input
-                      type="email"
-                      value={editForm.email}
-                      onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
-                      placeholder="contact@example.com"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium">Website</label>
-                    <Input
-                      type="url"
-                      value={editForm.website}
-                      onChange={(e) => setEditForm({ ...editForm, website: e.target.value })}
-                      placeholder="https://example.com"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium">Bio</label>
-                    <textarea
-                      className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary min-h-[80px]"
-                      value={editForm.bio}
-                      onChange={(e) => setEditForm({ ...editForm, bio: e.target.value })}
-                      placeholder="About this publisher..."
-                    />
+
+                  {/* Active/Suspended Status Badge */}
+                  <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
+                    publisher.status === 'suspended'
+                      ? 'bg-destructive/10 text-destructive'
+                      : publisher.status === 'pending' || publisher.status === 'pending_verification'
+                        ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+                        : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+                  }`}>
+                    {publisher.status === 'suspended' ? (
+                      <Ban className="w-3.5 h-3.5" />
+                    ) : publisher.status === 'pending' || publisher.status === 'pending_verification' ? (
+                      <Clock className="w-3.5 h-3.5" />
+                    ) : (
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                    )}
+                    {publisher.status === 'suspended'
+                      ? 'Suspended'
+                      : publisher.status === 'pending' || publisher.status === 'pending_verification'
+                        ? 'Pending'
+                        : 'Active'}
                   </div>
                 </div>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setEditDialogOpen(false)} disabled={editLoading}>
-                    Cancel
-                  </Button>
-                  <Button onClick={handleEditPublisher} disabled={editLoading}>
-                    {editLoading ? 'Saving...' : 'Save Changes'}
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="destructive" size="sm">
-                  Delete
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Delete Publisher</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Are you sure you want to delete &quot;{publisher.name}&quot;? This action cannot be undone.
-                    <br /><br />
-                    <strong>This will:</strong>
-                    <ul className="list-disc list-inside mt-2 text-sm">
-                      <li>Delete all publisher data (algorithms, coverage, etc.)</li>
-                      <li>Remove access for all users linked to this publisher</li>
-                      <li>Delete Clerk users who only had access to this publisher</li>
-                    </ul>
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={handleDeletePublisher}
-                    disabled={deleteLoading}
-                    className="bg-red-600 hover:bg-red-700"
-                  >
-                    {deleteLoading ? 'Deleting...' : 'Delete Publisher'}
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+
+                {/* Context-Sensitive Action Buttons */}
+                {!isDeleted && (
+                  <div className="flex items-center gap-1">
+                    {/* Impersonate Button */}
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                          onClick={() => {
+                            sessionStorage.setItem('impersonating', JSON.stringify({
+                              publisherId: publisher.id,
+                              publisher: {
+                                id: publisher.id,
+                                name: publisher.name,
+                                status: publisher.status,
+                              }
+                            }));
+                            router.push('/publisher/dashboard');
+                          }}
+                        >
+                          <Eye className="w-4 h-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>View as publisher</TooltipContent>
+                    </Tooltip>
+
+                    {/* Official Toggle */}
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className={`h-8 w-8 ${
+                            publisher.is_official
+                              ? 'text-emerald-600 hover:text-emerald-700 dark:text-emerald-400'
+                              : 'text-muted-foreground hover:text-foreground'
+                          }`}
+                          onClick={handleToggleOfficial}
+                          disabled={officialLoading}
+                        >
+                          {publisher.is_official ? (
+                            <ShieldCheck className="w-4 h-4" />
+                          ) : (
+                            <Shield className="w-4 h-4" />
+                          )}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        {publisher.is_official ? 'Remove official status' : 'Mark as official'}
+                      </TooltipContent>
+                    </Tooltip>
+
+                    {/* Status Action - Context Sensitive */}
+                    {publisher.status === 'suspended' ? (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-emerald-600 hover:text-emerald-700 dark:text-emerald-400"
+                            onClick={() => handleStatusChange('reactivate')}
+                            disabled={reactivateLoading}
+                          >
+                            <RotateCcw className="w-4 h-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Reactivate publisher</TooltipContent>
+                      </Tooltip>
+                    ) : (publisher.status === 'pending' || publisher.status === 'pending_verification') ? (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-emerald-600 hover:text-emerald-700 dark:text-emerald-400"
+                            onClick={() => handleStatusChange('verify')}
+                          >
+                            <CheckCircle2 className="w-4 h-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Verify publisher</TooltipContent>
+                      </Tooltip>
+                    ) : (
+                      <Dialog open={suspendDialogOpen} onOpenChange={setSuspendDialogOpen}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <DialogTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                              >
+                                <Ban className="w-4 h-4" />
+                              </Button>
+                            </DialogTrigger>
+                          </TooltipTrigger>
+                          <TooltipContent>Suspend publisher</TooltipContent>
+                        </Tooltip>
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle>Suspend Publisher</DialogTitle>
+                            <DialogDescription>
+                              Please provide a reason for suspending &quot;{publisher.name}&quot;. This will be visible to admins.
+                            </DialogDescription>
+                          </DialogHeader>
+                          <div className="py-4">
+                            <label className="text-sm font-medium">Reason for suspension</label>
+                            <textarea
+                              className="w-full px-3 py-2 mt-2 border border-border rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary min-h-[80px]"
+                              value={suspendReason}
+                              onChange={(e) => setSuspendReason(e.target.value)}
+                              placeholder="e.g., Violation of terms, Inaccurate data, User request..."
+                              disabled={suspendLoading}
+                            />
+                          </div>
+                          <DialogFooter>
+                            <Button variant="outline" onClick={() => setSuspendDialogOpen(false)} disabled={suspendLoading}>
+                              Cancel
+                            </Button>
+                            <Button variant="destructive" onClick={handleSuspend} disabled={suspendLoading}>
+                              {suspendLoading ? 'Suspending...' : 'Suspend Publisher'}
+                            </Button>
+                          </DialogFooter>
+                        </DialogContent>
+                      </Dialog>
+                    )}
+
+                    {/* Separator */}
+                    <div className="w-px h-4 bg-border mx-1" />
+
+                    {/* Edit Button */}
+                    <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <DialogTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                              onClick={openEditDialog}
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </Button>
+                          </DialogTrigger>
+                        </TooltipTrigger>
+                        <TooltipContent>Edit details</TooltipContent>
+                      </Tooltip>
+                      <DialogContent className="max-w-md">
+                        <DialogHeader>
+                          <DialogTitle>Edit Publisher</DialogTitle>
+                          <DialogDescription>
+                            Update the publisher&apos;s information.
+                          </DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4 py-4">
+                          <div>
+                            <label className="text-sm font-medium">Publisher / Organization Name</label>
+                            <Input
+                              value={editForm.name}
+                              onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                              placeholder="Congregation Beth Israel"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-sm font-medium">Email</label>
+                            <Input
+                              type="email"
+                              value={editForm.email}
+                              onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                              placeholder="contact@example.com"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-sm font-medium">Website</label>
+                            <Input
+                              type="url"
+                              value={editForm.website}
+                              onChange={(e) => setEditForm({ ...editForm, website: e.target.value })}
+                              placeholder="https://example.com"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-sm font-medium">Bio</label>
+                            <textarea
+                              className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary min-h-[80px]"
+                              value={editForm.bio}
+                              onChange={(e) => setEditForm({ ...editForm, bio: e.target.value })}
+                              placeholder="About this publisher..."
+                            />
+                          </div>
+                        </div>
+                        <DialogFooter>
+                          <Button variant="outline" onClick={() => setEditDialogOpen(false)} disabled={editLoading}>
+                            Cancel
+                          </Button>
+                          <Button onClick={handleEditPublisher} disabled={editLoading}>
+                            {editLoading ? 'Saving...' : 'Save Changes'}
+                          </Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
+
+                    {/* Delete Button */}
+                    <AlertDialog>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </AlertDialogTrigger>
+                        </TooltipTrigger>
+                        <TooltipContent>Delete publisher</TooltipContent>
+                      </Tooltip>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Delete Publisher</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Are you sure you want to delete &quot;{publisher.name}&quot;?
+                            <br /><br />
+                            <strong>This will:</strong>
+                            <ul className="list-disc list-inside mt-2 text-sm">
+                              <li>Hide the publisher from public view</li>
+                              <li>Disable access for publisher users</li>
+                            </ul>
+                            <br />
+                            <span className="text-muted-foreground">You can restore this publisher later from the deleted publishers list.</span>
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={handleDeletePublisher}
+                            disabled={deleteLoading}
+                            className="bg-destructive hover:bg-destructive/90"
+                          >
+                            {deleteLoading ? 'Deleting...' : 'Delete Publisher'}
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
+                )}
+              </div>
+
+              {/* Suspension Reason Alert */}
+              {publisher.status === 'suspended' && publisher.suspension_reason && (
+                <div className="mt-3 p-3 rounded-lg bg-destructive/5 border border-destructive/20">
+                  <p className="text-sm text-destructive">
+                    <span className="font-medium">Suspension reason:</span> {publisher.suspension_reason}
+                  </p>
+                </div>
+              )}
+            </CardHeader>
           </div>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-sm font-medium text-muted-foreground">Email</label>
-              <p>{publisher.email || 'Not set'}</p>
+
+          {/* Publisher Details Grid */}
+          <CardContent className="pt-0">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+              {/* Email */}
+              <div className="space-y-1">
+                <div className="flex items-center gap-1.5 text-muted-foreground">
+                  <Mail className="w-3.5 h-3.5" />
+                  <span className="text-xs font-medium uppercase tracking-wider">Email</span>
+                </div>
+                {publisher.email ? (
+                  <a href={`mailto:${publisher.email}`} className="text-sm text-primary hover:underline block truncate">
+                    {publisher.email}
+                  </a>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Not set</p>
+                )}
+              </div>
+
+              {/* Website */}
+              <div className="space-y-1">
+                <div className="flex items-center gap-1.5 text-muted-foreground">
+                  <Globe className="w-3.5 h-3.5" />
+                  <span className="text-xs font-medium uppercase tracking-wider">Website</span>
+                </div>
+                {publisher.website ? (
+                  <a
+                    href={publisher.website}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-primary hover:underline block truncate"
+                  >
+                    {publisher.website.replace(/^https?:\/\//, '')}
+                  </a>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Not set</p>
+                )}
+              </div>
+
+              {/* Created */}
+              <div className="space-y-1">
+                <div className="flex items-center gap-1.5 text-muted-foreground">
+                  <Calendar className="w-3.5 h-3.5" />
+                  <span className="text-xs font-medium uppercase tracking-wider">Created</span>
+                </div>
+                <p className="text-sm">{new Date(publisher.created_at).toLocaleDateString()}</p>
+              </div>
+
+              {/* Updated */}
+              <div className="space-y-1">
+                <div className="flex items-center gap-1.5 text-muted-foreground">
+                  <Clock className="w-3.5 h-3.5" />
+                  <span className="text-xs font-medium uppercase tracking-wider">Updated</span>
+                </div>
+                <p className="text-sm">{new Date(publisher.updated_at).toLocaleDateString()}</p>
+              </div>
             </div>
-            <div>
-              <label className="text-sm font-medium text-muted-foreground">Website</label>
-              <p>{publisher.website || 'Not set'}</p>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-muted-foreground">Created</label>
-              <p>{new Date(publisher.created_at).toLocaleDateString()}</p>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-muted-foreground">Updated</label>
-              <p>{new Date(publisher.updated_at).toLocaleDateString()}</p>
-            </div>
+
+            {/* Bio - Full Width */}
             {publisher.bio && (
-              <div className="col-span-2">
-                <label className="text-sm font-medium text-muted-foreground">Bio</label>
-                <p>{publisher.bio}</p>
+              <div className="mt-6 pt-6 border-t">
+                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-2">About</p>
+                <p className="text-sm leading-relaxed">{publisher.bio}</p>
               </div>
             )}
-          </div>
-
-          {/* Status Actions */}
-          <div className="mt-6 pt-4 border-t flex gap-2">
-            {(publisher.status === 'pending_verification' || publisher.status === 'pending') && (
-              <Button onClick={() => handleStatusChange('verify')}>
-                Verify Publisher
-              </Button>
-            )}
-            {(publisher.status === 'verified' || publisher.status === 'active') && (
-              <Button variant="destructive" onClick={() => handleStatusChange('suspend')}>
-                Suspend Publisher
-              </Button>
-            )}
-            {publisher.status === 'suspended' && (
-              <Button variant="outline" onClick={() => handleStatusChange('reactivate')}>
-                Reactivate Publisher
-              </Button>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </TooltipProvider>
 
       {/* Users Section */}
+      <TooltipProvider delayDuration={200}>
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
@@ -450,9 +735,17 @@ export default function AdminPublisherDetailPage() {
             </CardDescription>
           </div>
           <Dialog open={inviteDialogOpen} onOpenChange={setInviteDialogOpen}>
-            <DialogTrigger asChild>
-              <Button>Invite User</Button>
-            </DialogTrigger>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <DialogTrigger asChild>
+                  <Button size="sm" className="gap-1.5">
+                    <UserPlus className="w-4 h-4" />
+                    <span>Invite</span>
+                  </Button>
+                </DialogTrigger>
+              </TooltipTrigger>
+              <TooltipContent>Invite a user to manage this publisher</TooltipContent>
+            </Tooltip>
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>Invite User to Publisher</DialogTitle>
@@ -569,6 +862,7 @@ export default function AdminPublisherDetailPage() {
           )}
         </CardContent>
       </Card>
+      </TooltipProvider>
     </div>
   );
 }

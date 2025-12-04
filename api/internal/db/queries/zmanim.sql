@@ -35,27 +35,32 @@ SELECT
         ) all_tags
         WHERE all_tags.tag_type IN ('event', 'behavior')
     ) AS is_event_zman,
-    -- Tags from master zman AND publisher-specific tags (combined, deduplicated)
+    -- Tags from master zman AND publisher-specific tags (combined with is_negated)
     COALESCE(
-        (SELECT json_agg(DISTINCT json_build_object(
-            'id', t.id,
-            'tag_key', t.tag_key,
-            'name', t.name,
-            'display_name_hebrew', t.display_name_hebrew,
-            'display_name_english', t.display_name_english,
-            'tag_type', t.tag_type
-        ))
+        (SELECT json_agg(json_build_object(
+            'id', sub.id,
+            'tag_key', sub.tag_key,
+            'name', sub.name,
+            'display_name_hebrew', sub.display_name_hebrew,
+            'display_name_english', sub.display_name_english,
+            'tag_type', sub.tag_type,
+            'is_negated', sub.is_negated
+        ) ORDER BY sub.sort_order)
         FROM (
             -- Master zman tags
-            SELECT t.* FROM master_zman_tags mzt
+            SELECT t.id, t.tag_key, t.name, t.display_name_hebrew, t.display_name_english,
+                   t.tag_type, t.sort_order, mzt.is_negated
+            FROM master_zman_tags mzt
             JOIN zman_tags t ON mzt.tag_id = t.id
             WHERE mzt.master_zman_id = pz.master_zman_id
-            UNION
+            UNION ALL
             -- Publisher-specific tags
-            SELECT t.* FROM publisher_zman_tags pzt
+            SELECT t.id, t.tag_key, t.name, t.display_name_hebrew, t.display_name_english,
+                   t.tag_type, t.sort_order, pzt.is_negated
+            FROM publisher_zman_tags pzt
             JOIN zman_tags t ON pzt.tag_id = t.id
             WHERE pzt.publisher_zman_id = pz.id
-        ) t),
+        ) sub),
         '[]'::json
     ) AS tags,
     -- Linked source info
@@ -335,20 +340,20 @@ WHERE pz.id = $1;
 -- ============================================================================
 
 -- name: GetPublisherZmanTags :many
--- Get all tags for a specific publisher zman
+-- Get all tags for a specific publisher zman (including is_negated)
 SELECT
     t.id, t.tag_key, t.name, t.display_name_hebrew, t.display_name_english,
-    t.tag_type, t.description, t.sort_order
+    t.tag_type, t.description, t.sort_order, pzt.is_negated
 FROM publisher_zman_tags pzt
 JOIN zman_tags t ON t.id = pzt.tag_id
 WHERE pzt.publisher_zman_id = $1
 ORDER BY t.sort_order, t.display_name_english;
 
 -- name: AddTagToPublisherZman :exec
--- Add a tag to a publisher zman
-INSERT INTO publisher_zman_tags (publisher_zman_id, tag_id)
-VALUES ($1, $2)
-ON CONFLICT (publisher_zman_id, tag_id) DO NOTHING;
+-- Add a tag to a publisher zman (with optional is_negated)
+INSERT INTO publisher_zman_tags (publisher_zman_id, tag_id, is_negated)
+VALUES ($1, $2, $3)
+ON CONFLICT (publisher_zman_id, tag_id) DO UPDATE SET is_negated = $3;
 
 -- name: RemoveTagFromPublisherZman :exec
 -- Remove a tag from a publisher zman
@@ -361,5 +366,13 @@ WHERE publisher_zman_id = $1 AND tag_id = $2;
 DELETE FROM publisher_zman_tags WHERE publisher_zman_id = $1;
 
 -- name: BulkAddTagsToPublisherZman :copyfrom
--- Bulk insert tags for a publisher zman
-INSERT INTO publisher_zman_tags (publisher_zman_id, tag_id) VALUES ($1, $2);
+-- Bulk insert tags for a publisher zman (with is_negated)
+INSERT INTO publisher_zman_tags (publisher_zman_id, tag_id, is_negated) VALUES ($1, $2, $3);
+
+-- name: GetPublishersUsingMasterZman :many
+-- Get all publisher IDs that have a zman referencing this master registry entry
+-- Used for cache invalidation when master zman formula changes
+SELECT DISTINCT publisher_id
+FROM publisher_zmanim
+WHERE master_zman_id = $1
+  AND deleted_at IS NULL;

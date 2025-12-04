@@ -168,6 +168,10 @@ func (e *Executor) executeNode(node Node) Value {
 		return e.executeConditional(n)
 	case *ConditionNode:
 		return e.executeCondition(n)
+	case *LogicalOpNode:
+		return e.executeLogicalOp(n)
+	case *NotOpNode:
+		return e.executeNotOp(n)
 	case *ConditionVarNode:
 		return e.executeConditionVar(n)
 	case *DirectionNode:
@@ -625,6 +629,61 @@ func (e *Executor) executeCondition(n *ConditionNode) Value {
 
 	e.addError("cannot compare %s and %s", left.Type, right.Type)
 	return Value{}
+}
+
+// executeLogicalOp evaluates a logical operation (&& or ||)
+func (e *Executor) executeLogicalOp(n *LogicalOpNode) Value {
+	left := e.executeNode(n.Left)
+
+	if left.Type != ValueTypeBoolean {
+		e.addError("left side of %s must be boolean, got %s", n.Op, left.Type)
+		return Value{}
+	}
+
+	// Short-circuit evaluation
+	switch n.Op {
+	case "&&":
+		// If left is false, return false without evaluating right
+		if !left.Boolean {
+			return Value{Type: ValueTypeBoolean, Boolean: false}
+		}
+		// Evaluate right side
+		right := e.executeNode(n.Right)
+		if right.Type != ValueTypeBoolean {
+			e.addError("right side of && must be boolean, got %s", right.Type)
+			return Value{}
+		}
+		return Value{Type: ValueTypeBoolean, Boolean: right.Boolean}
+
+	case "||":
+		// If left is true, return true without evaluating right
+		if left.Boolean {
+			return Value{Type: ValueTypeBoolean, Boolean: true}
+		}
+		// Evaluate right side
+		right := e.executeNode(n.Right)
+		if right.Type != ValueTypeBoolean {
+			e.addError("right side of || must be boolean, got %s", right.Type)
+			return Value{}
+		}
+		return Value{Type: ValueTypeBoolean, Boolean: right.Boolean}
+
+	default:
+		e.addError("unknown logical operator: %s", n.Op)
+		return Value{}
+	}
+}
+
+// executeNotOp evaluates a logical NOT operation
+func (e *Executor) executeNotOp(n *NotOpNode) Value {
+	operand := e.executeNode(n.Operand)
+
+	if operand.Type != ValueTypeBoolean {
+		e.addError("operand of ! must be boolean, got %s", operand.Type)
+		return Value{}
+	}
+
+	return Value{Type: ValueTypeBoolean, Boolean: !operand.Boolean}
 }
 
 // executeConditionVar evaluates a condition variable

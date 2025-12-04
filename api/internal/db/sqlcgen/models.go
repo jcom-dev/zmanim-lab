@@ -5,6 +5,8 @@
 package sqlcgen
 
 import (
+	"time"
+
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -276,6 +278,8 @@ type MasterZmanTag struct {
 	MasterZmanID string             `json:"master_zman_id"`
 	TagID        string             `json:"tag_id"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	// When true, this zman should NOT appear on days matching this tag
+	IsNegated bool `json:"is_negated"`
 }
 
 // Master zmanim registry - trigram indexes available for fuzzy Hebrew/English/transliteration searches
@@ -363,6 +367,14 @@ type Publisher struct {
 	IsVerified bool `json:"is_verified"`
 	// Base64 encoded logo image (PNG format, data:image/png;base64,...)
 	LogoData *string `json:"logo_data"`
+	// Whether this publisher is an official/authoritative source for zmanim calculations. Unofficial publishers are community-contributed.
+	IsOfficial bool `json:"is_official"`
+	// The reason provided when this publisher was suspended. Cleared when reactivated.
+	SuspensionReason *string `json:"suspension_reason"`
+	// Timestamp when the publisher was soft-deleted. NULL means active.
+	DeletedAt pgtype.Timestamptz `json:"deleted_at"`
+	// The admin user ID who performed the soft delete.
+	DeletedBy *string `json:"deleted_by"`
 }
 
 // Publisher geographic coverage at country, region, or city level
@@ -424,6 +436,15 @@ type PublisherRequest struct {
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 }
 
+type PublisherSnapshot struct {
+	ID           string    `json:"id"`
+	PublisherID  string    `json:"publisher_id"`
+	Description  string    `json:"description"`
+	SnapshotData []byte    `json:"snapshot_data"`
+	CreatedBy    string    `json:"created_by"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
 // Custom display names for zmanim per publisher. Original master registry names remain accessible via master_zmanim_registry.
 type PublisherZmanAlias struct {
 	ID              string `json:"id"`
@@ -466,6 +487,8 @@ type PublisherZmanTag struct {
 	PublisherZmanID string             `json:"publisher_zman_id"`
 	TagID           string             `json:"tag_id"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	// When true, this zman should NOT appear on days matching this tag
+	IsNegated bool `json:"is_negated"`
 }
 
 // Version history for each publisher zman (max 7 versions, formula changes only)
@@ -589,6 +612,21 @@ type SystemConfig struct {
 	Description *string            `json:"description"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+// Maps zman_tags to HebCal events or Hebrew dates for calendar-based filtering
+type TagEventMapping struct {
+	ID    string `json:"id"`
+	TagID string `json:"tag_id"`
+	// HebCal event pattern. Use % as wildcard. E.g., "Chanukah%" matches all Chanukah days.
+	HebcalEventPattern *string `json:"hebcal_event_pattern"`
+	// Hebrew month number: 1=Nisan...12=Adar, 13=Adar II in leap year
+	HebrewMonth    *int32 `json:"hebrew_month"`
+	HebrewDayStart *int32 `json:"hebrew_day_start"`
+	HebrewDayEnd   *int32 `json:"hebrew_day_end"`
+	// Higher priority patterns are matched first for overlapping dates
+	Priority  *int32    `json:"priority"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 // Types of tags used to categorize zmanim (timing, event, shita, method, behavior)

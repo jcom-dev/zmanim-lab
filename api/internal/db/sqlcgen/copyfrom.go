@@ -31,6 +31,7 @@ func (r iteratorForBulkAddTagsToPublisherZman) Values() ([]interface{}, error) {
 	return []interface{}{
 		r.rows[0].PublisherZmanID,
 		r.rows[0].TagID,
+		r.rows[0].IsNegated,
 	}, nil
 }
 
@@ -38,7 +39,7 @@ func (r iteratorForBulkAddTagsToPublisherZman) Err() error {
 	return nil
 }
 
-// Bulk insert tags for a publisher zman
+// Bulk insert tags for a publisher zman (with is_negated)
 func (q *Queries) BulkAddTagsToPublisherZman(ctx context.Context, arg []BulkAddTagsToPublisherZmanParams) (int64, error) {
-	return q.db.CopyFrom(ctx, []string{"publisher_zman_tags"}, []string{"publisher_zman_id", "tag_id"}, &iteratorForBulkAddTagsToPublisherZman{rows: arg})
+	return q.db.CopyFrom(ctx, []string{"publisher_zman_tags"}, []string{"publisher_zman_id", "tag_id", "is_negated"}, &iteratorForBulkAddTagsToPublisherZman{rows: arg})
 }

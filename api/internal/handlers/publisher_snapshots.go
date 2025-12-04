@@ -1,0 +1,279 @@
+package handlers
+
+import (
+	"encoding/json"
+	"fmt"
+	"log/slog"
+	"net/http"
+	"time"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/jcom-dev/zmanim-lab/internal/services"
+)
+
+// ExportPublisherSnapshot exports the current publisher state as JSON
+// GET /api/v1/publisher/snapshot/export
+func (h *Handlers) ExportPublisherSnapshot(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// 1. Resolve publisher context
+	pc := h.publisherResolver.MustResolve(w, r)
+	if pc == nil {
+		return
+	}
+
+	// 2. No URL params
+
+	// 3. No body
+
+	// 4. No validation
+
+	// 5. Build snapshot
+	description := fmt.Sprintf("Export - %s", time.Now().Format("Jan 2, 2006 3:04 PM"))
+	snapshot, err := h.snapshotService.BuildSnapshot(ctx, pc.PublisherID, description)
+	if err != nil {
+		slog.Error("failed to build snapshot for export", "error", err, "publisher_id", pc.PublisherID)
+		RespondInternalError(w, r, "Failed to export snapshot")
+		return
+	}
+
+	// 6. Respond with JSON file download
+	filename := fmt.Sprintf("publisher-snapshot-%s.json", time.Now().Format("2006-01-02"))
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(snapshot); err != nil {
+		slog.Error("failed to encode snapshot", "error", err)
+	}
+}
+
+// ImportPublisherSnapshot imports a snapshot from JSON
+// POST /api/v1/publisher/snapshot/import
+func (h *Handlers) ImportPublisherSnapshot(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// 1. Resolve publisher context
+	pc := h.publisherResolver.MustResolve(w, r)
+	if pc == nil {
+		return
+	}
+
+	// 2. No URL params
+
+	// 3. Parse body
+	var req struct {
+		Snapshot services.PublisherSnapshot `json:"snapshot"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		RespondBadRequest(w, r, "Invalid request body")
+		return
+	}
+
+	// 4. Validate
+	if req.Snapshot.Version == 0 {
+		RespondValidationError(w, r, "Invalid snapshot format", map[string]string{
+			"version": "Snapshot version is required",
+		})
+		return
+	}
+	if req.Snapshot.Version != 1 {
+		RespondValidationError(w, r, "Unsupported snapshot version", map[string]string{
+			"version": fmt.Sprintf("Version %d is not supported. Only version 1 is supported.", req.Snapshot.Version),
+		})
+		return
+	}
+
+	// 5. Import snapshot
+	err := h.snapshotService.ImportSnapshot(ctx, pc.PublisherID, pc.UserID, &req.Snapshot)
+	if err != nil {
+		slog.Error("failed to import snapshot", "error", err, "publisher_id", pc.PublisherID)
+		RespondInternalError(w, r, "Failed to import snapshot")
+		return
+	}
+
+	// 6. Respond
+	RespondJSON(w, r, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"stats": map[string]int{
+			"zmanim": len(req.Snapshot.Zmanim),
+		},
+	})
+}
+
+// SavePublisherSnapshot creates a new version snapshot
+// POST /api/v1/publisher/snapshot
+func (h *Handlers) SavePublisherSnapshot(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// 1. Resolve publisher context
+	pc := h.publisherResolver.MustResolve(w, r)
+	if pc == nil {
+		return
+	}
+
+	// 2. No URL params
+
+	// 3. Parse body
+	var req struct {
+		Description string `json:"description"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		// Allow empty body - will use default description
+		req.Description = ""
+	}
+
+	// 4. Validate & set default
+	if req.Description == "" {
+		req.Description = fmt.Sprintf("Version save - %s", time.Now().Format("Jan 2, 2006 3:04 PM"))
+	}
+
+	// 5. Save snapshot
+	meta, err := h.snapshotService.SaveSnapshot(ctx, pc.PublisherID, pc.UserID, req.Description)
+	if err != nil {
+		slog.Error("failed to save snapshot", "error", err, "publisher_id", pc.PublisherID)
+		RespondInternalError(w, r, "Failed to save version")
+		return
+	}
+
+	// 6. Respond
+	RespondJSON(w, r, http.StatusCreated, meta)
+}
+
+// ListPublisherSnapshots returns all saved versions
+// GET /api/v1/publisher/snapshots
+func (h *Handlers) ListPublisherSnapshots(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// 1. Resolve publisher context
+	pc := h.publisherResolver.MustResolve(w, r)
+	if pc == nil {
+		return
+	}
+
+	// 2. No URL params
+
+	// 3. No body
+
+	// 4. No validation
+
+	// 5. List snapshots
+	snapshots, err := h.snapshotService.ListSnapshots(ctx, pc.PublisherID)
+	if err != nil {
+		slog.Error("failed to list snapshots", "error", err, "publisher_id", pc.PublisherID)
+		RespondInternalError(w, r, "Failed to list versions")
+		return
+	}
+
+	// 6. Respond
+	RespondJSON(w, r, http.StatusOK, map[string]interface{}{
+		"snapshots": snapshots,
+		"total":     len(snapshots),
+	})
+}
+
+// GetPublisherSnapshot returns a single snapshot with full data
+// GET /api/v1/publisher/snapshot/{id}
+func (h *Handlers) GetPublisherSnapshot(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// 1. Resolve publisher context
+	pc := h.publisherResolver.MustResolve(w, r)
+	if pc == nil {
+		return
+	}
+
+	// 2. Extract URL params
+	snapshotID := chi.URLParam(r, "id")
+	if snapshotID == "" {
+		RespondValidationError(w, r, "Snapshot ID is required", nil)
+		return
+	}
+
+	// 3. No body
+
+	// 4. No additional validation
+
+	// 5. Get snapshot
+	snapshot, err := h.snapshotService.GetSnapshot(ctx, snapshotID, pc.PublisherID)
+	if err != nil {
+		slog.Error("failed to get snapshot", "error", err, "snapshot_id", snapshotID, "publisher_id", pc.PublisherID)
+		RespondNotFound(w, r, "Snapshot not found")
+		return
+	}
+
+	// 6. Respond
+	RespondJSON(w, r, http.StatusOK, snapshot)
+}
+
+// RestorePublisherSnapshot restores from a saved version
+// POST /api/v1/publisher/snapshot/{id}/restore
+func (h *Handlers) RestorePublisherSnapshot(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// 1. Resolve publisher context
+	pc := h.publisherResolver.MustResolve(w, r)
+	if pc == nil {
+		return
+	}
+
+	// 2. Extract URL params
+	snapshotID := chi.URLParam(r, "id")
+	if snapshotID == "" {
+		RespondValidationError(w, r, "Snapshot ID is required", nil)
+		return
+	}
+
+	// 3. No body
+
+	// 4. No additional validation
+
+	// 5. Restore snapshot (auto-saves current state first)
+	autoSave, err := h.snapshotService.RestoreSnapshot(ctx, snapshotID, pc.PublisherID, pc.UserID)
+	if err != nil {
+		slog.Error("failed to restore snapshot", "error", err, "snapshot_id", snapshotID, "publisher_id", pc.PublisherID)
+		RespondInternalError(w, r, "Failed to restore version")
+		return
+	}
+
+	// 6. Respond
+	RespondJSON(w, r, http.StatusOK, map[string]interface{}{
+		"success":      true,
+		"auto_save_id": autoSave.ID,
+	})
+}
+
+// DeletePublisherSnapshot deletes a saved version
+// DELETE /api/v1/publisher/snapshot/{id}
+func (h *Handlers) DeletePublisherSnapshot(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// 1. Resolve publisher context
+	pc := h.publisherResolver.MustResolve(w, r)
+	if pc == nil {
+		return
+	}
+
+	// 2. Extract URL params
+	snapshotID := chi.URLParam(r, "id")
+	if snapshotID == "" {
+		RespondValidationError(w, r, "Snapshot ID is required", nil)
+		return
+	}
+
+	// 3. No body
+
+	// 4. No additional validation
+
+	// 5. Delete snapshot
+	err := h.snapshotService.DeleteSnapshot(ctx, snapshotID, pc.PublisherID)
+	if err != nil {
+		slog.Error("failed to delete snapshot", "error", err, "snapshot_id", snapshotID, "publisher_id", pc.PublisherID)
+		RespondInternalError(w, r, "Failed to delete version")
+		return
+	}
+
+	// 6. Respond
+	RespondJSON(w, r, http.StatusOK, map[string]interface{}{
+		"success": true,
+	})
+}

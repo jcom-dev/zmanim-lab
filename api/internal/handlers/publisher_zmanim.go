@@ -501,27 +501,32 @@ func (h *Handlers) fetchPublisherZmanim(ctx context.Context, publisherID string)
 				) all_tags
 				WHERE all_tags.tag_type IN ('event', 'behavior')
 			) AS is_event_zman,
-			-- Combine tags from master registry AND publisher-specific tags (UNION removes duplicates)
+			-- Combine tags from master registry AND publisher-specific tags (with is_negated)
 			COALESCE(
 				(SELECT json_agg(json_build_object(
-					'id', t.id,
-					'tag_key', t.tag_key,
-					'name', t.name,
-					'display_name_hebrew', t.display_name_hebrew,
-					'display_name_english', t.display_name_english,
-					'tag_type', t.tag_type
-				) ORDER BY t.sort_order)
+					'id', sub.id,
+					'tag_key', sub.tag_key,
+					'name', sub.name,
+					'display_name_hebrew', sub.display_name_hebrew,
+					'display_name_english', sub.display_name_english,
+					'tag_type', sub.tag_type,
+					'is_negated', sub.is_negated
+				) ORDER BY sub.sort_order)
 				FROM (
 					-- Tags from master registry
-					SELECT t.* FROM master_zman_tags mzt
+					SELECT t.id, t.tag_key, t.name, t.display_name_hebrew, t.display_name_english,
+					       t.tag_type, t.sort_order, mzt.is_negated
+					FROM master_zman_tags mzt
 					JOIN zman_tags t ON mzt.tag_id = t.id
 					WHERE mzt.master_zman_id = pz.master_zman_id
-					UNION
+					UNION ALL
 					-- Tags added by publisher
-					SELECT t.* FROM publisher_zman_tags pzt
+					SELECT t.id, t.tag_key, t.name, t.display_name_hebrew, t.display_name_english,
+					       t.tag_type, t.sort_order, pzt.is_negated
+					FROM publisher_zman_tags pzt
 					JOIN zman_tags t ON pzt.tag_id = t.id
 					WHERE pzt.publisher_zman_id = pz.id
-				) t),
+				) sub),
 				'[]'::json
 			) AS tags,
 			CASE WHEN pz.linked_publisher_zman_id IS NOT NULL THEN true ELSE false END AS is_linked,
@@ -1073,6 +1078,13 @@ func (h *Handlers) CreatePublisherZman(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Invalidate cache - new zman affects calculations
+	if h.cache != nil {
+		if err := h.cache.InvalidatePublisherCache(ctx, publisherID); err != nil {
+			slog.Warn("failed to invalidate cache after creating zman", "error", err, "publisher_id", publisherID)
+		}
+	}
+
 	z := createPublisherZmanRowToPublisherZman(sqlcZman)
 
 	RespondJSON(w, r, http.StatusCreated, z)
@@ -1170,12 +1182,12 @@ func (h *Handlers) UpdatePublisherZman(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Invalidate cached zmanim for this publisher when formula or is_enabled changes
+	// Invalidate all cached data for this publisher when formula or is_enabled changes
 	if h.cache != nil && (req.FormulaDSL != nil || req.IsEnabled != nil) {
-		if err := h.cache.InvalidateZmanim(ctx, publisherID); err != nil {
-			slog.Warn("failed to invalidate zmanim cache", "error", err, "publisher_id", publisherID)
+		if err := h.cache.InvalidatePublisherCache(ctx, publisherID); err != nil {
+			slog.Warn("failed to invalidate cache", "error", err, "publisher_id", publisherID)
 		} else {
-			slog.Info("invalidated zmanim cache", "publisher_id", publisherID, "reason", "zman_updated")
+			slog.Info("invalidated cache", "publisher_id", publisherID, "reason", "zman_updated")
 		}
 	}
 
@@ -1211,6 +1223,13 @@ func (h *Handlers) DeletePublisherZman(w http.ResponseWriter, r *http.Request) {
 	if deleteErr != nil {
 		RespondInternalError(w, r, "Failed to delete zman")
 		return
+	}
+
+	// Invalidate cache - deleted zman affects calculations
+	if h.cache != nil {
+		if err := h.cache.InvalidatePublisherCache(ctx, publisherID); err != nil {
+			slog.Warn("failed to invalidate cache after deleting zman", "error", err, "publisher_id", publisherID)
+		}
 	}
 
 	RespondJSON(w, r, http.StatusOK, map[string]interface{}{
@@ -1383,6 +1402,13 @@ func (h *Handlers) ImportZmanim(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			imported = append(imported, z)
+		}
+	}
+
+	// Invalidate cache - imported zmanim affect calculations
+	if h.cache != nil && len(imported) > 0 {
+		if err := h.cache.InvalidatePublisherCache(ctx, publisherID); err != nil {
+			slog.Warn("failed to invalidate cache after import", "error", err, "publisher_id", publisherID)
 		}
 	}
 
@@ -1765,6 +1791,13 @@ func (h *Handlers) CreateZmanFromPublisher(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	// Invalidate cache - new linked/copied zman affects calculations
+	if h.cache != nil {
+		if err := h.cache.InvalidatePublisherCache(ctx, publisherID); err != nil {
+			slog.Warn("failed to invalidate cache after creating linked zman", "error", err, "publisher_id", publisherID)
+		}
+	}
+
 	// Return the created zman
 	result := PublisherZman{
 		ID:                    newID,
@@ -1833,9 +1866,15 @@ func (h *Handlers) GetPublisherZmanTags(w http.ResponseWriter, r *http.Request) 
 	RespondJSON(w, r, http.StatusOK, tags)
 }
 
+// TagAssignment represents a tag with its negation state
+type TagAssignment struct {
+	TagID     string `json:"tag_id"`
+	IsNegated bool   `json:"is_negated"`
+}
+
 // UpdatePublisherZmanTagsRequest represents the request body for updating tags
 type UpdatePublisherZmanTagsRequest struct {
-	TagIDs []string `json:"tag_ids"`
+	Tags []TagAssignment `json:"tags"`
 }
 
 // UpdatePublisherZmanTags replaces all tags for a publisher zman
@@ -1890,14 +1929,14 @@ func (h *Handlers) UpdatePublisherZmanTags(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Insert new tags
-	for _, tagID := range req.TagIDs {
+	// Insert new tags with is_negated
+	for _, tag := range req.Tags {
 		_, err = tx.Exec(ctx,
-			"INSERT INTO publisher_zman_tags (publisher_zman_id, tag_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
-			zmanID, tagID,
+			"INSERT INTO publisher_zman_tags (publisher_zman_id, tag_id, is_negated) VALUES ($1, $2, $3) ON CONFLICT (publisher_zman_id, tag_id) DO UPDATE SET is_negated = $3",
+			zmanID, tag.TagID, tag.IsNegated,
 		)
 		if err != nil {
-			slog.Error("failed to insert tag", "error", err, "tag_id", tagID)
+			slog.Error("failed to insert tag", "error", err, "tag_id", tag.TagID)
 			RespondInternalError(w, r, "Failed to update tags")
 			return
 		}
@@ -1921,6 +1960,11 @@ func (h *Handlers) UpdatePublisherZmanTags(w http.ResponseWriter, r *http.Reques
 	RespondJSON(w, r, http.StatusOK, tags)
 }
 
+// AddTagRequest represents the request body for adding a single tag
+type AddTagRequest struct {
+	IsNegated bool `json:"is_negated"`
+}
+
 // AddTagToPublisherZman adds a single tag to a publisher zman
 // POST /api/v1/publisher/zmanim/{zmanKey}/tags/{tagId}
 func (h *Handlers) AddTagToPublisherZman(w http.ResponseWriter, r *http.Request) {
@@ -1933,6 +1977,14 @@ func (h *Handlers) AddTagToPublisherZman(w http.ResponseWriter, r *http.Request)
 	publisherID := pc.PublisherID
 	zmanKey := chi.URLParam(r, "zmanKey")
 	tagID := chi.URLParam(r, "tagId")
+
+	// Parse optional request body for is_negated
+	var req AddTagRequest
+	if r.Body != nil && r.ContentLength > 0 {
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			// Ignore decode errors - default to is_negated=false
+		}
+	}
 
 	// Get the publisher_zman_id
 	var zmanID string
@@ -1951,10 +2003,11 @@ func (h *Handlers) AddTagToPublisherZman(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Add the tag
+	// Add the tag with is_negated
 	err = h.db.Queries.AddTagToPublisherZman(ctx, sqlcgen.AddTagToPublisherZmanParams{
 		PublisherZmanID: zmanID,
 		TagID:           tagID,
+		IsNegated:       req.IsNegated,
 	})
 	if err != nil {
 		slog.Error("failed to add tag", "error", err)

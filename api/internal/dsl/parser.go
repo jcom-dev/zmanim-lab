@@ -328,10 +328,80 @@ func (p *Parser) parseConditional() Node {
 	}
 }
 
-// parseCondition parses a boolean condition
+// parseCondition parses a boolean condition with logical operators
+// Precedence (lowest to highest): || -> && -> comparison -> primary
 func (p *Parser) parseCondition() Node {
-	pos := Position{Line: p.current.Line, Column: p.current.Column}
+	return p.parseLogicalOr()
+}
 
+// parseLogicalOr parses || expressions (lowest precedence)
+func (p *Parser) parseLogicalOr() Node {
+	left := p.parseLogicalAnd()
+
+	for p.current.Type == TOKEN_OR {
+		pos := Position{Line: p.current.Line, Column: p.current.Column}
+		p.advance() // skip ||
+		right := p.parseLogicalAnd()
+		left = &LogicalOpNode{
+			Op:    "||",
+			Left:  left,
+			Right: right,
+			Pos:   pos,
+		}
+	}
+
+	return left
+}
+
+// parseLogicalAnd parses && expressions
+func (p *Parser) parseLogicalAnd() Node {
+	left := p.parseLogicalNot()
+
+	for p.current.Type == TOKEN_AND {
+		pos := Position{Line: p.current.Line, Column: p.current.Column}
+		p.advance() // skip &&
+		right := p.parseLogicalNot()
+		left = &LogicalOpNode{
+			Op:    "&&",
+			Left:  left,
+			Right: right,
+			Pos:   pos,
+		}
+	}
+
+	return left
+}
+
+// parseLogicalNot parses ! expressions
+func (p *Parser) parseLogicalNot() Node {
+	if p.current.Type == TOKEN_NOT {
+		pos := Position{Line: p.current.Line, Column: p.current.Column}
+		p.advance() // skip !
+		operand := p.parseLogicalNot() // Allow chained !
+		return &NotOpNode{
+			Operand: operand,
+			Pos:     pos,
+		}
+	}
+
+	return p.parseComparison()
+}
+
+// parseComparison parses comparison expressions
+func (p *Parser) parseComparison() Node {
+	// Handle parenthesized conditions
+	if p.current.Type == TOKEN_LPAREN {
+		p.advance() // skip (
+		node := p.parseCondition()
+		if p.current.Type != TOKEN_RPAREN {
+			p.addError("expected ')' after condition")
+			return nil
+		}
+		p.advance() // skip )
+		return node
+	}
+
+	pos := Position{Line: p.current.Line, Column: p.current.Column}
 	left := p.parseFactor()
 
 	// Check for comparison operator

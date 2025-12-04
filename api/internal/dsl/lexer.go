@@ -129,6 +129,24 @@ func (l *Lexer) NextToken() Token {
 			tok.Type = TOKEN_NEQ
 			tok.Literal = "!="
 		} else {
+			tok.Type = TOKEN_NOT
+			tok.Literal = "!"
+		}
+	case '&':
+		if l.peekChar() == '&' {
+			l.readChar()
+			tok.Type = TOKEN_AND
+			tok.Literal = "&&"
+		} else {
+			tok.Type = TOKEN_ILLEGAL
+			tok.Literal = string(l.ch)
+		}
+	case '|':
+		if l.peekChar() == '|' {
+			l.readChar()
+			tok.Type = TOKEN_OR
+			tok.Literal = "||"
+		} else {
 			tok.Type = TOKEN_ILLEGAL
 			tok.Literal = string(l.ch)
 		}

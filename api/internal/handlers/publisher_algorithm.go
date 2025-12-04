@@ -618,16 +618,12 @@ func (h *Handlers) PublishAlgorithm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Invalidate cache for this publisher (zmanim calculations are now stale)
+	// Invalidate all cache for this publisher (zmanim calculations are now stale)
 	if h.cache != nil {
-		if err := h.cache.InvalidateZmanim(ctx, publisherID); err != nil {
+		if err := h.cache.InvalidatePublisherCache(ctx, publisherID); err != nil {
 			slog.Error("cache invalidation error after publish", "error", err)
 		} else {
 			slog.Info("cache invalidated after algorithm publish", "publisher_id", publisherID)
-		}
-		// Also invalidate algorithm cache
-		if err := h.cache.InvalidateAlgorithm(ctx, publisherID); err != nil {
-			slog.Error("algorithm cache invalidation error", "error", err)
 		}
 	}
 

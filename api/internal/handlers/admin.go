@@ -73,12 +73,28 @@ func (h *Handlers) AdminGetPublisherUsers(w http.ResponseWriter, r *http.Request
 func (h *Handlers) AdminListPublishers(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	query := `
-		SELECT id, clerk_user_id, name, email, website,
-		       logo_url, bio, status, created_at, updated_at
-		FROM publishers
-		ORDER BY created_at DESC
-	`
+	// Check if we should include deleted publishers
+	includeDeleted := r.URL.Query().Get("include_deleted") == "true"
+
+	var query string
+	if includeDeleted {
+		query = `
+			SELECT id, clerk_user_id, name, email, website,
+			       logo_url, bio, status, is_official, suspension_reason,
+			       deleted_at, deleted_by, created_at, updated_at
+			FROM publishers
+			ORDER BY deleted_at DESC NULLS FIRST, created_at DESC
+		`
+	} else {
+		query = `
+			SELECT id, clerk_user_id, name, email, website,
+			       logo_url, bio, status, is_official, suspension_reason,
+			       deleted_at, deleted_by, created_at, updated_at
+			FROM publishers
+			WHERE deleted_at IS NULL
+			ORDER BY created_at DESC
+		`
+	}
 
 	rows, err := h.db.Pool.Query(ctx, query)
 	if err != nil {
@@ -91,23 +107,27 @@ func (h *Handlers) AdminListPublishers(w http.ResponseWriter, r *http.Request) {
 	publishers := make([]map[string]interface{}, 0)
 	for rows.Next() {
 		var id, name, email, status string
-		var clerkUserID, website, logoURL, bio *string
+		var clerkUserID, website, logoURL, bio, suspensionReason, deletedBy *string
+		var isOfficial bool
+		var deletedAt *time.Time
 		var createdAt, updatedAt time.Time
 
 		err := rows.Scan(&id, &clerkUserID, &name, &email,
-			&website, &logoURL, &bio, &status, &createdAt, &updatedAt)
+			&website, &logoURL, &bio, &status, &isOfficial, &suspensionReason,
+			&deletedAt, &deletedBy, &createdAt, &updatedAt)
 		if err != nil {
 			slog.Error("failed to scan publisher row", "error", err)
 			continue
 		}
 
 		publisher := map[string]interface{}{
-			"id":         id,
-			"name":       name,
-			"email":      email,
-			"status":     status,
-			"created_at": createdAt,
-			"updated_at": updatedAt,
+			"id":          id,
+			"name":        name,
+			"email":       email,
+			"status":      status,
+			"is_official": isOfficial,
+			"created_at":  createdAt,
+			"updated_at":  updatedAt,
 		}
 
 		if clerkUserID != nil {
@@ -121,6 +141,15 @@ func (h *Handlers) AdminListPublishers(w http.ResponseWriter, r *http.Request) {
 		}
 		if bio != nil {
 			publisher["bio"] = *bio
+		}
+		if suspensionReason != nil {
+			publisher["suspension_reason"] = *suspensionReason
+		}
+		if deletedAt != nil {
+			publisher["deleted_at"] = *deletedAt
+		}
+		if deletedBy != nil {
+			publisher["deleted_by"] = *deletedBy
 		}
 
 		publishers = append(publishers, publisher)
@@ -634,14 +663,53 @@ func (h *Handlers) AdminSuspendPublisher(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	result := h.updatePublisherStatus(ctx, id, "suspended")
-	if result.err != nil {
-		handlePublisherStatusError(w, r, result)
+	// Parse optional reason from request body
+	var req struct {
+		Reason string `json:"reason"`
+	}
+	// Ignore decode errors - reason is optional
+	json.NewDecoder(r.Body).Decode(&req)
+
+	// Update status and suspension reason
+	query := `
+		UPDATE publishers
+		SET status = 'suspended', suspension_reason = $1, updated_at = NOW()
+		WHERE id = $2
+		RETURNING id, name, email, status, suspension_reason, created_at, updated_at
+	`
+
+	var resID, name, email, status string
+	var suspensionReason *string
+	var createdAt, updatedAt time.Time
+
+	err := h.db.Pool.QueryRow(ctx, query, req.Reason, id).Scan(
+		&resID, &name, &email, &status, &suspensionReason, &createdAt, &updatedAt)
+
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			RespondNotFound(w, r, "Publisher not found")
+			return
+		}
+		slog.Error("failed to suspend publisher", "error", err, "id", id)
+		RespondInternalError(w, r, "Failed to suspend publisher")
 		return
 	}
 
-	slog.Info("publisher suspended", "id", id)
-	RespondJSON(w, r, http.StatusOK, result.publisher)
+	slog.Info("publisher suspended", "id", id, "reason", req.Reason)
+
+	publisher := map[string]interface{}{
+		"id":         resID,
+		"name":       name,
+		"email":      email,
+		"status":     status,
+		"created_at": createdAt,
+		"updated_at": updatedAt,
+	}
+	if suspensionReason != nil {
+		publisher["suspension_reason"] = *suspensionReason
+	}
+
+	RespondJSON(w, r, http.StatusOK, publisher)
 }
 
 // AdminReactivatePublisher reactivates a suspended publisher
@@ -655,14 +723,40 @@ func (h *Handlers) AdminReactivatePublisher(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	result := h.updatePublisherStatus(ctx, id, "active")
-	if result.err != nil {
-		handlePublisherStatusError(w, r, result)
+	// Clear suspension reason when reactivating
+	query := `
+		UPDATE publishers
+		SET status = 'active', suspension_reason = NULL, updated_at = NOW()
+		WHERE id = $1
+		RETURNING id, name, email, status, created_at, updated_at
+	`
+
+	var resID, name, email, status string
+	var createdAt, updatedAt time.Time
+
+	err := h.db.Pool.QueryRow(ctx, query, id).Scan(
+		&resID, &name, &email, &status, &createdAt, &updatedAt)
+
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			RespondNotFound(w, r, "Publisher not found")
+			return
+		}
+		slog.Error("failed to reactivate publisher", "error", err, "id", id)
+		RespondInternalError(w, r, "Failed to reactivate publisher")
 		return
 	}
 
 	slog.Info("publisher reactivated", "id", id)
-	RespondJSON(w, r, http.StatusOK, result.publisher)
+
+	RespondJSON(w, r, http.StatusOK, map[string]interface{}{
+		"id":         resID,
+		"name":       name,
+		"email":      email,
+		"status":     status,
+		"created_at": createdAt,
+		"updated_at": updatedAt,
+	})
 }
 
 // AdminUpdatePublisher updates a publisher's details
@@ -768,9 +862,138 @@ func (h *Handlers) AdminUpdatePublisher(w http.ResponseWriter, r *http.Request) 
 	RespondJSON(w, r, http.StatusOK, publisher)
 }
 
-// AdminDeletePublisher deletes a publisher and cleans up associated Clerk users
+// AdminDeletePublisher soft-deletes a publisher (can be restored later)
 // DELETE /api/admin/publishers/{id}
 func (h *Handlers) AdminDeletePublisher(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	id := chi.URLParam(r, "id")
+
+	if id == "" {
+		RespondValidationError(w, r, "Publisher ID is required", nil)
+		return
+	}
+
+	// Get admin user ID for audit trail
+	adminUserID := middleware.GetUserID(ctx)
+
+	// Get publisher name and check if already deleted
+	var publisherName string
+	var deletedAt *time.Time
+	err := h.db.Pool.QueryRow(ctx,
+		"SELECT name, deleted_at FROM publishers WHERE id = $1", id).Scan(&publisherName, &deletedAt)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			RespondNotFound(w, r, "Publisher not found")
+			return
+		}
+		slog.Error("failed to get publisher", "error", err, "id", id)
+		RespondInternalError(w, r, "Failed to get publisher")
+		return
+	}
+
+	if deletedAt != nil {
+		RespondBadRequest(w, r, "Publisher is already deleted")
+		return
+	}
+
+	// Soft delete the publisher
+	query := `
+		UPDATE publishers
+		SET deleted_at = NOW(), deleted_by = $1, updated_at = NOW()
+		WHERE id = $2 AND deleted_at IS NULL
+		RETURNING deleted_at
+	`
+
+	var deletedAtResult time.Time
+	err = h.db.Pool.QueryRow(ctx, query, adminUserID, id).Scan(&deletedAtResult)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			RespondNotFound(w, r, "Publisher not found or already deleted")
+			return
+		}
+		slog.Error("failed to soft delete publisher", "error", err, "id", id)
+		RespondInternalError(w, r, "Failed to delete publisher")
+		return
+	}
+
+	slog.Info("publisher soft-deleted", "id", id, "name", publisherName, "deleted_by", adminUserID)
+
+	RespondJSON(w, r, http.StatusOK, map[string]interface{}{
+		"message":    "Publisher deleted successfully",
+		"id":         id,
+		"name":       publisherName,
+		"deleted_at": deletedAtResult,
+		"deleted_by": adminUserID,
+	})
+}
+
+// AdminRestorePublisher restores a soft-deleted publisher
+// PUT /api/admin/publishers/{id}/restore
+func (h *Handlers) AdminRestorePublisher(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	id := chi.URLParam(r, "id")
+
+	if id == "" {
+		RespondValidationError(w, r, "Publisher ID is required", nil)
+		return
+	}
+
+	// Get publisher name and check if actually deleted
+	var publisherName string
+	var deletedAt *time.Time
+	err := h.db.Pool.QueryRow(ctx,
+		"SELECT name, deleted_at FROM publishers WHERE id = $1", id).Scan(&publisherName, &deletedAt)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			RespondNotFound(w, r, "Publisher not found")
+			return
+		}
+		slog.Error("failed to get publisher", "error", err, "id", id)
+		RespondInternalError(w, r, "Failed to get publisher")
+		return
+	}
+
+	if deletedAt == nil {
+		RespondBadRequest(w, r, "Publisher is not deleted")
+		return
+	}
+
+	// Restore the publisher
+	query := `
+		UPDATE publishers
+		SET deleted_at = NULL, deleted_by = NULL, updated_at = NOW()
+		WHERE id = $1 AND deleted_at IS NOT NULL
+		RETURNING id, name, status, updated_at
+	`
+
+	var resID, name, status string
+	var updatedAt time.Time
+	err = h.db.Pool.QueryRow(ctx, query, id).Scan(&resID, &name, &status, &updatedAt)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			RespondNotFound(w, r, "Publisher not found or not deleted")
+			return
+		}
+		slog.Error("failed to restore publisher", "error", err, "id", id)
+		RespondInternalError(w, r, "Failed to restore publisher")
+		return
+	}
+
+	adminUserID := middleware.GetUserID(ctx)
+	slog.Info("publisher restored", "id", id, "name", name, "restored_by", adminUserID)
+
+	RespondJSON(w, r, http.StatusOK, map[string]interface{}{
+		"message":    "Publisher restored successfully",
+		"id":         resID,
+		"name":       name,
+		"status":     status,
+		"updated_at": updatedAt,
+	})
+}
+
+// AdminPermanentDeletePublisher permanently deletes a publisher and cleans up associated Clerk users
+// DELETE /api/admin/publishers/{id}/permanent
+func (h *Handlers) AdminPermanentDeletePublisher(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	id := chi.URLParam(r, "id")
 
@@ -829,10 +1052,10 @@ func (h *Handlers) AdminDeletePublisher(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Delete the publisher (cascading will handle related tables)
+	// Permanently delete the publisher (cascading will handle related tables)
 	result, err := h.db.Pool.Exec(ctx, "DELETE FROM publishers WHERE id = $1", id)
 	if err != nil {
-		slog.Error("failed to delete publisher", "error", err, "id", id)
+		slog.Error("failed to permanently delete publisher", "error", err, "id", id)
 		RespondInternalError(w, r, "Failed to delete publisher")
 		return
 	}
@@ -842,7 +1065,7 @@ func (h *Handlers) AdminDeletePublisher(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	slog.Info("publisher deleted", "id", id, "name", publisherName)
+	slog.Info("publisher permanently deleted", "id", id, "name", publisherName)
 
 	// Clean up Clerk users in background
 	if h.clerkService != nil && len(usersToCleanup) > 0 {
@@ -878,7 +1101,7 @@ func (h *Handlers) AdminDeletePublisher(w http.ResponseWriter, r *http.Request) 
 	}
 
 	RespondJSON(w, r, http.StatusOK, map[string]interface{}{
-		"message":        "Publisher deleted successfully",
+		"message":        "Publisher permanently deleted",
 		"id":             id,
 		"name":           publisherName,
 		"users_affected": len(usersToCleanup),
@@ -1189,6 +1412,60 @@ func handlePublisherStatusError(w http.ResponseWriter, r *http.Request, result s
 		return
 	}
 	RespondInternalError(w, r, "Failed to update publisher status")
+}
+
+// AdminSetPublisherOfficial sets or clears the is_official flag for a publisher
+// PUT /api/admin/publishers/{id}/official
+func (h *Handlers) AdminSetPublisherOfficial(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	id := chi.URLParam(r, "id")
+
+	if id == "" {
+		RespondValidationError(w, r, "Publisher ID is required", nil)
+		return
+	}
+
+	var req struct {
+		IsOfficial bool `json:"is_official"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		RespondBadRequest(w, r, "Invalid request body")
+		return
+	}
+
+	query := `
+		UPDATE publishers
+		SET is_official = $1, updated_at = NOW()
+		WHERE id = $2
+		RETURNING id, name, is_official, updated_at
+	`
+
+	var resID, name string
+	var isOfficial bool
+	var updatedAt time.Time
+
+	err := h.db.Pool.QueryRow(ctx, query, req.IsOfficial, id).Scan(
+		&resID, &name, &isOfficial, &updatedAt)
+
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			RespondNotFound(w, r, "Publisher not found")
+			return
+		}
+		slog.Error("failed to update publisher official status", "error", err, "id", id)
+		RespondInternalError(w, r, "Failed to update publisher")
+		return
+	}
+
+	slog.Info("publisher official status updated", "id", id, "name", name, "is_official", isOfficial)
+
+	RespondJSON(w, r, http.StatusOK, map[string]interface{}{
+		"id":          resID,
+		"name":        name,
+		"is_official": isOfficial,
+		"updated_at":  updatedAt,
+	})
 }
 
 // generateSlug creates a URL-friendly slug from text

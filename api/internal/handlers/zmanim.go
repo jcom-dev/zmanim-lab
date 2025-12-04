@@ -32,9 +32,10 @@ type ZmanimWithFormulaResponse struct {
 
 // ZmanimPublisherInfo contains publisher details for the response
 type ZmanimPublisherInfo struct {
-	ID   string  `json:"id"`
-	Name string  `json:"name"`
-	Logo *string `json:"logo,omitempty"` // Base64 data URL
+	ID         string  `json:"id"`
+	Name       string  `json:"name"`
+	Logo       *string `json:"logo,omitempty"`       // Base64 data URL
+	IsOfficial bool    `json:"is_official"`          // Whether this is an official/authoritative source
 }
 
 // ZmanimLocationInfo contains location details for the response
@@ -55,7 +56,9 @@ type ZmanWithFormula struct {
 	Key          string         `json:"key"`
 	Time         string         `json:"time"`
 	IsBeta       bool           `json:"is_beta"`
+	IsCore       bool           `json:"is_core"`
 	TimeCategory string         `json:"time_category,omitempty"`
+	Tags         []ZmanTag      `json:"tags,omitempty"`
 	Formula      FormulaDetails `json:"formula"`
 }
 
@@ -63,8 +66,10 @@ type ZmanWithFormula struct {
 type FormulaDetails struct {
 	Method      string                 `json:"method"`
 	DisplayName string                 `json:"display_name"`
+	DSL         string                 `json:"dsl,omitempty"`
 	Parameters  map[string]interface{} `json:"parameters"`
 	Explanation string                 `json:"explanation"`
+	HalachicSource string              `json:"halachic_source,omitempty"`
 }
 
 // GetZmanimForCity calculates zmanim for a city with formula details
@@ -162,15 +167,17 @@ func (h *Handlers) GetZmanimForCity(w http.ResponseWriter, r *http.Request) {
 	var publisherInfo *ZmanimPublisherInfo
 	if publisherID != "" {
 		// First, get publisher info (logo_data is the base64 embedded logo)
-		pubQuery := `SELECT name, logo_data FROM publishers WHERE id = $1`
+		pubQuery := `SELECT name, logo_data, is_official FROM publishers WHERE id = $1`
 		var pubName string
 		var pubLogo *string
-		err = h.db.Pool.QueryRow(ctx, pubQuery, publisherID).Scan(&pubName, &pubLogo)
+		var isOfficial bool
+		err = h.db.Pool.QueryRow(ctx, pubQuery, publisherID).Scan(&pubName, &pubLogo, &isOfficial)
 		if err == nil {
 			publisherInfo = &ZmanimPublisherInfo{
-				ID:   publisherID,
-				Name: pubName,
-				Logo: pubLogo,
+				ID:         publisherID,
+				Name:       pubName,
+				Logo:       pubLogo,
+				IsOfficial: isOfficial,
 			}
 		}
 
@@ -227,20 +234,50 @@ func (h *Handlers) GetZmanimForCity(w http.ResponseWriter, r *http.Request) {
 		TimeCategory string
 		HebrewName   string
 		EnglishName  string
+		DSL          string
+		IsCore       bool
+		HalachicSource string
 	}
 	zmanMetadataMap := make(map[string]zmanMetadata)
-	metadataQuery := `SELECT zman_key, COALESCE(time_category, ''), COALESCE(canonical_hebrew_name, ''), COALESCE(canonical_english_name, '') FROM master_zmanim_registry`
+	metadataQuery := `SELECT zman_key, COALESCE(time_category, ''), COALESCE(canonical_hebrew_name, ''), COALESCE(canonical_english_name, ''), COALESCE(default_formula_dsl, ''), is_core, COALESCE(halachic_source, '') FROM master_zmanim_registry`
 	metadataRows, metadataErr := h.db.Pool.Query(ctx, metadataQuery)
 	if metadataErr == nil {
 		defer metadataRows.Close()
 		for metadataRows.Next() {
-			var zmanKey, timeCategory, hebrewName, englishName string
-			if err := metadataRows.Scan(&zmanKey, &timeCategory, &hebrewName, &englishName); err == nil {
+			var zmanKey, timeCategory, hebrewName, englishName, dsl, halachicSource string
+			var isCore bool
+			if err := metadataRows.Scan(&zmanKey, &timeCategory, &hebrewName, &englishName, &dsl, &isCore, &halachicSource); err == nil {
 				zmanMetadataMap[zmanKey] = zmanMetadata{
 					TimeCategory: timeCategory,
 					HebrewName:   hebrewName,
 					EnglishName:  englishName,
+					DSL:          dsl,
+					IsCore:       isCore,
+					HalachicSource: halachicSource,
 				}
+			}
+		}
+	}
+
+	// Fetch tags for all zmanim
+	tagsMap := make(map[string][]ZmanTag)
+	tagsQuery := `
+		SELECT mr.zman_key, t.id, t.tag_key, t.name, t.display_name_english, t.display_name_hebrew, t.tag_type, t.color, t.sort_order, t.created_at
+		FROM master_zmanim_registry mr
+		JOIN master_zman_tags mzt ON mr.id = mzt.master_zman_id
+		JOIN zman_tags t ON mzt.tag_id = t.id
+		ORDER BY mr.zman_key, t.tag_type, t.sort_order
+	`
+	tagsRows, tagsErr := h.db.Pool.Query(ctx, tagsQuery)
+	if tagsErr == nil {
+		defer tagsRows.Close()
+		for tagsRows.Next() {
+			var zmanKey string
+			var tag ZmanTag
+			var description *string
+			if err := tagsRows.Scan(&zmanKey, &tag.ID, &tag.TagKey, &tag.Name, &tag.DisplayNameEnglish, &tag.DisplayNameHebrew, &tag.TagType, &tag.Color, &tag.SortOrder, &tag.CreatedAt); err == nil {
+				tag.Description = description
+				tagsMap[zmanKey] = append(tagsMap[zmanKey], tag)
 			}
 		}
 	}
@@ -276,12 +313,16 @@ func (h *Handlers) GetZmanimForCity(w http.ResponseWriter, r *http.Request) {
 			Key:          zman.Key,
 			Time:         zman.TimeString,
 			IsBeta:       betaStatusMap[zman.Key],
+			IsCore:       metadata.IsCore,
 			TimeCategory: metadata.TimeCategory,
+			Tags:         tagsMap[zman.Key],
 			Formula: FormulaDetails{
 				Method:      zman.Formula.Method,
 				DisplayName: zman.Formula.DisplayName,
+				DSL:         metadata.DSL,
 				Parameters:  zman.Formula.Parameters,
 				Explanation: zman.Formula.Explanation,
+				HalachicSource: metadata.HalachicSource,
 			},
 		})
 	}
@@ -459,15 +500,11 @@ func (h *Handlers) InvalidatePublisherCache(w http.ResponseWriter, r *http.Reque
 
 	// Invalidate Redis cache (if available)
 	if h.cache != nil {
-		if err := h.cache.InvalidateZmanim(ctx, publisherID); err != nil {
+		if err := h.cache.InvalidatePublisherCache(ctx, publisherID); err != nil {
 			slog.Error("redis cache invalidation error", "error", err)
 		} else {
 			slog.Info("redis cache invalidated", "publisher_id", publisherID)
 			redisDeleted = 1 // Indicates success (actual count is logged by cache)
-		}
-		// Also invalidate algorithm cache
-		if err := h.cache.InvalidateAlgorithm(ctx, publisherID); err != nil {
-			slog.Error("redis algorithm cache invalidation error", "error", err)
 		}
 	}
 

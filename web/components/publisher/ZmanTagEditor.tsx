@@ -91,7 +91,12 @@ export function ZmanTagEditor({ zmanKey, currentTags, onTagsUpdated }: ZmanTagEd
   };
 
   const handleSave = async () => {
-    await updateTags.mutateAsync({ tag_ids: Array.from(selectedTagIds) });
+    // Convert selected tag IDs to TagAssignment format (not negated by default)
+    const tagAssignments = Array.from(selectedTagIds).map((tagId) => ({
+      tag_id: tagId,
+      is_negated: false,
+    }));
+    await updateTags.mutateAsync({ tags: tagAssignments });
     setIsOpen(false);
     onTagsUpdated?.();
   };

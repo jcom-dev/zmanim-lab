@@ -32,6 +32,7 @@ import {
   FlaskConical,
   Edit2,
   Code2,
+  X,
 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Switch } from '@/components/ui/switch';
@@ -171,6 +172,7 @@ interface ZmanCardProps {
   category: 'essential' | 'optional';
   onEdit?: (zmanKey: string) => void;
   displayLanguage?: 'hebrew' | 'english' | 'both';
+  allZmanim?: PublisherZman[];
 }
 
 /**
@@ -183,7 +185,7 @@ interface ZmanCardProps {
  * - Quick action buttons (Edit, Toggle Visibility, Delete)
  * - Drag handle for reordering
  */
-export function ZmanCard({ zman, category, onEdit, displayLanguage = 'both' }: ZmanCardProps) {
+export function ZmanCard({ zman, category, onEdit, displayLanguage = 'both', allZmanim = [] }: ZmanCardProps) {
   const router = useRouter();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showHistoryDialog, setShowHistoryDialog] = useState(false);
@@ -191,6 +193,12 @@ export function ZmanCard({ zman, category, onEdit, displayLanguage = 'both' }: Z
 
   const updateZman = useUpdateZman(zman.zman_key);
   const deleteZman = useDeleteZman();
+
+  // Find zmanim that depend on this one (have this zman_key in their dependencies)
+  const dependentZmanim = allZmanim.filter(
+    (z) => z.zman_key !== zman.zman_key && z.dependencies?.includes(zman.zman_key)
+  );
+  const hasDependents = dependentZmanim.length > 0;
   const { data: versionHistory, isLoading: historyLoading } = useZmanVersionHistory(
     showHistoryDialog ? zman.zman_key : null
   );
@@ -569,18 +577,16 @@ export function ZmanCard({ zman, category, onEdit, displayLanguage = 'both' }: Z
                 <History className="h-4 w-4" />
               </Button>
 
-              {/* Delete (only for disabled zmanim) */}
-              {!zman.is_enabled && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setShowDeleteDialog(true)}
-                  title="Delete zman"
-                  className="h-8 w-8 text-destructive hover:text-destructive"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              )}
+              {/* Delete */}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setShowDeleteDialog(true)}
+                title="Delete zman"
+                className="h-8 w-8 text-destructive hover:text-destructive"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
             </div>
           </div>
         </CardHeader>
@@ -637,7 +643,13 @@ export function ZmanCard({ zman, category, onEdit, displayLanguage = 'both' }: Z
           {/* Publisher Zman Tags - editable */}
           <div className="flex flex-wrap items-center gap-1.5 mt-2">
             {zman.tags && zman.tags.map((tag) => (
-              <ColorBadge key={tag.id} color={getTagTypeColor(tag.tag_type)} size="sm">
+              <ColorBadge
+                key={tag.id}
+                color={getTagTypeColor(tag.tag_type)}
+                size="sm"
+                className={tag.is_negated ? 'border-2 border-red-500 dark:border-red-400' : undefined}
+              >
+                {tag.is_negated && <X className="h-3 w-3 mr-1 text-red-500 dark:text-red-400" />}
                 {tag.display_name_english}
               </ColorBadge>
             ))}
@@ -697,20 +709,63 @@ export function ZmanCard({ zman, category, onEdit, displayLanguage = 'both' }: Z
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Zman?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete <strong>{zman.english_name}</strong>?
-              You can restore it later from the Deleted tab.
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className={`h-5 w-5 ${hasDependents ? 'text-amber-500' : 'text-destructive'}`} />
+              {hasDependents ? 'Cannot Delete Zman' : 'Delete Zman?'}
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                {hasDependents ? (
+                  <>
+                    <p>
+                      <strong>{zman.english_name}</strong> cannot be deleted because other zmanim depend on it.
+                    </p>
+                    <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md p-3 text-amber-800 dark:text-amber-200 text-sm">
+                      <p className="font-medium mb-2">The following zmanim reference this one:</p>
+                      <ul className="list-disc list-inside space-y-1">
+                        {dependentZmanim.map((dep) => (
+                          <li key={dep.zman_key}>{dep.english_name}</li>
+                        ))}
+                      </ul>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Update or delete the dependent zmanim first, then try again.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p>
+                      Are you sure you want to delete <strong>{zman.english_name}</strong>?
+                    </p>
+                    {zman.is_published && (
+                      <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md p-3 text-amber-800 dark:text-amber-200 text-sm">
+                        <strong>Warning:</strong> This zman is currently published. Deleting it will remove it from your public zmanim times.
+                      </div>
+                    )}
+                    <div className="bg-muted/50 border border-border rounded-md p-3 text-sm">
+                      <p className="text-muted-foreground">
+                        You can restore this zman from the Deleted tab if needed.
+                      </p>
+                    </div>
+                  </>
+                )}
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDelete}
-              className="bg-destructive hover:bg-destructive/90"
-            >
-              Delete
-            </AlertDialogAction>
+            {hasDependents ? (
+              <AlertDialogCancel>Close</AlertDialogCancel>
+            ) : (
+              <>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleDelete}
+                  className="bg-destructive hover:bg-destructive/90"
+                >
+                  Delete
+                </AlertDialogAction>
+              </>
+            )}
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -803,11 +858,13 @@ export function ZmanGrid({
   category,
   onEdit,
   displayLanguage = 'both',
+  allZmanim,
 }: {
   zmanim: PublisherZman[];
   category: 'essential' | 'optional';
   onEdit?: (zmanKey: string) => void;
   displayLanguage?: 'hebrew' | 'english' | 'both';
+  allZmanim?: PublisherZman[];
 }) {
   if (zmanim.length === 0) {
     return (
@@ -820,7 +877,7 @@ export function ZmanGrid({
   return (
     <div className="space-y-4">
       {zmanim.map((zman) => (
-        <ZmanCard key={zman.id} zman={zman} category={category} onEdit={onEdit} displayLanguage={displayLanguage} />
+        <ZmanCard key={zman.id} zman={zman} category={category} onEdit={onEdit} displayLanguage={displayLanguage} allZmanim={allZmanim} />
       ))}
     </div>
   );

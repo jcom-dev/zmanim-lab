@@ -10,6 +10,7 @@ import { useApi } from '@/lib/api-client';
 import { getStatusBadgeClasses } from '@/lib/badge-colors';
 import { StatusTooltip } from '@/components/shared/InfoTooltip';
 import { STATUS_TOOLTIPS, ADMIN_TOOLTIPS } from '@/lib/tooltip-content';
+import { ShieldCheck, ShieldAlert, Trash2, RotateCcw } from 'lucide-react';
 
 interface Publisher {
   id: string;
@@ -20,6 +21,10 @@ interface Publisher {
   website?: string;
   logo_url?: string;
   bio?: string;
+  is_official?: boolean;
+  suspension_reason?: string;
+  deleted_at?: string;
+  deleted_by?: string;
   created_at: string;
   updated_at: string;
 }
@@ -31,19 +36,20 @@ export default function AdminPublishersPage() {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [showDeleted, setShowDeleted] = useState(false);
 
   const fetchPublishers = useCallback(async () => {
     try {
       setLoading(true);
-
-      const data = await api.admin.get<{ publishers: Publisher[] }>('/admin/publishers');
+      const url = showDeleted ? '/admin/publishers?include_deleted=true' : '/admin/publishers';
+      const data = await api.admin.get<{ publishers: Publisher[] }>(url);
       setPublishers(data?.publishers || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setLoading(false);
     }
-  }, [api]);
+  }, [api, showDeleted]);
 
   useEffect(() => {
     fetchPublishers();
@@ -60,16 +66,36 @@ export default function AdminPublishersPage() {
     }
   };
 
+  const handleRestore = async (publisherId: string) => {
+    try {
+      await api.admin.put(`/admin/publishers/${publisherId}/restore`);
+      await fetchPublishers();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    }
+  };
+
 
   const filteredPublishers = publishers.filter((publisher) => {
     const matchesSearch =
       publisher.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       publisher.email.toLowerCase().includes(searchTerm.toLowerCase());
 
+    // Filter by deleted status when showing deleted
+    if (statusFilter === 'deleted') {
+      return matchesSearch && publisher.deleted_at;
+    }
+
     // Match pending filter to both 'pending' and 'pending_verification' statuses
     const matchesStatus = statusFilter === 'all' ||
       publisher.status === statusFilter ||
       (statusFilter === 'pending' && publisher.status === 'pending_verification');
+
+    // When showing all, include deleted if showDeleted is true
+    const isDeleted = !!publisher.deleted_at;
+    if (!showDeleted && isDeleted) {
+      return false;
+    }
 
     return matchesSearch && matchesStatus;
   });
@@ -118,7 +144,7 @@ export default function AdminPublishersPage() {
       {/* Filters */}
       <Card className="mb-6">
         <CardContent className="pt-6">
-          <div className="flex gap-4">
+          <div className="flex flex-col md:flex-row gap-4">
             <div className="flex-1">
               <input
                 type="text"
@@ -128,17 +154,37 @@ export default function AdminPublishersPage() {
                 className="w-full px-4 py-2 border border-border rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
-            <div>
+            <div className="flex gap-4 items-center">
               <select
                 value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
+                onChange={(e) => {
+                  const newFilter = e.target.value;
+                  setStatusFilter(newFilter);
+                  // Automatically enable showDeleted when "Deleted" is selected
+                  if (newFilter === 'deleted') {
+                    setShowDeleted(true);
+                  }
+                }}
                 className="px-4 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
               >
                 <option value="all">All Statuses</option>
                 <option value="pending">Pending</option>
                 <option value="verified">Verified</option>
                 <option value="suspended">Suspended</option>
+                <option value="deleted">Deleted</option>
               </select>
+              <label className="flex items-center gap-2 text-sm cursor-pointer whitespace-nowrap">
+                <input
+                  type="checkbox"
+                  checked={showDeleted}
+                  onChange={(e) => setShowDeleted(e.target.checked)}
+                  className="w-4 h-4 rounded border-border"
+                />
+                <span className="flex items-center gap-1">
+                  <Trash2 className="w-4 h-4 text-muted-foreground" />
+                  Show deleted
+                </span>
+              </label>
             </div>
           </div>
         </CardContent>
@@ -159,6 +205,7 @@ export default function AdminPublishersPage() {
                 <tr className="text-left">
                   <th className="pb-3 font-semibold">Publisher Name</th>
                   <th className="pb-3 font-semibold">Email</th>
+                  <th className="pb-3 font-semibold">Official</th>
                   <th className="pb-3 font-semibold">Status</th>
                   <th className="pb-3 font-semibold">Created</th>
                   <th className="pb-3 font-semibold text-right">Actions</th>
@@ -167,93 +214,137 @@ export default function AdminPublishersPage() {
               <tbody>
                 {filteredPublishers.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="py-8 text-center text-muted-foreground">
+                    <td colSpan={6} className="py-8 text-center text-muted-foreground">
                       No publishers found
                     </td>
                   </tr>
                 ) : (
-                  filteredPublishers.map((publisher) => (
-                    <tr key={publisher.id} className="border-b hover:bg-accent/50">
+                  filteredPublishers.map((publisher) => {
+                    const isDeleted = !!publisher.deleted_at;
+                    return (
+                    <tr key={publisher.id} className={`border-b hover:bg-accent/50 ${isDeleted ? 'opacity-60 bg-red-50/50 dark:bg-red-950/20' : ''}`}>
                       <td className="py-4">
-                        <Link href={`/admin/publishers/${publisher.id}`} className="font-medium text-primary hover:underline">
-                          {publisher.name}
-                        </Link>
+                        <div className="flex items-center gap-2">
+                          {isDeleted && <Trash2 className="w-4 h-4 text-red-500" />}
+                          <Link href={`/admin/publishers/${publisher.id}`} className={`font-medium hover:underline ${isDeleted ? 'text-muted-foreground line-through' : 'text-primary'}`}>
+                            {publisher.name}
+                          </Link>
+                        </div>
                       </td>
                       <td className="py-4">
                         <a
                           href={`mailto:${publisher.email}`}
-                          className="text-primary hover:underline block max-w-[150px] md:max-w-[250px] truncate"
+                          className={`hover:underline block max-w-[150px] md:max-w-[250px] truncate ${isDeleted ? 'text-muted-foreground' : 'text-primary'}`}
                           title={publisher.email}
                         >
                           {publisher.email}
                         </a>
                       </td>
                       <td className="py-4">
-                        <StatusTooltip
-                          status={publisher.status}
-                          tooltip={
-                            publisher.status === 'verified' ? STATUS_TOOLTIPS.verified :
-                            publisher.status === 'pending' || publisher.status === 'pending_verification' ? STATUS_TOOLTIPS.pending_verification :
-                            publisher.status === 'suspended' ? STATUS_TOOLTIPS.suspended :
-                            ''
-                          }
-                        >
-                          <span
-                            className={`inline-block px-3 py-1 rounded-full text-xs font-semibold border ${getStatusBadgeClasses(
-                              publisher.status
-                            )}`}
-                          >
-                            {publisher.status}
+                        {publisher.is_official ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 rounded-full border border-emerald-200 dark:border-emerald-800">
+                            <ShieldCheck className="w-3 h-3" />
+                            Official
                           </span>
-                        </StatusTooltip>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded-full border border-amber-200 dark:border-amber-800">
+                            <ShieldAlert className="w-3 h-3" />
+                            Unofficial
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-4">
+                        {isDeleted ? (
+                          <span className="inline-block px-3 py-1 rounded-full text-xs font-semibold border bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800">
+                            deleted
+                          </span>
+                        ) : (
+                          <StatusTooltip
+                            status={publisher.status}
+                            tooltip={
+                              publisher.status === 'verified' ? STATUS_TOOLTIPS.verified :
+                              publisher.status === 'pending' || publisher.status === 'pending_verification' ? STATUS_TOOLTIPS.pending_verification :
+                              publisher.status === 'suspended' ? STATUS_TOOLTIPS.suspended :
+                              ''
+                            }
+                          >
+                            <span
+                              className={`inline-block px-3 py-1 rounded-full text-xs font-semibold border ${getStatusBadgeClasses(
+                                publisher.status
+                              )}`}
+                            >
+                              {publisher.status}
+                            </span>
+                          </StatusTooltip>
+                        )}
                       </td>
                       <td className="py-4 text-sm text-muted-foreground">
-                        {new Date(publisher.created_at).toLocaleDateString()}
+                        {isDeleted ? (
+                          <span title={`Deleted on ${new Date(publisher.deleted_at!).toLocaleString()}`}>
+                            {new Date(publisher.deleted_at!).toLocaleDateString()}
+                          </span>
+                        ) : (
+                          new Date(publisher.created_at).toLocaleDateString()
+                        )}
                       </td>
                       <td className="py-4 text-right">
                         <div className="flex justify-end gap-2">
-                          <Link href={`/admin/publishers/${publisher.id}`}>
-                            <Button size="sm" variant="outline">
-                              View
+                          {isDeleted ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleRestore(publisher.id)}
+                              className="text-green-600 hover:text-green-700 border-green-300 hover:border-green-400"
+                            >
+                              <RotateCcw className="w-4 h-4 mr-1" />
+                              Restore
                             </Button>
-                          </Link>
-                          {(publisher.status === 'pending' || publisher.status === 'pending_verification') && (
-                            <StatusTooltip status="verify" tooltip={ADMIN_TOOLTIPS.verify_action}>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleStatusChange(publisher.id, 'verify')}
-                              >
-                                Verify
-                              </Button>
-                            </StatusTooltip>
-                          )}
-                          {publisher.status === 'verified' && (
-                            <StatusTooltip status="suspend" tooltip={ADMIN_TOOLTIPS.suspend_action}>
-                              <Button
-                                size="sm"
-                                variant="destructive"
-                                onClick={() => handleStatusChange(publisher.id, 'suspend')}
-                              >
-                                Suspend
-                              </Button>
-                            </StatusTooltip>
-                          )}
-                          {publisher.status === 'suspended' && (
-                            <StatusTooltip status="reactivate" tooltip={ADMIN_TOOLTIPS.reactivate_action}>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleStatusChange(publisher.id, 'reactivate')}
-                              >
-                                Reactivate
-                              </Button>
-                            </StatusTooltip>
+                          ) : (
+                            <>
+                              <Link href={`/admin/publishers/${publisher.id}`}>
+                                <Button size="sm" variant="outline">
+                                  View
+                                </Button>
+                              </Link>
+                              {(publisher.status === 'pending' || publisher.status === 'pending_verification') && (
+                                <StatusTooltip status="verify" tooltip={ADMIN_TOOLTIPS.verify_action}>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => handleStatusChange(publisher.id, 'verify')}
+                                  >
+                                    Verify
+                                  </Button>
+                                </StatusTooltip>
+                              )}
+                              {publisher.status === 'verified' && (
+                                <StatusTooltip status="suspend" tooltip={ADMIN_TOOLTIPS.suspend_action}>
+                                  <Button
+                                    size="sm"
+                                    variant="destructive"
+                                    onClick={() => handleStatusChange(publisher.id, 'suspend')}
+                                  >
+                                    Suspend
+                                  </Button>
+                                </StatusTooltip>
+                              )}
+                              {publisher.status === 'suspended' && (
+                                <StatusTooltip status="reactivate" tooltip={ADMIN_TOOLTIPS.reactivate_action}>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => handleStatusChange(publisher.id, 'reactivate')}
+                                  >
+                                    Reactivate
+                                  </Button>
+                                </StatusTooltip>
+                              )}
+                            </>
                           )}
                         </div>
                       </td>
                     </tr>
-                  ))
+                  );})
                 )}
               </tbody>
             </table>

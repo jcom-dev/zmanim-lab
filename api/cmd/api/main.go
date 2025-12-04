@@ -344,6 +344,15 @@ func main() {
 			r.Get("/algorithm/forks", h.GetMyForks)
 			// Note: Algorithm-wide version history removed (Story 4-13)
 			// Version history is now per-zman at /zmanim/{zmanKey}/history
+
+			// Publisher snapshot/version control
+			r.Get("/snapshot/export", h.ExportPublisherSnapshot)
+			r.Post("/snapshot/import", h.ImportPublisherSnapshot)
+			r.Get("/snapshots", h.ListPublisherSnapshots)
+			r.Post("/snapshot", h.SavePublisherSnapshot)
+			r.Get("/snapshot/{id}", h.GetPublisherSnapshot)
+			r.Post("/snapshot/{id}/restore", h.RestorePublisherSnapshot)
+			r.Delete("/snapshot/{id}", h.DeletePublisherSnapshot)
 		})
 
 		// User routes (authenticated)
@@ -361,9 +370,12 @@ func main() {
 			r.Post("/publishers", h.AdminCreatePublisher)
 			r.Put("/publishers/{id}", h.AdminUpdatePublisher)
 			r.Delete("/publishers/{id}", h.AdminDeletePublisher)
+			r.Put("/publishers/{id}/restore", h.AdminRestorePublisher)
+			r.Delete("/publishers/{id}/permanent", h.AdminPermanentDeletePublisher)
 			r.Put("/publishers/{id}/verify", h.AdminVerifyPublisher)
 			r.Put("/publishers/{id}/suspend", h.AdminSuspendPublisher)
 			r.Put("/publishers/{id}/reactivate", h.AdminReactivatePublisher)
+			r.Put("/publishers/{id}/official", h.AdminSetPublisherOfficial)
 
 			// Publisher user management (Epic 2)
 			r.Get("/publishers/{id}/users", h.AdminGetPublisherUsers)

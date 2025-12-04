@@ -96,6 +96,12 @@ func (v *Validator) validateNode(node Node) {
 	case *ConditionNode:
 		v.validateCondition(n)
 
+	case *LogicalOpNode:
+		v.validateLogicalOp(n)
+
+	case *NotOpNode:
+		v.validateNotOp(n)
+
 	case *DirectionNode:
 		if !Directions[n.Direction] {
 			v.addError(n.Pos, "unknown direction: %s", n.Direction)
@@ -357,6 +363,34 @@ func (v *Validator) validateCondition(n *ConditionNode) {
 				v.addError(n.Pos, "season comparison requires a string, got %s", rightType)
 			}
 		}
+	}
+}
+
+// validateLogicalOp validates a logical operation (&& or ||)
+func (v *Validator) validateLogicalOp(n *LogicalOpNode) {
+	v.validateNode(n.Left)
+	v.validateNode(n.Right)
+
+	// Both sides should produce boolean values
+	leftType := GetValueType(n.Left)
+	rightType := GetValueType(n.Right)
+
+	if leftType != ValueTypeBoolean {
+		v.addError(n.Pos, "left side of %s must be a boolean expression, got %s", n.Op, leftType)
+	}
+	if rightType != ValueTypeBoolean {
+		v.addError(n.Pos, "right side of %s must be a boolean expression, got %s", n.Op, rightType)
+	}
+}
+
+// validateNotOp validates a logical NOT operation
+func (v *Validator) validateNotOp(n *NotOpNode) {
+	v.validateNode(n.Operand)
+
+	// Operand should produce a boolean value
+	operandType := GetValueType(n.Operand)
+	if operandType != ValueTypeBoolean {
+		v.addError(n.Pos, "operand of ! must be a boolean expression, got %s", operandType)
 	}
 }
 

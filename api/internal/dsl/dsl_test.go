@@ -62,6 +62,21 @@ func TestLexer(t *testing.T) {
 			input:    "sunrise /* comment */ + 72min",
 			expected: []TokenType{TOKEN_PRIMITIVE, TOKEN_PLUS, TOKEN_DURATION, TOKEN_EOF},
 		},
+		{
+			name:     "logical and",
+			input:    "latitude > 50 && month >= 5",
+			expected: []TokenType{TOKEN_LATITUDE, TOKEN_GT, TOKEN_NUMBER, TOKEN_AND, TOKEN_MONTH, TOKEN_GTE, TOKEN_NUMBER, TOKEN_EOF},
+		},
+		{
+			name:     "logical or",
+			input:    "month == 5 || month == 6",
+			expected: []TokenType{TOKEN_MONTH, TOKEN_EQ, TOKEN_NUMBER, TOKEN_OR, TOKEN_MONTH, TOKEN_EQ, TOKEN_NUMBER, TOKEN_EOF},
+		},
+		{
+			name:     "logical not",
+			input:    "!latitude > 50",
+			expected: []TokenType{TOKEN_NOT, TOKEN_LATITUDE, TOKEN_GT, TOKEN_NUMBER, TOKEN_EOF},
+		},
 	}
 
 	for _, tt := range tests {
@@ -138,6 +153,11 @@ func TestParser(t *testing.T) {
 		{"multiplication", "proportional_hours(3, gra) + 72min * 2", false},
 		{"invalid syntax", "sunrise +", true},
 		{"unclosed paren", "solar(16.1, before_sunrise", true},
+		{"logical and in condition", "if (latitude > 50 && month >= 5) { sunrise }", false},
+		{"logical or in condition", "if (month == 5 || month == 6) { sunrise }", false},
+		{"logical not in condition", "if (!(latitude > 50)) { sunrise }", false},
+		{"complex logical expression", "if ((latitude > 50 && month >= 5) || month == 12) { sunrise } else { sunset }", false},
+		{"chained and", "if (month >= 5 && month <= 7 && latitude > 50) { sunrise }", false},
 	}
 
 	for _, tt := range tests {
@@ -369,6 +389,127 @@ func TestConditionVariables(t *testing.T) {
 		// January in northern hemisphere = winter
 		if ctx.Season() != "winter" {
 			t.Errorf("Season() = %s, want winter", ctx.Season())
+		}
+	})
+}
+
+// TestLogicalOperators tests logical operators (&&, ||, !)
+func TestLogicalOperators(t *testing.T) {
+	loc, _ := time.LoadLocation("Europe/London")
+	// June - summer in Manchester (lat ~53.5°)
+	date := time.Date(2024, 6, 15, 0, 0, 0, 0, loc)
+	ctx := NewExecutionContext(date, 53.48, -2.24, 0, loc) // Manchester
+
+	t.Run("logical AND - both true", func(t *testing.T) {
+		// latitude > 50 is true (53.48 > 50), month >= 5 is true (6 >= 5)
+		result, err := ExecuteFormula("if (latitude > 50 && month >= 5) { sunrise } else { sunset }", ctx)
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		sunrise, _ := ExecuteFormula("sunrise", ctx)
+		if result.Sub(sunrise).Abs() > time.Second {
+			t.Error("AND with both true should return true branch")
+		}
+	})
+
+	t.Run("logical AND - left false", func(t *testing.T) {
+		// latitude > 60 is false (53.48 < 60)
+		result, err := ExecuteFormula("if (latitude > 60 && month >= 5) { sunrise } else { sunset }", ctx)
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		sunset, _ := ExecuteFormula("sunset", ctx)
+		if result.Sub(sunset).Abs() > time.Second {
+			t.Error("AND with left false should return false branch")
+		}
+	})
+
+	t.Run("logical AND - right false", func(t *testing.T) {
+		// month >= 10 is false (6 < 10)
+		result, err := ExecuteFormula("if (latitude > 50 && month >= 10) { sunrise } else { sunset }", ctx)
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		sunset, _ := ExecuteFormula("sunset", ctx)
+		if result.Sub(sunset).Abs() > time.Second {
+			t.Error("AND with right false should return false branch")
+		}
+	})
+
+	t.Run("logical OR - both false", func(t *testing.T) {
+		// latitude > 60 is false, month >= 10 is false
+		result, err := ExecuteFormula("if (latitude > 60 || month >= 10) { sunrise } else { sunset }", ctx)
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		sunset, _ := ExecuteFormula("sunset", ctx)
+		if result.Sub(sunset).Abs() > time.Second {
+			t.Error("OR with both false should return false branch")
+		}
+	})
+
+	t.Run("logical OR - left true", func(t *testing.T) {
+		// latitude > 50 is true
+		result, err := ExecuteFormula("if (latitude > 50 || month >= 10) { sunrise } else { sunset }", ctx)
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		sunrise, _ := ExecuteFormula("sunrise", ctx)
+		if result.Sub(sunrise).Abs() > time.Second {
+			t.Error("OR with left true should return true branch")
+		}
+	})
+
+	t.Run("logical OR - right true", func(t *testing.T) {
+		// latitude > 60 is false, month >= 5 is true
+		result, err := ExecuteFormula("if (latitude > 60 || month >= 5) { sunrise } else { sunset }", ctx)
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		sunrise, _ := ExecuteFormula("sunrise", ctx)
+		if result.Sub(sunrise).Abs() > time.Second {
+			t.Error("OR with right true should return true branch")
+		}
+	})
+
+	t.Run("logical NOT", func(t *testing.T) {
+		// !(latitude > 60) is true (because latitude > 60 is false)
+		result, err := ExecuteFormula("if (!(latitude > 60)) { sunrise } else { sunset }", ctx)
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		sunrise, _ := ExecuteFormula("sunrise", ctx)
+		if result.Sub(sunrise).Abs() > time.Second {
+			t.Error("NOT of false should return true branch")
+		}
+	})
+
+	t.Run("complex expression - Manchester polar summer", func(t *testing.T) {
+		// This is the formula we want for Manchester: summer months with high latitude
+		// (month >= 5 && month <= 7 && latitude > 50)
+		result, err := ExecuteFormula("if (month >= 5 && month <= 7 && latitude > 50) { solar_noon } else { solar(16.1, before_sunrise) }", ctx)
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		solarNoon, _ := ExecuteFormula("solar_noon", ctx)
+		// In June at Manchester, we should get solar_noon (the true branch)
+		if result.Sub(solarNoon).Abs() > time.Second {
+			t.Error("Manchester summer should use solar_noon branch")
+		}
+	})
+
+	t.Run("complex expression - winter fallback", func(t *testing.T) {
+		// In January, should use the else branch
+		winterDate := time.Date(2024, 1, 15, 0, 0, 0, 0, loc)
+		winterCtx := NewExecutionContext(winterDate, 53.48, -2.24, 0, loc)
+
+		result, err := ExecuteFormula("if (month >= 5 && month <= 7 && latitude > 50) { solar_noon } else { solar(16.1, before_sunrise) }", winterCtx)
+		if err != nil {
+			t.Fatalf("error: %v", err)
+		}
+		dawn, _ := ExecuteFormula("solar(16.1, before_sunrise)", winterCtx)
+		if result.Sub(dawn).Abs() > time.Second {
+			t.Error("Manchester winter should use solar(16.1) branch")
 		}
 	})
 }

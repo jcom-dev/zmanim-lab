@@ -7,7 +7,13 @@
 
 ## CRITICAL VIOLATIONS (PR Blockers)
 
-### 1. Hardcoded Colors
+### 1. Publisher Zmanim - MUST Link
+Every publisher zman MUST have `master_registry_id` OR `linked_zman_id` - no orphans.
+
+### 2. Service Restart - Use `./restart.sh`
+FORBIDDEN: `go run`, `npm run dev`, `pkill` - always use `./restart.sh`
+
+### 3. Hardcoded Colors
 ```tsx
 // FORBIDDEN
 className="text-[#1e3a5f]" | className="bg-[#0051D5]" | style={{ color: '#ff0000' }}
@@ -16,7 +22,7 @@ className="text-[#1e3a5f]" | className="bg-[#0051D5]" | style={{ color: '#ff0000
 className="text-primary" | className="bg-primary/90" | className="text-muted-foreground"
 ```
 
-### 2. Raw fetch() / API_BASE in Components
+### 4. Raw fetch() / API_BASE in Components
 ```tsx
 // FORBIDDEN
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
@@ -30,14 +36,14 @@ await api.public.get('/countries');                  // No auth
 await api.admin.get('/admin/stats');                 // Auth, no X-Publisher-Id
 ```
 
-### 3. React Query Pattern
+### 5. React Query Pattern
 ```tsx
 import { usePublisherQuery, usePublisherMutation } from '@/lib/hooks';
 const { data, isLoading, error } = usePublisherQuery<ProfileData>('publisher-profile', '/publisher/profile');
 const mutation = usePublisherMutation<Profile, UpdateRequest>('/publisher/profile', 'PUT', { invalidateKeys: ['publisher-profile'] });
 ```
 
-### 4. Clerk Auth - MUST check isLoaded first
+### 6. Clerk Auth - MUST check isLoaded first
 ```tsx
 const { isLoaded, isSignedIn, user } = useUser();
 if (!isLoaded) return <LoadingSpinner />;
@@ -510,11 +516,12 @@ grep -r "waitForTimeout" tests/e2e --include="*.ts" | wc -l  # Should be 0
 5. `TEST_` prefix if creating data
 
 ### PR Checklist
+- [ ] Publisher zmanim linked (master_registry or linked_zman)
+- [ ] Service restarts via `./restart.sh`
 - [ ] No hardcoded colors
 - [ ] No raw fetch()
 - [ ] PublisherResolver pattern
 - [ ] SQLc queries
 - [ ] slog logging
 - [ ] 12-hour time format
-- [ ] E2E tests for new features
-- [ ] Parallel mode in test files
+- [ ] E2E tests with parallel mode

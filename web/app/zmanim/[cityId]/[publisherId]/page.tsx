@@ -6,7 +6,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import {
   MapPin, ChevronLeft, ChevronRight,
   Loader2, AlertCircle, ArrowLeft, Info, Search, X, Sun, Moon, Sunset, Clock,
-  Star, FlaskConical
+  Star, FlaskConical, ShieldAlert, ShieldCheck
 } from 'lucide-react';
 import Link from 'next/link';
 import { DateTime } from 'luxon';
@@ -39,6 +39,7 @@ interface Publisher {
   id: string;
   name: string;
   logo: string | null; // Base64 data URL
+  is_official: boolean; // Whether this is an official/authoritative source
 }
 
 interface ZmanimData {
@@ -100,6 +101,7 @@ export default function ZmanimPage() {
   const [selectedZman, setSelectedZman] = useState<Zman | null>(null);
   const [formulaPanelOpen, setFormulaPanelOpen] = useState(false);
   const [showHebrew, setShowHebrew] = useState(false);
+  const [showOptional, setShowOptional] = useState(false);
 
   // Location search state
   const [locationSearchOpen, setLocationSearchOpen] = useState(false);
@@ -116,17 +118,21 @@ export default function ZmanimPage() {
       result[group.key] = [];
     }
 
-    // Group zmanim by their display group
+    // Group zmanim by their display group, filtering by is_core if needed
     for (const zman of data?.zmanim || []) {
-      const displayGroupKey = timeCategoryToDisplayGroup[zman.time_category || ''] || 'evening';
-      if (!result[displayGroupKey]) {
-        result[displayGroupKey] = [];
+      // Show if: showOptional is true (show all), OR zman is core (always show core)
+      // This means: hide only if showOptional is false AND zman is not core
+      if (showOptional || zman.is_core) {
+        const displayGroupKey = timeCategoryToDisplayGroup[zman.time_category || ''] || 'evening';
+        if (!result[displayGroupKey]) {
+          result[displayGroupKey] = [];
+        }
+        result[displayGroupKey].push(zman);
       }
-      result[displayGroupKey].push(zman);
     }
 
     return result;
-  }, [data?.zmanim, displayGroups, timeCategoryToDisplayGroup]);
+  }, [data?.zmanim, displayGroups, timeCategoryToDisplayGroup, showOptional]);
 
   const loadZmanim = useCallback(async () => {
     try {
@@ -307,9 +313,25 @@ export default function ZmanimPage() {
                   )}
 
                   <div className="min-w-0 flex-1">
-                    <h1 className="font-bold text-sm md:text-lg tracking-tight truncate leading-tight">
-                      {isDefault ? 'Default Zmanim' : publisher?.name || 'Zmanim'}
-                    </h1>
+                    <div className="flex items-center gap-2">
+                      <h1 className="font-bold text-sm md:text-lg tracking-tight truncate leading-tight">
+                        {isDefault ? 'Default Zmanim' : publisher?.name || 'Zmanim'}
+                      </h1>
+                      {/* Official/Unofficial Badge */}
+                      {!isDefault && publisher && (
+                        publisher.is_official ? (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider bg-emerald-500/30 text-emerald-100 rounded border border-emerald-400/40 flex-shrink-0">
+                            <ShieldCheck className="w-3 h-3" />
+                            <span className="hidden sm:inline">Official</span>
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider bg-amber-500/30 text-amber-100 rounded border border-amber-400/40 flex-shrink-0">
+                            <ShieldAlert className="w-3 h-3" />
+                            <span className="hidden sm:inline">Unofficial</span>
+                          </span>
+                        )
+                      )}
+                    </div>
                     <button
                       onClick={() => setLocationSearchOpen(true)}
                       className="flex items-center gap-1 md:gap-1.5 text-primary-foreground/90 text-xs hover:text-white transition-all group mt-0.5"
@@ -371,12 +393,35 @@ export default function ZmanimPage() {
               </button>
             </div>
 
+            {/* Optional Zmanim Toggle */}
+            <div className="px-5 py-3 border-b border-border/50 flex items-center justify-center">
+              <button
+                onClick={() => setShowOptional(!showOptional)}
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium bg-muted hover:bg-muted/80 rounded-lg transition-all hover:scale-105 active:scale-95"
+              >
+                <FlaskConical className="w-4 h-4" />
+                {showOptional ? 'Hide Optional Zmanim' : 'Show Optional Zmanim'}
+              </button>
+            </div>
+
             {/* Default Warning */}
             {isDefault && (
               <div className="px-5 py-3 bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200/50 dark:border-amber-800/50 rounded-b-2xl">
                 <p className="text-amber-800 dark:text-amber-200 text-xs md:text-sm text-center">
                   These are default calculations using standard algorithms. They are not endorsed by a local halachic authority.
                 </p>
+              </div>
+            )}
+
+            {/* Unofficial Publisher Warning */}
+            {!isDefault && publisher && !publisher.is_official && (
+              <div className="px-5 py-3 bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200/50 dark:border-amber-800/50 rounded-b-2xl">
+                <div className="flex items-center justify-center gap-2 text-amber-800 dark:text-amber-200">
+                  <ShieldAlert className="w-4 h-4 flex-shrink-0" />
+                  <p className="text-xs md:text-sm text-center">
+                    This is a community-contributed source. These times have not been verified by the publisher organization.
+                  </p>
+                </div>
               </div>
             )}
           </div>

@@ -47,7 +47,7 @@ export const FUNCTIONS = [
   'else',
 ];
 
-export const OPERATORS = ['+', '-', '*', '/', '>', '<', '>=', '<=', '==', '!='];
+export const OPERATORS = ['+', '-', '*', '/', '>', '<', '>=', '<=', '==', '!=', '&&', '||', '!'];
 
 export const DIRECTION_KEYWORDS = ['before_sunrise', 'after_sunset'];
 
@@ -120,7 +120,7 @@ export function tokenize(input: string): Token[] {
     }
 
     // Operators
-    match = input.slice(pos).match(/^[+\-*/<>=!]+/);
+    match = input.slice(pos).match(/^[+\-*/<>=!&|]+/);
     if (match && OPERATORS.includes(match[0])) {
       tokens.push({ type: 'operator', value: match[0], start: pos, end: pos + match[0].length });
       pos += match[0].length;

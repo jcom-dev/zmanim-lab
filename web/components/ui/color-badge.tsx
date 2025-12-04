@@ -208,6 +208,14 @@ export function getTagTypeColor(tagType: string): ColorBadgeColor {
       return 'green';
     case 'behavior':
       return 'purple';
+    case 'shita':
+      return 'cyan';
+    case 'calculation':
+      return 'amber';
+    case 'category':
+      return 'orange';
+    case 'jewish_day':
+      return 'indigo';
     default:
       return 'slate';
   }

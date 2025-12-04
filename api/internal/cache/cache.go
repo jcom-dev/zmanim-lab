@@ -131,6 +131,34 @@ func (c *Cache) InvalidateZmanim(ctx context.Context, publisherID string) error 
 	return c.deleteByPattern(ctx, pattern)
 }
 
+// InvalidatePublisherCache clears ALL cached data for a publisher
+// This includes: zmanim calculations, filtered results, week batches, and algorithm config
+// Use this for comprehensive cache clearing when publisher data changes
+func (c *Cache) InvalidatePublisherCache(ctx context.Context, publisherID string) error {
+	patterns := []string{
+		fmt.Sprintf("zmanim:%s:*", publisherID), // Standard zmanim cache
+		fmt.Sprintf("%s:*", publisherID),        // Filtered zmanim cache (publisherId:date:lat:lon)
+		fmt.Sprintf("week:%s:*", publisherID),   // Week batch cache
+	}
+
+	var totalDeleted int64
+	for _, pattern := range patterns {
+		if err := c.deleteByPattern(ctx, pattern); err != nil {
+			log.Printf("Cache: error deleting pattern %s: %v", pattern, err)
+		}
+	}
+
+	// Also clear algorithm cache
+	if err := c.InvalidateAlgorithm(ctx, publisherID); err != nil {
+		log.Printf("Cache: error invalidating algorithm for %s: %v", publisherID, err)
+	}
+
+	if totalDeleted > 0 {
+		log.Printf("Cache: invalidated all cache for publisher %s", publisherID)
+	}
+	return nil
+}
+
 // InvalidateZmanimForCity removes cached zmanim for a specific city
 func (c *Cache) InvalidateZmanimForCity(ctx context.Context, publisherID, cityID string) error {
 	pattern := fmt.Sprintf("zmanim:%s:%s:*", publisherID, cityID)

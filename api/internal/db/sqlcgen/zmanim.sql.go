@@ -12,19 +12,20 @@ import (
 )
 
 const addTagToPublisherZman = `-- name: AddTagToPublisherZman :exec
-INSERT INTO publisher_zman_tags (publisher_zman_id, tag_id)
-VALUES ($1, $2)
-ON CONFLICT (publisher_zman_id, tag_id) DO NOTHING
+INSERT INTO publisher_zman_tags (publisher_zman_id, tag_id, is_negated)
+VALUES ($1, $2, $3)
+ON CONFLICT (publisher_zman_id, tag_id) DO UPDATE SET is_negated = $3
 `
 
 type AddTagToPublisherZmanParams struct {
 	PublisherZmanID string `json:"publisher_zman_id"`
 	TagID           string `json:"tag_id"`
+	IsNegated       bool   `json:"is_negated"`
 }
 
-// Add a tag to a publisher zman
+// Add a tag to a publisher zman (with optional is_negated)
 func (q *Queries) AddTagToPublisherZman(ctx context.Context, arg AddTagToPublisherZmanParams) error {
-	_, err := q.db.Exec(ctx, addTagToPublisherZman, arg.PublisherZmanID, arg.TagID)
+	_, err := q.db.Exec(ctx, addTagToPublisherZman, arg.PublisherZmanID, arg.TagID, arg.IsNegated)
 	return err
 }
 
@@ -96,6 +97,7 @@ func (q *Queries) BrowsePublicZmanim(ctx context.Context, arg BrowsePublicZmanim
 type BulkAddTagsToPublisherZmanParams struct {
 	PublisherZmanID string `json:"publisher_zman_id"`
 	TagID           string `json:"tag_id"`
+	IsNegated       bool   `json:"is_negated"`
 }
 
 const countPublisherZmanim = `-- name: CountPublisherZmanim :one
@@ -411,7 +413,7 @@ const getPublisherZmanTags = `-- name: GetPublisherZmanTags :many
 
 SELECT
     t.id, t.tag_key, t.name, t.display_name_hebrew, t.display_name_english,
-    t.tag_type, t.description, t.sort_order
+    t.tag_type, t.description, t.sort_order, pzt.is_negated
 FROM publisher_zman_tags pzt
 JOIN zman_tags t ON t.id = pzt.tag_id
 WHERE pzt.publisher_zman_id = $1
@@ -427,12 +429,13 @@ type GetPublisherZmanTagsRow struct {
 	TagType            string  `json:"tag_type"`
 	Description        *string `json:"description"`
 	SortOrder          *int32  `json:"sort_order"`
+	IsNegated          bool    `json:"is_negated"`
 }
 
 // ============================================================================
 // Publisher Zman Tags
 // ============================================================================
-// Get all tags for a specific publisher zman
+// Get all tags for a specific publisher zman (including is_negated)
 func (q *Queries) GetPublisherZmanTags(ctx context.Context, publisherZmanID string) ([]GetPublisherZmanTagsRow, error) {
 	rows, err := q.db.Query(ctx, getPublisherZmanTags, publisherZmanID)
 	if err != nil {
@@ -451,6 +454,7 @@ func (q *Queries) GetPublisherZmanTags(ctx context.Context, publisherZmanID stri
 			&i.TagType,
 			&i.Description,
 			&i.SortOrder,
+			&i.IsNegated,
 		); err != nil {
 			return nil, err
 		}
@@ -495,27 +499,32 @@ SELECT
         ) all_tags
         WHERE all_tags.tag_type IN ('event', 'behavior')
     ) AS is_event_zman,
-    -- Tags from master zman AND publisher-specific tags (combined, deduplicated)
+    -- Tags from master zman AND publisher-specific tags (combined with is_negated)
     COALESCE(
-        (SELECT json_agg(DISTINCT json_build_object(
-            'id', t.id,
-            'tag_key', t.tag_key,
-            'name', t.name,
-            'display_name_hebrew', t.display_name_hebrew,
-            'display_name_english', t.display_name_english,
-            'tag_type', t.tag_type
-        ))
+        (SELECT json_agg(json_build_object(
+            'id', sub.id,
+            'tag_key', sub.tag_key,
+            'name', sub.name,
+            'display_name_hebrew', sub.display_name_hebrew,
+            'display_name_english', sub.display_name_english,
+            'tag_type', sub.tag_type,
+            'is_negated', sub.is_negated
+        ) ORDER BY sub.sort_order)
         FROM (
             -- Master zman tags
-            SELECT t.id, t.tag_key, t.name, t.display_name_hebrew, t.display_name_english, t.tag_type, t.description, t.color, t.sort_order, t.created_at FROM master_zman_tags mzt
+            SELECT t.id, t.tag_key, t.name, t.display_name_hebrew, t.display_name_english,
+                   t.tag_type, t.sort_order, mzt.is_negated
+            FROM master_zman_tags mzt
             JOIN zman_tags t ON mzt.tag_id = t.id
             WHERE mzt.master_zman_id = pz.master_zman_id
-            UNION
+            UNION ALL
             -- Publisher-specific tags
-            SELECT t.id, t.tag_key, t.name, t.display_name_hebrew, t.display_name_english, t.tag_type, t.description, t.color, t.sort_order, t.created_at FROM publisher_zman_tags pzt
+            SELECT t.id, t.tag_key, t.name, t.display_name_hebrew, t.display_name_english,
+                   t.tag_type, t.sort_order, pzt.is_negated
+            FROM publisher_zman_tags pzt
             JOIN zman_tags t ON pzt.tag_id = t.id
             WHERE pzt.publisher_zman_id = pz.id
-        ) t),
+        ) sub),
         '[]'::json
     ) AS tags,
     -- Linked source info
@@ -711,6 +720,35 @@ func (q *Queries) GetPublisherZmanimForLinking(ctx context.Context, arg GetPubli
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getPublishersUsingMasterZman = `-- name: GetPublishersUsingMasterZman :many
+SELECT DISTINCT publisher_id
+FROM publisher_zmanim
+WHERE master_zman_id = $1
+  AND deleted_at IS NULL
+`
+
+// Get all publisher IDs that have a zman referencing this master registry entry
+// Used for cache invalidation when master zman formula changes
+func (q *Queries) GetPublishersUsingMasterZman(ctx context.Context, masterZmanID pgtype.UUID) ([]string, error) {
+	rows, err := q.db.Query(ctx, getPublishersUsingMasterZman, masterZmanID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var publisher_id string
+		if err := rows.Scan(&publisher_id); err != nil {
+			return nil, err
+		}
+		items = append(items, publisher_id)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

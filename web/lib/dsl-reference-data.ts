@@ -357,6 +357,24 @@ export const DSL_OPERATORS: ReferenceItem[] = [
     snippet: 'hr',
     category: 'operator',
   },
+  {
+    name: '&&',
+    description: 'Logical AND (e.g., month >= 5 && latitude > 50)',
+    snippet: ' && ',
+    category: 'operator',
+  },
+  {
+    name: '||',
+    description: 'Logical OR (e.g., month == 5 || month == 6)',
+    snippet: ' || ',
+    category: 'operator',
+  },
+  {
+    name: '!',
+    description: 'Logical NOT (e.g., !(latitude > 50))',
+    snippet: '!',
+    category: 'operator',
+  },
 ];
 
 export const EXAMPLE_PATTERNS: ExamplePattern[] = [

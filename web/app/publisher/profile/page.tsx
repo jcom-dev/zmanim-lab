@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { LogoUpload } from '@/components/publisher/LogoUpload';
 import { useApi } from '@/lib/api-client';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, ShieldCheck, ShieldAlert } from 'lucide-react';
 
 interface PublisherProfile {
   id: string;
@@ -19,6 +19,7 @@ interface PublisherProfile {
   logo_url?: string;
   logo_data?: string;
   status: string;
+  is_official?: boolean;
 }
 
 interface FieldErrors {
@@ -391,11 +392,45 @@ export default function PublisherProfilePage() {
             <CardHeader>
               <CardTitle>Account Status</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
+              {/* Official/Unofficial Status - Prominent Display */}
+              <div className={`flex items-center gap-3 p-4 rounded-lg border ${
+                profile.is_official
+                  ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800'
+                  : 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800'
+              }`}>
+                {profile.is_official ? (
+                  <>
+                    <div className="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-900/50">
+                      <ShieldCheck className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-emerald-800 dark:text-emerald-200">Official Publisher</p>
+                      <p className="text-sm text-emerald-700 dark:text-emerald-300">
+                        Your organization is verified as an official source for zmanim calculations.
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="p-2 rounded-lg bg-amber-100 dark:bg-amber-900/50">
+                      <ShieldAlert className="w-6 h-6 text-amber-600 dark:text-amber-400" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-amber-800 dark:text-amber-200">Community Publisher</p>
+                      <p className="text-sm text-amber-700 dark:text-amber-300">
+                        Your zmanim are shown as community-contributed. Contact an admin if you represent an official organization.
+                      </p>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Account Status */}
               <div className="flex items-center gap-3">
-                <span className="text-sm font-medium">Status:</span>
+                <span className="text-sm font-medium">Account Status:</span>
                 <span
-                  className={`px-3 py-1 rounded-full text-sm font-medium ${profile.status === 'verified'
+                  className={`px-3 py-1 rounded-full text-sm font-medium ${profile.status === 'verified' || profile.status === 'active'
                       ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-300'
                       : profile.status === 'pending'
                         ? 'bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-300'
@@ -406,7 +441,7 @@ export default function PublisherProfilePage() {
                 </span>
               </div>
               {profile.status === 'pending' && (
-                <p className="text-sm text-muted-foreground mt-2">
+                <p className="text-sm text-muted-foreground">
                   Your profile is pending approval by an administrator.
                 </p>
               )}

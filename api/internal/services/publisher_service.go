@@ -35,9 +35,9 @@ func (s *PublisherService) GetPublishers(ctx context.Context, page, pageSize int
 	if regionID != nil && *regionID != "" {
 		// Get publishers that cover the specified region
 		query = `
-			SELECT DISTINCT p.id, p.name, p.description, p.website, p.email,
+			SELECT DISTINCT p.id, p.name, COALESCE(p.description, ''), p.website, p.email,
 			       p.logo_url, (p.status = 'verified' OR p.status = 'active') as is_verified,
-			       COALESCE((SELECT COUNT(*) FROM user_subscriptions WHERE publisher_id = p.id), 0) as subscriber_count,
+			       0 as subscriber_count,
 			       p.created_at, p.updated_at
 			FROM publishers p
 			INNER JOIN coverage_areas ca ON p.id = ca.publisher_id
@@ -49,9 +49,9 @@ func (s *PublisherService) GetPublishers(ctx context.Context, page, pageSize int
 	} else {
 		// Get all verified publishers
 		query = `
-			SELECT id, name, description, website, email, logo_url,
+			SELECT id, name, COALESCE(description, ''), website, email, logo_url,
 			       (status = 'verified' OR status = 'active') as is_verified,
-			       COALESCE((SELECT COUNT(*) FROM user_subscriptions WHERE publisher_id = id), 0) as subscriber_count,
+			       0 as subscriber_count,
 			       created_at, updated_at
 			FROM publishers
 			WHERE status = 'verified' OR status = 'active'
@@ -114,9 +114,9 @@ func (s *PublisherService) GetPublishers(ctx context.Context, page, pageSize int
 // GetPublisherByID returns a publisher by ID
 func (s *PublisherService) GetPublisherByID(ctx context.Context, id string) (*models.Publisher, error) {
 	query := `
-		SELECT id, name, description, website, email, logo_url,
+		SELECT id, name, COALESCE(description, ''), website, email, logo_url,
 		       (status = 'verified' OR status = 'active') as is_verified,
-		       COALESCE((SELECT COUNT(*) FROM user_subscriptions WHERE publisher_id = $1), 0) as subscriber_count,
+		       0 as subscriber_count,
 		       created_at, updated_at
 		FROM publishers
 		WHERE id = $1
@@ -138,9 +138,9 @@ func (s *PublisherService) GetPublisherByID(ctx context.Context, id string) (*mo
 func (s *PublisherService) GetPublisherForLocation(ctx context.Context, latitude, longitude float64) (*models.Publisher, *models.Algorithm, error) {
 	// Find coverage area that contains the point with highest priority
 	query := `
-		SELECT p.id, p.name, p.description, p.website, p.email, p.logo_url,
+		SELECT p.id, p.name, COALESCE(p.description, ''), p.website, p.email, p.logo_url,
 		       (p.status = 'verified' OR p.status = 'active') as is_verified,
-		       COALESCE((SELECT COUNT(*) FROM user_subscriptions WHERE publisher_id = p.id), 0) as subscriber_count,
+		       0 as subscriber_count,
 		       p.created_at, p.updated_at,
 		       a.id, a.name, a.description, a.version, a.formula_definition, a.is_active
 		FROM publishers p
@@ -174,9 +174,9 @@ func (s *PublisherService) GetPublisherForLocation(ctx context.Context, latitude
 // getDefaultPublisher returns the default publisher (highest subscriber count)
 func (s *PublisherService) getDefaultPublisher(ctx context.Context) (*models.Publisher, *models.Algorithm, error) {
 	query := `
-		SELECT p.id, p.name, p.description, p.website, p.email, p.logo_url,
+		SELECT p.id, p.name, COALESCE(p.description, ''), p.website, p.email, p.logo_url,
 		       (p.status = 'verified' OR p.status = 'active') as is_verified,
-		       COALESCE((SELECT COUNT(*) FROM user_subscriptions WHERE publisher_id = p.id), 0) as subscriber_count,
+		       0 as subscriber_count,
 		       p.created_at, p.updated_at,
 		       a.id, a.name, a.description, a.version, a.formula_definition, a.is_active
 		FROM publishers p

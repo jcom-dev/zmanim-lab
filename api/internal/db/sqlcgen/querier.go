@@ -13,7 +13,7 @@ import (
 type Querier interface {
 	AcceptInvitation(ctx context.Context, id string) error
 	AddMasterZmanFromRequest(ctx context.Context, id string) (AddMasterZmanFromRequestRow, error)
-	// Add a tag to a publisher zman
+	// Add a tag to a publisher zman (with optional is_negated)
 	AddTagToPublisherZman(ctx context.Context, arg AddTagToPublisherZmanParams) error
 	// Request a new tag for a zman request
 	AddZmanRequestNewTag(ctx context.Context, arg AddZmanRequestNewTagParams) (AddZmanRequestNewTagRow, error)
@@ -42,19 +42,27 @@ type Querier interface {
 	ArchiveActiveAlgorithms(ctx context.Context, publisherID string) error
 	// Browse public zmanim --
 	BrowsePublicZmanim(ctx context.Context, arg BrowsePublicZmanimParams) ([]BrowsePublicZmanimRow, error)
-	// Bulk insert tags for a publisher zman
+	// Bulk insert tags for a publisher zman (with is_negated)
 	BulkAddTagsToPublisherZman(ctx context.Context, arg []BulkAddTagsToPublisherZmanParams) (int64, error)
 	CompleteOnboarding(ctx context.Context, publisherID string) (string, error)
 	CountCities(ctx context.Context, arg CountCitiesParams) (int64, error)
 	CountPendingInvitationsForEmail(ctx context.Context, arg CountPendingInvitationsForEmailParams) (int64, error)
 	CountPublisherZmanim(ctx context.Context, publisherID string) (int64, error)
 	CountPublishers(ctx context.Context, dollar_1 string) (int64, error)
+	// Get count of tags per type (for UI display)
+	CountTagsByType(ctx context.Context) ([]CountTagsByTypeRow, error)
 	// Create or update algorithm --
 	CreateAlgorithm(ctx context.Context, arg CreateAlgorithmParams) (CreateAlgorithmRow, error)
 	CreateCoverage(ctx context.Context, arg CreateCoverageParams) (CreateCoverageRow, error)
 	CreateInvitation(ctx context.Context, arg CreateInvitationParams) (string, error)
 	CreateOnboardingState(ctx context.Context, publisherID string) (PublisherOnboarding, error)
 	CreatePublisher(ctx context.Context, arg CreatePublisherParams) (CreatePublisherRow, error)
+	// ============================================
+	// PUBLISHER SNAPSHOT (ZMANIM-ONLY) QUERIES
+	// ============================================
+	// Snapshots store only zmanim data (not profile/coverage)
+	// Used for version control of publisher algorithms
+	CreatePublisherSnapshot(ctx context.Context, arg CreatePublisherSnapshotParams) (PublisherSnapshot, error)
 	CreatePublisherZman(ctx context.Context, arg CreatePublisherZmanParams) (CreatePublisherZmanRow, error)
 	CreatePublisherZmanFromRegistry(ctx context.Context, arg CreatePublisherZmanFromRegistryParams) (CreatePublisherZmanFromRegistryRow, error)
 	// Create a publisher_zman entry from an approved zman request
@@ -74,6 +82,7 @@ type Querier interface {
 	DeleteCoverageByPublisher(ctx context.Context, publisherID string) error
 	DeleteInvitation(ctx context.Context, id string) error
 	DeletePublisher(ctx context.Context, id string) error
+	DeletePublisherSnapshot(ctx context.Context, arg DeletePublisherSnapshotParams) error
 	DeletePublisherZman(ctx context.Context, arg DeletePublisherZmanParams) (string, error)
 	// Delete an alias by publisher_id and zman_key
 	DeletePublisherZmanAlias(ctx context.Context, arg DeletePublisherZmanAliasParams) error
@@ -113,6 +122,8 @@ type Querier interface {
 	// Get all active aliases for a publisher with canonical names included
 	// Orders by time_category (chronological) then hebrew_name
 	GetAllPublisherZmanAliases(ctx context.Context, publisherID string) ([]GetAllPublisherZmanAliasesRow, error)
+	// Get all active zman keys for a publisher (for diff comparison)
+	GetAllPublisherZmanimKeys(ctx context.Context, publisherID string) ([]string, error)
 	// ============================================================================
 	// TAG TYPES
 	// ============================================================================
@@ -122,6 +133,11 @@ type Querier interface {
 	// TAG QUERIES
 	// ============================================
 	GetAllTags(ctx context.Context) ([]GetAllTagsRow, error)
+	// ============================================================================
+	// All Tags Queries (with tag_key - extends master_registry.sql queries)
+	// ============================================================================
+	// Get all tags ordered by type and sort order (includes tag_key)
+	GetAllTagsWithKey(ctx context.Context) ([]GetAllTagsWithKeyRow, error)
 	// Queries for time_categories, event_categories, and tag_types tables
 	// ============================================================================
 	// TIME CATEGORIES
@@ -145,6 +161,8 @@ type Querier interface {
 	GetCountryByCode(ctx context.Context, code string) (GeoCountry, error)
 	GetCoverageCountByPublisher(ctx context.Context, publisherID string) (int64, error)
 	GetDeletedPublisherZmanim(ctx context.Context, publisherID string) ([]GetDeletedPublisherZmanimRow, error)
+	// Check if a zman exists in deleted state (for restore decision)
+	GetDeletedZmanByKey(ctx context.Context, arg GetDeletedZmanByKeyParams) (GetDeletedZmanByKeyRow, error)
 	// Get a display group by its ID
 	GetDisplayGroupByID(ctx context.Context, id string) (DisplayGroup, error)
 	// Get a display group by its key
@@ -154,10 +172,15 @@ type Querier interface {
 	// Get an event category by its key
 	GetEventCategoryByKey(ctx context.Context, key string) (EventCategory, error)
 	GetInvitationByToken(ctx context.Context, token string) (GetInvitationByTokenRow, error)
+	// Get all jewish_day type tags (for calendar filtering)
+	GetJewishDayTags(ctx context.Context) ([]GetJewishDayTagsRow, error)
+	GetLatestPublisherSnapshot(ctx context.Context, publisherID string) (PublisherSnapshot, error)
 	GetMasterZmanByID(ctx context.Context, id string) (GetMasterZmanByIDRow, error)
 	GetMasterZmanByKey(ctx context.Context, zmanKey string) (GetMasterZmanByKeyRow, error)
 	GetMasterZmanimByCategory(ctx context.Context, timeCategory string) ([]GetMasterZmanimByCategoryRow, error)
 	GetMasterZmanimByTag(ctx context.Context, name string) ([]GetMasterZmanimByTagRow, error)
+	// Get master registry zmanim that have any of the specified tags
+	GetMasterZmanimByTags(ctx context.Context, dollar_1 []string) ([]GetMasterZmanimByTagsRow, error)
 	GetMasterZmanimGroupedByCategory(ctx context.Context) ([]GetMasterZmanimGroupedByCategoryRow, error)
 	// Onboarding related --
 	GetOnboardingState(ctx context.Context, publisherID string) (PublisherOnboarding, error)
@@ -186,6 +209,7 @@ type Querier interface {
 	GetPublisherFullByClerkUserID(ctx context.Context, clerkUserID *string) (GetPublisherFullByClerkUserIDRow, error)
 	// Team Management --
 	GetPublisherOwner(ctx context.Context, id string) (*string, error)
+	GetPublisherSnapshot(ctx context.Context, arg GetPublisherSnapshotParams) (PublisherSnapshot, error)
 	// Alias CRUD Queries
 	// Epic 5, Story 5.0: Publisher Zman Aliases
 	// Get a specific alias for a publisher's zman by zman_key
@@ -193,12 +217,14 @@ type Querier interface {
 	// Get a specific zman by ID (for linking validation)
 	GetPublisherZmanByID(ctx context.Context, id string) (GetPublisherZmanByIDRow, error)
 	GetPublisherZmanByKey(ctx context.Context, arg GetPublisherZmanByKeyParams) (GetPublisherZmanByKeyRow, error)
+	// Get a specific zman by key for comparison during restore
+	GetPublisherZmanForSnapshotCompare(ctx context.Context, arg GetPublisherZmanForSnapshotCompareParams) (GetPublisherZmanForSnapshotCompareRow, error)
 	// Get all zman requests for a specific publisher
 	GetPublisherZmanRequests(ctx context.Context, publisherID string) ([]GetPublisherZmanRequestsRow, error)
 	// ============================================================================
 	// Publisher Zman Tags
 	// ============================================================================
-	// Get all tags for a specific publisher zman
+	// Get all tags for a specific publisher zman (including is_negated)
 	GetPublisherZmanTags(ctx context.Context, publisherZmanID string) ([]GetPublisherZmanTagsRow, error)
 	GetPublisherZmanWithRegistry(ctx context.Context, arg GetPublisherZmanWithRegistryParams) (GetPublisherZmanWithRegistryRow, error)
 	// Zmanim SQL Queries
@@ -210,17 +236,46 @@ type Querier interface {
 	// Orders by category chronologically then hebrew_name
 	GetPublisherZmanimForLinking(ctx context.Context, arg GetPublisherZmanimForLinkingParams) ([]GetPublisherZmanimForLinkingRow, error)
 	// ============================================
+	// ZMANIM SNAPSHOT DATA QUERIES
+	// ============================================
+	// Get all active (non-deleted) zmanim for snapshot export
+	GetPublisherZmanimForSnapshot(ctx context.Context, publisherID string) ([]GetPublisherZmanimForSnapshotRow, error)
+	// ============================================
 	// PUBLISHER ZMANIM WITH REGISTRY (new model)
 	// ============================================
 	GetPublisherZmanimWithRegistry(ctx context.Context, publisherID string) ([]GetPublisherZmanimWithRegistryRow, error)
+	// Get all publisher IDs that have a zman referencing this master registry entry
+	// Used for cache invalidation when master zman formula changes
+	GetPublishersUsingMasterZman(ctx context.Context, masterZmanID pgtype.UUID) ([]string, error)
 	GetRegionByCountryAndCode(ctx context.Context, arg GetRegionByCountryAndCodeParams) (GeoRegion, error)
 	GetRegionsByCountry(ctx context.Context, code string) ([]GetRegionsByCountryRow, error)
+	// Get a single tag by its key
+	GetTagByKey(ctx context.Context, tagKey string) (GetTagByKeyRow, error)
 	GetTagByName(ctx context.Context, name string) (GetTagByNameRow, error)
+	// Tag Events SQL Queries
+	// SQLc will generate type-safe Go code from these queries
+	// ============================================================================
+	// Tag Event Mappings
+	// ============================================================================
+	// Get all HebCal event mappings for tag matching
+	GetTagEventMappings(ctx context.Context) ([]GetTagEventMappingsRow, error)
 	// Get a tag type by its ID
 	GetTagTypeByID(ctx context.Context, id string) (TagType, error)
 	// Get a tag type by its key
 	GetTagTypeByKey(ctx context.Context, key string) (TagType, error)
+	// ============================================================================
+	// Tag Types Metadata
+	// ============================================================================
+	// Get all tag types with their styling
+	GetTagTypes(ctx context.Context) ([]GetTagTypesRow, error)
+	// Get multiple tags by their keys
+	GetTagsByKeys(ctx context.Context, dollar_1 []string) ([]GetTagsByKeysRow, error)
 	GetTagsByType(ctx context.Context, tagType string) ([]GetTagsByTypeRow, error)
+	// Get tags that match a specific HebCal event name using pattern matching
+	// The pattern supports SQL LIKE wildcards (%)
+	GetTagsForHebCalEvent(ctx context.Context, hebcalEventPattern *string) ([]GetTagsForHebCalEventRow, error)
+	// Get tags that match a specific Hebrew date (month and day)
+	GetTagsForHebrewDate(ctx context.Context, arg GetTagsForHebrewDateParams) ([]GetTagsForHebrewDateRow, error)
 	GetTagsForMasterZman(ctx context.Context, masterZmanID string) ([]GetTagsForMasterZmanRow, error)
 	// Get a time category by its ID
 	GetTimeCategoryByID(ctx context.Context, id string) (TimeCategory, error)
@@ -242,6 +297,11 @@ type Querier interface {
 	// VERSION HISTORY QUERIES
 	// ============================================
 	GetZmanVersionHistory(ctx context.Context, arg GetZmanVersionHistoryParams) ([]PublisherZmanVersion, error)
+	// ============================================================================
+	// Publisher Zmanim by Active Tags
+	// ============================================================================
+	// Get publisher zmanim that have any of the specified tags (for calendar day filtering)
+	GetZmanimByActiveTags(ctx context.Context, arg GetZmanimByActiveTagsParams) ([]GetZmanimByActiveTagsRow, error)
 	GetZmanimTemplateByKey(ctx context.Context, zmanKey string) (ZmanimTemplate, error)
 	// Zmanim Templates --
 	// Orders by category then hebrew_name
@@ -256,12 +316,15 @@ type Querier interface {
 	ImportZmanimFromTemplatesByKeys(ctx context.Context, arg ImportZmanimFromTemplatesByKeysParams) ([]ImportZmanimFromTemplatesByKeysRow, error)
 	InsertCountry(ctx context.Context, arg InsertCountryParams) (int16, error)
 	InsertRegion(ctx context.Context, arg InsertRegionParams) (int32, error)
+	// Insert a new zman from snapshot (zman doesn't exist at all)
+	InsertZmanFromSnapshot(ctx context.Context, arg InsertZmanFromSnapshotParams) error
 	// Update the tag request to link the newly created tag
 	// Must also clear requested_tag_name to satisfy tag_reference_check constraint
 	LinkTagToRequest(ctx context.Context, arg LinkTagToRequestParams) error
 	ListCitiesByContinent(ctx context.Context, arg ListCitiesByContinentParams) ([]ListCitiesByContinentRow, error)
 	ListCitiesByCountry(ctx context.Context, arg ListCitiesByCountryParams) ([]ListCitiesByCountryRow, error)
 	ListCitiesByRegion(ctx context.Context, arg ListCitiesByRegionParams) ([]ListCitiesByRegionRow, error)
+	ListPublisherSnapshots(ctx context.Context, publisherID string) ([]ListPublisherSnapshotsRow, error)
 	ListPublishers(ctx context.Context, arg ListPublishersParams) ([]ListPublishersRow, error)
 	ListPublishersByIDs(ctx context.Context, dollar_1 []string) ([]ListPublishersByIDsRow, error)
 	PermanentDeletePublisherZman(ctx context.Context, arg PermanentDeletePublisherZmanParams) error
@@ -275,6 +338,8 @@ type Querier interface {
 	RejectZmanRequest(ctx context.Context, arg RejectZmanRequestParams) (RejectZmanRequestRow, error)
 	// Remove a tag from a publisher zman
 	RemoveTagFromPublisherZman(ctx context.Context, arg RemoveTagFromPublisherZmanParams) error
+	// Restore a soft-deleted zman that exists in snapshot being restored
+	RestoreDeletedZmanForSnapshot(ctx context.Context, arg RestoreDeletedZmanForSnapshotParams) error
 	RestorePublisherZman(ctx context.Context, arg RestorePublisherZmanParams) (RestorePublisherZmanRow, error)
 	RollbackZmanToVersion(ctx context.Context, arg RollbackZmanToVersionParams) (RollbackZmanToVersionRow, error)
 	// Cities SQL Queries (Normalized Schema)
@@ -290,6 +355,11 @@ type Querier interface {
 	// SOFT DELETE QUERIES
 	// ============================================
 	SoftDeletePublisherZman(ctx context.Context, arg SoftDeletePublisherZmanParams) (SoftDeletePublisherZmanRow, error)
+	// ============================================
+	// SNAPSHOT RESTORE QUERIES
+	// ============================================
+	// Soft delete a zman that exists in current state but not in snapshot being restored
+	SoftDeleteZmanForRestore(ctx context.Context, arg SoftDeleteZmanForRestoreParams) error
 	UnpublishAllZmanim(ctx context.Context, publisherID string) error
 	UnpublishZmanimByKeys(ctx context.Context, arg UnpublishZmanimByKeysParams) error
 	UpdateAlgorithmDraft(ctx context.Context, arg UpdateAlgorithmDraftParams) (UpdateAlgorithmDraftRow, error)
@@ -303,6 +373,8 @@ type Querier interface {
 	UpdatePublisherStatus(ctx context.Context, arg UpdatePublisherStatusParams) (UpdatePublisherStatusRow, error)
 	UpdatePublisherZman(ctx context.Context, arg UpdatePublisherZmanParams) (UpdatePublisherZmanRow, error)
 	UpdateZmanCurrentVersion(ctx context.Context, arg UpdateZmanCurrentVersionParams) error
+	// Update an existing zman with data from snapshot (creates new version via trigger)
+	UpdateZmanFromSnapshot(ctx context.Context, arg UpdateZmanFromSnapshotParams) error
 	UpdateZmanRegistryRequestStatus(ctx context.Context, arg UpdateZmanRegistryRequestStatusParams) (UpdateZmanRegistryRequestStatusRow, error)
 	// Create or update an alias for a publisher's zman
 	UpsertPublisherZmanAlias(ctx context.Context, arg UpsertPublisherZmanAliasParams) (PublisherZmanAlias, error)

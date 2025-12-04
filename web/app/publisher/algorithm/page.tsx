@@ -16,15 +16,19 @@ import { OnboardingWizard } from '@/components/onboarding/OnboardingWizard';
 import {
   useZmanimList,
   useImportZmanim,
-  useDeletedZmanim,
-  useRestoreZman,
-  usePermanentDeleteZman,
   PublisherZman,
-  DeletedZman,
 } from '@/lib/hooks/useZmanimList';
 import { MasterZmanPicker } from '@/components/publisher/MasterZmanPicker';
 import { PublisherZmanPicker } from '@/components/publisher/PublisherZmanPicker';
 import { RequestZmanModal } from '@/components/publisher/RequestZmanModal';
+import { SaveVersionDialog } from '@/components/publisher/SaveVersionDialog';
+import { VersionHistoryDialog } from '@/components/publisher/VersionHistoryDialog';
+import { ImportSnapshotDialog } from '@/components/publisher/ImportSnapshotDialog';
+import { DeletedZmanimDialog } from '@/components/publisher/DeletedZmanimDialog';
+import { useExportSnapshot } from '@/lib/hooks/usePublisherSnapshots';
+import { DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
+import { TagFilterDropdown } from '@/components/shared/tags';
+import { useTags } from '@/components/shared/tags/hooks/useTags';
 
 interface OnboardingState {
   completed_at?: string | null;
@@ -47,7 +51,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { MapPin, Search, Plus, Download, Filter, AlertTriangle, ChevronLeft, ChevronRight, Calendar, RotateCcw, Trash2, Loader2, CalendarDays, Flame, Tag, ChevronDown, Library, Copy, Link2, FileQuestion } from 'lucide-react';
+import { MapPin, Search, Plus, Download, Upload, Filter, AlertTriangle, ChevronLeft, ChevronRight, Calendar, Loader2, CalendarDays, Flame, Tag, ChevronDown, Library, Copy, Link2, FileQuestion, History, Save } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { InfoTooltip, StatusTooltip } from '@/components/shared/InfoTooltip';
 import { ALGORITHM_TOOLTIPS, STATUS_TOOLTIPS } from '@/lib/tooltip-content';
@@ -66,36 +70,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 
-// Infer tags from the formula DSL for filtering
-type InferredTag = 'GRA' | 'MGA' | '16.1°' | 'Proportional Hours' | 'Solar Angle' | 'Fixed Minutes';
-
-function inferTagsFromFormula(formula: string): InferredTag[] {
-  const tags: InferredTag[] = [];
-
-  // Check for shita
-  if (formula.includes('gra') || formula.includes(', gra)')) {
-    tags.push('GRA');
-  }
-  if (formula.includes('mga') || formula.includes(', mga)')) {
-    tags.push('MGA');
-  }
-  if (formula.includes('alos_16_1')) {
-    tags.push('16.1°');
-  }
-
-  // Check for calculation method
-  if (formula.includes('proportional_hours(')) {
-    tags.push('Proportional Hours');
-  }
-  if (formula.includes('solar(')) {
-    tags.push('Solar Angle');
-  }
-  if (/\d+\s*min/.test(formula)) {
-    tags.push('Fixed Minutes');
-  }
-
-  return tags;
-}
 
 // Hebrew month names mapping
 const hebrewMonthNames: Record<string, string> = {
@@ -246,7 +220,7 @@ interface PublisherCoverage {
   country?: string;
 }
 
-type FilterType = 'all' | 'published' | 'draft' | 'essential' | 'optional' | 'hidden' | 'deleted';
+type FilterType = 'all' | 'published' | 'draft' | 'essential' | 'optional' | 'hidden';
 
 export default function AlgorithmEditorPage() {
   const router = useRouter();
@@ -260,10 +234,8 @@ export default function AlgorithmEditorPage() {
   const zmanim = useMemo(() => Array.isArray(zmanimData) ? zmanimData : [], [zmanimData]);
   const importZmanim = useImportZmanim();
 
-  // Deleted zmanim for restore
-  const { data: deletedZmanim = [], isLoading: deletedLoading } = useDeletedZmanim();
-  const restoreZman = useRestoreZman();
-  const permanentDeleteZman = usePermanentDeleteZman();
+  // Fetch all tags for the filter dropdown
+  const { data: allTags = [] } = useTags();
 
   // Check onboarding status
   const { data: onboardingState, isLoading: onboardingLoading, refetch: refetchOnboarding } = useQuery({
@@ -274,6 +246,9 @@ export default function AlgorithmEditorPage() {
   });
   const hasCompletedOnboarding = onboardingState?.completed_at != null || onboardingState?.skipped === true;
 
+  // Version control / snapshots
+  const exportSnapshot = useExportSnapshot();
+
   const [showMonthView, setShowMonthView] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [showZmanPicker, setShowZmanPicker] = useState(false);
@@ -283,6 +258,9 @@ export default function AlgorithmEditorPage() {
   const [showRequestZmanModal, setShowRequestZmanModal] = useState(false);
   const [showRestartConfirm, setShowRestartConfirm] = useState(false);
   const [forceShowWizard, setForceShowWizard] = useState(false);
+  const [showSaveVersionDialog, setShowSaveVersionDialog] = useState(false);
+  const [showVersionHistoryDialog, setShowVersionHistoryDialog] = useState(false);
+  const [showImportSnapshotDialog, setShowImportSnapshotDialog] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<FilterType>('all');
   const [viewMode, setViewMode] = useState<'everyday' | 'events'>('everyday');
@@ -582,16 +560,25 @@ export default function AlgorithmEditorPage() {
     return { everydayZmanim: everyday, eventZmanim: events };
   }, [zmanim]);
 
-  // Compute available tags from current view zmanim
-  const availableTags = useMemo(() => {
+  // Compute available tags from current view zmanim (tags that are actually used)
+  const availableTagKeys = useMemo(() => {
     const currentViewZmanim = viewMode === 'everyday' ? everydayZmanim : eventZmanim;
-    const tagSet = new Set<InferredTag>();
+    const tagKeySet = new Set<string>();
     currentViewZmanim.forEach(z => {
-      const tags = inferTagsFromFormula(z.formula_dsl);
-      tags.forEach(tag => tagSet.add(tag));
+      // Check if zman has tags array (from API response)
+      if (z.tags && Array.isArray(z.tags)) {
+        z.tags.forEach((tag: { tag_key: string }) => {
+          if (tag.tag_key) tagKeySet.add(tag.tag_key);
+        });
+      }
     });
-    return Array.from(tagSet).sort();
+    return tagKeySet;
   }, [everydayZmanim, eventZmanim, viewMode]);
+
+  // Filter allTags to only show tags that are actually used in current view
+  const availableTags = useMemo(() => {
+    return allTags.filter(tag => availableTagKeys.has(tag.tag_key));
+  }, [allTags, availableTagKeys]);
 
   // Reset tag filter when switching view modes (available tags may differ)
   useEffect(() => {
@@ -632,11 +619,11 @@ export default function AlgorithmEditorPage() {
         break;
     }
 
-    // Apply tag filter
+    // Apply tag filter - use actual zman tags from API
     if (tagFilter !== 'all') {
       result = result.filter(z => {
-        const tags = inferTagsFromFormula(z.formula_dsl);
-        return tags.includes(tagFilter as InferredTag);
+        if (!z.tags || !Array.isArray(z.tags)) return false;
+        return z.tags.some((tag: { tag_key: string }) => tag.tag_key === tagFilter);
       });
     }
 
@@ -652,17 +639,6 @@ export default function AlgorithmEditorPage() {
 
   // Existing zman keys to filter out in picker
   const existingZmanKeys = useMemo(() => zmanim.map(z => z.zman_key), [zmanim]);
-
-  // Handlers for deleted zmanim
-  const handleRestoreZman = async (zmanKey: string) => {
-    await restoreZman.mutateAsync(zmanKey);
-  };
-
-  const handlePermanentDelete = async (zmanKey: string) => {
-    if (confirm('Are you sure you want to permanently delete this zman? This cannot be undone.')) {
-      await permanentDeleteZman.mutateAsync(zmanKey);
-    }
-  };
 
   // Import handlers
   const handleImportDefaults = async () => {
@@ -756,21 +732,61 @@ export default function AlgorithmEditorPage() {
           <div className="flex flex-wrap gap-2 w-full md:w-auto">
             <Button
               variant="outline"
-              size="sm"
               onClick={() => setShowRestartConfirm(true)}
             >
               Restart Wizard
             </Button>
+
+            {/* Version Control Dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline">
+                  <History className="h-4 w-4 mr-2" />
+                  Versions
+                  <ChevronDown className="h-3 w-3 ml-1" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  onClick={() => {
+                    exportSnapshot.mutate(undefined, {
+                      onSuccess: () => {
+                        // Toast handled in the hook
+                      },
+                      onError: () => {
+                        // Toast handled in the hook
+                      },
+                    });
+                  }}
+                  disabled={exportSnapshot.isPending}
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  {exportSnapshot.isPending ? 'Exporting...' : 'Export to JSON'}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setShowImportSnapshotDialog(true)}>
+                  <Upload className="h-4 w-4 mr-2" />
+                  Import from JSON
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setShowSaveVersionDialog(true)}>
+                  <Save className="h-4 w-4 mr-2" />
+                  Save Version
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setShowVersionHistoryDialog(true)}>
+                  <History className="h-4 w-4 mr-2" />
+                  Version History
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
             <Button
               variant="outline"
-              size="sm"
               onClick={() => setShowMonthView(true)}
             >
               View Week
             </Button>
             <Button
               variant="outline"
-              size="sm"
               onClick={() => router.push('/publisher/dashboard')}
             >
               Back to Dashboard
@@ -1112,35 +1128,17 @@ export default function AlgorithmEditorPage() {
                   </div>
 
                   <div className="flex flex-wrap items-center justify-center gap-2 w-full sm:w-auto sm:justify-start">
-                    {/* Tag Filter Dropdown */}
-                    {availableTags.length > 0 && (
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="outline" size="default" className="flex items-center gap-2 whitespace-nowrap">
-                            <Tag className="h-4 w-4" />
-                            {tagFilter === 'all' ? 'All Tags' : tagFilter}
-                            <ChevronDown className="h-3 w-3 opacity-50" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem
-                            onClick={() => setTagFilter('all')}
-                            className={tagFilter === 'all' ? 'bg-muted' : ''}
-                          >
-                            All Tags
-                          </DropdownMenuItem>
-                          {availableTags.map(tag => (
-                            <DropdownMenuItem
-                              key={tag}
-                              onClick={() => setTagFilter(tag)}
-                              className={tagFilter === tag ? 'bg-muted' : ''}
-                            >
-                              {tag}
-                            </DropdownMenuItem>
-                          ))}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                    {/* Tag Filter Dropdown - show all tags or filter to available */}
+                    {allTags.length > 0 && (
+                      <TagFilterDropdown
+                        value={tagFilter}
+                        onChange={setTagFilter}
+                        tags={availableTags.length > 0 ? availableTags : allTags}
+                        placeholder="All Tags"
+                      />
                     )}
+
+                    <DeletedZmanimDialog />
 
                     <Button
                       variant="default"
@@ -1185,11 +1183,6 @@ export default function AlgorithmEditorPage() {
                         Hidden ({currentViewHiddenCount})
                       </TabsTrigger>
                     )}
-                    {deletedZmanim.length > 0 && (
-                      <TabsTrigger value="deleted" className="text-destructive">
-                        Deleted ({deletedZmanim.length})
-                      </TabsTrigger>
-                    )}
                   </TabsList>
                   </div>
                 </Tabs>
@@ -1202,93 +1195,24 @@ export default function AlgorithmEditorPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <CardTitle>
-                      {filterType === 'deleted'
-                        ? 'Deleted Zmanim'
-                        : viewMode === 'everyday'
-                          ? 'Everyday Zmanim'
-                          : 'Event Zmanim'}
+                      {viewMode === 'everyday' ? 'Everyday Zmanim' : 'Event Zmanim'}
                     </CardTitle>
                     <CardDescription>
-                      {filterType === 'deleted'
-                        ? `${deletedZmanim.length} deleted zmanim available for restore`
-                        : viewMode === 'everyday'
-                          ? `${filteredZmanim.length} daily solar calculation times ${filterType !== 'all' || tagFilter !== 'all' ? '(filtered)' : ''}`
-                          : `${filteredZmanim.length} Shabbos, holiday, and fast day times ${filterType !== 'all' || tagFilter !== 'all' ? '(filtered)' : ''}`}
+                      {viewMode === 'everyday'
+                        ? `${filteredZmanim.length} daily solar calculation times ${filterType !== 'all' || tagFilter !== 'all' ? '(filtered)' : ''}`
+                        : `${filteredZmanim.length} Shabbos, holiday, and fast day times ${filterType !== 'all' || tagFilter !== 'all' ? '(filtered)' : ''}`}
                     </CardDescription>
                   </div>
                 </div>
               </CardHeader>
               <CardContent>
-                {filterType === 'deleted' ? (
-                  /* Deleted Zmanim List */
-                  deletedLoading ? (
-                    <div className="flex justify-center py-8">
-                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                    </div>
-                  ) : deletedZmanim.length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground">
-                      <Trash2 className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                      <p>No deleted zmanim</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {deletedZmanim.map((dz) => (
-                        <div
-                          key={dz.id}
-                          className="p-4 rounded-lg border border-destructive/20 bg-destructive/5"
-                        >
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <h4 className="font-medium">
-                                {dz.hebrew_name}
-                                <span className="text-muted-foreground mx-2">•</span>
-                                {dz.english_name}
-                              </h4>
-                              <p className="text-xs text-muted-foreground mt-1">
-                                Deleted {new Date(dz.deleted_at).toLocaleDateString()}
-                              </p>
-                              <code className="text-xs text-muted-foreground mt-1 block font-mono">
-                                {dz.formula_dsl}
-                              </code>
-                            </div>
-                            <div className="flex gap-2">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleRestoreZman(dz.zman_key)}
-                                disabled={restoreZman.isPending}
-                              >
-                                {restoreZman.isPending ? (
-                                  <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                                ) : (
-                                  <RotateCcw className="h-3 w-3 mr-1" />
-                                )}
-                                Restore
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="destructive"
-                                onClick={() => handlePermanentDelete(dz.zman_key)}
-                                disabled={permanentDeleteZman.isPending}
-                              >
-                                <Trash2 className="h-3 w-3 mr-1" />
-                                Delete Forever
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )
-                ) : (
-                  /* Regular Zmanim Grid */
-                  <ZmanGrid
-                    zmanim={filteredZmanim}
-                    category="optional" // This is just for styling, actual category comes from zman
-                    onEdit={handleEditZman}
-                    displayLanguage={displayLanguage}
-                  />
-                )}
+                <ZmanGrid
+                  zmanim={filteredZmanim}
+                  category="optional" // This is just for styling, actual category comes from zman
+                  onEdit={handleEditZman}
+                  displayLanguage={displayLanguage}
+                  allZmanim={zmanim}
+                />
               </CardContent>
             </Card>
           </div>
@@ -1488,6 +1412,22 @@ export default function AlgorithmEditorPage() {
         <RequestZmanModal
           open={showRequestZmanModal}
           onOpenChange={setShowRequestZmanModal}
+          onSuccess={() => refetch()}
+        />
+
+        {/* Version Control Dialogs */}
+        <SaveVersionDialog
+          open={showSaveVersionDialog}
+          onOpenChange={setShowSaveVersionDialog}
+        />
+        <VersionHistoryDialog
+          open={showVersionHistoryDialog}
+          onOpenChange={setShowVersionHistoryDialog}
+          onRestore={() => refetch()}
+        />
+        <ImportSnapshotDialog
+          open={showImportSnapshotDialog}
+          onOpenChange={setShowImportSnapshotDialog}
           onSuccess={() => refetch()}
         />
 

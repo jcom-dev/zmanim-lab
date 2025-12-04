@@ -98,7 +98,7 @@ function getTokenColorClass(type: TokenType): string {
 
     case 'unknown':
       // Unknown/unrecognized tokens
-      return 'text-red-600 dark:text-red-400 underline decoration-wavy';
+      return 'text-red-600 dark:text-red-400';
 
     default:
       // Default/unknown tokens

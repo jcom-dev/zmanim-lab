@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { usePublisherContext } from '@/providers/PublisherContext';
-import { MapPin, Globe, Building2, Plus, Trash2, Loader2, Mountain } from 'lucide-react';
+import { MapPin, Globe, Building2, Plus, Trash2, Loader2, Mountain, Map } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -27,6 +27,7 @@ import { getCoverageBadgeClasses } from '@/lib/wcag-colors';
 import { InfoTooltip, StatusTooltip } from '@/components/shared/InfoTooltip';
 import { COVERAGE_TOOLTIPS, STATUS_TOOLTIPS } from '@/lib/tooltip-content';
 import { CoverageSelector, CoverageSelection } from '@/components/shared/CoverageSelector';
+import { CoverageMapDialog } from '@/components/shared/CoverageMapView';
 
 interface Coverage {
   id: string;
@@ -55,6 +56,7 @@ export default function PublisherCoveragePage() {
 
   // Add dialog state
   const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [mapDialogOpen, setMapDialogOpen] = useState(false);
   const [selectedItems, setSelectedItems] = useState<CoverageSelection[]>([]);
   const [addingCoverage, setAddingCoverage] = useState(false);
 
@@ -186,6 +188,38 @@ export default function PublisherCoveragePage() {
     return getCoverageBadgeClasses(level);
   };
 
+  // Handle map dialog confirmation
+  const handleMapConfirm = async (selections: CoverageSelection[]) => {
+    if (!selectedPublisher || selections.length === 0) return;
+
+    try {
+      setAddingCoverage(true);
+
+      // Add each selected country from the map
+      for (const item of selections) {
+        const body: Record<string, unknown> = {
+          coverage_level: 'country',
+          country_code: item.id,
+        };
+
+        await api.post('/publisher/coverage', {
+          body: JSON.stringify(body),
+        });
+      }
+
+      await fetchCoverage();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to add coverage');
+    } finally {
+      setAddingCoverage(false);
+    }
+  };
+
+  // Get existing coverage country codes for map highlighting
+  const existingCountryCodes = coverage
+    .filter((c) => c.coverage_level === 'country' && c.country_code)
+    .map((c) => c.country_code as string);
+
   if (contextLoading || isLoading) {
     return (
       <div className="p-8">
@@ -213,10 +247,16 @@ export default function PublisherCoveragePage() {
               Define where users can find your zmanim
             </p>
           </div>
-          <Button onClick={handleOpenAddDialog} className="w-full sm:w-auto">
-            <Plus className="w-4 h-4 mr-2" />
-            Add Coverage
-          </Button>
+          <div className="flex gap-2 w-full sm:w-auto">
+            <Button variant="outline" onClick={() => setMapDialogOpen(true)} className="flex-1 sm:flex-none">
+              <Map className="w-4 h-4 mr-2" />
+              Open Map
+            </Button>
+            <Button onClick={handleOpenAddDialog} className="flex-1 sm:flex-none">
+              <Plus className="w-4 h-4 mr-2" />
+              Add Coverage
+            </Button>
+          </div>
         </div>
 
         {error && (
@@ -352,6 +392,14 @@ export default function PublisherCoveragePage() {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Map Dialog for visual country selection */}
+        <CoverageMapDialog
+          open={mapDialogOpen}
+          onOpenChange={setMapDialogOpen}
+          existingCoverage={existingCountryCodes}
+          onConfirm={handleMapConfirm}
+        />
       </div>
     </div>
   );

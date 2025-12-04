@@ -17,6 +17,8 @@ const (
 	NodeTypeReference   NodeType = "reference"
 	NodeTypeConditional NodeType = "conditional"
 	NodeTypeCondition   NodeType = "condition"
+	NodeTypeLogicalOp   NodeType = "logical_op"
+	NodeTypeNotOp       NodeType = "not_op"
 	NodeTypeString      NodeType = "string"
 )
 
@@ -181,6 +183,30 @@ func (n *ConditionVarNode) Type() NodeType     { return NodeTypeCondition }
 func (n *ConditionVarNode) Position() Position { return n.Pos }
 func (n *ConditionVarNode) String() string     { return n.Name }
 
+// LogicalOpNode represents a logical operation (&& or ||)
+type LogicalOpNode struct {
+	Op    string   // "&&" or "||"
+	Left  Node     // Left operand (boolean expression)
+	Right Node     // Right operand (boolean expression)
+	Pos   Position // Source position
+}
+
+func (n *LogicalOpNode) Type() NodeType     { return NodeTypeLogicalOp }
+func (n *LogicalOpNode) Position() Position { return n.Pos }
+func (n *LogicalOpNode) String() string {
+	return fmt.Sprintf("(%s %s %s)", n.Left.String(), n.Op, n.Right.String())
+}
+
+// NotOpNode represents a logical NOT operation (!)
+type NotOpNode struct {
+	Operand Node     // The operand to negate
+	Pos     Position // Source position
+}
+
+func (n *NotOpNode) Type() NodeType     { return NodeTypeNotOp }
+func (n *NotOpNode) Position() Position { return n.Pos }
+func (n *NotOpNode) String() string     { return fmt.Sprintf("!(%s)", n.Operand.String()) }
+
 // ValueType represents the type of a computed value
 type ValueType string
 
@@ -244,6 +270,10 @@ func GetValueType(n Node) ValueType {
 		return GetValueType(node.TrueBranch)
 	case *ConditionNode:
 		return ValueTypeBoolean
+	case *LogicalOpNode:
+		return ValueTypeBoolean
+	case *NotOpNode:
+		return ValueTypeBoolean
 	case *ConditionVarNode:
 		if node.Name == "month" {
 			return ValueTypeNumber
@@ -291,5 +321,10 @@ func extractRefsRecursive(n Node, refs *[]string) {
 	case *ConditionNode:
 		extractRefsRecursive(node.Left, refs)
 		extractRefsRecursive(node.Right, refs)
+	case *LogicalOpNode:
+		extractRefsRecursive(node.Left, refs)
+		extractRefsRecursive(node.Right, refs)
+	case *NotOpNode:
+		extractRefsRecursive(node.Operand, refs)
 	}
 }

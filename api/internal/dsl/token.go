@@ -56,6 +56,11 @@ const (
 	TOKEN_EQ  // ==
 	TOKEN_NEQ // !=
 
+	// Logical operators
+	TOKEN_AND // &&
+	TOKEN_OR  // ||
+	TOKEN_NOT // !
+
 	// Literals
 	TOKEN_NUMBER   // 16.1, 72, etc.
 	TOKEN_DURATION // 72min, 1hr, 1h 30min
@@ -96,6 +101,9 @@ var tokenTypeNames = map[TokenType]string{
 	TOKEN_LTE:        "LTE",
 	TOKEN_EQ:         "EQ",
 	TOKEN_NEQ:        "NEQ",
+	TOKEN_AND:        "AND",
+	TOKEN_OR:         "OR",
+	TOKEN_NOT:        "NOT",
 	TOKEN_NUMBER:     "NUMBER",
 	TOKEN_DURATION:   "DURATION",
 	TOKEN_STRING:     "STRING",
