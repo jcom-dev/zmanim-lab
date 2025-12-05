@@ -39,7 +39,7 @@ interface Publisher {
   id: string;
   name: string;
   logo: string | null; // Base64 data URL
-  is_official: boolean; // Whether this is an official/authoritative source
+  is_certified: boolean; // Whether this is a certified/authoritative source
 }
 
 interface ZmanimData {
@@ -317,17 +317,17 @@ export default function ZmanimPage() {
                       <h1 className="font-bold text-sm md:text-lg tracking-tight truncate leading-tight">
                         {isDefault ? 'Default Zmanim' : publisher?.name || 'Zmanim'}
                       </h1>
-                      {/* Official/Unofficial Badge */}
+                      {/* Certified/Community Badge */}
                       {!isDefault && publisher && (
-                        publisher.is_official ? (
+                        publisher.is_certified ? (
                           <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider bg-emerald-500/30 text-emerald-100 rounded border border-emerald-400/40 flex-shrink-0">
                             <ShieldCheck className="w-3 h-3" />
-                            <span className="hidden sm:inline">Official</span>
+                            <span className="hidden sm:inline">Certified</span>
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider bg-amber-500/30 text-amber-100 rounded border border-amber-400/40 flex-shrink-0">
                             <ShieldAlert className="w-3 h-3" />
-                            <span className="hidden sm:inline">Unofficial</span>
+                            <span className="hidden sm:inline">Community</span>
                           </span>
                         )
                       )}
@@ -413,8 +413,8 @@ export default function ZmanimPage() {
               </div>
             )}
 
-            {/* Unofficial Publisher Warning */}
-            {!isDefault && publisher && !publisher.is_official && (
+            {/* Community Publisher Warning */}
+            {!isDefault && publisher && !publisher.is_certified && (
               <div className="px-5 py-3 bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200/50 dark:border-amber-800/50 rounded-b-2xl">
                 <div className="flex items-center justify-center gap-2 text-amber-800 dark:text-amber-200">
                   <ShieldAlert className="w-4 h-4 flex-shrink-0" />

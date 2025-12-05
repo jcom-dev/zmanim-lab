@@ -7,9 +7,6 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { ColorBadge, getTagTypeColor } from '@/components/ui/color-badge';
 import { useTimeCategories, useTagTypes } from '@/lib/hooks/useCategories';
 import {
   Select,
@@ -28,6 +25,8 @@ import {
   Calendar,
   Info,
 } from 'lucide-react';
+import { TagSelectorWithNegation } from '@/components/shared/tags/TagSelectorWithNegation';
+import type { TagSelectorTag } from '@/components/shared/tags/TagSelector';
 
 // Types
 export interface ZmanTag {
@@ -51,6 +50,11 @@ export interface PendingTagRequest {
   is_new_tag_request: boolean;
 }
 
+export interface TagAssignment {
+  tag_id: string;
+  is_negated: boolean;
+}
+
 export interface ZmanFormData {
   zman_key: string;
   canonical_hebrew_name: string;
@@ -63,7 +67,7 @@ export interface ZmanFormData {
   default_formula_dsl: string;
   is_core: boolean;
   is_hidden: boolean;
-  tag_ids: string[];
+  tags: TagAssignment[];
 }
 
 export interface ReviewSourceInfo {
@@ -87,19 +91,6 @@ interface ZmanRegistryFormProps {
   onTagReject?: (tagRequest: PendingTagRequest) => Promise<void>;
 }
 
-// Tag colors are now handled by ColorBadge component
-// Time categories are fetched from database via useTimeCategories hook
-
-const TAG_GROUPS: Array<{ key: ZmanTag['tag_type']; label: string }> = [
-  { key: 'event', label: 'Event' },
-  { key: 'timing', label: 'Timing' },
-  { key: 'behavior', label: 'Behavior' },
-  { key: 'shita', label: 'Shita' },
-  { key: 'calculation', label: 'Calculation' },
-  { key: 'category', label: 'Category' },
-  { key: 'jewish_day', label: 'Jewish Day' },
-];
-
 const DEFAULT_FORM_DATA: ZmanFormData = {
   zman_key: '',
   canonical_hebrew_name: '',
@@ -112,7 +103,7 @@ const DEFAULT_FORM_DATA: ZmanFormData = {
   default_formula_dsl: '',
   is_core: false,
   is_hidden: false,
-  tag_ids: [],
+  tags: [],
 };
 
 /**
@@ -150,7 +141,6 @@ export function ZmanRegistryForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [processingTagId, setProcessingTagId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [showSelectedTagsOnly, setShowSelectedTagsOnly] = useState(true);
 
   // Key validation state (for create mode)
   const [keyValidation, setKeyValidation] = useState<{
@@ -259,23 +249,6 @@ export function ZmanRegistryForm({
     );
   }, [pendingTagRequests, resolvedTagIds]);
 
-  const tagGroups = useMemo(
-    () =>
-      TAG_GROUPS.map((group) => ({
-        ...group,
-        tags: allTags
-          .filter((t) => t.tag_type === group.key)
-          .slice()
-          .sort(
-            (a, b) =>
-              (a.sort_order ?? Number.MAX_SAFE_INTEGER) -
-                (b.sort_order ?? Number.MAX_SAFE_INTEGER) ||
-              a.display_name_english.localeCompare(b.display_name_english)
-          ),
-      })),
-    [allTags]
-  );
-
   // Map of tag type key -> label from DB (fallback to key)
   const tagTypeLabelsMap = useMemo(() => {
     return tagTypes?.reduce((acc, tt) => {
@@ -303,10 +276,10 @@ export function ZmanRegistryForm({
     try {
       const newTag = await onTagApprove(tagRequest);
       if (newTag) {
-        // Add the new tag to selected tags
+        // Add the new tag to selected tags (positive by default)
         setFormData((prev) => ({
           ...prev,
-          tag_ids: [...prev.tag_ids, newTag.id],
+          tags: [...prev.tags, { tag_id: newTag.id, is_negated: false }],
         }));
         // Add to all tags list
         setAllTags((prev) => [...prev, newTag]);
@@ -416,15 +389,38 @@ export function ZmanRegistryForm({
     }
   };
 
+  // 3-state toggle: unselected → positive → negated → unselected
   const toggleTag = (tagId: string) => {
     setFormData((prev) => {
-      const exists = prev.tag_ids.includes(tagId);
-      return {
-        ...prev,
-        tag_ids: exists ? prev.tag_ids.filter((id) => id !== tagId) : [...prev.tag_ids, tagId],
-      };
+      const existingTag = prev.tags.find((t) => t.tag_id === tagId);
+
+      if (!existingTag) {
+        // Not selected -> add as positive
+        return {
+          ...prev,
+          tags: [...prev.tags, { tag_id: tagId, is_negated: false }],
+        };
+      } else if (!existingTag.is_negated) {
+        // Positive -> make negated
+        return {
+          ...prev,
+          tags: prev.tags.map((t) =>
+            t.tag_id === tagId ? { ...t, is_negated: true } : t
+          ),
+        };
+      } else {
+        // Negated -> remove
+        return {
+          ...prev,
+          tags: prev.tags.filter((t) => t.tag_id !== tagId),
+        };
+      }
     });
   };
+
+  // Compute selectedTagIds and negatedTagIds for TagSelectorWithNegation
+  const selectedTagIds = useMemo(() => formData.tags.map((t) => t.tag_id), [formData.tags]);
+  const negatedTagIds = useMemo(() => formData.tags.filter((t) => t.is_negated).map((t) => t.tag_id), [formData.tags]);
 
   return (
     <div className="space-y-6">
@@ -606,148 +602,19 @@ export function ZmanRegistryForm({
 
         {/* Tags Section */}
         <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <Label>Tags</Label>
-            <div className="flex items-center gap-3">
-              {formData.tag_ids.length > 0 && (
-                <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
-                  <Switch
-                    checked={showSelectedTagsOnly}
-                    onCheckedChange={setShowSelectedTagsOnly}
-                    className="scale-75"
-                  />
-                  Selected only ({formData.tag_ids.length})
-                </label>
-              )}
-              {(tagsLoading || tagTypesLoading) && (
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  Loading tags...
-                </div>
-              )}
-            </div>
-          </div>
+          <Label>Tags</Label>
           <p className="text-xs text-muted-foreground">
-            Select tags to categorize when/how this zman applies
+            Click once to include, click again to exclude (negate), click again to remove.
           </p>
-          {tagsLoading || tagTypesLoading ? (
-            <div className="flex justify-center py-6">
-              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-            </div>
-          ) : tagGroups.every((g) => g.tags.length === 0) ? (
-            <div className="text-sm text-muted-foreground py-4 text-center border rounded-md">
-              No tags available
-            </div>
-          ) : showSelectedTagsOnly && formData.tag_ids.length > 0 ? (
-            // Show selected tags view (grouped by type, no tabs)
-            <div className="border rounded-md p-3 space-y-4">
-              {(
-                tagGroups.map((group) => {
-                  const selectedTags = group.tags.filter(t => formData.tag_ids.includes(t.id));
-                  if (selectedTags.length === 0) return null;
-                  return (
-                    <div key={group.key} className="space-y-2">
-                      <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                        {tagTypeLabelsMap[group.key] || group.label}
-                      </div>
-                      <div className="grid gap-2">
-                        {selectedTags.map((tag) => (
-                          <label
-                            key={tag.id}
-                            className="flex items-center gap-3 px-3 py-2 rounded-lg border transition-colors cursor-pointer bg-primary/10 border-primary/30"
-                          >
-                            <Checkbox
-                              checked={true}
-                              onCheckedChange={() => toggleTag(tag.id)}
-                              disabled={disabled}
-                            />
-                            <div className="flex flex-col gap-0.5">
-                              <ColorBadge color={getTagTypeColor(tag.tag_type)} size="sm" className="w-fit">
-                                {tag.display_name_english}
-                              </ColorBadge>
-                              {tag.display_name_hebrew && (
-                                <span className="text-xs text-muted-foreground font-hebrew leading-none">
-                                  {tag.display_name_hebrew}
-                                </span>
-                              )}
-                            </div>
-                            {tag.description && (
-                              <span className="ml-auto text-xs text-muted-foreground text-right max-w-[200px]">
-                                {tag.description}
-                              </span>
-                            )}
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          ) : (
-            // Regular tabs view
-            <Tabs defaultValue={tagGroups.find(g => g.tags.length > 0)?.key || 'event'} className="w-full">
-              <TabsList className="flex flex-wrap h-auto gap-1 p-1 w-full justify-start">
-                {tagGroups.map((group) => {
-                  if (group.tags.length === 0) return null;
-                  const selectedCount = group.tags.filter(t => formData.tag_ids.includes(t.id)).length;
-                  return (
-                    <TabsTrigger
-                      key={group.key}
-                      value={group.key}
-                      className="text-xs px-3 py-1.5 data-[state=active]:bg-background relative"
-                    >
-                      {tagTypeLabelsMap[group.key] || group.label}
-                      {selectedCount > 0 && (
-                        <span className="ml-1.5 bg-primary text-primary-foreground text-[10px] px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
-                          {selectedCount}
-                        </span>
-                      )}
-                    </TabsTrigger>
-                  );
-                })}
-              </TabsList>
-              {tagGroups.map((group) => {
-                if (group.tags.length === 0) return null;
-                return (
-                  <TabsContent key={group.key} value={group.key} className="border rounded-md p-3 mt-2">
-                    <div className="grid gap-2">
-                      {group.tags.map((tag) => {
-                        const isSelected = formData.tag_ids.includes(tag.id);
-                        return (
-                          <label
-                            key={tag.id}
-                            className={`flex items-center gap-3 px-3 py-2 rounded-lg border transition-colors cursor-pointer ${isSelected ? 'bg-primary/10 border-primary/30' : 'bg-card hover:bg-muted border-transparent'}`}
-                          >
-                            <Checkbox
-                              checked={isSelected}
-                              onCheckedChange={() => toggleTag(tag.id)}
-                              disabled={disabled}
-                            />
-                            <div className="flex flex-col gap-0.5">
-                              <ColorBadge color={getTagTypeColor(tag.tag_type)} size="sm" className="w-fit">
-                                {tag.display_name_english}
-                              </ColorBadge>
-                              {tag.display_name_hebrew && (
-                                <span className="text-xs text-muted-foreground font-hebrew leading-none">
-                                  {tag.display_name_hebrew}
-                                </span>
-                              )}
-                            </div>
-                            {tag.description && (
-                              <span className="ml-auto text-xs text-muted-foreground text-right max-w-[200px]">
-                                {tag.description}
-                              </span>
-                            )}
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </TabsContent>
-                );
-              })}
-            </Tabs>
-          )}
+          <TagSelectorWithNegation
+            tags={allTags as TagSelectorTag[]}
+            selectedTagIds={selectedTagIds}
+            negatedTagIds={negatedTagIds}
+            onToggleTag={toggleTag}
+            tagTypeLabels={tagTypeLabelsMap}
+            isLoading={tagsLoading || tagTypesLoading}
+            disabled={disabled}
+          />
         </div>
 
         {/* Hebrew and English Names */}

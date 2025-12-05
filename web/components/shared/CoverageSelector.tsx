@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Input } from '@/components/ui/input';
-import { MapPin, Search, X, Loader2, Globe, Map, Globe2 } from 'lucide-react';
+import { MapPin, Search, X, Loader2, Globe, Map, Globe2, Building2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useApi } from '@/lib/api-client';
 
@@ -38,7 +38,18 @@ export interface Continent {
   city_count: number;
 }
 
-export type CoverageType = 'city' | 'region' | 'country' | 'continent';
+export interface District {
+  id: number;
+  code: string;
+  name: string;
+  region_id: number;
+  region_name: string;
+  country_code: string;
+  country_name: string;
+  city_count?: number;
+}
+
+export type CoverageType = 'city' | 'district' | 'region' | 'country' | 'continent';
 
 export interface CoverageSelection {
   type: CoverageType;
@@ -93,6 +104,7 @@ export function CoverageSelector({
   const [cityResults, setCityResults] = useState<City[]>([]);
   const [countryResults, setCountryResults] = useState<Country[]>([]);
   const [regionResults, setRegionResults] = useState<Region[]>([]);
+  const [districtResults, setDistrictResults] = useState<District[]>([]);
   const [continentResults, setContinentResults] = useState<Continent[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
@@ -105,6 +117,7 @@ export function CoverageSelector({
       setCityResults([]);
       setCountryResults([]);
       setRegionResults([]);
+      setDistrictResults([]);
       setContinentResults([]);
       setShowDropdown(false);
       return;
@@ -134,6 +147,11 @@ export function CoverageSelector({
             `/regions?search=${encodeURIComponent(searchQuery)}&limit=10`
           );
           setRegionResults(data?.regions || []);
+        } else if (searchType === 'district') {
+          const data = await api.public.get<{ districts: District[] }>(
+            `/districts?search=${encodeURIComponent(searchQuery)}&limit=10`
+          );
+          setDistrictResults(data?.districts || []);
         } else if (searchType === 'continent') {
           const data = await api.public.get<{ continents: Continent[] }>('/continents');
           const continents = data?.continents || [];
@@ -180,6 +198,7 @@ export function CoverageSelector({
     setCityResults([]);
     setCountryResults([]);
     setRegionResults([]);
+    setDistrictResults([]);
     setContinentResults([]);
     setShowDropdown(false);
   }, [selectedItems, onChange]);
@@ -205,6 +224,14 @@ export function CoverageSelector({
       type: 'region',
       id: `${region.country_code}-${region.name}`,
       name: `${region.name}, ${region.country_name}`,
+    });
+  }, [addItem]);
+
+  const addDistrict = useCallback((district: District) => {
+    addItem({
+      type: 'district',
+      id: String(district.id),
+      name: `${district.name}, ${district.region_name}, ${district.country_name}`,
     });
   }, [addItem]);
 
@@ -235,6 +262,7 @@ export function CoverageSelector({
     setCityResults([]);
     setCountryResults([]);
     setRegionResults([]);
+    setDistrictResults([]);
     setContinentResults([]);
     setShowDropdown(false);
   }, []);
@@ -291,6 +319,7 @@ export function CoverageSelector({
         <div className="flex gap-2 border-b overflow-x-auto">
           {[
             { type: 'city' as const, label: 'City', icon: MapPin },
+            { type: 'district' as const, label: 'County/District', icon: Building2 },
             { type: 'region' as const, label: 'State/Region', icon: Map },
             { type: 'country' as const, label: 'Country', icon: Globe },
             { type: 'continent' as const, label: 'Continent', icon: Globe2 },
@@ -431,6 +460,35 @@ export function CoverageSelector({
                   );
                 })}
               </div>
+            ) : searchType === 'district' && districtResults.length > 0 ? (
+              <div className="py-1">
+                {districtResults.map((district) => {
+                  const districtId = String(district.id);
+                  const isSelected = selectedItems.some((i) => i.id === districtId && i.type === 'district');
+                  return (
+                    <button
+                      key={district.id}
+                      type="button"
+                      onClick={() => !isSelected && addDistrict(district)}
+                      disabled={isSelected}
+                      className={cn(
+                        "w-full px-3 py-2 text-left text-sm flex items-start gap-2",
+                        isSelected ? "bg-muted text-muted-foreground" : "hover:bg-accent"
+                      )}
+                    >
+                      <Building2 className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium truncate">{district.name}</div>
+                        <div className="text-xs text-muted-foreground truncate">
+                          {district.region_name}, {district.country_name}
+                          {district.city_count ? ` · ${district.city_count.toLocaleString()} cities` : ''}
+                        </div>
+                      </div>
+                      {isSelected && <span className="text-xs text-primary shrink-0">Added</span>}
+                    </button>
+                  );
+                })}
+              </div>
             ) : searchType === 'continent' && continentResults.length > 0 ? (
               <div className="py-1">
                 {continentResults.map((continent) => {
@@ -511,6 +569,7 @@ function getIcon(type: CoverageType) {
     case 'continent': return <Globe2 className="w-3 h-3" />;
     case 'country': return <Globe className="w-3 h-3" />;
     case 'region': return <Map className="w-3 h-3" />;
+    case 'district': return <Building2 className="w-3 h-3" />;
     default: return <MapPin className="w-3 h-3" />;
   }
 }
@@ -520,6 +579,7 @@ function getTypeColor(type: CoverageType) {
     case 'continent': return 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400';
     case 'country': return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400';
     case 'region': return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400';
+    case 'district': return 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400';
     default: return 'bg-primary/10 text-primary';
   }
 }
@@ -527,6 +587,7 @@ function getTypeColor(type: CoverageType) {
 function getSearchPlaceholder(type: CoverageType) {
   switch (type) {
     case 'city': return "Search cities (e.g., Manchester, Paris...)";
+    case 'district': return "Search counties/districts (e.g., Los Angeles County, Greater Manchester...)";
     case 'region': return "Search states/regions (e.g., California, Ontario...)";
     case 'country': return "Search countries (e.g., United States, Israel...)";
     case 'continent': return "Search continents (e.g., Europe, North America...)";
@@ -536,6 +597,7 @@ function getSearchPlaceholder(type: CoverageType) {
 function getSearchTypeLabel(type: CoverageType) {
   switch (type) {
     case 'city': return 'cities';
+    case 'district': return 'districts';
     case 'region': return 'regions';
     case 'country': return 'countries';
     case 'continent': return 'continents';

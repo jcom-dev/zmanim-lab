@@ -19,7 +19,7 @@ interface PublisherProfile {
   logo_url?: string;
   logo_data?: string;
   status: string;
-  is_official?: boolean;
+  is_certified?: boolean;
 }
 
 interface FieldErrors {
@@ -393,21 +393,21 @@ export default function PublisherProfilePage() {
               <CardTitle>Account Status</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* Official/Unofficial Status - Prominent Display */}
+              {/* Certified/Community Status - Prominent Display */}
               <div className={`flex items-center gap-3 p-4 rounded-lg border ${
-                profile.is_official
+                profile.is_certified
                   ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800'
                   : 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800'
               }`}>
-                {profile.is_official ? (
+                {profile.is_certified ? (
                   <>
                     <div className="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-900/50">
                       <ShieldCheck className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
                     </div>
                     <div>
-                      <p className="font-semibold text-emerald-800 dark:text-emerald-200">Official Publisher</p>
+                      <p className="font-semibold text-emerald-800 dark:text-emerald-200">Certified Publisher</p>
                       <p className="text-sm text-emerald-700 dark:text-emerald-300">
-                        Your organization is verified as an official source for zmanim calculations.
+                        Your organization is verified as a certified source for zmanim calculations.
                       </p>
                     </div>
                   </>
@@ -419,7 +419,7 @@ export default function PublisherProfilePage() {
                     <div>
                       <p className="font-semibold text-amber-800 dark:text-amber-200">Community Publisher</p>
                       <p className="text-sm text-amber-700 dark:text-amber-300">
-                        Your zmanim are shown as community-contributed. Contact an admin if you represent an official organization.
+                        Your zmanim are shown as community-contributed. Contact an admin if you represent a certified organization.
                       </p>
                     </div>
                   </>

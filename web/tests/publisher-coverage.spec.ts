@@ -252,4 +252,60 @@ test.describe('Story 1.6: Publisher Coverage', () => {
       expect(response.status()).toBe(401);
     });
   });
+
+  test.describe('Geo Boundaries API', () => {
+    test('GET /api/v1/geo/boundaries/countries returns GeoJSON FeatureCollection', async ({ request }) => {
+      const response = await request.get(`${API_BASE}/api/v1/geo/boundaries/countries`);
+      expect(response.ok()).toBeTruthy();
+
+      const data = await response.json();
+      expect(data.type).toBe('FeatureCollection');
+      expect(Array.isArray(data.features)).toBeTruthy();
+      expect(data.features.length).toBeGreaterThan(100); // Natural Earth has ~170 countries
+
+      // Check feature structure
+      const feature = data.features[0];
+      expect(feature.type).toBe('Feature');
+      expect(feature.properties).toHaveProperty('code');
+      expect(feature.properties).toHaveProperty('name');
+      expect(feature.properties).toHaveProperty('continent_code');
+      expect(feature.geometry).toBeDefined();
+      expect(feature.geometry.type).toMatch(/Polygon|MultiPolygon/);
+    });
+
+    test('GET /api/v1/geo/boundaries/lookup returns country for valid coordinates', async ({ request }) => {
+      // Test with Jerusalem coordinates
+      const response = await request.get(`${API_BASE}/api/v1/geo/boundaries/lookup?lng=35.2137&lat=31.7683`);
+      expect(response.ok()).toBeTruthy();
+
+      const data = await response.json();
+      expect(data.data.country).toBeDefined();
+      expect(data.data.country.code).toBeDefined();
+      expect(data.data.country.name).toBeDefined();
+    });
+
+    test('GET /api/v1/geo/boundaries/lookup returns country for NYC coordinates', async ({ request }) => {
+      const response = await request.get(`${API_BASE}/api/v1/geo/boundaries/lookup?lng=-74.006&lat=40.7128`);
+      expect(response.ok()).toBeTruthy();
+
+      const data = await response.json();
+      expect(data.data.country.code).toBe('US');
+      expect(data.data.country.name).toBe('United States');
+    });
+
+    test('GET /api/v1/geo/boundaries/lookup requires lng and lat parameters', async ({ request }) => {
+      const response = await request.get(`${API_BASE}/api/v1/geo/boundaries/lookup`);
+      expect(response.status()).toBe(400);
+    });
+
+    test('GET /api/v1/geo/boundaries/lookup handles ocean coordinates gracefully', async ({ request }) => {
+      // Middle of Pacific Ocean
+      const response = await request.get(`${API_BASE}/api/v1/geo/boundaries/lookup?lng=-160&lat=0`);
+      expect(response.ok()).toBeTruthy();
+
+      const data = await response.json();
+      // Should return null/undefined for ocean (no country found)
+      expect(data.data.country).toBeFalsy();
+    });
+  });
 });

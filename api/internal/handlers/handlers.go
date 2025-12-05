@@ -413,7 +413,7 @@ func (h *Handlers) GetPublisherProfile(w http.ResponseWriter, r *http.Request) {
 		query = `
 			SELECT id, clerk_user_id, name, email,
 			       COALESCE(description, ''), COALESCE(bio, ''),
-			       website, logo_url, logo_data, status, is_official, created_at, updated_at
+			       website, logo_url, logo_data, status, is_certified, created_at, updated_at
 			FROM publishers
 			WHERE id = $1
 		`
@@ -423,7 +423,7 @@ func (h *Handlers) GetPublisherProfile(w http.ResponseWriter, r *http.Request) {
 		query = `
 			SELECT id, clerk_user_id, name, email,
 			       COALESCE(description, ''), COALESCE(bio, ''),
-			       website, logo_url, logo_data, status, is_official, created_at, updated_at
+			       website, logo_url, logo_data, status, is_certified, created_at, updated_at
 			FROM publishers
 			WHERE clerk_user_id = $1
 		`
@@ -443,7 +443,7 @@ func (h *Handlers) GetPublisherProfile(w http.ResponseWriter, r *http.Request) {
 		&publisher.LogoURL,
 		&publisher.LogoData,
 		&publisher.Status,
-		&publisher.IsOfficial,
+		&publisher.IsCertified,
 		&publisher.CreatedAt,
 		&publisher.UpdatedAt,
 	)
@@ -817,6 +817,7 @@ func (h *Handlers) GetPublisherAnalytics(w http.ResponseWriter, r *http.Request)
 	`, publisherID).Scan(&coverageAreas)
 
 	// Estimate cities count
+	// Note: country derived via city.region_id → region.country_id
 	var citiesCovered int
 	_ = h.db.Pool.QueryRow(ctx, `
 		SELECT COALESCE(SUM(
@@ -824,13 +825,14 @@ func (h *Handlers) GetPublisherAnalytics(w http.ResponseWriter, r *http.Request)
 				WHEN 'city' THEN 1
 				WHEN 'region' THEN (
 					SELECT COUNT(*) FROM cities c
-					JOIN geo_countries co ON c.country_id = co.id
-					LEFT JOIN geo_regions r ON c.region_id = r.id
+					JOIN geo_regions r ON c.region_id = r.id
+					JOIN geo_countries co ON r.country_id = co.id
 					WHERE co.code = pc.country_code AND r.name = pc.region
 				)
 				WHEN 'country' THEN (
 					SELECT COUNT(*) FROM cities c
-					JOIN geo_countries co ON c.country_id = co.id
+					JOIN geo_regions r ON c.region_id = r.id
+					JOIN geo_countries co ON r.country_id = co.id
 					WHERE co.code = pc.country_code
 				)
 				ELSE 0
@@ -936,19 +938,21 @@ func (h *Handlers) GetPublisherDashboardSummary(w http.ResponseWriter, r *http.R
 	`, publisherID).Scan(&coverageSummary.TotalAreas, &coverageSummary.TotalCities)
 
 	// Estimate cities count based on coverage type
+	// Note: country derived via city.region_id → region.country_id
 	_ = h.db.Pool.QueryRow(ctx, `
 		SELECT COALESCE(SUM(
 			CASE coverage_level
 				WHEN 'city' THEN 1
 				WHEN 'region' THEN (
 					SELECT COUNT(*) FROM cities c
-					JOIN geo_countries co ON c.country_id = co.id
-					LEFT JOIN geo_regions r ON c.region_id = r.id
+					JOIN geo_regions r ON c.region_id = r.id
+					JOIN geo_countries co ON r.country_id = co.id
 					WHERE co.code = pc.country_code AND r.name = pc.region
 				)
 				WHEN 'country' THEN (
 					SELECT COUNT(*) FROM cities c
-					JOIN geo_countries co ON c.country_id = co.id
+					JOIN geo_regions r ON c.region_id = r.id
+					JOIN geo_countries co ON r.country_id = co.id
 					WHERE co.code = pc.country_code
 				)
 				ELSE 0

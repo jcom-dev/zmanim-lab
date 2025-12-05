@@ -1,10 +1,16 @@
-import type { CoverageSelection } from '@/components/shared/CoverageSelector';
+import type { CoverageSelection, CoverageType } from '@/components/shared/CoverageSelector';
 
 export interface MapSelection {
-  /** ISO country code (ISO 3166-1 alpha-2 or numeric) */
+  /** Selection type: country, region, or city */
+  type: CoverageType;
+  /** Unique identifier (country code for countries, UUID for cities) */
   code: string;
-  /** Display name of the country */
+  /** Display name */
   name: string;
+  /** Country code (for region/city selections) */
+  countryCode?: string;
+  /** Coordinates for city selections (for marker display) */
+  coordinates?: [number, number]; // [lng, lat]
 }
 
 export interface CoverageMapViewProps {

@@ -206,6 +206,13 @@ func main() {
 			r.Get("/countries", h.GetCountries)
 			r.Get("/regions", h.GetRegions)
 
+			// Geographic boundaries for map rendering
+			r.Get("/geo/boundaries/countries", h.GetCountryBoundaries)
+			r.Get("/geo/boundaries/regions", h.GetRegionBoundaries)
+			r.Get("/geo/boundaries/districts", h.GetDistrictBoundaries)
+			r.Get("/geo/boundaries/lookup", h.LookupPointLocation)
+			r.Get("/geo/boundaries/stats", h.GetBoundaryStats)
+
 			// Zmanim calculations
 			r.Get("/zmanim", h.GetZmanimForCity) // New: GET with cityId, date, publisherId
 			r.Post("/zmanim", h.CalculateZmanim) // Legacy: POST with coordinates
@@ -375,7 +382,7 @@ func main() {
 			r.Put("/publishers/{id}/verify", h.AdminVerifyPublisher)
 			r.Put("/publishers/{id}/suspend", h.AdminSuspendPublisher)
 			r.Put("/publishers/{id}/reactivate", h.AdminReactivatePublisher)
-			r.Put("/publishers/{id}/official", h.AdminSetPublisherOfficial)
+			r.Put("/publishers/{id}/certified", h.AdminSetPublisherCertified)
 
 			// Publisher user management (Epic 2)
 			r.Get("/publishers/{id}/users", h.AdminGetPublisherUsers)

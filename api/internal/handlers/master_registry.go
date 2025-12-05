@@ -2303,33 +2303,33 @@ type AdminMasterZman struct {
 
 // AdminCreateMasterZmanRequest represents a request to create a master zman
 type AdminCreateMasterZmanRequest struct {
-	ZmanKey              string   `json:"zman_key" validate:"required"`
-	CanonicalHebrewName  string   `json:"canonical_hebrew_name" validate:"required"`
-	CanonicalEnglishName string   `json:"canonical_english_name" validate:"required"`
-	Transliteration      *string  `json:"transliteration"`
-	Description          *string  `json:"description"`
-	HalachicNotes        *string  `json:"halachic_notes"`
-	HalachicSource       *string  `json:"halachic_source"`
-	TimeCategory         string   `json:"time_category" validate:"required"`
-	DefaultFormulaDSL    string   `json:"default_formula_dsl" validate:"required"`
-	IsCore               bool     `json:"is_core"`
-	IsHidden             bool     `json:"is_hidden"`
-	TagIDs               []string `json:"tag_ids"`
+	ZmanKey              string          `json:"zman_key" validate:"required"`
+	CanonicalHebrewName  string          `json:"canonical_hebrew_name" validate:"required"`
+	CanonicalEnglishName string          `json:"canonical_english_name" validate:"required"`
+	Transliteration      *string         `json:"transliteration"`
+	Description          *string         `json:"description"`
+	HalachicNotes        *string         `json:"halachic_notes"`
+	HalachicSource       *string         `json:"halachic_source"`
+	TimeCategory         string          `json:"time_category" validate:"required"`
+	DefaultFormulaDSL    string          `json:"default_formula_dsl" validate:"required"`
+	IsCore               bool            `json:"is_core"`
+	IsHidden             bool            `json:"is_hidden"`
+	Tags                 []TagAssignment `json:"tags"`
 }
 
 // AdminUpdateMasterZmanRequest represents a request to update a master zman
 type AdminUpdateMasterZmanRequest struct {
-	CanonicalHebrewName  *string  `json:"canonical_hebrew_name"`
-	CanonicalEnglishName *string  `json:"canonical_english_name"`
-	Transliteration      *string  `json:"transliteration"`
-	Description          *string  `json:"description"`
-	HalachicNotes        *string  `json:"halachic_notes"`
-	HalachicSource       *string  `json:"halachic_source"`
-	TimeCategory         *string  `json:"time_category"`
-	DefaultFormulaDSL    *string  `json:"default_formula_dsl"`
-	IsCore               *bool    `json:"is_core"`
-	IsHidden             *bool    `json:"is_hidden"`
-	TagIDs               []string `json:"tag_ids"`
+	CanonicalHebrewName  *string         `json:"canonical_hebrew_name"`
+	CanonicalEnglishName *string         `json:"canonical_english_name"`
+	Transliteration      *string         `json:"transliteration"`
+	Description          *string         `json:"description"`
+	HalachicNotes        *string         `json:"halachic_notes"`
+	HalachicSource       *string         `json:"halachic_source"`
+	TimeCategory         *string         `json:"time_category"`
+	DefaultFormulaDSL    *string         `json:"default_formula_dsl"`
+	IsCore               *bool           `json:"is_core"`
+	IsHidden             *bool           `json:"is_hidden"`
+	Tags                 []TagAssignment `json:"tags"`
 }
 
 // AdminGetMasterZmanim returns all master zmanim including hidden ones
@@ -2614,18 +2614,23 @@ func (h *Handlers) AdminCreateMasterZman(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Add tags if provided
-	if len(req.TagIDs) > 0 {
-		for _, tagID := range req.TagIDs {
+	if len(req.Tags) > 0 {
+		for _, tag := range req.Tags {
 			_, err := h.db.Pool.Exec(ctx, `
-				INSERT INTO master_zman_tags (master_zman_id, tag_id)
-				VALUES ($1, $2)
-				ON CONFLICT DO NOTHING
-			`, result.ID, tagID)
+				INSERT INTO master_zman_tags (master_zman_id, tag_id, is_negated)
+				VALUES ($1, $2, $3)
+				ON CONFLICT (master_zman_id, tag_id) DO UPDATE SET is_negated = EXCLUDED.is_negated
+			`, result.ID, tag.TagID, tag.IsNegated)
 			if err != nil {
 				slog.Error("error inserting tag", "error", err)
 			}
 		}
-		result.TagIDs = req.TagIDs
+		// Build TagIDs for response
+		tagIDs := make([]string, len(req.Tags))
+		for i, tag := range req.Tags {
+			tagIDs[i] = tag.TagID
+		}
+		result.TagIDs = tagIDs
 	}
 
 	RespondJSON(w, r, http.StatusCreated, result)
@@ -2742,25 +2747,30 @@ func (h *Handlers) AdminUpdateMasterZman(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Update tags if provided
-	if req.TagIDs != nil {
+	if req.Tags != nil {
 		// Delete existing tags
 		_, err := h.db.Pool.Exec(ctx, `DELETE FROM master_zman_tags WHERE master_zman_id = $1`, id)
 		if err != nil {
 			slog.Error("error deleting existing tags", "error", err)
 		}
 
-		// Insert new tags
-		for _, tagID := range req.TagIDs {
+		// Insert new tags with negation
+		for _, tag := range req.Tags {
 			_, err := h.db.Pool.Exec(ctx, `
-				INSERT INTO master_zman_tags (master_zman_id, tag_id)
-				VALUES ($1, $2)
-				ON CONFLICT DO NOTHING
-			`, id, tagID)
+				INSERT INTO master_zman_tags (master_zman_id, tag_id, is_negated)
+				VALUES ($1, $2, $3)
+				ON CONFLICT (master_zman_id, tag_id) DO UPDATE SET is_negated = EXCLUDED.is_negated
+			`, id, tag.TagID, tag.IsNegated)
 			if err != nil {
 				slog.Error("error inserting tag", "error", err)
 			}
 		}
-		result.TagIDs = req.TagIDs
+		// Build TagIDs for response
+		tagIDs := make([]string, len(req.Tags))
+		for i, tag := range req.Tags {
+			tagIDs[i] = tag.TagID
+		}
+		result.TagIDs = tagIDs
 	}
 
 	// If default_formula_dsl changed, invalidate cache for ALL publishers using this master zman

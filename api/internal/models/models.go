@@ -21,7 +21,7 @@ type Publisher struct {
 	LogoData        *string   `json:"logo_data,omitempty"` // Base64 encoded logo image
 	Status          string    `json:"status"`
 	IsVerified      bool      `json:"is_verified"`
-	IsOfficial      bool      `json:"is_official"` // Whether this is an official/authoritative source
+	IsCertified     bool      `json:"is_certified"` // Whether this is a certified/authoritative source
 	SubscriberCount int       `json:"subscriber_count"`
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`

@@ -1,84 +1,42 @@
 'use client';
 
-import { memo, useCallback, useState, useRef, useMemo, forwardRef, useImperativeHandle, useEffect } from 'react';
+import {
+  memo,
+  useCallback,
+  useState,
+  useRef,
+  useMemo,
+  forwardRef,
+  useImperativeHandle,
+  useEffect,
+} from 'react';
 import MapGL, {
   NavigationControl,
   Source,
   Layer,
   MapRef,
   MapLayerMouseEvent,
+  Marker,
 } from 'react-map-gl/maplibre';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { useTheme } from 'next-themes';
-import { feature } from 'topojson-client';
-import type { Topology, GeometryCollection } from 'topojson-specification';
+import type { FillLayerSpecification, LineLayerSpecification } from 'maplibre-gl';
 import { cn } from '@/lib/utils';
+import { API_BASE } from '@/lib/api-client';
 import type { CoverageMapViewProps, MapSelection } from './types';
 
-// ISO numeric to ISO alpha-2 mapping for common countries
-const ISO_NUMERIC_TO_ALPHA2: Record<string, string> = {
-  '004': 'AF', '008': 'AL', '012': 'DZ', '020': 'AD', '024': 'AO',
-  '028': 'AG', '032': 'AR', '036': 'AU', '040': 'AT', '044': 'BS',
-  '048': 'BH', '050': 'BD', '051': 'AM', '052': 'BB', '056': 'BE',
-  '064': 'BT', '068': 'BO', '070': 'BA', '072': 'BW', '076': 'BR',
-  '084': 'BZ', '090': 'SB', '096': 'BN', '100': 'BG', '104': 'MM',
-  '108': 'BI', '112': 'BY', '116': 'KH', '120': 'CM', '124': 'CA',
-  '140': 'CF', '144': 'LK', '148': 'TD', '152': 'CL', '156': 'CN',
-  '158': 'TW', '170': 'CO', '178': 'CG', '180': 'CD', '188': 'CR',
-  '191': 'HR', '192': 'CU', '196': 'CY', '203': 'CZ', '204': 'BJ',
-  '208': 'DK', '214': 'DO', '218': 'EC', '222': 'SV', '226': 'GQ',
-  '231': 'ET', '232': 'ER', '233': 'EE', '238': 'FK', '242': 'FJ',
-  '246': 'FI', '250': 'FR', '260': 'TF', '262': 'DJ', '266': 'GA',
-  '268': 'GE', '270': 'GM', '275': 'PS', '276': 'DE', '288': 'GH',
-  '300': 'GR', '304': 'GL', '320': 'GT', '324': 'GN', '328': 'GY',
-  '332': 'HT', '340': 'HN', '348': 'HU', '352': 'IS', '356': 'IN',
-  '360': 'ID', '364': 'IR', '368': 'IQ', '372': 'IE', '376': 'IL',
-  '380': 'IT', '384': 'CI', '388': 'JM', '392': 'JP', '398': 'KZ',
-  '400': 'JO', '404': 'KE', '408': 'KP', '410': 'KR', '414': 'KW',
-  '417': 'KG', '418': 'LA', '422': 'LB', '426': 'LS', '428': 'LV',
-  '430': 'LR', '434': 'LY', '440': 'LT', '442': 'LU', '450': 'MG',
-  '454': 'MW', '458': 'MY', '466': 'ML', '478': 'MR', '484': 'MX',
-  '496': 'MN', '498': 'MD', '499': 'ME', '504': 'MA', '508': 'MZ',
-  '512': 'OM', '516': 'NA', '524': 'NP', '528': 'NL', '540': 'NC',
-  '548': 'VU', '554': 'NZ', '558': 'NI', '562': 'NE', '566': 'NG',
-  '578': 'NO', '586': 'PK', '591': 'PA', '598': 'PG', '600': 'PY',
-  '604': 'PE', '608': 'PH', '616': 'PL', '620': 'PT', '624': 'GW',
-  '626': 'TL', '630': 'PR', '634': 'QA', '642': 'RO', '643': 'RU',
-  '646': 'RW', '682': 'SA', '686': 'SN', '688': 'RS', '694': 'SL',
-  '702': 'SG', '703': 'SK', '704': 'VN', '705': 'SI', '706': 'SO',
-  '710': 'ZA', '716': 'ZW', '724': 'ES', '728': 'SS', '729': 'SD',
-  '732': 'EH', '740': 'SR', '748': 'SZ', '752': 'SE', '756': 'CH',
-  '760': 'SY', '762': 'TJ', '764': 'TH', '768': 'TG', '780': 'TT',
-  '784': 'AE', '788': 'TN', '792': 'TR', '795': 'TM', '800': 'UG',
-  '804': 'UA', '807': 'MK', '818': 'EG', '826': 'GB', '834': 'TZ',
-  '840': 'US', '854': 'BF', '858': 'UY', '860': 'UZ', '862': 'VE',
-  '887': 'YE', '894': 'ZM',
+// Zoom level thresholds for different selection granularity
+const ZOOM_THRESHOLDS = {
+  REGION: 4,     // Above this zoom, show region boundaries and allow region selection
+  DISTRICT: 6,   // Above this zoom, show district boundaries and allow district selection
+  CITY: 8,       // Above this zoom, clicking searches for cities
+  MIN_ZOOM: 1,   // Minimum zoom level allowed
 };
-
-// Country name mapping for ISO codes
-const COUNTRY_NAMES: Record<string, string> = {
-  US: 'United States', GB: 'United Kingdom', CA: 'Canada', AU: 'Australia',
-  IL: 'Israel', FR: 'France', DE: 'Germany', IT: 'Italy', ES: 'Spain',
-  NL: 'Netherlands', BE: 'Belgium', CH: 'Switzerland', AT: 'Austria',
-  SE: 'Sweden', NO: 'Norway', DK: 'Denmark', FI: 'Finland', PL: 'Poland',
-  CZ: 'Czech Republic', HU: 'Hungary', RO: 'Romania', BG: 'Bulgaria',
-  GR: 'Greece', PT: 'Portugal', IE: 'Ireland', NZ: 'New Zealand',
-  ZA: 'South Africa', BR: 'Brazil', AR: 'Argentina', MX: 'Mexico',
-  JP: 'Japan', KR: 'South Korea', CN: 'China', IN: 'India', RU: 'Russia',
-  TR: 'Turkey', SA: 'Saudi Arabia', AE: 'United Arab Emirates', EG: 'Egypt',
-  MA: 'Morocco', NG: 'Nigeria', KE: 'Kenya', TH: 'Thailand', VN: 'Vietnam',
-  ID: 'Indonesia', MY: 'Malaysia', SG: 'Singapore', PH: 'Philippines',
-};
-
-function getIsoAlpha2(numericId: string | number): string {
-  const id = String(numericId).padStart(3, '0');
-  return ISO_NUMERIC_TO_ALPHA2[id] || id;
-}
 
 // Pre-built map style URLs (CORS-friendly)
 const MAP_STYLES = {
   light: 'https://tiles.openfreemap.org/styles/liberty',
-  dark: 'https://tiles.openfreemap.org/styles/dark',
+  dark: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
 };
 
 function getMapStyleUrl(isDark: boolean): string {
@@ -86,25 +44,24 @@ function getMapStyleUrl(isDark: boolean): string {
 }
 
 // Selection colors
-const SELECTION_COLORS = {
-  existing: { fill: 'rgba(245, 158, 11, 0.3)', stroke: '#f59e0b' },
-  selected: { fill: 'rgba(34, 197, 94, 0.4)', stroke: '#22c55e' },
-  hover: { fill: 'rgba(59, 130, 246, 0.3)', stroke: '#3b82f6' },
-  default: { fill: 'rgba(100, 116, 139, 0.1)', stroke: 'rgba(100, 116, 139, 0.3)' },
+const COLORS = {
+  existing: { fill: '#f59e0b', stroke: '#f59e0b' },   // Amber
+  selected: { fill: '#22c55e', stroke: '#22c55e' },   // Green
 };
 
-interface HoverInfo {
-  code: string;
-  name: string;
-  x: number;
-  y: number;
-}
-
-// GeoJSON FeatureCollection type
+// GeoJSON types matching server response
 interface CountryFeature {
   type: 'Feature';
-  id: string;
-  properties: { name: string; iso_a2?: string };
+  id: number;
+  properties: {
+    id: number;
+    code: string;
+    name: string;
+    continent_code: string;
+    continent_name: string;
+    area_km2?: number;
+    centroid?: [number, number];
+  };
   geometry: GeoJSON.Geometry;
 }
 
@@ -113,9 +70,127 @@ interface CountryCollection {
   features: CountryFeature[];
 }
 
+interface RegionFeature {
+  type: 'Feature';
+  id: number;
+  properties: {
+    id: number;
+    code: string;
+    name: string;
+    country_code: string;
+    country_name: string;
+    area_km2?: number;
+    centroid?: [number, number];
+  };
+  geometry: GeoJSON.Geometry;
+}
+
+interface RegionCollection {
+  type: 'FeatureCollection';
+  features: RegionFeature[];
+}
+
+interface DistrictFeature {
+  type: 'Feature';
+  id: number;
+  properties: {
+    id: number;
+    code: string;
+    name: string;
+    region_id: number;
+    region_code: string;
+    region_name: string;
+    country_code: string;
+    country_name: string;
+    area_km2?: number;
+    centroid?: [number, number];
+  };
+  geometry: GeoJSON.Geometry;
+}
+
+interface DistrictCollection {
+  type: 'FeatureCollection';
+  features: DistrictFeature[];
+}
+
+// Helper to build dynamic paint expressions based on selected/existing codes
+function buildFillPaint(
+  selectedCodes: string[],
+  existingCodes: string[]
+): FillLayerSpecification['paint'] {
+  // If no codes, return simple transparent values (case expression requires at least one condition)
+  if (selectedCodes.length === 0 && existingCodes.length === 0) {
+    return {
+      'fill-color': 'transparent',
+      'fill-opacity': 0,
+    };
+  }
+
+  const colorExpr: unknown[] = ['case'];
+  const opacityExpr: unknown[] = ['case'];
+
+  if (selectedCodes.length > 0) {
+    colorExpr.push(['in', ['get', 'code'], ['literal', selectedCodes]]);
+    colorExpr.push(COLORS.selected.fill);
+    opacityExpr.push(['in', ['get', 'code'], ['literal', selectedCodes]]);
+    opacityExpr.push(0.5);
+  }
+  if (existingCodes.length > 0) {
+    colorExpr.push(['in', ['get', 'code'], ['literal', existingCodes]]);
+    colorExpr.push(COLORS.existing.fill);
+    opacityExpr.push(['in', ['get', 'code'], ['literal', existingCodes]]);
+    opacityExpr.push(0.4);
+  }
+  colorExpr.push('transparent');
+  opacityExpr.push(0);
+
+  return {
+    'fill-color': colorExpr,
+    'fill-opacity': opacityExpr,
+  } as FillLayerSpecification['paint'];
+}
+
+function buildLinePaint(
+  selectedCodes: string[],
+  existingCodes: string[]
+): LineLayerSpecification['paint'] {
+  // If no codes, return simple transparent values (case expression requires at least one condition)
+  if (selectedCodes.length === 0 && existingCodes.length === 0) {
+    return {
+      'line-color': 'transparent',
+      'line-width': 2,
+      'line-opacity': 0,
+    };
+  }
+
+  const colorExpr: unknown[] = ['case'];
+  const opacityExpr: unknown[] = ['case'];
+
+  if (selectedCodes.length > 0) {
+    colorExpr.push(['in', ['get', 'code'], ['literal', selectedCodes]]);
+    colorExpr.push(COLORS.selected.stroke);
+    opacityExpr.push(['in', ['get', 'code'], ['literal', selectedCodes]]);
+    opacityExpr.push(1);
+  }
+  if (existingCodes.length > 0) {
+    colorExpr.push(['in', ['get', 'code'], ['literal', existingCodes]]);
+    colorExpr.push(COLORS.existing.stroke);
+    opacityExpr.push(['in', ['get', 'code'], ['literal', existingCodes]]);
+    opacityExpr.push(1);
+  }
+  colorExpr.push('transparent');
+  opacityExpr.push(0);
+
+  return {
+    'line-color': colorExpr,
+    'line-width': 2,
+    'line-opacity': opacityExpr,
+  } as LineLayerSpecification['paint'];
+}
+
 /**
  * Interactive map using MapLibre GL for coverage region selection.
- * Features smooth WebGL rendering and premium styling.
+ * Fetches country boundaries from the server-side API for reliable ID matching.
  */
 export const CoverageMapViewGL = memo(
   forwardRef<MapRef, CoverageMapViewProps>(function CoverageMapViewGL(
@@ -133,51 +208,131 @@ export const CoverageMapViewGL = memo(
     const { resolvedTheme } = useTheme();
     const isDark = resolvedTheme === 'dark';
     const mapRef = useRef<MapRef>(null);
-    const [hoverInfo, setHoverInfo] = useState<HoverInfo | null>(null);
-    const [hoveredCountry, setHoveredCountry] = useState<string | null>(null);
     const [currentZoom, setCurrentZoom] = useState(initialZoom);
     const [countriesGeoJSON, setCountriesGeoJSON] = useState<CountryCollection | null>(null);
+    const [regionsGeoJSON, setRegionsGeoJSON] = useState<RegionCollection | null>(null);
+    const [districtsGeoJSON, setDistrictsGeoJSON] = useState<DistrictCollection | null>(null);
+    const [visibleCountryCode, setVisibleCountryCode] = useState<string | null>(null);
+    const [visibleRegionId, setVisibleRegionId] = useState<number | null>(null);
     const [mapLoaded, setMapLoaded] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
+    // Map from ISO code to feature numeric ID for setFeatureState
+    const isoToFeatureId = useRef<Map<string, number>>(new Map());
 
     // Expose the map ref to parent components
     useImperativeHandle(ref, () => mapRef.current as MapRef);
 
-    // Load GeoJSON countries data
+    // Load GeoJSON countries data from server API
     useEffect(() => {
-      fetch('/geo/world-countries-110m.json')
+      setIsLoading(true);
+      setError(null);
+
+      fetch(`${API_BASE}/api/v1/geo/boundaries/countries`)
         .then((res) => {
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           return res.json();
         })
-        .then((topoData: Topology<{ countries: GeometryCollection }>) => {
-          if (!topoData.objects?.countries) {
-            throw new Error('Invalid TopoJSON: missing countries object');
-          }
-
-          // Convert TopoJSON to GeoJSON
-          const geojson = feature(
-            topoData,
-            topoData.objects.countries
-          ) as unknown as CountryCollection;
-
-          // Add ISO alpha-2 codes to features (ID can be number or string)
-          geojson.features = geojson.features.map((f) => {
-            const numericId = String(f.id);
-            const alpha2 = getIsoAlpha2(numericId);
-            return {
-              ...f,
-              properties: {
-                ...f.properties,
-                iso_a2: alpha2,
-              },
-            };
+        .then((geojsonData: CountryCollection) => {
+          // Server returns GeoJSON with 'code' in properties (ISO alpha-2)
+          const isoMap = new Map<string, number>();
+          geojsonData.features.forEach((f, index) => {
+            const code = f.properties.code?.toUpperCase();
+            if (code) {
+              isoMap.set(code, index);
+            }
           });
 
-          console.log(`Loaded ${geojson.features.length} countries`);
-          setCountriesGeoJSON(geojson);
+          isoToFeatureId.current = isoMap;
+          console.log(`Loaded ${geojsonData.features.length} countries from API`);
+          setCountriesGeoJSON(geojsonData);
+          setIsLoading(false);
         })
-        .catch((err) => console.error('Failed to load countries GeoJSON:', err));
+        .catch((err) => {
+          console.error('Failed to load countries from API:', err);
+          setError('Failed to load map data');
+          setIsLoading(false);
+        });
     }, []);
+
+    // Load region boundaries when zoomed into a specific country
+    useEffect(() => {
+      if (!visibleCountryCode || currentZoom < ZOOM_THRESHOLDS.REGION) {
+        setRegionsGeoJSON(null);
+        setDistrictsGeoJSON(null);
+        setVisibleRegionId(null);
+        return;
+      }
+
+      fetch(`${API_BASE}/api/v1/geo/boundaries/regions?country_code=${visibleCountryCode}`)
+        .then((res) => {
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          return res.json();
+        })
+        .then((geojsonData: RegionCollection) => {
+          if (geojsonData.features.length > 0) {
+            console.log(`Loaded ${geojsonData.features.length} regions for ${visibleCountryCode}`);
+            setRegionsGeoJSON(geojsonData);
+          } else {
+            setRegionsGeoJSON(null);
+          }
+        })
+        .catch((err) => {
+          console.error('Failed to load regions:', err);
+          setRegionsGeoJSON(null);
+        });
+    }, [visibleCountryCode, currentZoom]);
+
+    // Load district boundaries when zoomed into a specific region
+    useEffect(() => {
+      if (!visibleCountryCode || currentZoom < ZOOM_THRESHOLDS.DISTRICT) {
+        setDistrictsGeoJSON(null);
+        return;
+      }
+
+      // Fetch all districts for the country (API supports country_code parameter)
+      fetch(`${API_BASE}/api/v1/geo/boundaries/districts?country_code=${visibleCountryCode}`)
+        .then((res) => {
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          return res.json();
+        })
+        .then((geojsonData: DistrictCollection) => {
+          if (geojsonData.features.length > 0) {
+            console.log(`Loaded ${geojsonData.features.length} districts for ${visibleCountryCode}`);
+            setDistrictsGeoJSON(geojsonData);
+          } else {
+            setDistrictsGeoJSON(null);
+          }
+        })
+        .catch((err) => {
+          console.error('Failed to load districts:', err);
+          setDistrictsGeoJSON(null);
+        });
+    }, [visibleCountryCode, currentZoom]);
+
+    // Detect which country is in view when zoomed in
+    useEffect(() => {
+      const map = mapRef.current?.getMap();
+      if (!map || !mapLoaded || currentZoom < ZOOM_THRESHOLDS.REGION) {
+        setVisibleCountryCode(null);
+        return;
+      }
+
+      // Get center of viewport and determine country
+      const center = map.getCenter();
+      fetch(`${API_BASE}/api/v1/geo/boundaries/lookup?lng=${center.lng}&lat=${center.lat}`)
+        .then((res) => res.json())
+        .then((data) => {
+          const countryCode = data.data?.country?.code;
+          if (countryCode && countryCode !== visibleCountryCode) {
+            setVisibleCountryCode(countryCode);
+          }
+        })
+        .catch(() => {
+          // Ignore lookup failures
+        });
+    }, [currentZoom, mapLoaded, visibleCountryCode]);
 
     const mapStyleUrl = useMemo(() => getMapStyleUrl(isDark), [isDark]);
 
@@ -191,22 +346,155 @@ export const CoverageMapViewGL = memo(
       [selectedRegions]
     );
 
-    // Handle country click for selection
+    // Build paint expressions based on current selection
+    const fillLayerPaint = useMemo(
+      () => buildFillPaint(Array.from(selectedSet), Array.from(existingSet)),
+      [selectedSet, existingSet]
+    );
+
+    const lineLayerPaint = useMemo(
+      () => buildLinePaint(Array.from(selectedSet), Array.from(existingSet)),
+      [selectedSet, existingSet]
+    );
+
+    // Update feature states when selection/existing coverage changes
+    useEffect(() => {
+      const map = mapRef.current?.getMap();
+      if (!map || !mapLoaded || !countriesGeoJSON) return;
+
+      // Update feature state for all countries
+      for (const [isoCode, featureId] of isoToFeatureId.current.entries()) {
+        const isSelected = selectedSet.has(isoCode);
+        const isExisting = existingSet.has(isoCode);
+
+        map.setFeatureState(
+          { source: 'countries-source', id: featureId },
+          { selected: isSelected, existing: isExisting }
+        );
+      }
+    }, [selectedSet, existingSet, mapLoaded, countriesGeoJSON]);
+
+    // Handle map click for selection - zoom-aware (country at low zoom, city search at high zoom)
     const handleClick = useCallback(
-      (event: MapLayerMouseEvent) => {
+      async (event: MapLayerMouseEvent) => {
         if (viewOnly) return;
 
-        const features = event.features;
+        const { lng, lat } = event.lngLat;
+
+        // At high zoom levels, search for nearby cities instead of selecting the country
+        if (currentZoom >= ZOOM_THRESHOLDS.CITY) {
+          try {
+            // Use the nearest cities API to find cities near the click point
+            const radius = 50000; // 50km radius
+            const response = await fetch(
+              `${API_BASE}/api/v1/cities/nearby?lng=${lng}&lat=${lat}&radius=${radius}&limit=1`
+            );
+            if (response.ok) {
+              const data = await response.json();
+              const city = data.data?.city;
+              if (city) {
+                const citySelection: MapSelection = {
+                  type: 'city',
+                  code: city.id,
+                  name: `${city.name}, ${city.region || city.country}`,
+                  countryCode: city.country_code,
+                  coordinates: [city.longitude, city.latitude],
+                };
+                const isCurrentlySelected = selectedRegions.some(
+                  (r) => r.type === 'city' && r.code === city.id
+                );
+                if (isCurrentlySelected) {
+                  onSelectionChange(selectedRegions.filter((r) => r.code !== city.id));
+                } else {
+                  onSelectionChange([...selectedRegions, citySelection]);
+                }
+                return;
+              }
+            }
+          } catch (err) {
+            console.error('Failed to lookup nearby city:', err);
+          }
+          // Fall through to country selection if city lookup fails
+        }
+
+        // At district zoom level, try to select district first
+        if (currentZoom >= ZOOM_THRESHOLDS.DISTRICT && districtsGeoJSON) {
+          const districtFeatures = event.features?.filter(
+            (f) => f.layer?.id === 'districts-fill'
+          );
+          if (districtFeatures?.length) {
+            const clickedDistrict = districtFeatures[0];
+            const districtProps = clickedDistrict.properties;
+            const districtId = districtProps?.id;
+            const districtName = districtProps?.name || 'Unknown';
+            const regionName = districtProps?.region_name || '';
+            const countryCode = districtProps?.country_code || '';
+
+            if (districtId) {
+              const districtSelection: MapSelection = {
+                type: 'district',
+                code: String(districtId),
+                name: `${districtName}, ${regionName}`,
+                countryCode,
+              };
+              const isCurrentlySelected = selectedRegions.some(
+                (r) => r.type === 'district' && r.code === String(districtId)
+              );
+              if (isCurrentlySelected) {
+                onSelectionChange(selectedRegions.filter((r) => r.code !== String(districtId)));
+              } else {
+                onSelectionChange([...selectedRegions, districtSelection]);
+              }
+              return;
+            }
+          }
+        }
+
+        // At region zoom level (between REGION and DISTRICT), try to select region
+        if (currentZoom >= ZOOM_THRESHOLDS.REGION && currentZoom < ZOOM_THRESHOLDS.DISTRICT && regionsGeoJSON) {
+          // Check if we clicked on a region
+          const regionFeatures = event.features?.filter(
+            (f) => f.layer?.id === 'regions-fill'
+          );
+          if (regionFeatures?.length) {
+            const clickedRegion = regionFeatures[0];
+            const regionProps = clickedRegion.properties;
+            const regionCode = regionProps?.code || '';
+            const regionName = regionProps?.name || 'Unknown';
+            const countryCode = regionProps?.country_code || '';
+
+            if (regionCode) {
+              const regionSelection: MapSelection = {
+                type: 'region',
+                code: regionCode,
+                name: `${regionName}, ${countryCode}`,
+                countryCode,
+              };
+              const isCurrentlySelected = selectedRegions.some(
+                (r) => r.type === 'region' && r.code === regionCode
+              );
+              if (isCurrentlySelected) {
+                onSelectionChange(selectedRegions.filter((r) => r.code !== regionCode));
+              } else {
+                onSelectionChange([...selectedRegions, regionSelection]);
+              }
+              return;
+            }
+          }
+        }
+
+        // At lower zoom levels or if region click failed, select the country
+        const features = event.features?.filter((f) => f.layer?.id === 'countries-fill');
         if (!features?.length) return;
 
-        const feature = features[0];
-        const props = feature.properties;
-        const countryCode = (props?.iso_a2 || '').toUpperCase();
-        const countryName = props?.name || COUNTRY_NAMES[countryCode] || 'Unknown';
+        const clickedFeature = features[0];
+        const props = clickedFeature.properties;
+        const countryCode = (props?.code || '').toUpperCase();
+        const countryName = props?.name || 'Unknown';
 
         if (!countryCode) return;
 
-        const region: MapSelection = { code: countryCode, name: countryName };
+        const region: MapSelection = { type: 'country', code: countryCode, name: countryName };
         const isCurrentlySelected = selectedSet.has(countryCode);
 
         if (isCurrentlySelected) {
@@ -215,38 +503,8 @@ export const CoverageMapViewGL = memo(
           onSelectionChange([...selectedRegions, region]);
         }
       },
-      [viewOnly, selectedRegions, onSelectionChange, selectedSet]
+      [viewOnly, selectedRegions, onSelectionChange, selectedSet, currentZoom, regionsGeoJSON, districtsGeoJSON]
     );
-
-    // Handle hover for tooltip
-    const handleMouseMove = useCallback(
-      (event: MapLayerMouseEvent) => {
-        if (viewOnly) return;
-
-        const features = event.features;
-        if (!features?.length) {
-          setHoverInfo(null);
-          setHoveredCountry(null);
-          return;
-        }
-
-        const feature = features[0];
-        const props = feature.properties;
-        const code = (props?.iso_a2 || '').toUpperCase();
-        const name = props?.name || COUNTRY_NAMES[code] || 'Unknown';
-
-        if (code) {
-          setHoveredCountry(code);
-          setHoverInfo({ code, name, x: event.point.x, y: event.point.y });
-        }
-      },
-      [viewOnly]
-    );
-
-    const handleMouseLeave = useCallback(() => {
-      setHoverInfo(null);
-      setHoveredCountry(null);
-    }, []);
 
     const handleZoom = useCallback(() => {
       if (mapRef.current) {
@@ -259,62 +517,22 @@ export const CoverageMapViewGL = memo(
       setMapLoaded(true);
     }, []);
 
-    // Create fill color expression for countries
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const fillColorExpression = useMemo((): any => {
-      const conditions: unknown[] = ['case'];
-
-      // Add selected countries (green)
-      if (selectedSet.size > 0) {
-        conditions.push(['in', ['get', 'iso_a2'], ['literal', Array.from(selectedSet)]]);
-        conditions.push(SELECTION_COLORS.selected.fill);
-      }
-
-      // Add existing coverage (amber)
-      if (existingSet.size > 0) {
-        conditions.push(['in', ['get', 'iso_a2'], ['literal', Array.from(existingSet)]]);
-        conditions.push(SELECTION_COLORS.existing.fill);
-      }
-
-      // Add hovered country (blue)
-      if (hoveredCountry && !selectedSet.has(hoveredCountry) && !existingSet.has(hoveredCountry)) {
-        conditions.push(['==', ['get', 'iso_a2'], hoveredCountry]);
-        conditions.push(SELECTION_COLORS.hover.fill);
-      }
-
-      // Default fill
-      conditions.push(SELECTION_COLORS.default.fill);
-
-      return conditions;
-    }, [selectedSet, existingSet, hoveredCountry]);
-
-    // Create stroke color expression
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const strokeColorExpression = useMemo((): any => {
-      const conditions: unknown[] = ['case'];
-
-      if (selectedSet.size > 0) {
-        conditions.push(['in', ['get', 'iso_a2'], ['literal', Array.from(selectedSet)]]);
-        conditions.push(SELECTION_COLORS.selected.stroke);
-      }
-
-      if (existingSet.size > 0) {
-        conditions.push(['in', ['get', 'iso_a2'], ['literal', Array.from(existingSet)]]);
-        conditions.push(SELECTION_COLORS.existing.stroke);
-      }
-
-      if (hoveredCountry) {
-        conditions.push(['==', ['get', 'iso_a2'], hoveredCountry]);
-        conditions.push(SELECTION_COLORS.hover.stroke);
-      }
-
-      conditions.push(SELECTION_COLORS.default.stroke);
-
-      return conditions;
-    }, [selectedSet, existingSet, hoveredCountry]);
-
     return (
       <div className="relative w-full overflow-hidden rounded-lg" style={{ height }}>
+        {/* Loading overlay */}
+        {isLoading && (
+          <div className="absolute inset-0 flex items-center justify-center bg-background/50 z-10">
+            <div className="text-muted-foreground">Loading map...</div>
+          </div>
+        )}
+
+        {/* Error overlay */}
+        {error && (
+          <div className="absolute inset-0 flex items-center justify-center bg-background/50 z-10">
+            <div className="text-destructive">{error}</div>
+          </div>
+        )}
+
         <MapGL
           ref={mapRef}
           initialViewState={{
@@ -325,79 +543,204 @@ export const CoverageMapViewGL = memo(
           mapStyle={mapStyleUrl}
           onLoad={handleMapLoad}
           onClick={handleClick}
-          onMouseMove={handleMouseMove}
-          onMouseLeave={handleMouseLeave}
           onZoom={handleZoom}
-          interactiveLayerIds={viewOnly ? [] : ['countries-fill']}
+          interactiveLayerIds={viewOnly ? [] : ['countries-fill', 'regions-fill', 'districts-fill']}
           style={{ width: '100%', height: '100%' }}
-          cursor={viewOnly ? 'default' : hoveredCountry ? 'pointer' : 'grab'}
+          cursor={viewOnly ? 'default' : 'pointer'}
           attributionControl={false}
         >
           <NavigationControl position="top-right" showCompass={false} />
 
-          {/* Countries overlay layer - rendered above base map */}
+          {/* Countries overlay layer */}
           {mapLoaded && countriesGeoJSON && (
-            <Source id="countries-source" type="geojson" data={countriesGeoJSON}>
+            <Source
+              id="countries-source"
+              type="geojson"
+              data={countriesGeoJSON}
+              generateId={false}
+            >
               {/* Fill layer */}
+              <Layer id="countries-fill" type="fill" paint={fillLayerPaint} />
+              {/* Stroke layer */}
+              <Layer id="countries-stroke" type="line" paint={lineLayerPaint} />
+            </Source>
+          )}
+
+          {/* Regions overlay layer - shown when zoomed into a country */}
+          {mapLoaded && regionsGeoJSON && currentZoom >= ZOOM_THRESHOLDS.REGION && (
+            <Source
+              id="regions-source"
+              type="geojson"
+              data={regionsGeoJSON}
+              generateId={false}
+            >
+              {/* Region fill - purple/violet for distinction */}
               <Layer
-                id="countries-fill"
+                id="regions-fill"
                 type="fill"
                 paint={{
-                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  'fill-color': fillColorExpression as any,
-                  'fill-opacity': 0.6,
+                  'fill-color': [
+                    'case',
+                    ['in', ['get', 'code'], ['literal', selectedRegions.filter(r => r.type === 'region').map(r => r.code)]],
+                    '#8b5cf6', // Violet for selected
+                    'transparent',
+                  ],
+                  'fill-opacity': [
+                    'case',
+                    ['in', ['get', 'code'], ['literal', selectedRegions.filter(r => r.type === 'region').map(r => r.code)]],
+                    0.4,
+                    0,
+                  ],
                 }}
               />
-              {/* Stroke layer */}
+              {/* Region stroke - always visible for boundaries */}
               <Layer
-                id="countries-stroke"
+                id="regions-stroke"
                 type="line"
                 paint={{
-                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  'line-color': strokeColorExpression as any,
-                  'line-width': 1,
+                  'line-color': [
+                    'case',
+                    ['in', ['get', 'code'], ['literal', selectedRegions.filter(r => r.type === 'region').map(r => r.code)]],
+                    '#8b5cf6', // Violet for selected
+                    '#9ca3af', // Gray for unselected
+                  ],
+                  'line-width': [
+                    'case',
+                    ['in', ['get', 'code'], ['literal', selectedRegions.filter(r => r.type === 'region').map(r => r.code)]],
+                    2.5,
+                    1,
+                  ],
+                  'line-opacity': [
+                    'case',
+                    ['in', ['get', 'code'], ['literal', selectedRegions.filter(r => r.type === 'region').map(r => r.code)]],
+                    1,
+                    0.5,
+                  ],
+                }}
+              />
+            </Source>
+          )}
+
+          {/* Districts overlay layer - shown when zoomed deeper */}
+          {mapLoaded && districtsGeoJSON && currentZoom >= ZOOM_THRESHOLDS.DISTRICT && (
+            <Source
+              id="districts-source"
+              type="geojson"
+              data={districtsGeoJSON}
+              generateId={false}
+            >
+              {/* District fill - orange for distinction */}
+              <Layer
+                id="districts-fill"
+                type="fill"
+                paint={{
+                  'fill-color': [
+                    'case',
+                    ['in', ['to-string', ['get', 'id']], ['literal', selectedRegions.filter(r => r.type === 'district').map(r => r.code)]],
+                    '#f97316', // Orange for selected
+                    'transparent',
+                  ],
+                  'fill-opacity': [
+                    'case',
+                    ['in', ['to-string', ['get', 'id']], ['literal', selectedRegions.filter(r => r.type === 'district').map(r => r.code)]],
+                    0.4,
+                    0,
+                  ],
+                }}
+              />
+              {/* District stroke - always visible for boundaries */}
+              <Layer
+                id="districts-stroke"
+                type="line"
+                paint={{
+                  'line-color': [
+                    'case',
+                    ['in', ['to-string', ['get', 'id']], ['literal', selectedRegions.filter(r => r.type === 'district').map(r => r.code)]],
+                    '#f97316', // Orange for selected
+                    '#d4d4d4', // Light gray for unselected
+                  ],
+                  'line-width': [
+                    'case',
+                    ['in', ['to-string', ['get', 'id']], ['literal', selectedRegions.filter(r => r.type === 'district').map(r => r.code)]],
+                    2.5,
+                    0.5,
+                  ],
+                  'line-opacity': [
+                    'case',
+                    ['in', ['to-string', ['get', 'id']], ['literal', selectedRegions.filter(r => r.type === 'district').map(r => r.code)]],
+                    1,
+                    0.4,
+                  ],
+                }}
+              />
+            </Source>
+          )}
+
+          {/* City coverage circles and markers for selected cities */}
+          {selectedRegions.filter((r) => r.type === 'city' && r.coordinates).length > 0 && (
+            <Source
+              id="cities-source"
+              type="geojson"
+              data={{
+                type: 'FeatureCollection',
+                features: selectedRegions
+                  .filter((r) => r.type === 'city' && r.coordinates)
+                  .map((city) => ({
+                    type: 'Feature' as const,
+                    properties: { name: city.name, id: city.code },
+                    geometry: {
+                      type: 'Point' as const,
+                      coordinates: city.coordinates!,
+                    },
+                  })),
+              }}
+            >
+              {/* City coverage circle - 15km radius visual indicator */}
+              <Layer
+                id="cities-circle"
+                type="circle"
+                paint={{
+                  'circle-radius': [
+                    'interpolate',
+                    ['exponential', 2],
+                    ['zoom'],
+                    6, 20,
+                    10, 80,
+                    14, 320,
+                  ],
+                  'circle-color': '#3b82f6',
+                  'circle-opacity': 0.25,
+                  'circle-stroke-width': 2,
+                  'circle-stroke-color': '#3b82f6',
+                  'circle-stroke-opacity': 0.8,
+                }}
+              />
+              {/* City center marker */}
+              <Layer
+                id="cities-center"
+                type="circle"
+                paint={{
+                  'circle-radius': 6,
+                  'circle-color': '#3b82f6',
+                  'circle-stroke-width': 2,
+                  'circle-stroke-color': '#ffffff',
                 }}
               />
             </Source>
           )}
         </MapGL>
 
-        {/* Premium tooltip */}
-        {hoverInfo && !viewOnly && (
-          <div
-            className={cn(
-              'absolute pointer-events-none z-10 px-4 py-3 rounded-xl shadow-2xl',
-              'bg-card/95 backdrop-blur-md border border-border/50',
-              'animate-in fade-in-0 zoom-in-95 duration-150',
-              'transform -translate-x-1/2'
-            )}
-            style={{ left: hoverInfo.x, top: Math.max(60, hoverInfo.y - 60) }}
-          >
-            <div className="flex items-center gap-3">
-              <div
-                className={cn(
-                  'w-2.5 h-2.5 rounded-full',
-                  existingSet.has(hoverInfo.code)
-                    ? 'bg-amber-500'
-                    : selectedSet.has(hoverInfo.code)
-                      ? 'bg-green-500'
-                      : 'bg-blue-500'
-                )}
-              />
-              <div>
-                <div className="font-semibold text-foreground tracking-tight">{hoverInfo.name}</div>
-                <div className="text-xs text-muted-foreground font-mono">{hoverInfo.code}</div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Zoom level indicator */}
-        {process.env.NODE_ENV === 'development' && (
-          <div className="absolute bottom-4 right-4 px-2 py-1 text-xs font-mono bg-card/80 rounded text-muted-foreground">
-            z: {currentZoom.toFixed(1)}
-          </div>
-        )}
+        {/* Zoom level and selection mode indicator */}
+        <div className="absolute bottom-4 right-4 px-2 py-1 text-xs font-mono bg-card/80 rounded text-muted-foreground">
+          {currentZoom >= ZOOM_THRESHOLDS.CITY
+            ? '🏙️ City'
+            : currentZoom >= ZOOM_THRESHOLDS.DISTRICT
+              ? '🏘️ District'
+              : currentZoom >= ZOOM_THRESHOLDS.REGION
+                ? '🗺️ Region'
+                : '🌍 Country'}
+          {process.env.NODE_ENV === 'development' && ` (z: ${currentZoom.toFixed(1)})`}
+        </div>
 
         {/* Legend */}
         {(existingCoverage.length > 0 || selectedRegions.length > 0) && (
@@ -413,24 +756,48 @@ export const CoverageMapViewGL = memo(
                 <span
                   className="w-4 h-4 rounded-md border-2"
                   style={{
-                    backgroundColor: SELECTION_COLORS.existing.fill,
-                    borderColor: SELECTION_COLORS.existing.stroke,
+                    backgroundColor: `${COLORS.existing.fill}66`,
+                    borderColor: COLORS.existing.stroke,
                   }}
                 />
                 <span className="text-muted-foreground font-medium">Existing coverage</span>
               </div>
             )}
-            {selectedRegions.length > 0 && (
+            {selectedRegions.filter((r) => r.type === 'country').length > 0 && (
               <div className="flex items-center gap-3">
                 <span
                   className="w-4 h-4 rounded-md border-2"
                   style={{
-                    backgroundColor: SELECTION_COLORS.selected.fill,
-                    borderColor: SELECTION_COLORS.selected.stroke,
+                    backgroundColor: `${COLORS.selected.fill}80`,
+                    borderColor: COLORS.selected.stroke,
                   }}
                 />
                 <span className="text-muted-foreground font-medium">
-                  New selection ({selectedRegions.length})
+                  Countries ({selectedRegions.filter((r) => r.type === 'country').length})
+                </span>
+              </div>
+            )}
+            {selectedRegions.filter((r) => r.type === 'region').length > 0 && (
+              <div className="flex items-center gap-3">
+                <span className="w-4 h-4 rounded-md bg-violet-500/60 border-2 border-violet-500" />
+                <span className="text-muted-foreground font-medium">
+                  Regions ({selectedRegions.filter((r) => r.type === 'region').length})
+                </span>
+              </div>
+            )}
+            {selectedRegions.filter((r) => r.type === 'district').length > 0 && (
+              <div className="flex items-center gap-3">
+                <span className="w-4 h-4 rounded-md bg-orange-500/60 border-2 border-orange-500" />
+                <span className="text-muted-foreground font-medium">
+                  Districts ({selectedRegions.filter((r) => r.type === 'district').length})
+                </span>
+              </div>
+            )}
+            {selectedRegions.filter((r) => r.type === 'city').length > 0 && (
+              <div className="flex items-center gap-3">
+                <span className="w-4 h-4 rounded-full bg-blue-500/80 border-2 border-blue-600" />
+                <span className="text-muted-foreground font-medium">
+                  Cities ({selectedRegions.filter((r) => r.type === 'city').length})
                 </span>
               </div>
             )}

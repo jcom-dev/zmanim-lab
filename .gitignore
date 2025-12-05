@@ -63,6 +63,8 @@ api/api
 api/main
 api/indexer
 api/import-cities
+api/import-geo-boundaries
+api/import-wof
 api/zmanim-api
 zmanim-api
 *.exe
@@ -100,3 +102,8 @@ webkit/
 
 # Downloaded data files (GeoNames, etc.)
 scripts/data/
+data/*
+api/data/*
+
+# Temp files
+api/1

@@ -120,7 +120,7 @@ export const CoverageMapView = memo(function CoverageMapView({
 
       if (!alpha2) return;
 
-      const region: MapSelection = { code: alpha2, name };
+      const region: MapSelection = { type: 'country', code: alpha2, name };
       const exists = isSelected(alpha2);
 
       if (exists) {

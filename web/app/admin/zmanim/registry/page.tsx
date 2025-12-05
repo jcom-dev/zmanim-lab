@@ -51,8 +51,7 @@ interface MasterZman {
   is_hidden: boolean;
   created_at: string;
   updated_at: string;
-  tags?: ZmanTag[];
-  tag_ids?: string[]; // IDs of associated tags
+  tags?: (ZmanTag & { is_negated?: boolean })[];
 }
 
 interface TimeCategory {
@@ -244,7 +243,7 @@ export default function AdminRegistryPage() {
       default_formula_dsl: data.default_formula_dsl,
       is_core: data.is_core,
       is_hidden: data.is_hidden,
-      tag_ids: data.tag_ids,
+      tags: data.tags, // { tag_id, is_negated }[]
     };
 
     if (editingZman) {
@@ -627,7 +626,7 @@ export default function AdminRegistryPage() {
               default_formula_dsl: editingZman.default_formula_dsl,
               is_core: editingZman.is_core,
               is_hidden: editingZman.is_hidden,
-              tag_ids: editingZman.tag_ids || (editingZman.tags?.map(t => t.id) || []),
+              tags: editingZman.tags?.map(t => ({ tag_id: t.id, is_negated: t.is_negated || false })) || [],
             } : undefined}
             onSave={handleSave}
             onCancel={() => setIsDialogOpen(false)}

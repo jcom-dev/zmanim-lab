@@ -49,7 +49,7 @@ interface Publisher {
   status: string;
   website?: string;
   bio?: string;
-  is_official?: boolean;
+  is_certified?: boolean;
   suspension_reason?: string;
   deleted_at?: string;
   deleted_by?: string;
@@ -87,7 +87,7 @@ export default function AdminPublisherDetailPage() {
     bio: '',
   });
   const [deleteLoading, setDeleteLoading] = useState(false);
-  const [officialLoading, setOfficialLoading] = useState(false);
+  const [certifiedLoading, setCertifiedLoading] = useState(false);
   const [suspendDialogOpen, setSuspendDialogOpen] = useState(false);
   const [suspendReason, setSuspendReason] = useState('');
   const [suspendLoading, setSuspendLoading] = useState(false);
@@ -242,18 +242,18 @@ export default function AdminPublisherDetailPage() {
     }
   };
 
-  const handleToggleOfficial = async () => {
+  const handleToggleCertified = async () => {
     if (!publisher) return;
     try {
-      setOfficialLoading(true);
-      await api.admin.put(`/admin/publishers/${id}/official`, {
-        body: JSON.stringify({ is_official: !publisher.is_official }),
+      setCertifiedLoading(true);
+      await api.admin.put(`/admin/publishers/${id}/certified`, {
+        body: JSON.stringify({ is_certified: !publisher.is_certified }),
       });
       await fetchPublisher();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
-      setOfficialLoading(false);
+      setCertifiedLoading(false);
     }
   };
 
@@ -357,18 +357,18 @@ export default function AdminPublisherDetailPage() {
               <div className="flex items-start justify-between">
                 {/* Status Badges */}
                 <div className="flex flex-wrap items-center gap-2">
-                  {/* Official/Unofficial Badge */}
+                  {/* Certified/Community Badge */}
                   <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
-                    publisher.is_official
+                    publisher.is_certified
                       ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
                       : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
                   }`}>
-                    {publisher.is_official ? (
+                    {publisher.is_certified ? (
                       <ShieldCheck className="w-3.5 h-3.5" />
                     ) : (
                       <ShieldAlert className="w-3.5 h-3.5" />
                     )}
-                    {publisher.is_official ? 'Official' : 'Community'}
+                    {publisher.is_certified ? 'Certified' : 'Community'}
                   </div>
 
                   {/* Active/Suspended Status Badge */}
@@ -422,21 +422,21 @@ export default function AdminPublisherDetailPage() {
                       <TooltipContent>View as publisher</TooltipContent>
                     </Tooltip>
 
-                    {/* Official Toggle */}
+                    {/* Certified Toggle */}
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button
                           variant="ghost"
                           size="icon"
                           className={`h-8 w-8 ${
-                            publisher.is_official
+                            publisher.is_certified
                               ? 'text-emerald-600 hover:text-emerald-700 dark:text-emerald-400'
                               : 'text-muted-foreground hover:text-foreground'
                           }`}
-                          onClick={handleToggleOfficial}
-                          disabled={officialLoading}
+                          onClick={handleToggleCertified}
+                          disabled={certifiedLoading}
                         >
-                          {publisher.is_official ? (
+                          {publisher.is_certified ? (
                             <ShieldCheck className="w-4 h-4" />
                           ) : (
                             <Shield className="w-4 h-4" />
@@ -444,7 +444,7 @@ export default function AdminPublisherDetailPage() {
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent>
-                        {publisher.is_official ? 'Remove official status' : 'Mark as official'}
+                        {publisher.is_certified ? 'Remove certified status' : 'Mark as certified'}
                       </TooltipContent>
                     </Tooltip>
 

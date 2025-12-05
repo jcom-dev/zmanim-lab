@@ -80,7 +80,7 @@ func (h *Handlers) AdminListPublishers(w http.ResponseWriter, r *http.Request) {
 	if includeDeleted {
 		query = `
 			SELECT id, clerk_user_id, name, email, website,
-			       logo_url, bio, status, is_official, suspension_reason,
+			       logo_url, bio, status, is_certified, suspension_reason,
 			       deleted_at, deleted_by, created_at, updated_at
 			FROM publishers
 			ORDER BY deleted_at DESC NULLS FIRST, created_at DESC
@@ -88,7 +88,7 @@ func (h *Handlers) AdminListPublishers(w http.ResponseWriter, r *http.Request) {
 	} else {
 		query = `
 			SELECT id, clerk_user_id, name, email, website,
-			       logo_url, bio, status, is_official, suspension_reason,
+			       logo_url, bio, status, is_certified, suspension_reason,
 			       deleted_at, deleted_by, created_at, updated_at
 			FROM publishers
 			WHERE deleted_at IS NULL
@@ -108,12 +108,12 @@ func (h *Handlers) AdminListPublishers(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var id, name, email, status string
 		var clerkUserID, website, logoURL, bio, suspensionReason, deletedBy *string
-		var isOfficial bool
+		var isCertified bool
 		var deletedAt *time.Time
 		var createdAt, updatedAt time.Time
 
 		err := rows.Scan(&id, &clerkUserID, &name, &email,
-			&website, &logoURL, &bio, &status, &isOfficial, &suspensionReason,
+			&website, &logoURL, &bio, &status, &isCertified, &suspensionReason,
 			&deletedAt, &deletedBy, &createdAt, &updatedAt)
 		if err != nil {
 			slog.Error("failed to scan publisher row", "error", err)
@@ -121,13 +121,13 @@ func (h *Handlers) AdminListPublishers(w http.ResponseWriter, r *http.Request) {
 		}
 
 		publisher := map[string]interface{}{
-			"id":          id,
-			"name":        name,
-			"email":       email,
-			"status":      status,
-			"is_official": isOfficial,
-			"created_at":  createdAt,
-			"updated_at":  updatedAt,
+			"id":           id,
+			"name":         name,
+			"email":        email,
+			"status":       status,
+			"is_certified": isCertified,
+			"created_at":   createdAt,
+			"updated_at":   updatedAt,
 		}
 
 		if clerkUserID != nil {
@@ -1414,9 +1414,9 @@ func handlePublisherStatusError(w http.ResponseWriter, r *http.Request, result s
 	RespondInternalError(w, r, "Failed to update publisher status")
 }
 
-// AdminSetPublisherOfficial sets or clears the is_official flag for a publisher
-// PUT /api/admin/publishers/{id}/official
-func (h *Handlers) AdminSetPublisherOfficial(w http.ResponseWriter, r *http.Request) {
+// AdminSetPublisherCertified sets or clears the is_certified flag for a publisher
+// PUT /api/admin/publishers/{id}/certified
+func (h *Handlers) AdminSetPublisherCertified(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	id := chi.URLParam(r, "id")
 
@@ -1426,7 +1426,7 @@ func (h *Handlers) AdminSetPublisherOfficial(w http.ResponseWriter, r *http.Requ
 	}
 
 	var req struct {
-		IsOfficial bool `json:"is_official"`
+		IsCertified bool `json:"is_certified"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -1436,35 +1436,35 @@ func (h *Handlers) AdminSetPublisherOfficial(w http.ResponseWriter, r *http.Requ
 
 	query := `
 		UPDATE publishers
-		SET is_official = $1, updated_at = NOW()
+		SET is_certified = $1, updated_at = NOW()
 		WHERE id = $2
-		RETURNING id, name, is_official, updated_at
+		RETURNING id, name, is_certified, updated_at
 	`
 
 	var resID, name string
-	var isOfficial bool
+	var isCertified bool
 	var updatedAt time.Time
 
-	err := h.db.Pool.QueryRow(ctx, query, req.IsOfficial, id).Scan(
-		&resID, &name, &isOfficial, &updatedAt)
+	err := h.db.Pool.QueryRow(ctx, query, req.IsCertified, id).Scan(
+		&resID, &name, &isCertified, &updatedAt)
 
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			RespondNotFound(w, r, "Publisher not found")
 			return
 		}
-		slog.Error("failed to update publisher official status", "error", err, "id", id)
+		slog.Error("failed to update publisher certified status", "error", err, "id", id)
 		RespondInternalError(w, r, "Failed to update publisher")
 		return
 	}
 
-	slog.Info("publisher official status updated", "id", id, "name", name, "is_official", isOfficial)
+	slog.Info("publisher certified status updated", "id", id, "name", name, "is_certified", isCertified)
 
 	RespondJSON(w, r, http.StatusOK, map[string]interface{}{
-		"id":          resID,
-		"name":        name,
-		"is_official": isOfficial,
-		"updated_at":  updatedAt,
+		"id":           resID,
+		"name":         name,
+		"is_certified": isCertified,
+		"updated_at":   updatedAt,
 	})
 }
 

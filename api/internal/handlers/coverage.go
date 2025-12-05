@@ -51,8 +51,8 @@ func (h *Handlers) GetPublisherCoverage(w http.ResponseWriter, r *http.Request) 
 			COALESCE(co.name, country_lookup.name, pc.country_code, '') as country
 		FROM publisher_coverage pc
 		LEFT JOIN cities c ON pc.city_id = c.id
-		LEFT JOIN geo_countries co ON c.country_id = co.id
 		LEFT JOIN geo_regions r ON c.region_id = r.id
+		LEFT JOIN geo_countries co ON r.country_id = co.id
 		LEFT JOIN geo_countries country_lookup ON country_lookup.code = pc.country_code
 		LEFT JOIN geo_continents ct ON ct.name = pc.continent_code
 		WHERE pc.publisher_id = $1
@@ -205,8 +205,8 @@ func (h *Handlers) CreatePublisherCoverage(w http.ResponseWriter, r *http.Reques
 		_ = h.db.Pool.QueryRow(ctx,
 			`SELECT c.name || ', ' || COALESCE(r.name, '') || ', ' || co.name
 			 FROM cities c
-			 JOIN geo_countries co ON c.country_id = co.id
-			 LEFT JOIN geo_regions r ON c.region_id = r.id
+			 JOIN geo_regions r ON c.region_id = r.id
+			 JOIN geo_countries co ON r.country_id = co.id
 			 WHERE c.id = $1`,
 			*req.CityID,
 		).Scan(&coverage.DisplayName)
@@ -449,11 +449,13 @@ func (h *Handlers) GetPublishersForCity(w http.ResponseWriter, r *http.Request) 
 func (h *Handlers) GetContinents(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
+	// Note: country derived via city.region_id → region.country_id
 	query := `
 		SELECT ct.code, ct.name, COUNT(c.id) as city_count
 		FROM geo_continents ct
 		LEFT JOIN geo_countries co ON co.continent_id = ct.id
-		LEFT JOIN cities c ON c.country_id = co.id
+		LEFT JOIN geo_regions r ON r.country_id = co.id
+		LEFT JOIN cities c ON c.region_id = r.id
 		GROUP BY ct.id, ct.code, ct.name
 		ORDER BY ct.name
 	`
@@ -515,12 +517,14 @@ func (h *Handlers) GetCountries(w http.ResponseWriter, r *http.Request) {
 	var rows pgx.Rows
 	var err error
 
+	// Note: country derived via city.region_id → region.country_id
 	if continent != "" {
 		query = `
 			SELECT co.code, co.name, COUNT(c.id) as city_count
 			FROM geo_countries co
 			JOIN geo_continents ct ON co.continent_id = ct.id
-			LEFT JOIN cities c ON c.country_id = co.id
+			LEFT JOIN geo_regions r ON r.country_id = co.id
+			LEFT JOIN cities c ON c.region_id = r.id
 			WHERE ct.code = $1 OR ct.name = $1
 			GROUP BY co.id, co.code, co.name
 			ORDER BY co.name
@@ -530,7 +534,8 @@ func (h *Handlers) GetCountries(w http.ResponseWriter, r *http.Request) {
 		query = `
 			SELECT co.code, co.name, COUNT(c.id) as city_count
 			FROM geo_countries co
-			LEFT JOIN cities c ON c.country_id = co.id
+			LEFT JOIN geo_regions r ON r.country_id = co.id
+			LEFT JOIN cities c ON c.region_id = r.id
 			GROUP BY co.id, co.code, co.name
 			ORDER BY co.name
 		`

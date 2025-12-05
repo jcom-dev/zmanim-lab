@@ -103,34 +103,29 @@ type AstronomicalPrimitive struct {
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }
 
-// Cities table - use idx_cities_name_trgm for ILIKE searches, idx_cities_country_population for country listings
+// Level 4: Cities with coordinates, timezone, and elevation for zmanim calculations
 type City struct {
-	ID              string             `json:"id"`
-	Name            string             `json:"name"`
-	HebrewName      *string            `json:"hebrew_name"`
-	Latitude        float64            `json:"latitude"`
-	Longitude       float64            `json:"longitude"`
-	Timezone        string             `json:"timezone"`
-	ElevationMeters *int32             `json:"elevation_meters"`
-	Population      *int32             `json:"population"`
-	Location        interface{}        `json:"location"`
-	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	ID string `json:"id"`
+	// Region is required per WOF hierarchy (country derived via region.country_id)
+	RegionID int32 `json:"region_id"`
+	// District/county is optional per WOF hierarchy
+	DistrictID *int32      `json:"district_id"`
+	Name       string      `json:"name"`
+	NameAscii  *string     `json:"name_ascii"`
+	NameLocal  *string     `json:"name_local"`
+	Latitude   float64     `json:"latitude"`
+	Longitude  float64     `json:"longitude"`
+	Location   interface{} `json:"location"`
+	Timezone   string      `json:"timezone"`
 	// Elevation in meters above sea level, used for zmanim calculations
-	Elevation *int32 `json:"elevation"`
+	ElevationM *int32 `json:"elevation_m"`
+	Population *int32 `json:"population"`
 	// GeoNames ID for data source reference and deduplication
-	Geonameid *int32  `json:"geonameid"`
-	NameAscii *string `json:"name_ascii"`
-	// FK to geo_countries - normalized replacement for country/country_code
-	CountryID int16 `json:"country_id"`
-	// FK to geo_regions - normalized replacement for region/region_code
-	RegionID *int32 `json:"region_id"`
-}
-
-type Country struct {
-	ID        string             `json:"id"`
-	Code      string             `json:"code"`
-	Name      string             `json:"name"`
+	Geonameid *int32             `json:"geonameid"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+	// Who's On First stable ID for this locality
+	WofID *int64 `json:"wof_id"`
 }
 
 // Types of days for which zmanim can be configured.
@@ -208,30 +203,127 @@ type ExplanationCache struct {
 	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
 }
 
-// Lookup table for 7 continents with ISO codes
+// Tracks boundary data imports for reproducibility
+type GeoBoundaryImport struct {
+	ID               int32              `json:"id"`
+	Source           string             `json:"source"`
+	Level            string             `json:"level"`
+	CountryCode      *string            `json:"country_code"`
+	Version          *string            `json:"version"`
+	RecordsImported  *int32             `json:"records_imported"`
+	RecordsMatched   *int32             `json:"records_matched"`
+	RecordsUnmatched *int32             `json:"records_unmatched"`
+	ImportedAt       pgtype.Timestamptz `json:"imported_at"`
+	Notes            *string            `json:"notes"`
+}
+
+// Level 0: 7 continents with ISO codes
 type GeoContinent struct {
 	ID   int16  `json:"id"`
 	Code string `json:"code"`
 	Name string `json:"name"`
 }
 
-// Lookup table for countries with ISO 3166-1 alpha-2 codes
+// Level 1 (ADM0): Countries with ISO 3166-1 codes and subdivision metadata
 type GeoCountry struct {
-	ID int16 `json:"id"`
-	// ISO 3166-1 alpha-2 country code (e.g., US, IL, GB)
-	Code        string `json:"code"`
-	Name        string `json:"name"`
-	ContinentID int16  `json:"continent_id"`
+	ID          int16   `json:"id"`
+	Code        string  `json:"code"`
+	CodeIso3    *string `json:"code_iso3"`
+	Name        string  `json:"name"`
+	NameLocal   *string `json:"name_local"`
+	ContinentID int16   `json:"continent_id"`
+	// Display label for ADM1 level: State (US), Province (CA), Constituent Country (GB)
+	Adm1Label *string `json:"adm1_label"`
+	// Display label for ADM2 level: County (US), Borough (GB), Département (FR)
+	Adm2Label *string `json:"adm2_label"`
+	HasAdm1   *bool   `json:"has_adm1"`
+	HasAdm2   *bool   `json:"has_adm2"`
+	// True for city-states like Singapore, Monaco, Vatican
+	IsCityState *bool              `json:"is_city_state"`
+	Population  *int64             `json:"population"`
+	AreaKm2     *float64           `json:"area_km2"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+	// Who's On First stable ID for this country
+	WofID *int64 `json:"wof_id"`
 }
 
-// Lookup table for administrative regions (states, provinces, districts)
+// Polygon boundaries for countries
+type GeoCountryBoundary struct {
+	CountryID int16       `json:"country_id"`
+	Boundary  interface{} `json:"boundary"`
+	// Simplified boundary for faster web rendering
+	BoundarySimplified interface{}        `json:"boundary_simplified"`
+	AreaKm2            *float64           `json:"area_km2"`
+	Centroid           interface{}        `json:"centroid"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+}
+
+// Level 3 (ADM2): Counties, boroughs, départements, local authorities
+type GeoDistrict struct {
+	ID       int32 `json:"id"`
+	RegionID int32 `json:"region_id"`
+	// Local administrative code (e.g., E08000003 for Manchester)
+	Code       string             `json:"code"`
+	Name       string             `json:"name"`
+	NameLocal  *string            `json:"name_local"`
+	Population *int64             `json:"population"`
+	AreaKm2    *float64           `json:"area_km2"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+	// Who's On First stable ID for this district
+	WofID *int64 `json:"wof_id"`
+}
+
+// Polygon boundaries for districts/counties (ADM2)
+type GeoDistrictBoundary struct {
+	DistrictID         int32              `json:"district_id"`
+	Boundary           interface{}        `json:"boundary"`
+	BoundarySimplified interface{}        `json:"boundary_simplified"`
+	AreaKm2            *float64           `json:"area_km2"`
+	Centroid           interface{}        `json:"centroid"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+}
+
+// Manual name mappings between data sources
+type GeoNameMapping struct {
+	ID                int32              `json:"id"`
+	Level             string             `json:"level"`
+	Source            string             `json:"source"`
+	SourceName        string             `json:"source_name"`
+	SourceCountryCode *string            `json:"source_country_code"`
+	TargetID          int32              `json:"target_id"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	Notes             *string            `json:"notes"`
+}
+
+// Level 2 (ADM1): States, provinces, constituent countries, regions
 type GeoRegion struct {
 	ID        int32 `json:"id"`
 	CountryID int16 `json:"country_id"`
-	// GeoNames admin1 code within the country
-	Code string `json:"code"`
-	// Human-readable region name (e.g., California, Ontario)
-	Name string `json:"name"`
+	// ISO 3166-2 subdivision code (e.g., US-CA for California)
+	Code       string             `json:"code"`
+	Name       string             `json:"name"`
+	NameLocal  *string            `json:"name_local"`
+	Population *int64             `json:"population"`
+	AreaKm2    *float64           `json:"area_km2"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+	// Who's On First stable ID for this region
+	WofID *int64 `json:"wof_id"`
+}
+
+// Polygon boundaries for regions/states (ADM1)
+type GeoRegionBoundary struct {
+	RegionID           int32              `json:"region_id"`
+	Boundary           interface{}        `json:"boundary"`
+	BoundarySimplified interface{}        `json:"boundary_simplified"`
+	AreaKm2            *float64           `json:"area_km2"`
+	Centroid           interface{}        `json:"centroid"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
 }
 
 // Canonical list of Jewish events (Shabbos, Yom Tov, fasts, etc.) with Israel/Diaspora duration differences
@@ -367,8 +459,8 @@ type Publisher struct {
 	IsVerified bool `json:"is_verified"`
 	// Base64 encoded logo image (PNG format, data:image/png;base64,...)
 	LogoData *string `json:"logo_data"`
-	// Whether this publisher is an official/authoritative source for zmanim calculations. Unofficial publishers are community-contributed.
-	IsOfficial bool `json:"is_official"`
+	// Whether this publisher is a certified/authoritative source for zmanim calculations. Non-certified publishers are community-contributed.
+	IsCertified bool `json:"is_certified"`
 	// The reason provided when this publisher was suspended. Cleared when reactivated.
 	SuspensionReason *string `json:"suspension_reason"`
 	// Timestamp when the publisher was soft-deleted. NULL means active.
@@ -377,21 +469,22 @@ type Publisher struct {
 	DeletedBy *string `json:"deleted_by"`
 }
 
-// Publisher geographic coverage at country, region, or city level
+// Publisher geographic coverage at continent, country, region, district, or city level
 type PublisherCoverage struct {
 	ID          string `json:"id"`
 	PublisherID string `json:"publisher_id"`
-	// Level of coverage: country, region, or city
+	// Granularity: continent > country > region > district > city
 	CoverageLevel string      `json:"coverage_level"`
-	CountryCode   *string     `json:"country_code"`
-	Region        *string     `json:"region"`
+	ContinentCode *string     `json:"continent_code"`
+	CountryID     *int16      `json:"country_id"`
+	RegionID      *int32      `json:"region_id"`
+	DistrictID    *int32      `json:"district_id"`
 	CityID        pgtype.UUID `json:"city_id"`
 	// Priority for this coverage (1-10, higher = more prominent)
-	Priority      *int32             `json:"priority"`
-	IsActive      *bool              `json:"is_active"`
-	CreatedAt     pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
-	ContinentCode *string            `json:"continent_code"`
+	Priority  *int32             `json:"priority"`
+	IsActive  *bool              `json:"is_active"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }
 
 // Publisher team invitations.

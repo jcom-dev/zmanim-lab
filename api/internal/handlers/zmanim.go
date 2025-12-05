@@ -32,10 +32,10 @@ type ZmanimWithFormulaResponse struct {
 
 // ZmanimPublisherInfo contains publisher details for the response
 type ZmanimPublisherInfo struct {
-	ID         string  `json:"id"`
-	Name       string  `json:"name"`
-	Logo       *string `json:"logo,omitempty"`       // Base64 data URL
-	IsOfficial bool    `json:"is_official"`          // Whether this is an official/authoritative source
+	ID          string  `json:"id"`
+	Name        string  `json:"name"`
+	Logo        *string `json:"logo,omitempty"`        // Base64 data URL
+	IsCertified bool    `json:"is_certified"`          // Whether this is a certified/authoritative source
 }
 
 // ZmanimLocationInfo contains location details for the response
@@ -143,8 +143,8 @@ func (h *Handlers) GetZmanimForCity(w http.ResponseWriter, r *http.Request) {
 	cityQuery := `
 		SELECT c.name, co.name as country, r.name as region, c.timezone, c.latitude, c.longitude
 		FROM cities c
-		JOIN geo_countries co ON c.country_id = co.id
-		LEFT JOIN geo_regions r ON c.region_id = r.id
+		JOIN geo_regions r ON c.region_id = r.id
+		JOIN geo_countries co ON r.country_id = co.id
 		WHERE c.id = $1
 	`
 	err = h.db.Pool.QueryRow(ctx, cityQuery, cityID).Scan(
@@ -167,17 +167,17 @@ func (h *Handlers) GetZmanimForCity(w http.ResponseWriter, r *http.Request) {
 	var publisherInfo *ZmanimPublisherInfo
 	if publisherID != "" {
 		// First, get publisher info (logo_data is the base64 embedded logo)
-		pubQuery := `SELECT name, logo_data, is_official FROM publishers WHERE id = $1`
+		pubQuery := `SELECT name, logo_data, is_certified FROM publishers WHERE id = $1`
 		var pubName string
 		var pubLogo *string
-		var isOfficial bool
-		err = h.db.Pool.QueryRow(ctx, pubQuery, publisherID).Scan(&pubName, &pubLogo, &isOfficial)
+		var isCertified bool
+		err = h.db.Pool.QueryRow(ctx, pubQuery, publisherID).Scan(&pubName, &pubLogo, &isCertified)
 		if err == nil {
 			publisherInfo = &ZmanimPublisherInfo{
-				ID:         publisherID,
-				Name:       pubName,
-				Logo:       pubLogo,
-				IsOfficial: isOfficial,
+				ID:          publisherID,
+				Name:        pubName,
+				Logo:        pubLogo,
+				IsCertified: isCertified,
 			}
 		}
 

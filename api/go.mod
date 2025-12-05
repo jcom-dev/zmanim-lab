@@ -40,8 +40,10 @@ require (
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/kr/text v0.2.0 // indirect
+	github.com/mattn/go-sqlite3 v1.14.32 // indirect
 	github.com/nathan-osman/go-sunrise v1.1.0 // indirect
 	github.com/swaggo/files/v2 v2.0.2 // indirect
+	github.com/tkrajina/go-elevations v0.1.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/crypto v0.36.0 // indirect
 	golang.org/x/mod v0.30.0 // indirect

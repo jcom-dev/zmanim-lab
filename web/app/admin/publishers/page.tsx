@@ -21,7 +21,7 @@ interface Publisher {
   website?: string;
   logo_url?: string;
   bio?: string;
-  is_official?: boolean;
+  is_certified?: boolean;
   suspension_reason?: string;
   deleted_at?: string;
   deleted_by?: string;
@@ -205,7 +205,7 @@ export default function AdminPublishersPage() {
                 <tr className="text-left">
                   <th className="pb-3 font-semibold">Publisher Name</th>
                   <th className="pb-3 font-semibold">Email</th>
-                  <th className="pb-3 font-semibold">Official</th>
+                  <th className="pb-3 font-semibold">Source</th>
                   <th className="pb-3 font-semibold">Status</th>
                   <th className="pb-3 font-semibold">Created</th>
                   <th className="pb-3 font-semibold text-right">Actions</th>
@@ -241,15 +241,15 @@ export default function AdminPublishersPage() {
                         </a>
                       </td>
                       <td className="py-4">
-                        {publisher.is_official ? (
+                        {publisher.is_certified ? (
                           <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 rounded-full border border-emerald-200 dark:border-emerald-800">
                             <ShieldCheck className="w-3 h-3" />
-                            Official
+                            Certified
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded-full border border-amber-200 dark:border-amber-800">
                             <ShieldAlert className="w-3 h-3" />
-                            Unofficial
+                            Community
                           </span>
                         )}
                       </td>

@@ -183,7 +183,7 @@ export default function AdminZmanRequestsPage() {
       default_formula_dsl: data.default_formula_dsl,
       is_core: data.is_core,
       is_hidden: data.is_hidden,
-      tag_ids: data.tag_ids,
+      tags: data.tags, // { tag_id, is_negated }[]
     };
 
     // Create in registry first
@@ -285,10 +285,10 @@ export default function AdminZmanRequestsPage() {
     halachic_source: request.halachic_source || '',
     is_core: false,
     is_hidden: false,
-    // Include existing tag IDs from approved tags
-    tag_ids: pendingTagRequests
+    // Include existing tag IDs from approved tags (all as positive/non-negated)
+    tags: pendingTagRequests
       .filter((t) => !t.is_new_tag_request && t.tag_id)
-      .map((t) => t.tag_id!),
+      .map((t) => ({ tag_id: t.tag_id!, is_negated: false })),
   });
 
   // Build source info for the form

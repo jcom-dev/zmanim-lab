@@ -55,14 +55,15 @@ func (h *Handlers) SearchCities(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Build dynamic query with normalized schema JOINs
+	// Note: country derived via city.region_id → region.country_id
 	var queryBuilder strings.Builder
 	queryBuilder.WriteString(`
 		SELECT c.id, c.name, co.name as country, co.code as country_code, r.name as region,
 		       c.latitude, c.longitude, c.timezone, c.population, c.elevation, ct.name as continent
 		FROM cities c
-		JOIN geo_countries co ON c.country_id = co.id
+		JOIN geo_regions r ON c.region_id = r.id
+		JOIN geo_countries co ON r.country_id = co.id
 		JOIN geo_continents ct ON co.continent_id = ct.id
-		LEFT JOIN geo_regions r ON c.region_id = r.id
 		WHERE 1=1`)
 
 	args := make([]interface{}, 0)
@@ -201,14 +202,15 @@ func (h *Handlers) GetNearbyCity(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Find nearest city using PostGIS ST_Distance with normalized JOINs
+	// Note: country derived via city.region_id → region.country_id
 	query := `
 		SELECT c.id, c.name, co.name as country, co.code as country_code, r.name as region,
 		       c.latitude, c.longitude, c.timezone, c.population, c.elevation, ct.name as continent,
 		       ST_Distance(c.location, ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography) as distance_meters
 		FROM cities c
-		JOIN geo_countries co ON c.country_id = co.id
+		JOIN geo_regions r ON c.region_id = r.id
+		JOIN geo_countries co ON r.country_id = co.id
 		JOIN geo_continents ct ON co.continent_id = ct.id
-		LEFT JOIN geo_regions r ON c.region_id = r.id
 		ORDER BY c.location <-> ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography
 		LIMIT 1
 	`
@@ -268,9 +270,9 @@ func (h *Handlers) GetCityByID(w http.ResponseWriter, r *http.Request) {
 		SELECT c.id, c.name, co.name as country, co.code as country_code, r.name as region,
 		       c.latitude, c.longitude, c.timezone, c.population, c.elevation, ct.name as continent
 		FROM cities c
-		JOIN geo_countries co ON c.country_id = co.id
+		JOIN geo_regions r ON c.region_id = r.id
+		JOIN geo_countries co ON r.country_id = co.id
 		JOIN geo_continents ct ON co.continent_id = ct.id
-		LEFT JOIN geo_regions r ON c.region_id = r.id
 		WHERE c.id = $1
 	`
 
