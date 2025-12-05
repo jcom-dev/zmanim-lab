@@ -399,31 +399,49 @@ func cmdReset(args []string) {
 	fmt.Println("🔥 NUCLEAR RESET - Deleting all geographic data...")
 	fmt.Println("")
 
-	// Order matters due to foreign keys - delete from leaf tables first
-	tables := []struct {
-		name  string
-		query string
-	}{
-		{"publisher_coverage", "DELETE FROM publisher_coverage"},
-		{"geo_boundary_imports", "DELETE FROM geo_boundary_imports"},
-		{"geo_name_mappings", "DELETE FROM geo_name_mappings"},
-		{"cities", "TRUNCATE cities CASCADE"},
-		{"geo_district_boundaries", "DELETE FROM geo_district_boundaries"},
-		{"geo_districts", "TRUNCATE geo_districts CASCADE"},
-		{"geo_region_boundaries", "DELETE FROM geo_region_boundaries"},
-		{"geo_regions", "TRUNCATE geo_regions CASCADE"},
-		{"geo_country_boundaries", "DELETE FROM geo_country_boundaries"},
-		{"geo_countries", "TRUNCATE geo_countries CASCADE"},
-		{"geo_continents", "TRUNCATE geo_continents CASCADE"},
-	}
+	// Use TRUNCATE CASCADE on parent tables - it will cascade to children
+	// This is faster and handles FK dependencies automatically
+	_, err = pool.Exec(ctx, `
+		TRUNCATE
+			geo_continents,
+			geo_countries,
+			geo_regions,
+			geo_districts,
+			cities,
+			geo_names,
+			geo_country_boundaries,
+			geo_region_boundaries,
+			geo_district_boundaries,
+			geo_boundary_imports,
+			geo_name_mappings,
+			publisher_coverage
+		CASCADE
+	`)
+	if err != nil {
+		fmt.Printf("   ❌ TRUNCATE failed: %v\n", err)
+		fmt.Println("   Falling back to DELETE...")
 
-	for _, t := range tables {
-		result, err := pool.Exec(ctx, t.query)
-		if err != nil {
-			fmt.Printf("   ❌ %s: %v\n", t.name, err)
-		} else {
-			fmt.Printf("   ✓ %s: %d rows deleted\n", t.name, result.RowsAffected())
+		// Fallback: delete in order
+		tables := []string{
+			"publisher_coverage",
+			"geo_boundary_imports",
+			"geo_name_mappings",
+			"geo_names",
+			"cities",
+			"geo_district_boundaries",
+			"geo_districts",
+			"geo_region_boundaries",
+			"geo_regions",
+			"geo_country_boundaries",
+			"geo_countries",
+			"geo_continents",
 		}
+		for _, t := range tables {
+			_, _ = pool.Exec(ctx, "DELETE FROM "+t)
+			fmt.Printf("   ✓ %s cleared\n", t)
+		}
+	} else {
+		fmt.Println("   ✓ All geographic tables truncated")
 	}
 
 	fmt.Println("")
