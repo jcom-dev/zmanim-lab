@@ -5,12 +5,12 @@
 set -e
 
 # Check if we're in Coder environment
-if [[ -d "/home/coder" ]] && [[ -f "/home/coder/workspace/zmanim-lab/api/.env" ]]; then
+if [[ -d "/home/coder" ]] && [[ -f "/home/daniel/repos/zmanim-lab/api/.env" ]]; then
     echo "Running database migrations..."
 
     # Use DATABASE_URL from environment, or fall back to .env file
     if [[ -z "$DATABASE_URL" ]]; then
-        source /home/coder/workspace/zmanim-lab/api/.env
+        source /home/daniel/repos/zmanim-lab/api/.env
     fi
 
     # Parse DATABASE_URL
@@ -32,15 +32,15 @@ if [[ -d "/home/coder" ]] && [[ -f "/home/coder/workspace/zmanim-lab/api/.env" ]
         exit 1
     fi
 
-    MIGRATIONS_DIR="/home/coder/workspace/zmanim-lab/db/migrations"
+    MIGRATIONS_DIR="/home/daniel/repos/zmanim-lab/db/migrations"
 
     # Create schema_migrations table if it doesn't exist
-    PGPASSWORD=$DB_PASS psql -h $DB_HOST -U $DB_USER -d $DB_NAME -c \
+    PGPASSWORD=$DB_PASS psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -c \
         "CREATE TABLE IF NOT EXISTS schema_migrations (version TEXT PRIMARY KEY, applied_at TIMESTAMPTZ DEFAULT NOW());" 2>/dev/null || true
 
     # Get list of applied migrations
     echo "Checking for applied migrations..."
-    APPLIED=$(PGPASSWORD=$DB_PASS psql -h $DB_HOST -U $DB_USER -d $DB_NAME -t -c \
+    APPLIED=$(PGPASSWORD=$DB_PASS psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -t -c \
         "SELECT version FROM schema_migrations ORDER BY version;" 2>/dev/null || echo "")
 
     # Apply pending migrations
@@ -58,10 +58,10 @@ if [[ -d "/home/coder" ]] && [[ -f "/home/coder/workspace/zmanim-lab/api/.env" ]
         echo "  [APPLY] $MIGRATION_NAME"
 
         # Apply migration (continue on errors for idempotent migrations)
-        PGPASSWORD=$DB_PASS psql -h $DB_HOST -U $DB_USER -d $DB_NAME -f "$migration" 2>&1 || true
+        PGPASSWORD=$DB_PASS psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -f "$migration" 2>&1 || true
 
         # Record migration as applied
-        PGPASSWORD=$DB_PASS psql -h $DB_HOST -U $DB_USER -d $DB_NAME -c \
+        PGPASSWORD=$DB_PASS psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -c \
             "INSERT INTO schema_migrations (version) VALUES ('$MIGRATION_NAME') ON CONFLICT DO NOTHING;" 2>/dev/null
         echo "    Done"
     done
