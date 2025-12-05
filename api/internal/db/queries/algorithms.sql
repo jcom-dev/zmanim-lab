@@ -81,43 +81,48 @@ SET status = 'deprecated',
 WHERE id = $1 AND publisher_id = $2;
 
 -- Onboarding related --
+-- Schema: id, publisher_id, profile_complete, algorithm_selected, zmanim_configured, coverage_set, created_at, updated_at
 
 -- name: GetOnboardingState :one
 SELECT
-    id, publisher_id, current_step, completed_steps, wizard_data,
-    started_at, last_updated_at, completed_at, skipped
+    id, publisher_id, profile_complete, algorithm_selected, zmanim_configured, coverage_set,
+    created_at, updated_at
 FROM publisher_onboarding
 WHERE publisher_id = $1;
 
 -- name: CreateOnboardingState :one
 INSERT INTO publisher_onboarding (publisher_id)
 VALUES ($1)
-RETURNING id, publisher_id, current_step, completed_steps, wizard_data,
-    started_at, last_updated_at, completed_at, skipped;
+RETURNING id, publisher_id, profile_complete, algorithm_selected, zmanim_configured, coverage_set,
+    created_at, updated_at;
 
--- name: UpdateOnboardingState :one
+-- name: UpdateOnboardingProfileComplete :one
 UPDATE publisher_onboarding
-SET current_step = COALESCE(sqlc.narg('current_step'), current_step),
-    completed_steps = COALESCE(sqlc.narg('completed_steps'), completed_steps),
-    wizard_data = COALESCE(sqlc.narg('wizard_data'), wizard_data),
-    last_updated_at = NOW()
+SET profile_complete = $2, updated_at = NOW()
 WHERE publisher_id = $1
-RETURNING id, publisher_id, current_step, completed_steps, wizard_data,
-    started_at, last_updated_at, completed_at, skipped;
+RETURNING id, publisher_id, profile_complete, algorithm_selected, zmanim_configured, coverage_set,
+    created_at, updated_at;
 
--- name: CompleteOnboarding :one
+-- name: UpdateOnboardingAlgorithmSelected :one
 UPDATE publisher_onboarding
-SET completed_at = NOW(),
-    last_updated_at = NOW()
+SET algorithm_selected = $2, updated_at = NOW()
 WHERE publisher_id = $1
-RETURNING id;
+RETURNING id, publisher_id, profile_complete, algorithm_selected, zmanim_configured, coverage_set,
+    created_at, updated_at;
 
--- name: SkipOnboarding :one
+-- name: UpdateOnboardingZmanimConfigured :one
 UPDATE publisher_onboarding
-SET skipped = true,
-    last_updated_at = NOW()
+SET zmanim_configured = $2, updated_at = NOW()
 WHERE publisher_id = $1
-RETURNING id;
+RETURNING id, publisher_id, profile_complete, algorithm_selected, zmanim_configured, coverage_set,
+    created_at, updated_at;
+
+-- name: UpdateOnboardingCoverageSet :one
+UPDATE publisher_onboarding
+SET coverage_set = $2, updated_at = NOW()
+WHERE publisher_id = $1
+RETURNING id, publisher_id, profile_complete, algorithm_selected, zmanim_configured, coverage_set,
+    created_at, updated_at;
 
 -- Algorithm Templates --
 

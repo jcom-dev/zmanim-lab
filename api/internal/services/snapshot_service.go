@@ -86,10 +86,8 @@ func (s *SnapshotService) BuildSnapshot(ctx context.Context, publisherID string,
 			id := uuidBytesToString(z.LinkedPublisherZmanID.Bytes)
 			linkedZmanID = &id
 		}
-		var sourceType string
-		if z.SourceType != nil {
-			sourceType = *z.SourceType
-		} else {
+		sourceType := z.SourceType
+		if sourceType == "" {
 			sourceType = "registry"
 		}
 		snapshot.Zmanim[i] = SnapshotZman{
@@ -133,9 +131,9 @@ func (s *SnapshotService) SaveSnapshot(ctx context.Context, publisherID string, 
 	// Save to database
 	result, err := s.db.Queries.CreatePublisherSnapshot(ctx, sqlcgen.CreatePublisherSnapshotParams{
 		PublisherID:  publisherID,
-		Description:  description,
+		Description:  &description,
 		SnapshotData: snapshotJSON,
-		CreatedBy:    userID,
+		CreatedBy:    &userID,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to save snapshot: %w", err)
@@ -143,8 +141,8 @@ func (s *SnapshotService) SaveSnapshot(ctx context.Context, publisherID string, 
 
 	return &SnapshotMeta{
 		ID:          result.ID,
-		Description: result.Description,
-		CreatedBy:   result.CreatedBy,
+		Description: ptrToString(result.Description),
+		CreatedBy:   ptrToString(result.CreatedBy),
 		CreatedAt:   result.CreatedAt,
 	}, nil
 }
@@ -160,8 +158,8 @@ func (s *SnapshotService) ListSnapshots(ctx context.Context, publisherID string)
 	for i, row := range rows {
 		snapshots[i] = SnapshotMeta{
 			ID:          row.ID,
-			Description: row.Description,
-			CreatedBy:   row.CreatedBy,
+			Description: ptrToString(row.Description),
+			CreatedBy:   ptrToString(row.CreatedBy),
 			CreatedAt:   row.CreatedAt,
 		}
 	}
@@ -335,11 +333,7 @@ func (s *SnapshotService) zmanDiffers(existing sqlcgen.GetPublisherZmanForSnapsh
 	if !uuidPtrEqual(existing.LinkedPublisherZmanID, snap.LinkedPublisherZmanID) {
 		return true
 	}
-	existingSourceType := ""
-	if existing.SourceType != nil {
-		existingSourceType = *existing.SourceType
-	}
-	if existingSourceType != snap.SourceType {
+	if existing.SourceType != snap.SourceType {
 		return true
 	}
 	return false
@@ -387,7 +381,7 @@ func (s *SnapshotService) updateZmanFromSnapshot(ctx context.Context, publisherI
 		Category:              z.Category,
 		MasterZmanID:          stringToPgtypeUUID(ptrToString(z.MasterZmanID)),
 		LinkedPublisherZmanID: stringToPgtypeUUID(ptrToString(z.LinkedPublisherZmanID)),
-		SourceType:            &z.SourceType,
+		SourceType:            z.SourceType,
 	})
 }
 
@@ -411,7 +405,7 @@ func (s *SnapshotService) insertZmanFromSnapshot(ctx context.Context, publisherI
 		Category:              z.Category,
 		MasterZmanID:          stringToPgtypeUUID(ptrToString(z.MasterZmanID)),
 		LinkedPublisherZmanID: stringToPgtypeUUID(ptrToString(z.LinkedPublisherZmanID)),
-		SourceType:            &z.SourceType,
+		SourceType:            z.SourceType,
 	})
 }
 

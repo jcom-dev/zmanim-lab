@@ -2,14 +2,15 @@ package handlers
 
 import (
 	"encoding/json"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/jackc/pgx/v5"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jcom-dev/zmanim-lab/internal/db/sqlcgen"
 	"github.com/jcom-dev/zmanim-lab/internal/models"
 )
 
@@ -33,56 +34,19 @@ func (h *Handlers) GetPublisherCoverage(w http.ResponseWriter, r *http.Request) 
 	if pc == nil {
 		return // Response already sent
 	}
-	publisherID := pc.PublisherID
 
-	// Query coverage areas with display names using normalized schema
-	query := `
-		SELECT
-			pc.id, pc.publisher_id, pc.coverage_level,
-			pc.continent_code, pc.country_code, pc.region, pc.city_id,
-			pc.priority, pc.is_active, pc.created_at, pc.updated_at,
-			CASE
-				WHEN pc.coverage_level = 'continent' THEN COALESCE(ct.name, pc.continent_code)
-				WHEN pc.coverage_level = 'city' THEN c.name || ', ' || COALESCE(r.name, '') || ', ' || co.name
-				WHEN pc.coverage_level = 'region' THEN pc.region || ', ' || COALESCE(country_lookup.name, pc.country_code)
-				WHEN pc.coverage_level = 'country' THEN COALESCE(country_lookup.name, pc.country_code)
-			END as display_name,
-			COALESCE(c.name, '') as city_name,
-			COALESCE(co.name, country_lookup.name, pc.country_code, '') as country
-		FROM publisher_coverage pc
-		LEFT JOIN cities c ON pc.city_id = c.id
-		LEFT JOIN geo_regions r ON c.region_id = r.id
-		LEFT JOIN geo_countries co ON r.country_id = co.id
-		LEFT JOIN geo_countries country_lookup ON country_lookup.code = pc.country_code
-		LEFT JOIN geo_continents ct ON ct.name = pc.continent_code
-		WHERE pc.publisher_id = $1
-		ORDER BY pc.priority DESC, pc.created_at DESC
-	`
-
-	rows, err := h.db.Pool.Query(ctx, query, publisherID)
+	// Query coverage areas using SQLc
+	rows, err := h.db.Queries.GetPublisherCoverage(ctx, pc.PublisherID)
 	if err != nil {
+		slog.Error("failed to fetch coverage", "error", err, "publisher_id", pc.PublisherID)
 		RespondInternalError(w, r, "Failed to fetch coverage areas")
 		return
 	}
-	defer rows.Close()
 
-	var coverage []models.PublisherCoverage
-	for rows.Next() {
-		var c models.PublisherCoverage
-		err := rows.Scan(
-			&c.ID, &c.PublisherID, &c.CoverageLevel,
-			&c.ContinentCode, &c.CountryCode, &c.Region, &c.CityID,
-			&c.Priority, &c.IsActive, &c.CreatedAt, &c.UpdatedAt,
-			&c.DisplayName, &c.CityName, &c.Country,
-		)
-		if err != nil {
-			continue
-		}
+	coverage := make([]models.PublisherCoverage, 0, len(rows))
+	for _, row := range rows {
+		c := coverageRowToModel(row)
 		coverage = append(coverage, c)
-	}
-
-	if coverage == nil {
-		coverage = []models.PublisherCoverage{}
 	}
 
 	RespondJSON(w, r, http.StatusOK, models.PublisherCoverageListResponse{
@@ -93,7 +57,7 @@ func (h *Handlers) GetPublisherCoverage(w http.ResponseWriter, r *http.Request) 
 
 // CreatePublisherCoverage adds a new coverage area for the publisher
 // @Summary Create coverage area
-// @Description Adds a new geographic coverage area (continent, country, region, or city level)
+// @Description Adds a new geographic coverage area (continent, country, region, district, or city level)
 // @Tags Coverage
 // @Accept json
 // @Produce json
@@ -113,7 +77,6 @@ func (h *Handlers) CreatePublisherCoverage(w http.ResponseWriter, r *http.Reques
 	if pc == nil {
 		return // Response already sent
 	}
-	publisherID := pc.PublisherID
 
 	// Parse request body
 	var req models.PublisherCoverageCreateRequest
@@ -123,115 +86,164 @@ func (h *Handlers) CreatePublisherCoverage(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Validate coverage level
-	if req.CoverageLevel != "continent" && req.CoverageLevel != "country" && req.CoverageLevel != "region" && req.CoverageLevel != "city" {
-		RespondBadRequest(w, r, "Invalid coverage_level: must be 'continent', 'country', 'region', or 'city'")
+	validLevels := map[string]bool{"continent": true, "country": true, "region": true, "district": true, "city": true}
+	if !validLevels[req.CoverageLevel] {
+		RespondBadRequest(w, r, "Invalid coverage_level: must be 'continent', 'country', 'region', 'district', or 'city'")
 		return
 	}
 
-	// Validate based on coverage level
+	// Default priority
+	priority := int32(5)
+	if req.Priority != nil && *req.Priority >= 1 && *req.Priority <= 10 {
+		priority = int32(*req.Priority)
+	}
+
+	var coverage models.PublisherCoverage
+
+	// Create coverage based on level using appropriate SQLc query
 	switch req.CoverageLevel {
 	case "continent":
 		if req.ContinentCode == nil || *req.ContinentCode == "" {
 			RespondBadRequest(w, r, "continent_code is required for continent-level coverage")
 			return
 		}
+		// Check for duplicate
+		exists, _ := h.db.Queries.CheckDuplicateCoverageContinent(ctx, sqlcgen.CheckDuplicateCoverageContinentParams{
+			PublisherID:   pc.PublisherID,
+			ContinentCode: req.ContinentCode,
+		})
+		if exists {
+			RespondBadRequest(w, r, "Coverage already exists for this continent")
+			return
+		}
+		row, err := h.db.Queries.CreateCoverageContinent(ctx, sqlcgen.CreateCoverageContinentParams{
+			PublisherID:   pc.PublisherID,
+			ContinentCode: req.ContinentCode,
+			Priority:      &priority,
+			IsActive:      true,
+		})
+		if err != nil {
+			slog.Error("failed to create continent coverage", "error", err)
+			RespondInternalError(w, r, "Failed to create coverage")
+			return
+		}
+		coverage = createCoverageContinentRowToModel(row)
+
 	case "country":
-		if req.CountryCode == nil || *req.CountryCode == "" {
-			RespondBadRequest(w, r, "country_code is required for country-level coverage")
+		if req.CountryID == nil {
+			RespondBadRequest(w, r, "country_id is required for country-level coverage")
 			return
 		}
+		// Check for duplicate
+		exists, _ := h.db.Queries.CheckDuplicateCoverageCountry(ctx, sqlcgen.CheckDuplicateCoverageCountryParams{
+			PublisherID: pc.PublisherID,
+			CountryID:   req.CountryID,
+		})
+		if exists {
+			RespondBadRequest(w, r, "Coverage already exists for this country")
+			return
+		}
+		row, err := h.db.Queries.CreateCoverageCountry(ctx, sqlcgen.CreateCoverageCountryParams{
+			PublisherID: pc.PublisherID,
+			CountryID:   req.CountryID,
+			Priority:    &priority,
+			IsActive:    true,
+		})
+		if err != nil {
+			slog.Error("failed to create country coverage", "error", err)
+			RespondInternalError(w, r, "Failed to create coverage")
+			return
+		}
+		coverage = createCoverageCountryRowToModel(row)
+
 	case "region":
-		if req.CountryCode == nil || *req.CountryCode == "" {
-			RespondBadRequest(w, r, "country_code is required for region-level coverage")
+		if req.RegionID == nil {
+			RespondBadRequest(w, r, "region_id is required for region-level coverage")
 			return
 		}
-		if req.Region == nil || *req.Region == "" {
-			RespondBadRequest(w, r, "region is required for region-level coverage")
+		// Check for duplicate
+		exists, _ := h.db.Queries.CheckDuplicateCoverageRegion(ctx, sqlcgen.CheckDuplicateCoverageRegionParams{
+			PublisherID: pc.PublisherID,
+			RegionID:    req.RegionID,
+		})
+		if exists {
+			RespondBadRequest(w, r, "Coverage already exists for this region")
 			return
 		}
+		row, err := h.db.Queries.CreateCoverageRegion(ctx, sqlcgen.CreateCoverageRegionParams{
+			PublisherID: pc.PublisherID,
+			RegionID:    req.RegionID,
+			Priority:    &priority,
+			IsActive:    true,
+		})
+		if err != nil {
+			slog.Error("failed to create region coverage", "error", err)
+			RespondInternalError(w, r, "Failed to create coverage")
+			return
+		}
+		coverage = createCoverageRegionRowToModel(row)
+
+	case "district":
+		if req.DistrictID == nil {
+			RespondBadRequest(w, r, "district_id is required for district-level coverage")
+			return
+		}
+		// Check for duplicate
+		exists, _ := h.db.Queries.CheckDuplicateCoverageDistrict(ctx, sqlcgen.CheckDuplicateCoverageDistrictParams{
+			PublisherID: pc.PublisherID,
+			DistrictID:  req.DistrictID,
+		})
+		if exists {
+			RespondBadRequest(w, r, "Coverage already exists for this district")
+			return
+		}
+		row, err := h.db.Queries.CreateCoverageDistrict(ctx, sqlcgen.CreateCoverageDistrictParams{
+			PublisherID: pc.PublisherID,
+			DistrictID:  req.DistrictID,
+			Priority:    &priority,
+			IsActive:    true,
+		})
+		if err != nil {
+			slog.Error("failed to create district coverage", "error", err)
+			RespondInternalError(w, r, "Failed to create coverage")
+			return
+		}
+		coverage = createCoverageDistrictRowToModel(row)
+
 	case "city":
 		if req.CityID == nil || *req.CityID == "" {
 			RespondBadRequest(w, r, "city_id is required for city-level coverage")
 			return
 		}
-		// Verify city exists
-		var exists bool
-		err := h.db.Pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM cities WHERE id = $1)", *req.CityID).Scan(&exists)
-		if err != nil || !exists {
-			RespondBadRequest(w, r, "Invalid city_id: city not found")
+		// Parse city UUID
+		cityUUID, err := uuid.Parse(*req.CityID)
+		if err != nil {
+			RespondBadRequest(w, r, "Invalid city_id format: must be a valid UUID")
 			return
 		}
-	}
+		cityPgUUID := pgtype.UUID{Bytes: cityUUID, Valid: true}
 
-	// Default priority
-	priority := 5
-	if req.Priority != nil && *req.Priority >= 1 && *req.Priority <= 10 {
-		priority = *req.Priority
-	}
-
-	// Insert coverage
-	var coverage models.PublisherCoverage
-	query := `
-		INSERT INTO publisher_coverage (publisher_id, coverage_level, continent_code, country_code, region, city_id, priority)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
-		RETURNING id, publisher_id, coverage_level, continent_code, country_code, region, city_id, priority, is_active, created_at, updated_at
-	`
-
-	insertErr := h.db.Pool.QueryRow(ctx, query,
-		publisherID, req.CoverageLevel, req.ContinentCode, req.CountryCode, req.Region, req.CityID, priority,
-	).Scan(
-		&coverage.ID, &coverage.PublisherID, &coverage.CoverageLevel,
-		&coverage.ContinentCode, &coverage.CountryCode, &coverage.Region, &coverage.CityID,
-		&coverage.Priority, &coverage.IsActive, &coverage.CreatedAt, &coverage.UpdatedAt,
-	)
-
-	if insertErr != nil {
-		slog.Error("failed to create coverage", "error", insertErr, "publisher_id", publisherID)
-
-		// Check for unique constraint violation
-		if strings.Contains(insertErr.Error(), "duplicate key") || strings.Contains(insertErr.Error(), "unique constraint") {
-			RespondBadRequest(w, r, "Coverage already exists for this area")
+		// Check for duplicate
+		exists, _ := h.db.Queries.CheckDuplicateCoverageCity(ctx, sqlcgen.CheckDuplicateCoverageCityParams{
+			PublisherID: pc.PublisherID,
+			CityID:      cityPgUUID,
+		})
+		if exists {
+			RespondBadRequest(w, r, "Coverage already exists for this city")
 			return
 		}
-		RespondInternalError(w, r, "Failed to create coverage")
-		return
-	}
-
-	// Get display name using normalized schema
-	if req.CoverageLevel == "continent" && req.ContinentCode != nil {
-		// Continent display name
-		coverage.DisplayName = *req.ContinentCode
-	} else if req.CoverageLevel == "city" && req.CityID != nil {
-		_ = h.db.Pool.QueryRow(ctx,
-			`SELECT c.name || ', ' || COALESCE(r.name, '') || ', ' || co.name
-			 FROM cities c
-			 JOIN geo_regions r ON c.region_id = r.id
-			 JOIN geo_countries co ON r.country_id = co.id
-			 WHERE c.id = $1`,
-			*req.CityID,
-		).Scan(&coverage.DisplayName)
-	} else if req.CoverageLevel == "region" {
-		// Look up country name for region display from geo_countries
-		var countryName string
-		err := h.db.Pool.QueryRow(ctx,
-			"SELECT name FROM geo_countries WHERE code = $1",
-			*req.CountryCode,
-		).Scan(&countryName)
-		if err != nil || countryName == "" {
-			countryName = *req.CountryCode
+		row, err := h.db.Queries.CreateCoverageCity(ctx, sqlcgen.CreateCoverageCityParams{
+			PublisherID: pc.PublisherID,
+			CityID:      cityPgUUID,
+			Priority:    &priority,
+			IsActive:    true,
+		})
+		if err != nil {
+			slog.Error("failed to create city coverage", "error", err)
+			RespondInternalError(w, r, "Failed to create coverage")
+			return
 		}
-		coverage.DisplayName = *req.Region + ", " + countryName
-	} else {
-		// Look up country name for country-level coverage from geo_countries
-		var countryName string
-		err := h.db.Pool.QueryRow(ctx,
-			"SELECT name FROM geo_countries WHERE code = $1",
-			*req.CountryCode,
-		).Scan(&countryName)
-		if err != nil || countryName == "" {
-			countryName = *req.CountryCode
-		}
-		coverage.DisplayName = countryName
+		coverage = createCoverageCityRowToModel(row)
 	}
 
 	RespondJSON(w, r, http.StatusCreated, coverage)
@@ -268,13 +280,13 @@ func (h *Handlers) UpdatePublisherCoverage(w http.ResponseWriter, r *http.Reques
 		return // Response already sent
 	}
 
-	// Verify ownership - coverage must belong to this publisher
-	var verifiedPublisherID string
-	err := h.db.Pool.QueryRow(ctx,
-		`SELECT publisher_id FROM publisher_coverage WHERE id = $1 AND publisher_id = $2`,
-		coverageID, pc.PublisherID,
-	).Scan(&verifiedPublisherID)
+	// Verify ownership by fetching the coverage
+	existingCoverage, err := h.db.Queries.GetPublisherCoverageByID(ctx, coverageID)
 	if err != nil {
+		RespondNotFound(w, r, "Coverage not found")
+		return
+	}
+	if existingCoverage.PublisherID != pc.PublisherID {
 		RespondNotFound(w, r, "Coverage not found or not owned by publisher")
 		return
 	}
@@ -286,53 +298,44 @@ func (h *Handlers) UpdatePublisherCoverage(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Build update query
-	updates := []string{}
-	args := []interface{}{}
-	argCount := 1
+	if req.Priority == nil && req.IsActive == nil {
+		RespondBadRequest(w, r, "No fields to update")
+		return
+	}
 
+	var coverage models.PublisherCoverage
+
+	// Update priority if provided
 	if req.Priority != nil {
 		if *req.Priority < 1 || *req.Priority > 10 {
 			RespondBadRequest(w, r, "Priority must be between 1 and 10")
 			return
 		}
-		updates = append(updates, fmt.Sprintf("priority = $%d", argCount))
-		args = append(args, *req.Priority)
-		argCount++
+		priority := int32(*req.Priority)
+		row, err := h.db.Queries.UpdateCoveragePriority(ctx, sqlcgen.UpdateCoveragePriorityParams{
+			ID:       coverageID,
+			Priority: &priority,
+		})
+		if err != nil {
+			slog.Error("failed to update coverage priority", "error", err)
+			RespondInternalError(w, r, "Failed to update coverage")
+			return
+		}
+		coverage = updateCoverageRowToModel(row)
 	}
 
+	// Update active status if provided
 	if req.IsActive != nil {
-		updates = append(updates, fmt.Sprintf("is_active = $%d", argCount))
-		args = append(args, *req.IsActive)
-		argCount++
-	}
-
-	if len(updates) == 0 {
-		RespondBadRequest(w, r, "No fields to update")
-		return
-	}
-
-	// Add coverage ID
-	args = append(args, coverageID)
-
-	// Execute update
-	query := "UPDATE publisher_coverage SET " + updates[0]
-	for i := 1; i < len(updates); i++ {
-		query += ", " + updates[i]
-	}
-	query += fmt.Sprintf(", updated_at = NOW() WHERE id = $%d", argCount)
-	query += " RETURNING id, publisher_id, coverage_level, country_code, region, city_id, priority, is_active, created_at, updated_at"
-
-	var coverage models.PublisherCoverage
-	updateErr := h.db.Pool.QueryRow(ctx, query, args...).Scan(
-		&coverage.ID, &coverage.PublisherID, &coverage.CoverageLevel,
-		&coverage.CountryCode, &coverage.Region, &coverage.CityID,
-		&coverage.Priority, &coverage.IsActive, &coverage.CreatedAt, &coverage.UpdatedAt,
-	)
-
-	if updateErr != nil {
-		RespondInternalError(w, r, "Failed to update coverage")
-		return
+		row, err := h.db.Queries.UpdateCoverageActive(ctx, sqlcgen.UpdateCoverageActiveParams{
+			ID:       coverageID,
+			IsActive: *req.IsActive,
+		})
+		if err != nil {
+			slog.Error("failed to update coverage active status", "error", err)
+			RespondInternalError(w, r, "Failed to update coverage")
+			return
+		}
+		coverage = updateCoverageActiveRowToModel(row)
 	}
 
 	RespondJSON(w, r, http.StatusOK, coverage)
@@ -367,19 +370,21 @@ func (h *Handlers) DeletePublisherCoverage(w http.ResponseWriter, r *http.Reques
 		return // Response already sent
 	}
 
-	// Delete with publisher ownership check
-	result, err := h.db.Pool.Exec(ctx,
-		`DELETE FROM publisher_coverage WHERE id = $1 AND publisher_id = $2`,
-		coverageID, pc.PublisherID,
-	)
-
+	// Verify ownership by fetching the coverage
+	existingCoverage, err := h.db.Queries.GetPublisherCoverageByID(ctx, coverageID)
 	if err != nil {
-		RespondInternalError(w, r, "Failed to delete coverage")
+		RespondNotFound(w, r, "Coverage not found")
+		return
+	}
+	if existingCoverage.PublisherID != pc.PublisherID {
+		RespondNotFound(w, r, "Coverage not found or not owned by publisher")
 		return
 	}
 
-	if result.RowsAffected() == 0 {
-		RespondNotFound(w, r, "Coverage not found or not owned by user")
+	// Delete coverage
+	if err := h.db.Queries.DeleteCoverage(ctx, coverageID); err != nil {
+		slog.Error("failed to delete coverage", "error", err)
+		RespondInternalError(w, r, "Failed to delete coverage")
 		return
 	}
 
@@ -390,10 +395,10 @@ func (h *Handlers) DeletePublisherCoverage(w http.ResponseWriter, r *http.Reques
 
 // GetPublishersForCity returns publishers serving a specific city
 // @Summary Get publishers for city
-// @Description Returns all publishers that have coverage for the specified city (via city, region, country, or continent level)
+// @Description Returns all publishers that have coverage for the specified city (via city, district, region, country, or continent level)
 // @Tags Cities
 // @Produce json
-// @Param cityId path string true "City ID"
+// @Param cityId path string true "City ID (UUID)"
 // @Success 200 {object} APIResponse{data=models.PublishersForCityResponse} "Publishers serving this city"
 // @Failure 400 {object} APIResponse{error=APIError} "Invalid request"
 // @Failure 500 {object} APIResponse{error=APIError} "Internal server error"
@@ -407,12 +412,13 @@ func (h *Handlers) GetPublishersForCity(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Use the database function we created
+	// Use raw SQL since SQLc can't type the result of a SQL function
 	query := `SELECT publisher_id, publisher_name, coverage_level, priority, match_type
 			  FROM get_publishers_for_city($1)`
 
 	rows, err := h.db.Pool.Query(ctx, query, cityID)
 	if err != nil {
+		slog.Error("failed to get publishers for city", "error", err, "city_id", cityID)
 		RespondInternalError(w, r, "Failed to fetch publishers for city")
 		return
 	}
@@ -435,141 +441,6 @@ func (h *Handlers) GetPublishersForCity(w http.ResponseWriter, r *http.Request) 
 		Publishers: publishers,
 		Total:      len(publishers),
 		CityID:     cityID,
-	})
-}
-
-// GetContinents returns list of continents with city counts using normalized schema
-// @Summary List continents
-// @Description Returns all continents with their city counts
-// @Tags Geography
-// @Produce json
-// @Success 200 {object} APIResponse{data=object} "List of continents"
-// @Failure 500 {object} APIResponse{error=APIError} "Internal server error"
-// @Router /continents [get]
-func (h *Handlers) GetContinents(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-
-	// Note: country derived via city.region_id → region.country_id
-	query := `
-		SELECT ct.code, ct.name, COUNT(c.id) as city_count
-		FROM geo_continents ct
-		LEFT JOIN geo_countries co ON co.continent_id = ct.id
-		LEFT JOIN geo_regions r ON r.country_id = co.id
-		LEFT JOIN cities c ON c.region_id = r.id
-		GROUP BY ct.id, ct.code, ct.name
-		ORDER BY ct.name
-	`
-
-	rows, err := h.db.Pool.Query(ctx, query)
-	if err != nil {
-		slog.Error("failed to fetch continents", "error", err)
-		RespondInternalError(w, r, "Failed to fetch continents")
-		return
-	}
-	defer rows.Close()
-
-	type Continent struct {
-		Code      string `json:"code"`
-		Name      string `json:"name"`
-		CityCount int    `json:"city_count"`
-	}
-
-	var continents []Continent
-	for rows.Next() {
-		var code, name string
-		var cityCount int
-		if err := rows.Scan(&code, &name, &cityCount); err != nil {
-			continue
-		}
-		continents = append(continents, Continent{
-			Code:      code, // 2-character ISO continent code (AF, AN, AS, EU, NA, OC, SA)
-			Name:      name,
-			CityCount: cityCount,
-		})
-	}
-
-	if continents == nil {
-		continents = []Continent{}
-	}
-
-	RespondJSON(w, r, http.StatusOK, map[string]interface{}{
-		"continents": continents,
-		"total":      len(continents),
-	})
-}
-
-// GetCountries returns list of countries using normalized schema
-// @Summary List countries
-// @Description Returns all countries with their city counts, optionally filtered by continent
-// @Tags Geography
-// @Produce json
-// @Param continent query string false "Filter by continent code or name"
-// @Success 200 {object} APIResponse{data=object} "List of countries"
-// @Failure 500 {object} APIResponse{error=APIError} "Internal server error"
-// @Router /countries [get]
-func (h *Handlers) GetCountries(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-
-	// Check for continent filter
-	continent := strings.TrimSpace(r.URL.Query().Get("continent"))
-
-	var query string
-	var rows pgx.Rows
-	var err error
-
-	// Note: country derived via city.region_id → region.country_id
-	if continent != "" {
-		query = `
-			SELECT co.code, co.name, COUNT(c.id) as city_count
-			FROM geo_countries co
-			JOIN geo_continents ct ON co.continent_id = ct.id
-			LEFT JOIN geo_regions r ON r.country_id = co.id
-			LEFT JOIN cities c ON c.region_id = r.id
-			WHERE ct.code = $1 OR ct.name = $1
-			GROUP BY co.id, co.code, co.name
-			ORDER BY co.name
-		`
-		rows, err = h.db.Pool.Query(ctx, query, continent)
-	} else {
-		query = `
-			SELECT co.code, co.name, COUNT(c.id) as city_count
-			FROM geo_countries co
-			LEFT JOIN geo_regions r ON r.country_id = co.id
-			LEFT JOIN cities c ON c.region_id = r.id
-			GROUP BY co.id, co.code, co.name
-			ORDER BY co.name
-		`
-		rows, err = h.db.Pool.Query(ctx, query)
-	}
-
-	if err != nil {
-		RespondInternalError(w, r, "Failed to fetch countries")
-		return
-	}
-	defer rows.Close()
-
-	type Country struct {
-		Code      string `json:"code"`
-		Name      string `json:"name"`
-		CityCount int    `json:"city_count"`
-	}
-
-	var countries []Country
-	for rows.Next() {
-		var c Country
-		if err := rows.Scan(&c.Code, &c.Name, &c.CityCount); err != nil {
-			continue
-		}
-		countries = append(countries, c)
-	}
-
-	if countries == nil {
-		countries = []Country{}
-	}
-
-	RespondJSON(w, r, http.StatusOK, map[string]interface{}{
-		"countries": countries,
-		"total":     len(countries),
 	})
 }
 
@@ -597,67 +468,62 @@ func (h *Handlers) GetRegions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get limit (default 20, max 100)
-	limit := 20
+	limit := int32(20)
 	if l := r.URL.Query().Get("limit"); l != "" {
 		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 && parsed <= 100 {
-			limit = parsed
+			limit = int32(parsed)
 		}
 	}
 
 	type Region struct {
+		ID          int32  `json:"id"`
+		Code        string `json:"code"`
 		Name        string `json:"name"`
-		CountryCode string `json:"country_code"`
-		CountryName string `json:"country_name"`
-		CityCount   int    `json:"city_count"`
+		CountryID   int32  `json:"country_id,omitempty"`
+		CountryCode string `json:"country_code,omitempty"`
+		CountryName string `json:"country_name,omitempty"`
+		CityCount   int64  `json:"city_count,omitempty"`
 	}
-
-	var rows pgx.Rows
-	var err error
-
-	if search != "" && len(search) >= 2 {
-		// Search across all regions using normalized schema
-		query := `
-			SELECT r.name, co.code, co.name, COUNT(c.id) as city_count
-			FROM geo_regions r
-			JOIN geo_countries co ON r.country_id = co.id
-			LEFT JOIN cities c ON c.region_id = r.id
-			WHERE r.name ILIKE $1 || '%' OR r.name ILIKE '%' || $1 || '%'
-			GROUP BY r.id, r.name, co.code, co.name
-			ORDER BY
-				CASE WHEN r.name ILIKE $1 || '%' THEN 0 ELSE 1 END,
-				city_count DESC,
-				r.name
-			LIMIT $2
-		`
-		rows, err = h.db.Pool.Query(ctx, query, search, limit)
-	} else {
-		// Filter by country code using normalized schema
-		query := `
-			SELECT r.name, co.code, co.name, COUNT(c.id) as city_count
-			FROM geo_regions r
-			JOIN geo_countries co ON r.country_id = co.id
-			LEFT JOIN cities c ON c.region_id = r.id
-			WHERE co.code = $1
-			GROUP BY r.id, r.name, co.code, co.name
-			ORDER BY r.name
-			LIMIT $2
-		`
-		rows, err = h.db.Pool.Query(ctx, query, countryCode, limit)
-	}
-
-	if err != nil {
-		RespondInternalError(w, r, "Failed to fetch regions")
-		return
-	}
-	defer rows.Close()
 
 	var regions []Region
-	for rows.Next() {
-		var reg Region
-		if err := rows.Scan(&reg.Name, &reg.CountryCode, &reg.CountryName, &reg.CityCount); err != nil {
-			continue
+
+	if search != "" && len(search) >= 2 {
+		// Search across all regions using SQLc
+		rows, err := h.db.Queries.SearchRegions(ctx, sqlcgen.SearchRegionsParams{
+			Column1: &search,
+			Limit:   limit,
+		})
+		if err != nil {
+			slog.Error("failed to search regions", "error", err)
+			RespondInternalError(w, r, "Failed to fetch regions")
+			return
 		}
-		regions = append(regions, reg)
+		for _, row := range rows {
+			regions = append(regions, Region{
+				ID:          row.ID,
+				Code:        row.Code,
+				Name:        row.Name,
+				CountryID:   int32(row.CountryID),
+				CountryCode: row.CountryCode,
+				CountryName: row.Country,
+				CityCount:   row.CityCount,
+			})
+		}
+	} else {
+		// Filter by country code using SQLc
+		rows, err := h.db.Queries.GetRegionsByCountry(ctx, countryCode)
+		if err != nil {
+			slog.Error("failed to get regions by country", "error", err)
+			RespondInternalError(w, r, "Failed to fetch regions")
+			return
+		}
+		for _, row := range rows {
+			regions = append(regions, Region{
+				ID:   row.ID,
+				Code: row.Code,
+				Name: row.Name,
+			})
+		}
 	}
 
 	if regions == nil {
@@ -668,4 +534,214 @@ func (h *Handlers) GetRegions(w http.ResponseWriter, r *http.Request) {
 		"regions": regions,
 		"total":   len(regions),
 	})
+}
+
+// Helper functions to convert SQLc rows to models
+
+func coverageRowToModel(row sqlcgen.GetPublisherCoverageRow) models.PublisherCoverage {
+	c := models.PublisherCoverage{
+		ID:            row.ID,
+		PublisherID:   row.PublisherID,
+		CoverageLevel: row.CoverageLevel,
+		ContinentCode: row.ContinentCode,
+		CountryID:     row.CountryID,
+		RegionID:      row.RegionID,
+		DistrictID:    row.DistrictID,
+		IsActive:      row.IsActive,
+		CreatedAt:     row.CreatedAt.Time,
+		UpdatedAt:     row.UpdatedAt.Time,
+		ContinentName: row.ContinentName,
+		CountryCode:   row.CountryCode,
+		CountryName:   row.CountryName,
+		RegionCode:    row.RegionCode,
+		RegionName:    row.RegionName,
+		DistrictCode:  row.DistrictCode,
+		DistrictName:  row.DistrictName,
+		CityName:      row.CityName,
+	}
+	if row.Priority != nil {
+		c.Priority = int(*row.Priority)
+	}
+	if row.CityID.Valid {
+		cityStr := row.CityID.Bytes[:]
+		cityUUID, _ := uuid.FromBytes(cityStr)
+		s := cityUUID.String()
+		c.CityID = &s
+	}
+	return c
+}
+
+func createCoverageContinentRowToModel(row sqlcgen.CreateCoverageContinentRow) models.PublisherCoverage {
+	c := models.PublisherCoverage{
+		ID:            row.ID,
+		PublisherID:   row.PublisherID,
+		CoverageLevel: row.CoverageLevel,
+		ContinentCode: row.ContinentCode,
+		CountryID:     row.CountryID,
+		RegionID:      row.RegionID,
+		DistrictID:    row.DistrictID,
+		IsActive:      row.IsActive,
+		CreatedAt:     row.CreatedAt.Time,
+		UpdatedAt:     row.UpdatedAt.Time,
+	}
+	if row.Priority != nil {
+		c.Priority = int(*row.Priority)
+	}
+	if row.CityID.Valid {
+		cityStr := row.CityID.Bytes[:]
+		cityUUID, _ := uuid.FromBytes(cityStr)
+		s := cityUUID.String()
+		c.CityID = &s
+	}
+	return c
+}
+
+func createCoverageCountryRowToModel(row sqlcgen.CreateCoverageCountryRow) models.PublisherCoverage {
+	c := models.PublisherCoverage{
+		ID:            row.ID,
+		PublisherID:   row.PublisherID,
+		CoverageLevel: row.CoverageLevel,
+		ContinentCode: row.ContinentCode,
+		CountryID:     row.CountryID,
+		RegionID:      row.RegionID,
+		DistrictID:    row.DistrictID,
+		IsActive:      row.IsActive,
+		CreatedAt:     row.CreatedAt.Time,
+		UpdatedAt:     row.UpdatedAt.Time,
+	}
+	if row.Priority != nil {
+		c.Priority = int(*row.Priority)
+	}
+	if row.CityID.Valid {
+		cityStr := row.CityID.Bytes[:]
+		cityUUID, _ := uuid.FromBytes(cityStr)
+		s := cityUUID.String()
+		c.CityID = &s
+	}
+	return c
+}
+
+func createCoverageRegionRowToModel(row sqlcgen.CreateCoverageRegionRow) models.PublisherCoverage {
+	c := models.PublisherCoverage{
+		ID:            row.ID,
+		PublisherID:   row.PublisherID,
+		CoverageLevel: row.CoverageLevel,
+		ContinentCode: row.ContinentCode,
+		CountryID:     row.CountryID,
+		RegionID:      row.RegionID,
+		DistrictID:    row.DistrictID,
+		IsActive:      row.IsActive,
+		CreatedAt:     row.CreatedAt.Time,
+		UpdatedAt:     row.UpdatedAt.Time,
+	}
+	if row.Priority != nil {
+		c.Priority = int(*row.Priority)
+	}
+	if row.CityID.Valid {
+		cityStr := row.CityID.Bytes[:]
+		cityUUID, _ := uuid.FromBytes(cityStr)
+		s := cityUUID.String()
+		c.CityID = &s
+	}
+	return c
+}
+
+func createCoverageDistrictRowToModel(row sqlcgen.CreateCoverageDistrictRow) models.PublisherCoverage {
+	c := models.PublisherCoverage{
+		ID:            row.ID,
+		PublisherID:   row.PublisherID,
+		CoverageLevel: row.CoverageLevel,
+		ContinentCode: row.ContinentCode,
+		CountryID:     row.CountryID,
+		RegionID:      row.RegionID,
+		DistrictID:    row.DistrictID,
+		IsActive:      row.IsActive,
+		CreatedAt:     row.CreatedAt.Time,
+		UpdatedAt:     row.UpdatedAt.Time,
+	}
+	if row.Priority != nil {
+		c.Priority = int(*row.Priority)
+	}
+	if row.CityID.Valid {
+		cityStr := row.CityID.Bytes[:]
+		cityUUID, _ := uuid.FromBytes(cityStr)
+		s := cityUUID.String()
+		c.CityID = &s
+	}
+	return c
+}
+
+func createCoverageCityRowToModel(row sqlcgen.CreateCoverageCityRow) models.PublisherCoverage {
+	c := models.PublisherCoverage{
+		ID:            row.ID,
+		PublisherID:   row.PublisherID,
+		CoverageLevel: row.CoverageLevel,
+		ContinentCode: row.ContinentCode,
+		CountryID:     row.CountryID,
+		RegionID:      row.RegionID,
+		DistrictID:    row.DistrictID,
+		IsActive:      row.IsActive,
+		CreatedAt:     row.CreatedAt.Time,
+		UpdatedAt:     row.UpdatedAt.Time,
+	}
+	if row.Priority != nil {
+		c.Priority = int(*row.Priority)
+	}
+	if row.CityID.Valid {
+		cityStr := row.CityID.Bytes[:]
+		cityUUID, _ := uuid.FromBytes(cityStr)
+		s := cityUUID.String()
+		c.CityID = &s
+	}
+	return c
+}
+
+func updateCoverageRowToModel(row sqlcgen.UpdateCoveragePriorityRow) models.PublisherCoverage {
+	c := models.PublisherCoverage{
+		ID:            row.ID,
+		PublisherID:   row.PublisherID,
+		CoverageLevel: row.CoverageLevel,
+		ContinentCode: row.ContinentCode,
+		CountryID:     row.CountryID,
+		RegionID:      row.RegionID,
+		DistrictID:    row.DistrictID,
+		IsActive:      row.IsActive,
+		CreatedAt:     row.CreatedAt.Time,
+		UpdatedAt:     row.UpdatedAt.Time,
+	}
+	if row.Priority != nil {
+		c.Priority = int(*row.Priority)
+	}
+	if row.CityID.Valid {
+		cityStr := row.CityID.Bytes[:]
+		cityUUID, _ := uuid.FromBytes(cityStr)
+		s := cityUUID.String()
+		c.CityID = &s
+	}
+	return c
+}
+
+func updateCoverageActiveRowToModel(row sqlcgen.UpdateCoverageActiveRow) models.PublisherCoverage {
+	c := models.PublisherCoverage{
+		ID:            row.ID,
+		PublisherID:   row.PublisherID,
+		CoverageLevel: row.CoverageLevel,
+		ContinentCode: row.ContinentCode,
+		CountryID:     row.CountryID,
+		RegionID:      row.RegionID,
+		DistrictID:    row.DistrictID,
+		IsActive:      row.IsActive,
+		CreatedAt:     row.CreatedAt.Time,
+		UpdatedAt:     row.UpdatedAt.Time,
+	}
+	if row.Priority != nil {
+		c.Priority = int(*row.Priority)
+	}
+	if row.CityID.Valid {
+		cityStr := row.CityID.Bytes[:]
+		cityUUID, _ := uuid.FromBytes(cityStr)
+		s := cityUUID.String()
+		c.CityID = &s
+	}
+	return c
 }

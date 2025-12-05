@@ -264,17 +264,47 @@ LEFT JOIN geo_districts d ON db.district_id = d.id AND d.region_id = r.id
 WHERE ST_Contains(cb.boundary::geometry, ST_SetSRID(ST_MakePoint($1, $2), 4326))
 LIMIT 1;
 
+-- name: LookupAllLevelsByPointWithArea :one
+-- Returns all geographic levels for a point with area information for zoom-based selection
+SELECT
+    -- Country
+    c.id as country_id,
+    c.code as country_code,
+    c.name as country_name,
+    c.adm1_label,
+    c.adm2_label,
+    c.has_adm1,
+    c.has_adm2,
+    c.is_city_state,
+    cb.area_km2 as country_area_km2,
+    -- Region
+    r.id as region_id,
+    r.code as region_code,
+    r.name as region_name,
+    rb.area_km2 as region_area_km2,
+    -- District
+    d.id as district_id,
+    d.code as district_code,
+    d.name as district_name,
+    db.area_km2 as district_area_km2
+FROM geo_countries c
+JOIN geo_country_boundaries cb ON c.id = cb.country_id
+LEFT JOIN geo_region_boundaries rb ON ST_Contains(rb.boundary::geometry, ST_SetSRID(ST_MakePoint($1, $2), 4326))
+LEFT JOIN geo_regions r ON rb.region_id = r.id AND r.country_id = c.id
+LEFT JOIN geo_district_boundaries db ON ST_Contains(db.boundary::geometry, ST_SetSRID(ST_MakePoint($1, $2), 4326))
+LEFT JOIN geo_districts d ON db.district_id = d.id AND d.region_id = r.id
+WHERE ST_Contains(cb.boundary::geometry, ST_SetSRID(ST_MakePoint($1, $2), 4326))
+LIMIT 1;
+
 -- name: LookupNearestCities :many
--- Note: country derived via city.region_id → region.country_id
 SELECT
     c.id,
     c.name,
-    c.name_local,
     co.code as country_code,
     r.name as region_name,
     d.name as district_name,
     ST_Distance(c.location, ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography) / 1000 as distance_km
-FROM cities c
+FROM geo_cities c
 JOIN geo_regions r ON c.region_id = r.id
 JOIN geo_countries co ON r.country_id = co.id
 LEFT JOIN geo_districts d ON c.district_id = d.id
@@ -351,6 +381,46 @@ DELETE FROM geo_region_boundaries;
 
 -- name: DeleteAllDistrictBoundaries :exec
 DELETE FROM geo_district_boundaries;
+
+-- name: DeleteAllCityBoundaries :exec
+DELETE FROM geo_city_boundaries;
+
+-- ============================================================================
+-- City Boundaries (Localities)
+-- ============================================================================
+
+-- name: UpsertCityBoundary :exec
+INSERT INTO geo_city_boundaries (city_id, boundary, boundary_simplified, area_km2)
+VALUES (
+    $1,
+    ST_GeomFromGeoJSON($2)::geography,
+    CASE WHEN $3::text IS NOT NULL THEN ST_GeomFromGeoJSON($3)::geography ELSE NULL END,
+    $4
+)
+ON CONFLICT (city_id) DO UPDATE SET
+    boundary = ST_GeomFromGeoJSON($2)::geography,
+    boundary_simplified = CASE WHEN $3::text IS NOT NULL THEN ST_GeomFromGeoJSON($3)::geography ELSE geo_city_boundaries.boundary_simplified END,
+    area_km2 = $4,
+    updated_at = now();
+
+-- name: GetCityBoundaryByID :one
+SELECT
+    c.id,
+    c.name,
+    co.code as country_code,
+    r.name as region_name,
+    d.name as district_name,
+    cb.area_km2,
+    ST_AsGeoJSON(cb.boundary)::text as boundary_geojson
+FROM geo_city_boundaries cb
+JOIN geo_cities c ON cb.city_id = c.id
+JOIN geo_countries co ON c.country_id = co.id
+LEFT JOIN geo_regions r ON c.region_id = r.id
+LEFT JOIN geo_districts d ON c.district_id = d.id
+WHERE c.id = $1;
+
+-- name: CountCityBoundaries :one
+SELECT COUNT(*) FROM geo_city_boundaries;
 
 -- ============================================================================
 -- Import Tracking
@@ -467,15 +537,15 @@ SELECT * FROM validate_all_city_hierarchy();
 -- Get statistics on city hierarchy assignments
 -- Note: country derived via city.region_id → region.country_id (region_id is NOT NULL)
 SELECT
-    (SELECT COUNT(*) FROM cities) as total_cities,
-    (SELECT COUNT(*) FROM cities) as cities_with_country,  -- All cities have country via region
-    (SELECT COUNT(*) FROM cities WHERE region_id IS NOT NULL) as cities_with_region,
-    (SELECT COUNT(*) FROM cities WHERE district_id IS NOT NULL) as cities_with_district,
-    (SELECT COUNT(*) FROM cities c
+    (SELECT COUNT(*) FROM geo_cities) as total_cities,
+    (SELECT COUNT(*) FROM geo_cities) as cities_with_country,  -- All cities have country via region
+    (SELECT COUNT(*) FROM geo_cities WHERE region_id IS NOT NULL) as cities_with_region,
+    (SELECT COUNT(*) FROM geo_cities WHERE district_id IS NOT NULL) as cities_with_district,
+    (SELECT COUNT(*) FROM geo_cities c
      JOIN geo_regions r ON c.region_id = r.id
      JOIN geo_countries co ON r.country_id = co.id
      WHERE co.has_adm1 = true AND c.region_id IS NULL) as missing_region,
-    (SELECT COUNT(*) FROM cities c
+    (SELECT COUNT(*) FROM geo_cities c
      JOIN geo_regions r ON c.region_id = r.id
      JOIN geo_countries co ON r.country_id = co.id
      WHERE co.has_adm2 = true AND c.district_id IS NULL) as missing_district;

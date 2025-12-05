@@ -73,6 +73,17 @@ func (q *Queries) AssignCitiesToRegions(ctx context.Context) (interface{}, error
 	return assign_cities_to_regions, err
 }
 
+const countCityBoundaries = `-- name: CountCityBoundaries :one
+SELECT COUNT(*) FROM geo_city_boundaries
+`
+
+func (q *Queries) CountCityBoundaries(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countCityBoundaries)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countCountryBoundaries = `-- name: CountCountryBoundaries :one
 
 SELECT COUNT(*) FROM geo_country_boundaries
@@ -145,6 +156,15 @@ func (q *Queries) CreateBoundaryImport(ctx context.Context, arg CreateBoundaryIm
 	var id int32
 	err := row.Scan(&id)
 	return id, err
+}
+
+const deleteAllCityBoundaries = `-- name: DeleteAllCityBoundaries :exec
+DELETE FROM geo_city_boundaries
+`
+
+func (q *Queries) DeleteAllCityBoundaries(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, deleteAllCityBoundaries)
+	return err
 }
 
 const deleteAllCountryBoundaries = `-- name: DeleteAllCountryBoundaries :exec
@@ -363,17 +383,59 @@ func (q *Queries) GetBoundaryStats(ctx context.Context) (GetBoundaryStatsRow, er
 	return i, err
 }
 
+const getCityBoundaryByID = `-- name: GetCityBoundaryByID :one
+SELECT
+    c.id,
+    c.name,
+    co.code as country_code,
+    r.name as region_name,
+    d.name as district_name,
+    cb.area_km2,
+    ST_AsGeoJSON(cb.boundary)::text as boundary_geojson
+FROM geo_city_boundaries cb
+JOIN geo_cities c ON cb.city_id = c.id
+JOIN geo_countries co ON c.country_id = co.id
+LEFT JOIN geo_regions r ON c.region_id = r.id
+LEFT JOIN geo_districts d ON c.district_id = d.id
+WHERE c.id = $1
+`
+
+type GetCityBoundaryByIDRow struct {
+	ID              string   `json:"id"`
+	Name            string   `json:"name"`
+	CountryCode     string   `json:"country_code"`
+	RegionName      *string  `json:"region_name"`
+	DistrictName    *string  `json:"district_name"`
+	AreaKm2         *float64 `json:"area_km2"`
+	BoundaryGeojson string   `json:"boundary_geojson"`
+}
+
+func (q *Queries) GetCityBoundaryByID(ctx context.Context, id string) (GetCityBoundaryByIDRow, error) {
+	row := q.db.QueryRow(ctx, getCityBoundaryByID, id)
+	var i GetCityBoundaryByIDRow
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.CountryCode,
+		&i.RegionName,
+		&i.DistrictName,
+		&i.AreaKm2,
+		&i.BoundaryGeojson,
+	)
+	return i, err
+}
+
 const getCityHierarchyStats = `-- name: GetCityHierarchyStats :one
 SELECT
-    (SELECT COUNT(*) FROM cities) as total_cities,
-    (SELECT COUNT(*) FROM cities) as cities_with_country,  -- All cities have country via region
-    (SELECT COUNT(*) FROM cities WHERE region_id IS NOT NULL) as cities_with_region,
-    (SELECT COUNT(*) FROM cities WHERE district_id IS NOT NULL) as cities_with_district,
-    (SELECT COUNT(*) FROM cities c
+    (SELECT COUNT(*) FROM geo_cities) as total_cities,
+    (SELECT COUNT(*) FROM geo_cities) as cities_with_country,  -- All cities have country via region
+    (SELECT COUNT(*) FROM geo_cities WHERE region_id IS NOT NULL) as cities_with_region,
+    (SELECT COUNT(*) FROM geo_cities WHERE district_id IS NOT NULL) as cities_with_district,
+    (SELECT COUNT(*) FROM geo_cities c
      JOIN geo_regions r ON c.region_id = r.id
      JOIN geo_countries co ON r.country_id = co.id
      WHERE co.has_adm1 = true AND c.region_id IS NULL) as missing_region,
-    (SELECT COUNT(*) FROM cities c
+    (SELECT COUNT(*) FROM geo_cities c
      JOIN geo_regions r ON c.region_id = r.id
      JOIN geo_countries co ON r.country_id = co.id
      WHERE co.has_adm2 = true AND c.district_id IS NULL) as missing_district
@@ -1233,6 +1295,89 @@ func (q *Queries) LookupAllLevelsByPoint(ctx context.Context, arg LookupAllLevel
 	return i, err
 }
 
+const lookupAllLevelsByPointWithArea = `-- name: LookupAllLevelsByPointWithArea :one
+SELECT
+    -- Country
+    c.id as country_id,
+    c.code as country_code,
+    c.name as country_name,
+    c.adm1_label,
+    c.adm2_label,
+    c.has_adm1,
+    c.has_adm2,
+    c.is_city_state,
+    cb.area_km2 as country_area_km2,
+    -- Region
+    r.id as region_id,
+    r.code as region_code,
+    r.name as region_name,
+    rb.area_km2 as region_area_km2,
+    -- District
+    d.id as district_id,
+    d.code as district_code,
+    d.name as district_name,
+    db.area_km2 as district_area_km2
+FROM geo_countries c
+JOIN geo_country_boundaries cb ON c.id = cb.country_id
+LEFT JOIN geo_region_boundaries rb ON ST_Contains(rb.boundary::geometry, ST_SetSRID(ST_MakePoint($1, $2), 4326))
+LEFT JOIN geo_regions r ON rb.region_id = r.id AND r.country_id = c.id
+LEFT JOIN geo_district_boundaries db ON ST_Contains(db.boundary::geometry, ST_SetSRID(ST_MakePoint($1, $2), 4326))
+LEFT JOIN geo_districts d ON db.district_id = d.id AND d.region_id = r.id
+WHERE ST_Contains(cb.boundary::geometry, ST_SetSRID(ST_MakePoint($1, $2), 4326))
+LIMIT 1
+`
+
+type LookupAllLevelsByPointWithAreaParams struct {
+	StMakepoint   interface{} `json:"st_makepoint"`
+	StMakepoint_2 interface{} `json:"st_makepoint_2"`
+}
+
+type LookupAllLevelsByPointWithAreaRow struct {
+	CountryID       int16    `json:"country_id"`
+	CountryCode     string   `json:"country_code"`
+	CountryName     string   `json:"country_name"`
+	Adm1Label       *string  `json:"adm1_label"`
+	Adm2Label       *string  `json:"adm2_label"`
+	HasAdm1         *bool    `json:"has_adm1"`
+	HasAdm2         *bool    `json:"has_adm2"`
+	IsCityState     *bool    `json:"is_city_state"`
+	CountryAreaKm2  *float64 `json:"country_area_km2"`
+	RegionID        *int32   `json:"region_id"`
+	RegionCode      *string  `json:"region_code"`
+	RegionName      *string  `json:"region_name"`
+	RegionAreaKm2   *float64 `json:"region_area_km2"`
+	DistrictID      *int32   `json:"district_id"`
+	DistrictCode    *string  `json:"district_code"`
+	DistrictName    *string  `json:"district_name"`
+	DistrictAreaKm2 *float64 `json:"district_area_km2"`
+}
+
+// Returns all geographic levels for a point with area information for zoom-based selection
+func (q *Queries) LookupAllLevelsByPointWithArea(ctx context.Context, arg LookupAllLevelsByPointWithAreaParams) (LookupAllLevelsByPointWithAreaRow, error) {
+	row := q.db.QueryRow(ctx, lookupAllLevelsByPointWithArea, arg.StMakepoint, arg.StMakepoint_2)
+	var i LookupAllLevelsByPointWithAreaRow
+	err := row.Scan(
+		&i.CountryID,
+		&i.CountryCode,
+		&i.CountryName,
+		&i.Adm1Label,
+		&i.Adm2Label,
+		&i.HasAdm1,
+		&i.HasAdm2,
+		&i.IsCityState,
+		&i.CountryAreaKm2,
+		&i.RegionID,
+		&i.RegionCode,
+		&i.RegionName,
+		&i.RegionAreaKm2,
+		&i.DistrictID,
+		&i.DistrictCode,
+		&i.DistrictName,
+		&i.DistrictAreaKm2,
+	)
+	return i, err
+}
+
 const lookupCountryByPoint = `-- name: LookupCountryByPoint :one
 
 SELECT
@@ -1336,12 +1481,11 @@ const lookupNearestCities = `-- name: LookupNearestCities :many
 SELECT
     c.id,
     c.name,
-    c.name_local,
     co.code as country_code,
     r.name as region_name,
     d.name as district_name,
     ST_Distance(c.location, ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography) / 1000 as distance_km
-FROM cities c
+FROM geo_cities c
 JOIN geo_regions r ON c.region_id = r.id
 JOIN geo_countries co ON r.country_id = co.id
 LEFT JOIN geo_districts d ON c.district_id = d.id
@@ -1360,14 +1504,12 @@ type LookupNearestCitiesParams struct {
 type LookupNearestCitiesRow struct {
 	ID           string  `json:"id"`
 	Name         string  `json:"name"`
-	NameLocal    *string `json:"name_local"`
 	CountryCode  string  `json:"country_code"`
 	RegionName   string  `json:"region_name"`
 	DistrictName *string `json:"district_name"`
 	DistanceKm   int32   `json:"distance_km"`
 }
 
-// Note: country derived via city.region_id → region.country_id
 func (q *Queries) LookupNearestCities(ctx context.Context, arg LookupNearestCitiesParams) ([]LookupNearestCitiesRow, error) {
 	rows, err := q.db.Query(ctx, lookupNearestCities,
 		arg.StMakepoint,
@@ -1385,7 +1527,6 @@ func (q *Queries) LookupNearestCities(ctx context.Context, arg LookupNearestCiti
 		if err := rows.Scan(
 			&i.ID,
 			&i.Name,
-			&i.NameLocal,
 			&i.CountryCode,
 			&i.RegionName,
 			&i.DistrictName,
@@ -1439,6 +1580,42 @@ func (q *Queries) LookupRegionByPoint(ctx context.Context, arg LookupRegionByPoi
 		&i.CountryCode,
 	)
 	return i, err
+}
+
+const upsertCityBoundary = `-- name: UpsertCityBoundary :exec
+
+INSERT INTO geo_city_boundaries (city_id, boundary, boundary_simplified, area_km2)
+VALUES (
+    $1,
+    ST_GeomFromGeoJSON($2)::geography,
+    CASE WHEN $3::text IS NOT NULL THEN ST_GeomFromGeoJSON($3)::geography ELSE NULL END,
+    $4
+)
+ON CONFLICT (city_id) DO UPDATE SET
+    boundary = ST_GeomFromGeoJSON($2)::geography,
+    boundary_simplified = CASE WHEN $3::text IS NOT NULL THEN ST_GeomFromGeoJSON($3)::geography ELSE geo_city_boundaries.boundary_simplified END,
+    area_km2 = $4,
+    updated_at = now()
+`
+
+type UpsertCityBoundaryParams struct {
+	CityID            string      `json:"city_id"`
+	StGeomfromgeojson interface{} `json:"st_geomfromgeojson"`
+	Column3           string      `json:"column_3"`
+	AreaKm2           *float64    `json:"area_km2"`
+}
+
+// ============================================================================
+// City Boundaries (Localities)
+// ============================================================================
+func (q *Queries) UpsertCityBoundary(ctx context.Context, arg UpsertCityBoundaryParams) error {
+	_, err := q.db.Exec(ctx, upsertCityBoundary,
+		arg.CityID,
+		arg.StGeomfromgeojson,
+		arg.Column3,
+		arg.AreaKm2,
+	)
+	return err
 }
 
 const upsertCountryBoundary = `-- name: UpsertCountryBoundary :exec

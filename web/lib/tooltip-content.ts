@@ -36,6 +36,8 @@ export const COVERAGE_TOOLTIPS = {
     country: 'Your zmanim apply to all cities in selected countries.',
     region:
       'Your zmanim apply to all cities in selected states, provinces, or regions.',
+    district:
+      'Your zmanim apply to cities in selected districts, counties, or sub-regions.',
     city:
       'Your zmanim apply only to specifically selected cities. Most precise coverage.',
   },

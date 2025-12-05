@@ -106,10 +106,10 @@ DECLARE
     v_updated integer := 0;
     v_unmatched integer := 0;
 BEGIN
-    ALTER TABLE cities DISABLE TRIGGER trg_validate_city_hierarchy;
+    ALTER TABLE geo_cities DISABLE TRIGGER trg_validate_city_hierarchy;
 
     WITH matches AS (
-        UPDATE cities c
+        UPDATE geo_cities c
         SET country_id = cb.country_id,
             updated_at = now()
         FROM geo_country_boundaries cb
@@ -120,13 +120,13 @@ BEGIN
     SELECT COUNT(*) INTO v_updated FROM matches;
 
     SELECT COUNT(*) INTO v_unmatched
-    FROM cities c
+    FROM geo_cities c
     WHERE NOT EXISTS (
         SELECT 1 FROM geo_country_boundaries cb
         WHERE ST_Contains(cb.boundary::geometry, c.location::geometry)
     );
 
-    ALTER TABLE cities ENABLE TRIGGER trg_validate_city_hierarchy;
+    ALTER TABLE geo_cities ENABLE TRIGGER trg_validate_city_hierarchy;
 
     RETURN QUERY SELECT v_updated, v_unmatched;
 END;
@@ -139,10 +139,10 @@ DECLARE
     v_updated integer := 0;
     v_unmatched integer := 0;
 BEGIN
-    ALTER TABLE cities DISABLE TRIGGER trg_validate_city_hierarchy;
+    ALTER TABLE geo_cities DISABLE TRIGGER trg_validate_city_hierarchy;
 
     WITH matches AS (
-        UPDATE cities c
+        UPDATE geo_cities c
         SET region_id = r.id,
             updated_at = now()
         FROM geo_region_boundaries rb
@@ -155,7 +155,7 @@ BEGIN
     SELECT COUNT(*) INTO v_updated FROM matches;
 
     SELECT COUNT(*) INTO v_unmatched
-    FROM cities c
+    FROM geo_cities c
     JOIN geo_countries co ON c.country_id = co.id
     WHERE co.has_adm1 = true
       AND c.region_id IS NULL
@@ -166,7 +166,7 @@ BEGIN
           AND r.country_id = c.country_id
     );
 
-    ALTER TABLE cities ENABLE TRIGGER trg_validate_city_hierarchy;
+    ALTER TABLE geo_cities ENABLE TRIGGER trg_validate_city_hierarchy;
 
     RETURN QUERY SELECT v_updated, v_unmatched;
 END;
@@ -179,10 +179,10 @@ DECLARE
     v_updated integer := 0;
     v_unmatched integer := 0;
 BEGIN
-    ALTER TABLE cities DISABLE TRIGGER trg_validate_city_hierarchy;
+    ALTER TABLE geo_cities DISABLE TRIGGER trg_validate_city_hierarchy;
 
     WITH matches AS (
-        UPDATE cities c
+        UPDATE geo_cities c
         SET district_id = d.id,
             updated_at = now()
         FROM geo_district_boundaries db
@@ -196,7 +196,7 @@ BEGIN
     SELECT COUNT(*) INTO v_updated FROM matches;
 
     SELECT COUNT(*) INTO v_unmatched
-    FROM cities c
+    FROM geo_cities c
     JOIN geo_countries co ON c.country_id = co.id
     WHERE co.has_adm2 = true
       AND c.region_id IS NOT NULL
@@ -208,7 +208,7 @@ BEGIN
           AND d.region_id = c.region_id
     );
 
-    ALTER TABLE cities ENABLE TRIGGER trg_validate_city_hierarchy;
+    ALTER TABLE geo_cities ENABLE TRIGGER trg_validate_city_hierarchy;
 
     RETURN QUERY SELECT v_updated, v_unmatched;
 END;
@@ -264,7 +264,7 @@ BEGIN
         co.continent_id,
         cont.code as continent_code
     INTO v_city
-    FROM cities c
+    FROM geo_cities c
     JOIN geo_countries co ON c.country_id = co.id
     JOIN geo_continents cont ON co.continent_id = cont.id
     WHERE c.id = p_city_id;
@@ -322,21 +322,21 @@ BEGIN
     RETURN QUERY
     SELECT c.id, c.name::text, 'country_continent_mismatch'::text,
            format('Country %s belongs to continent %s, not %s', c.country_id, gc.continent_id, c.continent_id)
-    FROM cities c
+    FROM geo_cities c
     JOIN geo_countries gc ON c.country_id = gc.id
     WHERE c.country_id IS NOT NULL AND gc.continent_id != c.continent_id;
 
     RETURN QUERY
     SELECT c.id, c.name::text, 'region_continent_mismatch'::text,
            format('Region %s belongs to continent %s, not %s', c.region_id, r.continent_id, c.continent_id)
-    FROM cities c
+    FROM geo_cities c
     JOIN geo_regions r ON c.region_id = r.id
     WHERE c.region_id IS NOT NULL AND r.continent_id != c.continent_id;
 
     RETURN QUERY
     SELECT c.id, c.name::text, 'region_country_mismatch'::text,
            format('Region %s has country %s, city has country %s', c.region_id, r.country_id, c.country_id)
-    FROM cities c
+    FROM geo_cities c
     JOIN geo_regions r ON c.region_id = r.id
     WHERE c.region_id IS NOT NULL
       AND r.country_id IS NOT NULL
@@ -345,14 +345,14 @@ BEGIN
     RETURN QUERY
     SELECT c.id, c.name::text, 'district_continent_mismatch'::text,
            format('District %s belongs to continent %s, not %s', c.district_id, d.continent_id, c.continent_id)
-    FROM cities c
+    FROM geo_cities c
     JOIN geo_districts d ON c.district_id = d.id
     WHERE c.district_id IS NOT NULL AND d.continent_id != c.continent_id;
 
     RETURN QUERY
     SELECT c.id, c.name::text, 'district_region_mismatch'::text,
            format('District %s has region %s, city has region %s', c.district_id, d.region_id, c.region_id)
-    FROM cities c
+    FROM geo_cities c
     JOIN geo_districts d ON c.district_id = d.id
     WHERE c.district_id IS NOT NULL
       AND d.region_id IS NOT NULL
@@ -361,7 +361,7 @@ BEGIN
     RETURN QUERY
     SELECT c.id, c.name::text, 'district_country_mismatch'::text,
            format('District %s has country %s, city has country %s', c.district_id, d.country_id, c.country_id)
-    FROM cities c
+    FROM geo_cities c
     JOIN geo_districts d ON c.district_id = d.id
     WHERE c.district_id IS NOT NULL
       AND d.country_id IS NOT NULL
@@ -380,7 +380,7 @@ BEGIN
         c.name,
         format('Assigned to region %s (%s) but coordinates are in region %s (%s)',
                c.region_id, r1.name, r2.id, r2.name)
-    FROM cities c
+    FROM geo_cities c
     JOIN geo_regions r1 ON c.region_id = r1.id
     JOIN geo_region_boundaries rb ON ST_Contains(rb.boundary::geometry, c.location::geometry)
     JOIN geo_regions r2 ON rb.region_id = r2.id AND r2.country_id = c.country_id
@@ -393,7 +393,7 @@ BEGIN
         c.name,
         format('Assigned to district %s (%s) but coordinates are in district %s (%s)',
                c.district_id, d1.name, d2.id, d2.name)
-    FROM cities c
+    FROM geo_cities c
     JOIN geo_districts d1 ON c.district_id = d1.id
     JOIN geo_district_boundaries db ON ST_Contains(db.boundary::geometry, c.location::geometry)
     JOIN geo_districts d2 ON db.district_id = d2.id AND d2.region_id = c.region_id
@@ -405,7 +405,7 @@ BEGIN
         c.id,
         c.name,
         format('In country %s which has_adm1=true but no region assigned', co.name)
-    FROM cities c
+    FROM geo_cities c
     JOIN geo_countries co ON c.country_id = co.id
     WHERE co.has_adm1 = true
       AND c.region_id IS NULL;
@@ -416,7 +416,7 @@ BEGIN
         c.id,
         c.name,
         format('In country %s which has_adm2=true but no district assigned', co.name)
-    FROM cities c
+    FROM geo_cities c
     JOIN geo_countries co ON c.country_id = co.id
     WHERE co.has_adm2 = true
       AND c.region_id IS NOT NULL
@@ -539,7 +539,7 @@ CREATE TABLE public.geo_districts (
 );
 COMMENT ON TABLE public.geo_districts IS 'Level 3 (ADM2): Counties, boroughs, districts';
 
-CREATE TABLE public.cities (
+CREATE TABLE public.geo_cities (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     region_id integer,
     district_id integer,
@@ -558,7 +558,7 @@ CREATE TABLE public.cities (
     continent_id smallint,
     country_id integer
 );
-COMMENT ON TABLE public.cities IS 'Level 4: Cities with coordinates for zmanim calculations';
+COMMENT ON TABLE public.geo_cities IS 'Level 4: Cities with coordinates for zmanim calculations';
 
 -- ============================================================================
 -- GEO NAMES TABLE (multi-language support)
@@ -609,6 +609,16 @@ CREATE TABLE public.geo_district_boundaries (
     created_at timestamptz DEFAULT now(),
     updated_at timestamptz DEFAULT now()
 );
+
+CREATE TABLE public.geo_city_boundaries (
+    city_id uuid NOT NULL,
+    boundary geography(MultiPolygon,4326) NOT NULL,
+    boundary_simplified geography(MultiPolygon,4326),
+    area_km2 double precision,
+    created_at timestamptz DEFAULT now(),
+    updated_at timestamptz DEFAULT now()
+);
+COMMENT ON TABLE public.geo_city_boundaries IS 'City/locality boundaries from WOF';
 
 CREATE TABLE public.geo_boundary_imports (
     id integer NOT NULL,
@@ -880,23 +890,30 @@ CREATE TABLE public.publisher_zmanim (
     publisher_id uuid NOT NULL,
     zman_key varchar(100) NOT NULL,
     hebrew_name text NOT NULL,
-    english_name text,
-    formula_dsl text,
+    english_name text DEFAULT '' NOT NULL,
+    transliteration text,
+    description text,
+    formula_dsl text DEFAULT '' NOT NULL,
+    ai_explanation text,
+    publisher_comment text,
     master_zman_id uuid,
     halachic_notes text,
     is_enabled boolean DEFAULT true NOT NULL,
     is_visible boolean DEFAULT true NOT NULL,
-    is_published boolean DEFAULT true,
+    is_published boolean DEFAULT true NOT NULL,
     is_beta boolean DEFAULT false NOT NULL,
-    category text DEFAULT 'essential',
+    is_custom boolean DEFAULT false NOT NULL,
+    category text DEFAULT 'essential' NOT NULL,
     aliases text[] DEFAULT '{}',
+    dependencies text[] DEFAULT '{}',
     linked_publisher_zman_id uuid,
     current_version integer DEFAULT 1,
     created_at timestamptz DEFAULT now(),
     updated_at timestamptz DEFAULT now(),
     deleted_at timestamptz,
+    deleted_by text,
+    certified_at timestamptz,
     source_type varchar(20) DEFAULT 'custom' NOT NULL CHECK (source_type IN ('custom', 'registry', 'linked')),
-    is_custom boolean DEFAULT false NOT NULL,
     display_name_hebrew text,
     display_name_english text
 );
@@ -951,7 +968,7 @@ CREATE TABLE public.publisher_zman_versions (
     english_name text,
     formula_dsl text,
     halachic_notes text,
-    changed_by text,
+    created_by text,
     change_reason text,
     created_at timestamptz DEFAULT now() NOT NULL
 );
@@ -974,7 +991,9 @@ CREATE TABLE public.publisher_coverage (
 CREATE TABLE public.publisher_snapshots (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     publisher_id uuid NOT NULL,
+    description text,
     snapshot_data jsonb NOT NULL,
+    created_by text,
     created_at timestamptz DEFAULT now() NOT NULL
 );
 
@@ -1279,9 +1298,9 @@ ALTER TABLE ONLY public.algorithm_templates ADD CONSTRAINT algorithm_templates_t
 ALTER TABLE ONLY public.algorithms ADD CONSTRAINT algorithms_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY public.astronomical_primitives ADD CONSTRAINT astronomical_primitives_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY public.astronomical_primitives ADD CONSTRAINT astronomical_primitives_variable_name_key UNIQUE (variable_name);
-ALTER TABLE ONLY public.cities ADD CONSTRAINT cities_pkey PRIMARY KEY (id);
-ALTER TABLE ONLY public.cities ADD CONSTRAINT cities_geonameid_key UNIQUE (geonameid);
-ALTER TABLE ONLY public.cities ADD CONSTRAINT cities_wof_id_key UNIQUE (wof_id);
+ALTER TABLE ONLY public.geo_cities ADD CONSTRAINT geo_cities_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.geo_cities ADD CONSTRAINT geo_cities_geonameid_key UNIQUE (geonameid);
+ALTER TABLE ONLY public.geo_cities ADD CONSTRAINT geo_cities_wof_id_key UNIQUE (wof_id);
 ALTER TABLE ONLY public.day_types ADD CONSTRAINT day_types_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY public.day_types ADD CONSTRAINT day_types_name_key UNIQUE (name);
 ALTER TABLE ONLY public.display_groups ADD CONSTRAINT display_groups_pkey PRIMARY KEY (id);
@@ -1301,6 +1320,7 @@ ALTER TABLE ONLY public.geo_names ADD CONSTRAINT geo_names_pkey PRIMARY KEY (id)
 ALTER TABLE ONLY public.geo_names ADD CONSTRAINT geo_names_unique UNIQUE (entity_type, entity_id, language_code);
 ALTER TABLE ONLY public.geo_country_boundaries ADD CONSTRAINT geo_country_boundaries_pkey PRIMARY KEY (country_id);
 ALTER TABLE ONLY public.geo_district_boundaries ADD CONSTRAINT geo_district_boundaries_pkey PRIMARY KEY (district_id);
+ALTER TABLE ONLY public.geo_city_boundaries ADD CONSTRAINT geo_city_boundaries_pkey PRIMARY KEY (city_id);
 ALTER TABLE ONLY public.geo_districts ADD CONSTRAINT geo_districts_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY public.geo_districts ADD CONSTRAINT geo_districts_region_id_code_key UNIQUE (region_id, code);
 ALTER TABLE ONLY public.geo_districts ADD CONSTRAINT geo_districts_wof_id_key UNIQUE (wof_id);
@@ -1364,13 +1384,14 @@ ALTER TABLE ONLY public.zmanim_templates ADD CONSTRAINT zmanim_templates_zman_ke
 ALTER TABLE ONLY public.ai_audit_logs ADD CONSTRAINT ai_audit_logs_publisher_id_fkey FOREIGN KEY (publisher_id) REFERENCES public.publishers(id) ON DELETE SET NULL;
 ALTER TABLE ONLY public.algorithms ADD CONSTRAINT algorithms_forked_from_fkey FOREIGN KEY (forked_from) REFERENCES public.algorithms(id) ON DELETE SET NULL;
 ALTER TABLE ONLY public.algorithms ADD CONSTRAINT algorithms_publisher_id_fkey FOREIGN KEY (publisher_id) REFERENCES public.publishers(id) ON DELETE CASCADE;
-ALTER TABLE ONLY public.cities ADD CONSTRAINT cities_continent_id_fkey FOREIGN KEY (continent_id) REFERENCES public.geo_continents(id);
-ALTER TABLE ONLY public.cities ADD CONSTRAINT cities_country_id_fkey FOREIGN KEY (country_id) REFERENCES public.geo_countries(id);
-ALTER TABLE ONLY public.cities ADD CONSTRAINT cities_district_id_fkey FOREIGN KEY (district_id) REFERENCES public.geo_districts(id);
-ALTER TABLE ONLY public.cities ADD CONSTRAINT cities_region_id_fkey FOREIGN KEY (region_id) REFERENCES public.geo_regions(id);
+ALTER TABLE ONLY public.geo_cities ADD CONSTRAINT geo_cities_continent_id_fkey FOREIGN KEY (continent_id) REFERENCES public.geo_continents(id);
+ALTER TABLE ONLY public.geo_cities ADD CONSTRAINT geo_cities_country_id_fkey FOREIGN KEY (country_id) REFERENCES public.geo_countries(id);
+ALTER TABLE ONLY public.geo_cities ADD CONSTRAINT geo_cities_district_id_fkey FOREIGN KEY (district_id) REFERENCES public.geo_districts(id);
+ALTER TABLE ONLY public.geo_cities ADD CONSTRAINT geo_cities_region_id_fkey FOREIGN KEY (region_id) REFERENCES public.geo_regions(id);
 ALTER TABLE ONLY public.geo_countries ADD CONSTRAINT geo_countries_continent_id_fkey FOREIGN KEY (continent_id) REFERENCES public.geo_continents(id);
 ALTER TABLE ONLY public.geo_country_boundaries ADD CONSTRAINT geo_country_boundaries_country_id_fkey FOREIGN KEY (country_id) REFERENCES public.geo_countries(id) ON DELETE CASCADE;
 ALTER TABLE ONLY public.geo_district_boundaries ADD CONSTRAINT geo_district_boundaries_district_id_fkey FOREIGN KEY (district_id) REFERENCES public.geo_districts(id) ON DELETE CASCADE;
+ALTER TABLE ONLY public.geo_city_boundaries ADD CONSTRAINT geo_city_boundaries_city_id_fkey FOREIGN KEY (city_id) REFERENCES public.geo_cities(id) ON DELETE CASCADE;
 ALTER TABLE ONLY public.geo_districts ADD CONSTRAINT geo_districts_continent_id_fkey FOREIGN KEY (continent_id) REFERENCES public.geo_continents(id);
 ALTER TABLE ONLY public.geo_districts ADD CONSTRAINT geo_districts_country_id_fkey FOREIGN KEY (country_id) REFERENCES public.geo_countries(id);
 ALTER TABLE ONLY public.geo_districts ADD CONSTRAINT geo_districts_region_id_fkey FOREIGN KEY (region_id) REFERENCES public.geo_regions(id) ON DELETE CASCADE;
@@ -1384,7 +1405,7 @@ ALTER TABLE ONLY public.master_zman_events ADD CONSTRAINT master_zman_events_jew
 ALTER TABLE ONLY public.master_zman_events ADD CONSTRAINT master_zman_events_master_zman_id_fkey FOREIGN KEY (master_zman_id) REFERENCES public.master_zmanim_registry(id) ON DELETE CASCADE;
 ALTER TABLE ONLY public.master_zman_tags ADD CONSTRAINT master_zman_tags_master_zman_id_fkey FOREIGN KEY (master_zman_id) REFERENCES public.master_zmanim_registry(id) ON DELETE CASCADE;
 ALTER TABLE ONLY public.master_zman_tags ADD CONSTRAINT master_zman_tags_tag_id_fkey FOREIGN KEY (tag_id) REFERENCES public.zman_tags(id) ON DELETE CASCADE;
-ALTER TABLE ONLY public.publisher_coverage ADD CONSTRAINT publisher_coverage_city_id_fkey FOREIGN KEY (city_id) REFERENCES public.cities(id) ON DELETE CASCADE;
+ALTER TABLE ONLY public.publisher_coverage ADD CONSTRAINT publisher_coverage_city_id_fkey FOREIGN KEY (city_id) REFERENCES public.geo_cities(id) ON DELETE CASCADE;
 ALTER TABLE ONLY public.publisher_coverage ADD CONSTRAINT publisher_coverage_country_id_fkey FOREIGN KEY (country_id) REFERENCES public.geo_countries(id) ON DELETE CASCADE;
 ALTER TABLE ONLY public.publisher_coverage ADD CONSTRAINT publisher_coverage_district_id_fkey FOREIGN KEY (district_id) REFERENCES public.geo_districts(id) ON DELETE CASCADE;
 ALTER TABLE ONLY public.publisher_coverage ADD CONSTRAINT publisher_coverage_publisher_id_fkey FOREIGN KEY (publisher_id) REFERENCES public.publishers(id) ON DELETE CASCADE;
@@ -1443,16 +1464,18 @@ CREATE INDEX idx_astronomical_primitives_category ON public.astronomical_primiti
 CREATE INDEX idx_astronomical_primitives_variable_name ON public.astronomical_primitives USING btree (variable_name);
 
 -- Cities
-CREATE INDEX idx_cities_continent_id ON public.cities USING btree (continent_id);
-CREATE INDEX idx_cities_country_id ON public.cities USING btree (country_id);
-CREATE INDEX idx_cities_district ON public.cities USING btree (district_id);
-CREATE INDEX idx_cities_location ON public.cities USING gist (location);
-CREATE INDEX idx_cities_name_ascii_trgm ON public.cities USING gin (name_ascii gin_trgm_ops);
-CREATE INDEX idx_cities_name_trgm ON public.cities USING gin (name gin_trgm_ops);
-CREATE INDEX idx_cities_population ON public.cities USING btree (population DESC NULLS LAST);
-CREATE INDEX idx_cities_region ON public.cities USING btree (region_id);
-CREATE INDEX idx_cities_region_population ON public.cities USING btree (region_id, population DESC NULLS LAST, name) WHERE (region_id IS NOT NULL);
-CREATE INDEX idx_cities_wof_id ON public.cities USING btree (wof_id) WHERE (wof_id IS NOT NULL);
+CREATE INDEX idx_geo_cities_continent_id ON public.geo_cities USING btree (continent_id);
+CREATE INDEX idx_geo_cities_country_id ON public.geo_cities USING btree (country_id);
+CREATE INDEX idx_geo_cities_district ON public.geo_cities USING btree (district_id);
+CREATE INDEX idx_geo_cities_location ON public.geo_cities USING gist (location);
+CREATE INDEX idx_geo_cities_name_ascii_trgm ON public.geo_cities USING gin (name_ascii gin_trgm_ops);
+CREATE INDEX idx_geo_cities_name_trgm ON public.geo_cities USING gin (name gin_trgm_ops);
+CREATE INDEX idx_geo_cities_population ON public.geo_cities USING btree (population DESC NULLS LAST);
+CREATE INDEX idx_geo_cities_region ON public.geo_cities USING btree (region_id);
+-- Composite indexes for ListCitiesByRegion and ListCitiesByDistrict queries (with ORDER BY population, name)
+CREATE INDEX idx_geo_cities_region_population ON public.geo_cities USING btree (region_id, population DESC NULLS LAST, name) WHERE (region_id IS NOT NULL);
+CREATE INDEX idx_geo_cities_district_population ON public.geo_cities USING btree (district_id, population DESC NULLS LAST, name) WHERE (district_id IS NOT NULL);
+CREATE INDEX idx_geo_cities_wof_id ON public.geo_cities USING btree (wof_id) WHERE (wof_id IS NOT NULL);
 
 -- Day Types
 CREATE INDEX idx_day_types_name ON public.day_types USING btree (name);
@@ -1473,15 +1496,21 @@ CREATE INDEX idx_geo_continents_wof_id ON public.geo_continents USING btree (wof
 CREATE INDEX idx_geo_countries_continent ON public.geo_countries USING btree (continent_id);
 CREATE INDEX idx_geo_countries_name_trgm ON public.geo_countries USING gin (name gin_trgm_ops);
 CREATE INDEX idx_geo_countries_wof_id ON public.geo_countries USING btree (wof_id) WHERE (wof_id IS NOT NULL);
+-- Composite index for GetCountries query (join + ORDER BY name)
+CREATE INDEX idx_geo_countries_continent_name ON public.geo_countries USING btree (continent_id, name);
 CREATE INDEX idx_geo_districts_continent ON public.geo_districts USING btree (continent_id);
 CREATE INDEX idx_geo_districts_country ON public.geo_districts USING btree (country_id);
 CREATE INDEX idx_geo_districts_name_trgm ON public.geo_districts USING gin (name gin_trgm_ops);
 CREATE INDEX idx_geo_districts_region ON public.geo_districts USING btree (region_id);
 CREATE INDEX idx_geo_districts_wof_id ON public.geo_districts USING btree (wof_id) WHERE (wof_id IS NOT NULL);
+-- Composite index for GetDistrictsByRegion (region_id + ORDER BY name)
+CREATE INDEX idx_geo_districts_region_name ON public.geo_districts USING btree (region_id, name);
 CREATE INDEX idx_geo_regions_continent ON public.geo_regions USING btree (continent_id);
 CREATE INDEX idx_geo_regions_country ON public.geo_regions USING btree (country_id);
 CREATE INDEX idx_geo_regions_name_trgm ON public.geo_regions USING gin (name gin_trgm_ops);
 CREATE INDEX idx_geo_regions_wof_id ON public.geo_regions USING btree (wof_id) WHERE (wof_id IS NOT NULL);
+-- Composite index for GetRegionsByCountry (country_id + ORDER BY name)
+CREATE INDEX idx_geo_regions_country_name ON public.geo_regions USING btree (country_id, name);
 
 -- Geo names (multi-language)
 CREATE INDEX idx_geo_names_entity ON public.geo_names USING btree (entity_type, entity_id);
@@ -1498,6 +1527,8 @@ CREATE INDEX idx_region_boundaries_simplified ON public.geo_region_boundaries US
 CREATE INDEX idx_district_boundaries_centroid ON public.geo_district_boundaries USING gist (centroid);
 CREATE INDEX idx_district_boundaries_geom ON public.geo_district_boundaries USING gist (boundary);
 CREATE INDEX idx_district_boundaries_simplified ON public.geo_district_boundaries USING gist (boundary_simplified);
+CREATE INDEX idx_city_boundaries_geom ON public.geo_city_boundaries USING gist (boundary);
+CREATE INDEX idx_city_boundaries_simplified ON public.geo_city_boundaries USING gist (boundary_simplified);
 
 -- Jewish Events
 CREATE INDEX idx_jewish_events_code ON public.jewish_events USING btree (code);
@@ -1647,12 +1678,12 @@ CREATE TRIGGER prune_versions_trigger AFTER INSERT ON public.publisher_zman_vers
 CREATE TRIGGER publisher_zman_day_types_updated_at BEFORE UPDATE ON public.publisher_zman_day_types FOR EACH ROW EXECUTE FUNCTION public.update_publisher_zman_day_types_updated_at();
 CREATE TRIGGER publisher_zman_events_updated_at BEFORE UPDATE ON public.publisher_zman_events FOR EACH ROW EXECUTE FUNCTION public.update_publisher_zman_events_updated_at();
 CREATE TRIGGER publisher_zmanim_updated_at BEFORE UPDATE ON public.publisher_zmanim FOR EACH ROW EXECUTE FUNCTION public.update_publisher_zmanim_updated_at();
-CREATE TRIGGER trg_validate_city_hierarchy BEFORE INSERT OR UPDATE ON public.cities FOR EACH ROW EXECUTE FUNCTION public.validate_city_hierarchy();
+CREATE TRIGGER trg_validate_city_hierarchy BEFORE INSERT OR UPDATE ON public.geo_cities FOR EACH ROW EXECUTE FUNCTION public.validate_city_hierarchy();
 CREATE TRIGGER trg_validate_district_hierarchy BEFORE INSERT OR UPDATE ON public.geo_districts FOR EACH ROW EXECUTE FUNCTION public.validate_district_hierarchy();
 CREATE TRIGGER trg_validate_region_hierarchy BEFORE INSERT OR UPDATE ON public.geo_regions FOR EACH ROW EXECUTE FUNCTION public.validate_region_hierarchy();
 CREATE TRIGGER trigger_prune_publisher_snapshots AFTER INSERT ON public.publisher_snapshots FOR EACH ROW EXECUTE FUNCTION public.prune_publisher_snapshots();
 CREATE TRIGGER update_algorithms_updated_at BEFORE UPDATE ON public.algorithms FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
-CREATE TRIGGER update_cities_updated_at BEFORE UPDATE ON public.cities FOR EACH ROW EXECUTE FUNCTION public.update_geo_updated_at();
+CREATE TRIGGER update_geo_cities_updated_at BEFORE UPDATE ON public.geo_cities FOR EACH ROW EXECUTE FUNCTION public.update_geo_updated_at();
 CREATE TRIGGER update_geo_countries_updated_at BEFORE UPDATE ON public.geo_countries FOR EACH ROW EXECUTE FUNCTION public.update_geo_updated_at();
 CREATE TRIGGER update_geo_country_boundaries_updated_at BEFORE UPDATE ON public.geo_country_boundaries FOR EACH ROW EXECUTE FUNCTION public.update_geo_updated_at();
 CREATE TRIGGER update_geo_district_boundaries_updated_at BEFORE UPDATE ON public.geo_district_boundaries FOR EACH ROW EXECUTE FUNCTION public.update_geo_updated_at();
@@ -1660,3 +1691,21 @@ CREATE TRIGGER update_geo_districts_updated_at BEFORE UPDATE ON public.geo_distr
 CREATE TRIGGER update_geo_region_boundaries_updated_at BEFORE UPDATE ON public.geo_region_boundaries FOR EACH ROW EXECUTE FUNCTION public.update_geo_updated_at();
 CREATE TRIGGER update_geo_regions_updated_at BEFORE UPDATE ON public.geo_regions FOR EACH ROW EXECUTE FUNCTION public.update_geo_updated_at();
 CREATE TRIGGER update_publisher_coverage_updated_at BEFORE UPDATE ON public.publisher_coverage FOR EACH ROW EXECUTE FUNCTION public.update_geo_updated_at();
+
+-- ============================================================================
+-- Data Migration: Populate is_city_state for existing countries
+-- Run this once after migration to update existing data
+-- ============================================================================
+-- UPDATE geo_countries SET is_city_state = true WHERE code IN (
+--   'MC', -- Monaco
+--   'VA', -- Vatican City
+--   'SM', -- San Marino
+--   'LI', -- Liechtenstein
+--   'AD', -- Andorra
+--   'MT', -- Malta
+--   'SG', -- Singapore
+--   'BH', -- Bahrain
+--   'HK', -- Hong Kong
+--   'MO', -- Macau
+--   'GI'  -- Gibraltar
+-- );

@@ -26,10 +26,10 @@ RETURNING id, publisher_id, description, snapshot_data, created_by, created_at
 `
 
 type CreatePublisherSnapshotParams struct {
-	PublisherID  string `json:"publisher_id"`
-	Description  string `json:"description"`
-	SnapshotData []byte `json:"snapshot_data"`
-	CreatedBy    string `json:"created_by"`
+	PublisherID  string  `json:"publisher_id"`
+	Description  *string `json:"description"`
+	SnapshotData []byte  `json:"snapshot_data"`
+	CreatedBy    *string `json:"created_by"`
 }
 
 // ============================================
@@ -217,7 +217,7 @@ type GetPublisherZmanForSnapshotCompareRow struct {
 	Category              string      `json:"category"`
 	MasterZmanID          pgtype.UUID `json:"master_zman_id"`
 	LinkedPublisherZmanID pgtype.UUID `json:"linked_publisher_zman_id"`
-	SourceType            *string     `json:"source_type"`
+	SourceType            string      `json:"source_type"`
 	CurrentVersion        *int32      `json:"current_version"`
 }
 
@@ -290,7 +290,7 @@ type GetPublisherZmanimForSnapshotRow struct {
 	Category              string      `json:"category"`
 	MasterZmanID          pgtype.UUID `json:"master_zman_id"`
 	LinkedPublisherZmanID pgtype.UUID `json:"linked_publisher_zman_id"`
-	SourceType            *string     `json:"source_type"`
+	SourceType            string      `json:"source_type"`
 }
 
 // ============================================
@@ -378,7 +378,7 @@ type InsertZmanFromSnapshotParams struct {
 	Category              string      `json:"category"`
 	MasterZmanID          pgtype.UUID `json:"master_zman_id"`
 	LinkedPublisherZmanID pgtype.UUID `json:"linked_publisher_zman_id"`
-	SourceType            *string     `json:"source_type"`
+	SourceType            string      `json:"source_type"`
 }
 
 // Insert a new zman from snapshot (zman doesn't exist at all)
@@ -422,8 +422,8 @@ LIMIT 20
 type ListPublisherSnapshotsRow struct {
 	ID          string    `json:"id"`
 	PublisherID string    `json:"publisher_id"`
-	Description string    `json:"description"`
-	CreatedBy   string    `json:"created_by"`
+	Description *string   `json:"description"`
+	CreatedBy   *string   `json:"created_by"`
 	CreatedAt   time.Time `json:"created_at"`
 }
 
@@ -533,7 +533,7 @@ type UpdateZmanFromSnapshotParams struct {
 	Category              string      `json:"category"`
 	MasterZmanID          pgtype.UUID `json:"master_zman_id"`
 	LinkedPublisherZmanID pgtype.UUID `json:"linked_publisher_zman_id"`
-	SourceType            *string     `json:"source_type"`
+	SourceType            string      `json:"source_type"`
 }
 
 // Update an existing zman with data from snapshot (creates new version via trigger)

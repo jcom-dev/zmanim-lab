@@ -82,6 +82,7 @@ export function getCoverageBadgeClasses(level: string): string {
     continent: 'bg-orange-100 text-orange-900 border-orange-400 dark:bg-orange-950 dark:text-orange-200 dark:border-orange-700',
     country: 'bg-blue-100 text-blue-900 border-blue-400 dark:bg-blue-950 dark:text-blue-200 dark:border-blue-700',
     region: 'bg-green-100 text-green-900 border-green-500 dark:bg-green-950 dark:text-green-200 dark:border-green-700',
+    district: 'bg-teal-100 text-teal-900 border-teal-400 dark:bg-teal-950 dark:text-teal-200 dark:border-teal-700',
     city: 'bg-purple-100 text-purple-900 border-purple-400 dark:bg-purple-950 dark:text-purple-200 dark:border-purple-700',
   };
 

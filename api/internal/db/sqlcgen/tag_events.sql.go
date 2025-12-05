@@ -205,13 +205,13 @@ ORDER BY mr.canonical_hebrew_name
 `
 
 type GetMasterZmanimByTagsRow struct {
-	ID                   string `json:"id"`
-	ZmanKey              string `json:"zman_key"`
-	CanonicalHebrewName  string `json:"canonical_hebrew_name"`
-	CanonicalEnglishName string `json:"canonical_english_name"`
-	DefaultFormulaDsl    string `json:"default_formula_dsl"`
-	TimeCategory         string `json:"time_category"`
-	IsCore               *bool  `json:"is_core"`
+	ID                   string  `json:"id"`
+	ZmanKey              string  `json:"zman_key"`
+	CanonicalHebrewName  string  `json:"canonical_hebrew_name"`
+	CanonicalEnglishName string  `json:"canonical_english_name"`
+	DefaultFormulaDsl    *string `json:"default_formula_dsl"`
+	TimeCategory         *string `json:"time_category"`
+	IsCore               *bool   `json:"is_core"`
 }
 
 // Get master registry zmanim that have any of the specified tags

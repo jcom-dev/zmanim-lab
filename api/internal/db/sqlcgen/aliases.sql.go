@@ -7,11 +7,91 @@ package sqlcgen
 
 import (
 	"context"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const createPublisherZmanAlias = `-- name: CreatePublisherZmanAlias :one
+INSERT INTO publisher_zman_aliases (
+    publisher_id,
+    publisher_zman_id,
+    alias_hebrew,
+    alias_english,
+    alias_transliteration,
+    context,
+    is_primary,
+    sort_order
+)
+SELECT $1, pz.id, $3, $4, $5, $6, $7, $8
+FROM publisher_zmanim pz
+WHERE pz.publisher_id = $1 AND pz.zman_key = $2
+RETURNING id, publisher_id, publisher_zman_id, alias_hebrew, alias_english, alias_transliteration, context, is_primary, sort_order, created_at
+`
+
+type CreatePublisherZmanAliasParams struct {
+	PublisherID          string  `json:"publisher_id"`
+	ZmanKey              string  `json:"zman_key"`
+	AliasHebrew          string  `json:"alias_hebrew"`
+	AliasEnglish         *string `json:"alias_english"`
+	AliasTransliteration *string `json:"alias_transliteration"`
+	Context              *string `json:"context"`
+	IsPrimary            bool    `json:"is_primary"`
+	SortOrder            *int32  `json:"sort_order"`
+}
+
+type CreatePublisherZmanAliasRow struct {
+	ID                   string    `json:"id"`
+	PublisherID          string    `json:"publisher_id"`
+	PublisherZmanID      string    `json:"publisher_zman_id"`
+	AliasHebrew          string    `json:"alias_hebrew"`
+	AliasEnglish         *string   `json:"alias_english"`
+	AliasTransliteration *string   `json:"alias_transliteration"`
+	Context              *string   `json:"context"`
+	IsPrimary            bool      `json:"is_primary"`
+	SortOrder            *int32    `json:"sort_order"`
+	CreatedAt            time.Time `json:"created_at"`
+}
+
+// Create an alias for a publisher's zman
+func (q *Queries) CreatePublisherZmanAlias(ctx context.Context, arg CreatePublisherZmanAliasParams) (CreatePublisherZmanAliasRow, error) {
+	row := q.db.QueryRow(ctx, createPublisherZmanAlias,
+		arg.PublisherID,
+		arg.ZmanKey,
+		arg.AliasHebrew,
+		arg.AliasEnglish,
+		arg.AliasTransliteration,
+		arg.Context,
+		arg.IsPrimary,
+		arg.SortOrder,
+	)
+	var i CreatePublisherZmanAliasRow
+	err := row.Scan(
+		&i.ID,
+		&i.PublisherID,
+		&i.PublisherZmanID,
+		&i.AliasHebrew,
+		&i.AliasEnglish,
+		&i.AliasTransliteration,
+		&i.Context,
+		&i.IsPrimary,
+		&i.SortOrder,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const deletePublisherZmanAlias = `-- name: DeletePublisherZmanAlias :exec
+DELETE FROM publisher_zman_aliases WHERE id = $1
+`
+
+// Delete an alias by ID
+func (q *Queries) DeletePublisherZmanAlias(ctx context.Context, id string) error {
+	_, err := q.db.Exec(ctx, deletePublisherZmanAlias, id)
+	return err
+}
+
+const deletePublisherZmanAliasByZmanKey = `-- name: DeletePublisherZmanAliasByZmanKey :exec
 DELETE FROM publisher_zman_aliases pza
 USING publisher_zmanim pz
 WHERE pza.publisher_zman_id = pz.id
@@ -19,14 +99,14 @@ WHERE pza.publisher_zman_id = pz.id
   AND pz.zman_key = $2
 `
 
-type DeletePublisherZmanAliasParams struct {
+type DeletePublisherZmanAliasByZmanKeyParams struct {
 	PublisherID string `json:"publisher_id"`
 	ZmanKey     string `json:"zman_key"`
 }
 
-// Delete an alias by publisher_id and zman_key
-func (q *Queries) DeletePublisherZmanAlias(ctx context.Context, arg DeletePublisherZmanAliasParams) error {
-	_, err := q.db.Exec(ctx, deletePublisherZmanAlias, arg.PublisherID, arg.ZmanKey)
+// Delete all aliases for a specific zman_key
+func (q *Queries) DeletePublisherZmanAliasByZmanKey(ctx context.Context, arg DeletePublisherZmanAliasByZmanKeyParams) error {
+	_, err := q.db.Exec(ctx, deletePublisherZmanAliasByZmanKey, arg.PublisherID, arg.ZmanKey)
 	return err
 }
 
@@ -35,19 +115,20 @@ SELECT
     pza.id,
     pza.publisher_id,
     pza.publisher_zman_id,
-    pza.custom_hebrew_name,
-    pza.custom_english_name,
-    pza.custom_transliteration,
-    pza.is_active,
+    pza.alias_hebrew,
+    pza.alias_english,
+    pza.alias_transliteration,
+    pza.context,
+    pza.is_primary,
+    pza.sort_order,
     pza.created_at,
-    pza.updated_at,
     pz.zman_key,
     mzr.canonical_hebrew_name,
     mzr.canonical_english_name
 FROM publisher_zman_aliases pza
 JOIN publisher_zmanim pz ON pza.publisher_zman_id = pz.id
 JOIN master_zmanim_registry mzr ON pz.zman_key = mzr.zman_key
-WHERE pza.publisher_id = $1 AND pza.is_active = true
+WHERE pza.publisher_id = $1
 ORDER BY
     CASE mzr.time_category
         WHEN 'dawn' THEN 1
@@ -60,25 +141,27 @@ ORDER BY
         WHEN 'midnight' THEN 8
         ELSE 9
     END,
+    pza.sort_order,
     mzr.canonical_hebrew_name
 `
 
 type GetAllPublisherZmanAliasesRow struct {
-	ID                    string             `json:"id"`
-	PublisherID           string             `json:"publisher_id"`
-	PublisherZmanID       string             `json:"publisher_zman_id"`
-	CustomHebrewName      string             `json:"custom_hebrew_name"`
-	CustomEnglishName     string             `json:"custom_english_name"`
-	CustomTransliteration *string            `json:"custom_transliteration"`
-	IsActive              bool               `json:"is_active"`
-	CreatedAt             pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
-	ZmanKey               string             `json:"zman_key"`
-	CanonicalHebrewName   string             `json:"canonical_hebrew_name"`
-	CanonicalEnglishName  string             `json:"canonical_english_name"`
+	ID                   string    `json:"id"`
+	PublisherID          string    `json:"publisher_id"`
+	PublisherZmanID      string    `json:"publisher_zman_id"`
+	AliasHebrew          string    `json:"alias_hebrew"`
+	AliasEnglish         *string   `json:"alias_english"`
+	AliasTransliteration *string   `json:"alias_transliteration"`
+	Context              *string   `json:"context"`
+	IsPrimary            bool      `json:"is_primary"`
+	SortOrder            *int32    `json:"sort_order"`
+	CreatedAt            time.Time `json:"created_at"`
+	ZmanKey              string    `json:"zman_key"`
+	CanonicalHebrewName  string    `json:"canonical_hebrew_name"`
+	CanonicalEnglishName string    `json:"canonical_english_name"`
 }
 
-// Get all active aliases for a publisher with canonical names included
+// Get all aliases for a publisher with canonical names included
 // Orders by time_category (chronological) then hebrew_name
 func (q *Queries) GetAllPublisherZmanAliases(ctx context.Context, publisherID string) ([]GetAllPublisherZmanAliasesRow, error) {
 	rows, err := q.db.Query(ctx, getAllPublisherZmanAliases, publisherID)
@@ -93,12 +176,13 @@ func (q *Queries) GetAllPublisherZmanAliases(ctx context.Context, publisherID st
 			&i.ID,
 			&i.PublisherID,
 			&i.PublisherZmanID,
-			&i.CustomHebrewName,
-			&i.CustomEnglishName,
-			&i.CustomTransliteration,
-			&i.IsActive,
+			&i.AliasHebrew,
+			&i.AliasEnglish,
+			&i.AliasTransliteration,
+			&i.Context,
+			&i.IsPrimary,
+			&i.SortOrder,
 			&i.CreatedAt,
-			&i.UpdatedAt,
 			&i.ZmanKey,
 			&i.CanonicalHebrewName,
 			&i.CanonicalEnglishName,
@@ -119,19 +203,20 @@ SELECT
     pza.id,
     pza.publisher_id,
     pza.publisher_zman_id,
-    pza.custom_hebrew_name,
-    pza.custom_english_name,
-    pza.custom_transliteration,
-    pza.is_active,
+    pza.alias_hebrew,
+    pza.alias_english,
+    pza.alias_transliteration,
+    pza.context,
+    pza.is_primary,
+    pza.sort_order,
     pza.created_at,
-    pza.updated_at,
     pz.zman_key,
     mzr.canonical_hebrew_name,
     mzr.canonical_english_name
 FROM publisher_zman_aliases pza
 JOIN publisher_zmanim pz ON pza.publisher_zman_id = pz.id
 JOIN master_zmanim_registry mzr ON pz.zman_key = mzr.zman_key
-WHERE pza.publisher_id = $1 AND pz.zman_key = $2 AND pza.is_active = true
+WHERE pza.publisher_id = $1 AND pz.zman_key = $2 AND pza.is_primary = true
 `
 
 type GetPublisherZmanAliasParams struct {
@@ -140,22 +225,24 @@ type GetPublisherZmanAliasParams struct {
 }
 
 type GetPublisherZmanAliasRow struct {
-	ID                    string             `json:"id"`
-	PublisherID           string             `json:"publisher_id"`
-	PublisherZmanID       string             `json:"publisher_zman_id"`
-	CustomHebrewName      string             `json:"custom_hebrew_name"`
-	CustomEnglishName     string             `json:"custom_english_name"`
-	CustomTransliteration *string            `json:"custom_transliteration"`
-	IsActive              bool               `json:"is_active"`
-	CreatedAt             pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
-	ZmanKey               string             `json:"zman_key"`
-	CanonicalHebrewName   string             `json:"canonical_hebrew_name"`
-	CanonicalEnglishName  string             `json:"canonical_english_name"`
+	ID                   string    `json:"id"`
+	PublisherID          string    `json:"publisher_id"`
+	PublisherZmanID      string    `json:"publisher_zman_id"`
+	AliasHebrew          string    `json:"alias_hebrew"`
+	AliasEnglish         *string   `json:"alias_english"`
+	AliasTransliteration *string   `json:"alias_transliteration"`
+	Context              *string   `json:"context"`
+	IsPrimary            bool      `json:"is_primary"`
+	SortOrder            *int32    `json:"sort_order"`
+	CreatedAt            time.Time `json:"created_at"`
+	ZmanKey              string    `json:"zman_key"`
+	CanonicalHebrewName  string    `json:"canonical_hebrew_name"`
+	CanonicalEnglishName string    `json:"canonical_english_name"`
 }
 
 // Alias CRUD Queries
 // Epic 5, Story 5.0: Publisher Zman Aliases
+// Schema: id, publisher_zman_id, publisher_id, alias_hebrew, alias_english, alias_transliteration, context, is_primary, sort_order, created_at
 // Get a specific alias for a publisher's zman by zman_key
 func (q *Queries) GetPublisherZmanAlias(ctx context.Context, arg GetPublisherZmanAliasParams) (GetPublisherZmanAliasRow, error) {
 	row := q.db.QueryRow(ctx, getPublisherZmanAlias, arg.PublisherID, arg.ZmanKey)
@@ -164,12 +251,13 @@ func (q *Queries) GetPublisherZmanAlias(ctx context.Context, arg GetPublisherZma
 		&i.ID,
 		&i.PublisherID,
 		&i.PublisherZmanID,
-		&i.CustomHebrewName,
-		&i.CustomEnglishName,
-		&i.CustomTransliteration,
-		&i.IsActive,
+		&i.AliasHebrew,
+		&i.AliasEnglish,
+		&i.AliasTransliteration,
+		&i.Context,
+		&i.IsPrimary,
+		&i.SortOrder,
 		&i.CreatedAt,
-		&i.UpdatedAt,
 		&i.ZmanKey,
 		&i.CanonicalHebrewName,
 		&i.CanonicalEnglishName,
@@ -186,12 +274,12 @@ SELECT
     mzr.canonical_hebrew_name,
     mzr.canonical_english_name,
     pza.id as alias_id,
-    pza.custom_hebrew_name,
-    pza.custom_english_name,
-    pza.custom_transliteration
+    pza.alias_hebrew,
+    pza.alias_english,
+    pza.alias_transliteration
 FROM publisher_zmanim pz
 JOIN master_zmanim_registry mzr ON pz.zman_key = mzr.zman_key
-LEFT JOIN publisher_zman_aliases pza ON pza.publisher_zman_id = pz.id AND pza.is_active = true
+LEFT JOIN publisher_zman_aliases pza ON pza.publisher_zman_id = pz.id AND pza.is_primary = true
 WHERE pz.publisher_id = $1 AND pz.is_enabled = true
 ORDER BY
     CASE mzr.time_category
@@ -209,19 +297,19 @@ ORDER BY
 `
 
 type GetZmanimWithAliasesRow struct {
-	PublisherZmanID       string      `json:"publisher_zman_id"`
-	ZmanKey               string      `json:"zman_key"`
-	FormulaDsl            string      `json:"formula_dsl"`
-	IsEnabled             bool        `json:"is_enabled"`
-	CanonicalHebrewName   string      `json:"canonical_hebrew_name"`
-	CanonicalEnglishName  string      `json:"canonical_english_name"`
-	AliasID               pgtype.UUID `json:"alias_id"`
-	CustomHebrewName      *string     `json:"custom_hebrew_name"`
-	CustomEnglishName     *string     `json:"custom_english_name"`
-	CustomTransliteration *string     `json:"custom_transliteration"`
+	PublisherZmanID      string      `json:"publisher_zman_id"`
+	ZmanKey              string      `json:"zman_key"`
+	FormulaDsl           string      `json:"formula_dsl"`
+	IsEnabled            bool        `json:"is_enabled"`
+	CanonicalHebrewName  string      `json:"canonical_hebrew_name"`
+	CanonicalEnglishName string      `json:"canonical_english_name"`
+	AliasID              pgtype.UUID `json:"alias_id"`
+	AliasHebrew          *string     `json:"alias_hebrew"`
+	AliasEnglish         *string     `json:"alias_english"`
+	AliasTransliteration *string     `json:"alias_transliteration"`
 }
 
-// Get all of a publisher's zmanim with their aliases (if any)
+// Get all of a publisher's zmanim with their primary alias (if any)
 // Orders by time_category (chronological) then hebrew_name
 func (q *Queries) GetZmanimWithAliases(ctx context.Context, publisherID string) ([]GetZmanimWithAliasesRow, error) {
 	rows, err := q.db.Query(ctx, getZmanimWithAliases, publisherID)
@@ -240,9 +328,9 @@ func (q *Queries) GetZmanimWithAliases(ctx context.Context, publisherID string) 
 			&i.CanonicalHebrewName,
 			&i.CanonicalEnglishName,
 			&i.AliasID,
-			&i.CustomHebrewName,
-			&i.CustomEnglishName,
-			&i.CustomTransliteration,
+			&i.AliasHebrew,
+			&i.AliasEnglish,
+			&i.AliasTransliteration,
 		); err != nil {
 			return nil, err
 		}
@@ -254,54 +342,64 @@ func (q *Queries) GetZmanimWithAliases(ctx context.Context, publisherID string) 
 	return items, nil
 }
 
-const upsertPublisherZmanAlias = `-- name: UpsertPublisherZmanAlias :one
-INSERT INTO publisher_zman_aliases (
-    publisher_id,
-    publisher_zman_id,
-    custom_hebrew_name,
-    custom_english_name,
-    custom_transliteration
-)
-SELECT $1, pz.id, $3, $4, $5
-FROM publisher_zmanim pz
-WHERE pz.publisher_id = $1 AND pz.zman_key = $2
-ON CONFLICT (publisher_id, publisher_zman_id) DO UPDATE SET
-    custom_hebrew_name = EXCLUDED.custom_hebrew_name,
-    custom_english_name = EXCLUDED.custom_english_name,
-    custom_transliteration = EXCLUDED.custom_transliteration,
-    is_active = true,
-    updated_at = NOW()
-RETURNING id, publisher_id, publisher_zman_id, custom_hebrew_name, custom_english_name, custom_transliteration, is_active, created_at, updated_at
+const updatePublisherZmanAlias = `-- name: UpdatePublisherZmanAlias :one
+UPDATE publisher_zman_aliases
+SET alias_hebrew = $2,
+    alias_english = $3,
+    alias_transliteration = $4,
+    context = $5,
+    is_primary = $6,
+    sort_order = $7
+WHERE id = $1
+RETURNING id, publisher_id, publisher_zman_id, alias_hebrew, alias_english, alias_transliteration, context, is_primary, sort_order, created_at
 `
 
-type UpsertPublisherZmanAliasParams struct {
-	PublisherID           string  `json:"publisher_id"`
-	ZmanKey               string  `json:"zman_key"`
-	CustomHebrewName      string  `json:"custom_hebrew_name"`
-	CustomEnglishName     string  `json:"custom_english_name"`
-	CustomTransliteration *string `json:"custom_transliteration"`
+type UpdatePublisherZmanAliasParams struct {
+	ID                   string  `json:"id"`
+	AliasHebrew          string  `json:"alias_hebrew"`
+	AliasEnglish         *string `json:"alias_english"`
+	AliasTransliteration *string `json:"alias_transliteration"`
+	Context              *string `json:"context"`
+	IsPrimary            bool    `json:"is_primary"`
+	SortOrder            *int32  `json:"sort_order"`
 }
 
-// Create or update an alias for a publisher's zman
-func (q *Queries) UpsertPublisherZmanAlias(ctx context.Context, arg UpsertPublisherZmanAliasParams) (PublisherZmanAlias, error) {
-	row := q.db.QueryRow(ctx, upsertPublisherZmanAlias,
-		arg.PublisherID,
-		arg.ZmanKey,
-		arg.CustomHebrewName,
-		arg.CustomEnglishName,
-		arg.CustomTransliteration,
+type UpdatePublisherZmanAliasRow struct {
+	ID                   string    `json:"id"`
+	PublisherID          string    `json:"publisher_id"`
+	PublisherZmanID      string    `json:"publisher_zman_id"`
+	AliasHebrew          string    `json:"alias_hebrew"`
+	AliasEnglish         *string   `json:"alias_english"`
+	AliasTransliteration *string   `json:"alias_transliteration"`
+	Context              *string   `json:"context"`
+	IsPrimary            bool      `json:"is_primary"`
+	SortOrder            *int32    `json:"sort_order"`
+	CreatedAt            time.Time `json:"created_at"`
+}
+
+// Update an alias
+func (q *Queries) UpdatePublisherZmanAlias(ctx context.Context, arg UpdatePublisherZmanAliasParams) (UpdatePublisherZmanAliasRow, error) {
+	row := q.db.QueryRow(ctx, updatePublisherZmanAlias,
+		arg.ID,
+		arg.AliasHebrew,
+		arg.AliasEnglish,
+		arg.AliasTransliteration,
+		arg.Context,
+		arg.IsPrimary,
+		arg.SortOrder,
 	)
-	var i PublisherZmanAlias
+	var i UpdatePublisherZmanAliasRow
 	err := row.Scan(
 		&i.ID,
 		&i.PublisherID,
 		&i.PublisherZmanID,
-		&i.CustomHebrewName,
-		&i.CustomEnglishName,
-		&i.CustomTransliteration,
-		&i.IsActive,
+		&i.AliasHebrew,
+		&i.AliasEnglish,
+		&i.AliasTransliteration,
+		&i.Context,
+		&i.IsPrimary,
+		&i.SortOrder,
 		&i.CreatedAt,
-		&i.UpdatedAt,
 	)
 	return i, err
 }

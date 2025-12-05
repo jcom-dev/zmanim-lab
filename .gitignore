@@ -107,3 +107,4 @@ api/data/*
 
 # Temp files
 api/1
+api/city-boundaries.jsonl

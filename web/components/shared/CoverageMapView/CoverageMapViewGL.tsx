@@ -12,6 +12,7 @@ import {
 } from 'react';
 import MapGL, {
   NavigationControl,
+  GeolocateControl,
   Source,
   Layer,
   MapRef,
@@ -25,13 +26,30 @@ import { cn } from '@/lib/utils';
 import { API_BASE } from '@/lib/api-client';
 import type { CoverageMapViewProps, MapSelection } from './types';
 
-// Zoom level thresholds for different selection granularity
+// Zoom level thresholds for loading boundaries (not selection - that's backend-driven)
 const ZOOM_THRESHOLDS = {
-  REGION: 4,     // Above this zoom, show region boundaries and allow region selection
-  DISTRICT: 6,   // Above this zoom, show district boundaries and allow district selection
-  CITY: 8,       // Above this zoom, clicking searches for cities
+  REGION: 4,     // Above this zoom, load region boundaries
+  DISTRICT: 6,   // Above this zoom, load district boundaries
   MIN_ZOOM: 1,   // Minimum zoom level allowed
 };
+
+// Response type from smart lookup endpoint
+interface SmartLookupResponse {
+  recommended_level: 'country' | 'region' | 'district' | 'city';
+  levels: {
+    country?: { id: number; code: string; name: string; area_km2?: number; label?: string };
+    region?: { id: number; code: string; name: string; area_km2?: number; label?: string };
+    district?: { id: number; code: string; name: string; area_km2?: number; label?: string };
+  };
+  nearby_cities?: Array<{
+    id: string;
+    name: string;
+    country_code: string;
+    region_name?: string;
+    district_name?: string;
+    distance_km: number;
+  }>;
+}
 
 // Pre-built map style URLs (CORS-friendly)
 const MAP_STYLES = {
@@ -374,136 +392,106 @@ export const CoverageMapViewGL = memo(
       }
     }, [selectedSet, existingSet, mapLoaded, countriesGeoJSON]);
 
-    // Handle map click for selection - zoom-aware (country at low zoom, city search at high zoom)
+    // Handle map click for selection - uses backend-driven smart selection
     const handleClick = useCallback(
       async (event: MapLayerMouseEvent) => {
         if (viewOnly) return;
 
         const { lng, lat } = event.lngLat;
 
-        // At high zoom levels, search for nearby cities instead of selecting the country
-        if (currentZoom >= ZOOM_THRESHOLDS.CITY) {
-          try {
-            // Use the nearest cities API to find cities near the click point
-            const radius = 50000; // 50km radius
-            const response = await fetch(
-              `${API_BASE}/api/v1/cities/nearby?lng=${lng}&lat=${lat}&radius=${radius}&limit=1`
+        try {
+          // Call smart lookup endpoint to get recommended level based on zoom and entity areas
+          const response = await fetch(
+            `${API_BASE}/api/v1/geo/boundaries/at-point?lng=${lng}&lat=${lat}&zoom=${currentZoom}`
+          );
+
+          if (!response.ok) {
+            console.error('Smart lookup failed:', response.status);
+            return;
+          }
+
+          const data: SmartLookupResponse = await response.json();
+          const { recommended_level, levels, nearby_cities } = data;
+
+          // Handle selection based on recommended level
+          if (recommended_level === 'city' && nearby_cities?.length) {
+            // Select nearest city
+            const city = nearby_cities[0];
+            const citySelection: MapSelection = {
+              type: 'city',
+              code: city.id,
+              name: `${city.name}${city.region_name ? `, ${city.region_name}` : ''}`,
+              countryCode: city.country_code,
+            };
+            const isCurrentlySelected = selectedRegions.some(
+              (r) => r.type === 'city' && r.code === city.id
             );
-            if (response.ok) {
-              const data = await response.json();
-              const city = data.data?.city;
-              if (city) {
-                const citySelection: MapSelection = {
-                  type: 'city',
-                  code: city.id,
-                  name: `${city.name}, ${city.region || city.country}`,
-                  countryCode: city.country_code,
-                  coordinates: [city.longitude, city.latitude],
-                };
-                const isCurrentlySelected = selectedRegions.some(
-                  (r) => r.type === 'city' && r.code === city.id
-                );
-                if (isCurrentlySelected) {
-                  onSelectionChange(selectedRegions.filter((r) => r.code !== city.id));
-                } else {
-                  onSelectionChange([...selectedRegions, citySelection]);
-                }
-                return;
-              }
+            if (isCurrentlySelected) {
+              onSelectionChange(selectedRegions.filter((r) => r.code !== city.id));
+            } else {
+              onSelectionChange([...selectedRegions, citySelection]);
             }
-          } catch (err) {
-            console.error('Failed to lookup nearby city:', err);
+            return;
           }
-          // Fall through to country selection if city lookup fails
-        }
 
-        // At district zoom level, try to select district first
-        if (currentZoom >= ZOOM_THRESHOLDS.DISTRICT && districtsGeoJSON) {
-          const districtFeatures = event.features?.filter(
-            (f) => f.layer?.id === 'districts-fill'
-          );
-          if (districtFeatures?.length) {
-            const clickedDistrict = districtFeatures[0];
-            const districtProps = clickedDistrict.properties;
-            const districtId = districtProps?.id;
-            const districtName = districtProps?.name || 'Unknown';
-            const regionName = districtProps?.region_name || '';
-            const countryCode = districtProps?.country_code || '';
-
-            if (districtId) {
-              const districtSelection: MapSelection = {
-                type: 'district',
-                code: String(districtId),
-                name: `${districtName}, ${regionName}`,
-                countryCode,
-              };
-              const isCurrentlySelected = selectedRegions.some(
-                (r) => r.type === 'district' && r.code === String(districtId)
-              );
-              if (isCurrentlySelected) {
-                onSelectionChange(selectedRegions.filter((r) => r.code !== String(districtId)));
-              } else {
-                onSelectionChange([...selectedRegions, districtSelection]);
-              }
-              return;
+          if (recommended_level === 'district' && levels.district) {
+            const district = levels.district;
+            const districtSelection: MapSelection = {
+              type: 'district',
+              code: String(district.id),
+              name: `${district.name}${levels.region ? `, ${levels.region.name}` : ''}`,
+              countryCode: levels.country?.code || '',
+            };
+            const isCurrentlySelected = selectedRegions.some(
+              (r) => r.type === 'district' && r.code === String(district.id)
+            );
+            if (isCurrentlySelected) {
+              onSelectionChange(selectedRegions.filter((r) => r.code !== String(district.id)));
+            } else {
+              onSelectionChange([...selectedRegions, districtSelection]);
             }
+            return;
           }
-        }
 
-        // At region zoom level (between REGION and DISTRICT), try to select region
-        if (currentZoom >= ZOOM_THRESHOLDS.REGION && currentZoom < ZOOM_THRESHOLDS.DISTRICT && regionsGeoJSON) {
-          // Check if we clicked on a region
-          const regionFeatures = event.features?.filter(
-            (f) => f.layer?.id === 'regions-fill'
-          );
-          if (regionFeatures?.length) {
-            const clickedRegion = regionFeatures[0];
-            const regionProps = clickedRegion.properties;
-            const regionCode = regionProps?.code || '';
-            const regionName = regionProps?.name || 'Unknown';
-            const countryCode = regionProps?.country_code || '';
+          if (recommended_level === 'region' && levels.region) {
+            const region = levels.region;
+            const regionSelection: MapSelection = {
+              type: 'region',
+              code: String(region.id), // Use numeric ID
+              name: `${region.name}${levels.country ? `, ${levels.country.name}` : ''}`,
+              countryCode: levels.country?.code || '',
+            };
+            const isCurrentlySelected = selectedRegions.some(
+              (r) => r.type === 'region' && r.code === String(region.id)
+            );
+            if (isCurrentlySelected) {
+              onSelectionChange(selectedRegions.filter((r) => r.code !== String(region.id)));
+            } else {
+              onSelectionChange([...selectedRegions, regionSelection]);
+            }
+            return;
+          }
 
-            if (regionCode) {
-              const regionSelection: MapSelection = {
-                type: 'region',
-                code: regionCode,
-                name: `${regionName}, ${countryCode}`,
-                countryCode,
-              };
-              const isCurrentlySelected = selectedRegions.some(
-                (r) => r.type === 'region' && r.code === regionCode
-              );
-              if (isCurrentlySelected) {
-                onSelectionChange(selectedRegions.filter((r) => r.code !== regionCode));
-              } else {
-                onSelectionChange([...selectedRegions, regionSelection]);
-              }
-              return;
+          // Default: select country
+          if (levels.country) {
+            const country = levels.country;
+            const countrySelection: MapSelection = {
+              type: 'country',
+              code: country.code.toUpperCase(),
+              name: country.name,
+            };
+            const isCurrentlySelected = selectedSet.has(country.code.toUpperCase());
+            if (isCurrentlySelected) {
+              onSelectionChange(selectedRegions.filter((r) => r.code.toUpperCase() !== country.code.toUpperCase()));
+            } else {
+              onSelectionChange([...selectedRegions, countrySelection]);
             }
           }
-        }
-
-        // At lower zoom levels or if region click failed, select the country
-        const features = event.features?.filter((f) => f.layer?.id === 'countries-fill');
-        if (!features?.length) return;
-
-        const clickedFeature = features[0];
-        const props = clickedFeature.properties;
-        const countryCode = (props?.code || '').toUpperCase();
-        const countryName = props?.name || 'Unknown';
-
-        if (!countryCode) return;
-
-        const region: MapSelection = { type: 'country', code: countryCode, name: countryName };
-        const isCurrentlySelected = selectedSet.has(countryCode);
-
-        if (isCurrentlySelected) {
-          onSelectionChange(selectedRegions.filter((r) => r.code.toUpperCase() !== countryCode));
-        } else {
-          onSelectionChange([...selectedRegions, region]);
+        } catch (err) {
+          console.error('Failed to perform smart lookup:', err);
         }
       },
-      [viewOnly, selectedRegions, onSelectionChange, selectedSet, currentZoom, regionsGeoJSON, districtsGeoJSON]
+      [viewOnly, selectedRegions, onSelectionChange, selectedSet, currentZoom]
     );
 
     const handleZoom = useCallback(() => {
@@ -550,6 +538,13 @@ export const CoverageMapViewGL = memo(
           attributionControl={false}
         >
           <NavigationControl position="top-right" showCompass={false} />
+          <GeolocateControl
+            position="top-right"
+            trackUserLocation={false}
+            showUserLocation={true}
+            showAccuracyCircle={false}
+            fitBoundsOptions={{ maxZoom: 10 }}
+          />
 
           {/* Countries overlay layer */}
           {mapLoaded && countriesGeoJSON && (
@@ -730,9 +725,9 @@ export const CoverageMapViewGL = memo(
           )}
         </MapGL>
 
-        {/* Zoom level and selection mode indicator */}
+        {/* Zoom level and selection mode indicator - shows approximate mode, actual selection is adaptive */}
         <div className="absolute bottom-4 right-4 px-2 py-1 text-xs font-mono bg-card/80 rounded text-muted-foreground">
-          {currentZoom >= ZOOM_THRESHOLDS.CITY
+          {currentZoom >= 10
             ? '🏙️ City'
             : currentZoom >= ZOOM_THRESHOLDS.DISTRICT
               ? '🏘️ District'

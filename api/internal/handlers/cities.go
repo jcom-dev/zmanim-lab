@@ -1,13 +1,14 @@
 package handlers
 
 import (
-	"fmt"
 	"log/slog"
 	"math"
 	"net/http"
 	"strconv"
 	"strings"
 
+	"github.com/go-chi/chi/v5"
+	"github.com/jcom-dev/zmanim-lab/internal/db/sqlcgen"
 	"github.com/jcom-dev/zmanim-lab/internal/models"
 )
 
@@ -18,9 +19,10 @@ import (
 // @Produce json
 // @Param search query string false "Search query (min 2 chars for fuzzy match)"
 // @Param country_code query string false "ISO 3166-1 alpha-2 country code"
-// @Param region query string false "Region/state name"
+// @Param region_code query string false "Region/state code"
 // @Param continent_code query string false "Continent code (AF, AS, EU, NA, OC, SA, AN)"
-// @Param limit query int false "Max results (default 10, max 100)"
+// @Param limit query int false "Max results (default 20, max 100)"
+// @Param offset query int false "Offset for pagination (default 0)"
 // @Success 200 {object} APIResponse{data=models.CitySearchResponse} "List of matching cities"
 // @Failure 400 {object} APIResponse{error=APIError} "Invalid parameters"
 // @Failure 500 {object} APIResponse{error=APIError} "Internal server error"
@@ -31,129 +33,71 @@ func (h *Handlers) SearchCities(w http.ResponseWriter, r *http.Request) {
 	// Get query parameters
 	search := strings.TrimSpace(r.URL.Query().Get("search"))
 	countryCode := strings.TrimSpace(r.URL.Query().Get("country_code"))
-	region := strings.TrimSpace(r.URL.Query().Get("region"))
+	regionCode := strings.TrimSpace(r.URL.Query().Get("region_code"))
 	continentCode := strings.TrimSpace(r.URL.Query().Get("continent_code"))
 
-	// At least one filter must be provided
-	if search == "" && countryCode == "" && continentCode == "" {
-		RespondBadRequest(w, r, "Either search, country_code, or continent_code parameter is required")
-		return
-	}
-
-	// Get limit (default 10 for search, 100 for filters; max 100)
-	defaultLimit := 10
-	maxLimit := 100
-	if search == "" && countryCode != "" {
-		defaultLimit = 100
-	}
-
-	limit := defaultLimit
+	// Parse limit (default 20, max 100)
+	limit := int32(20)
 	if l := r.URL.Query().Get("limit"); l != "" {
-		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 && parsed <= maxLimit {
-			limit = parsed
+		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 && parsed <= 100 {
+			limit = int32(parsed)
 		}
 	}
 
-	// Build dynamic query with normalized schema JOINs
-	// Note: country derived via city.region_id → region.country_id
-	var queryBuilder strings.Builder
-	queryBuilder.WriteString(`
-		SELECT c.id, c.name, co.name as country, co.code as country_code, r.name as region,
-		       c.latitude, c.longitude, c.timezone, c.population, c.elevation, ct.name as continent
-		FROM cities c
-		JOIN geo_regions r ON c.region_id = r.id
-		JOIN geo_countries co ON r.country_id = co.id
-		JOIN geo_continents ct ON co.continent_id = ct.id
-		WHERE 1=1`)
-
-	args := make([]interface{}, 0)
-	argNum := 1
-
-	// Add continent code filter
-	if continentCode != "" {
-		queryBuilder.WriteString(fmt.Sprintf(" AND ct.code = $%d", argNum))
-		args = append(args, continentCode)
-		argNum++
+	// Parse offset
+	offset := int32(0)
+	if o := r.URL.Query().Get("offset"); o != "" {
+		if parsed, err := strconv.Atoi(o); err == nil && parsed >= 0 {
+			offset = int32(parsed)
+		}
 	}
 
-	// Add country code filter
-	if countryCode != "" {
-		queryBuilder.WriteString(fmt.Sprintf(" AND co.code = $%d", argNum))
-		args = append(args, countryCode)
-		argNum++
-	}
-
-	// Add region filter
-	if region != "" {
-		queryBuilder.WriteString(fmt.Sprintf(" AND r.name = $%d", argNum))
-		args = append(args, region)
-		argNum++
-	}
-
-	// Add search filter (uses pg_trgm for fuzzy matching)
-	// Lower threshold (0.2) allows typos like "lverpool" -> "Liverpool"
+	// If search is provided and long enough, use fuzzy search
 	if search != "" && len(search) >= 2 {
-		queryBuilder.WriteString(fmt.Sprintf(` AND (
-			c.name_ascii ILIKE $%d || '%%'
-			OR c.name ILIKE $%d || '%%'
-			OR c.name_ascii %% $%d
-			OR c.name %% $%d
-		)`, argNum, argNum, argNum, argNum))
-		args = append(args, search)
-		argNum++
+		rows, err := h.db.Queries.SearchCitiesFuzzy(ctx, sqlcgen.SearchCitiesFuzzyParams{
+			ContinentCode: nullableString(continentCode),
+			CountryCode:   nullableString(countryCode),
+			RegionCode:    nullableString(regionCode),
+			Search:        nullableString(search),
+			Limit:         limit,
+		})
+		if err != nil {
+			slog.Error("failed to search cities", "error", err, "search", search)
+			RespondInternalError(w, r, "Failed to search cities")
+			return
+		}
+
+		cities := make([]models.City, 0, len(rows))
+		for _, row := range rows {
+			city := searchCitiesFuzzyRowToCity(row)
+			cities = append(cities, city)
+		}
+
+		RespondJSON(w, r, http.StatusOK, models.CitySearchResponse{
+			Cities: cities,
+			Total:  len(cities),
+		})
+		return
 	}
 
-	// Add ordering - prioritize exact prefix matches, then similarity score, then population
-	if search != "" && len(search) >= 2 {
-		queryBuilder.WriteString(fmt.Sprintf(`
-		ORDER BY
-			CASE WHEN c.name_ascii ILIKE $%d || '%%' THEN 0
-			     WHEN c.name ILIKE $%d || '%%' THEN 1
-			     ELSE 2 END,
-			similarity(c.name_ascii, $%d) DESC,
-			c.population DESC NULLS LAST,
-			c.name ASC`, len(args), len(args), len(args)))
-	} else {
-		queryBuilder.WriteString(`
-		ORDER BY c.population DESC NULLS LAST, c.name ASC`)
-	}
-
-	// Add limit
-	queryBuilder.WriteString(fmt.Sprintf(" LIMIT $%d", argNum))
-	args = append(args, limit)
-
-	// Execute query
-	rows, err := h.db.Pool.Query(ctx, queryBuilder.String(), args...)
+	// Use standard search with filters
+	rows, err := h.db.Queries.SearchCities(ctx, sqlcgen.SearchCitiesParams{
+		ContinentCode: nullableString(continentCode),
+		CountryCode:   nullableString(countryCode),
+		RegionCode:    nullableString(regionCode),
+		SearchName:    nullableString(search),
+		Limit:         limit,
+		Offset:        offset,
+	})
 	if err != nil {
-		slog.Error("failed to search cities", "error", err, "search", search, "country", countryCode, "region", region)
+		slog.Error("failed to search cities", "error", err, "search", search)
 		RespondInternalError(w, r, "Failed to search cities")
 		return
 	}
-	defer rows.Close()
 
-	cities := make([]models.City, 0)
-	for rows.Next() {
-		var city models.City
-		err := rows.Scan(
-			&city.ID,
-			&city.Name,
-			&city.Country,
-			&city.CountryCode,
-			&city.Region,
-			&city.Latitude,
-			&city.Longitude,
-			&city.Timezone,
-			&city.Population,
-			&city.Elevation,
-			&city.Continent,
-		)
-		if err != nil {
-			slog.Error("failed to scan city row", "error", err)
-			continue
-		}
-
-		// Build display name: "City, Region, Country"
-		city.DisplayName = buildDisplayName(city)
+	cities := make([]models.City, 0, len(rows))
+	for _, row := range rows {
+		city := searchCitiesRowToCity(row)
 		cities = append(cities, city)
 	}
 
@@ -201,44 +145,19 @@ func (h *Handlers) GetNearbyCity(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Find nearest city using PostGIS ST_Distance with normalized JOINs
-	// Note: country derived via city.region_id → region.country_id
-	query := `
-		SELECT c.id, c.name, co.name as country, co.code as country_code, r.name as region,
-		       c.latitude, c.longitude, c.timezone, c.population, c.elevation, ct.name as continent,
-		       ST_Distance(c.location, ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography) as distance_meters
-		FROM cities c
-		JOIN geo_regions r ON c.region_id = r.id
-		JOIN geo_countries co ON r.country_id = co.id
-		JOIN geo_continents ct ON co.continent_id = ct.id
-		ORDER BY c.location <-> ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography
-		LIMIT 1
-	`
-
-	var city models.City
-	var distanceMeters float64
-	err = h.db.Pool.QueryRow(ctx, query, lat, lng).Scan(
-		&city.ID,
-		&city.Name,
-		&city.Country,
-		&city.CountryCode,
-		&city.Region,
-		&city.Latitude,
-		&city.Longitude,
-		&city.Timezone,
-		&city.Population,
-		&city.Elevation,
-		&city.Continent,
-		&distanceMeters,
-	)
-
+	// Use SQLc query for nearest city
+	row, err := h.db.Queries.GetNearestCity(ctx, sqlcgen.GetNearestCityParams{
+		Longitude: lng,
+		Latitude:  lat,
+	})
 	if err != nil {
 		slog.Error("failed to find nearby city", "error", err, "lat", lat, "lng", lng)
 		RespondInternalError(w, r, "Failed to find nearby city")
 		return
 	}
 
-	city.DisplayName = buildDisplayName(city)
+	city := nearestCityRowToCity(row)
+	distanceMeters := row.DistanceMeters
 
 	// Return city with distance info
 	response := map[string]interface{}{
@@ -253,51 +172,288 @@ func (h *Handlers) GetNearbyCity(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetCityByID returns a single city by ID
-// GET /api/v1/cities/{id}
+// @Summary Get city by ID
+// @Description Returns a single city by its ID
+// @Tags Cities
+// @Produce json
+// @Param id path string true "City ID"
+// @Success 200 {object} APIResponse{data=models.City} "City details"
+// @Failure 404 {object} APIResponse{error=APIError} "City not found"
+// @Router /cities/{id} [get]
 func (h *Handlers) GetCityByID(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	// Get city ID from URL
-	id := r.URL.Query().Get("id")
+	// Get city ID from URL path (ID is a string in the database)
+	id := chi.URLParam(r, "id")
 	if id == "" {
-		// Try to get from path parameter (chi)
-		// For now, use query param
 		RespondBadRequest(w, r, "City ID is required")
 		return
 	}
 
-	query := `
-		SELECT c.id, c.name, co.name as country, co.code as country_code, r.name as region,
-		       c.latitude, c.longitude, c.timezone, c.population, c.elevation, ct.name as continent
-		FROM cities c
-		JOIN geo_regions r ON c.region_id = r.id
-		JOIN geo_countries co ON r.country_id = co.id
-		JOIN geo_continents ct ON co.continent_id = ct.id
-		WHERE c.id = $1
-	`
-
-	var city models.City
-	err := h.db.Pool.QueryRow(ctx, query, id).Scan(
-		&city.ID,
-		&city.Name,
-		&city.Country,
-		&city.CountryCode,
-		&city.Region,
-		&city.Latitude,
-		&city.Longitude,
-		&city.Timezone,
-		&city.Population,
-		&city.Elevation,
-		&city.Continent,
-	)
-
+	row, err := h.db.Queries.GetCityByID(ctx, id)
 	if err != nil {
 		RespondNotFound(w, r, "City not found")
 		return
 	}
 
-	city.DisplayName = buildDisplayName(city)
+	city := getCityByIDRowToCity(row)
 	RespondJSON(w, r, http.StatusOK, city)
+}
+
+// GetCountries returns all countries, optionally filtered by continent
+// @Summary List countries
+// @Description Returns all countries with optional continent filter
+// @Tags Geographic
+// @Produce json
+// @Param continent_code query string false "Continent code filter (AF, AS, EU, NA, OC, SA, AN)"
+// @Success 200 {object} APIResponse{data=[]object} "List of countries"
+// @Router /countries [get]
+func (h *Handlers) GetCountries(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	continentCode := r.URL.Query().Get("continent_code")
+
+	if continentCode != "" {
+		rows, err := h.db.Queries.GetCountriesByContinent(ctx, continentCode)
+		if err != nil {
+			slog.Error("failed to get countries by continent", "error", err)
+			RespondInternalError(w, r, "Failed to get countries")
+			return
+		}
+		RespondJSON(w, r, http.StatusOK, rows)
+		return
+	}
+
+	rows, err := h.db.Queries.GetCountries(ctx)
+	if err != nil {
+		slog.Error("failed to get countries", "error", err)
+		RespondInternalError(w, r, "Failed to get countries")
+		return
+	}
+	RespondJSON(w, r, http.StatusOK, rows)
+}
+
+// GetCountryByCode returns a single country by its ISO code
+// @Summary Get country by code
+// @Description Returns a single country by its ISO 3166-1 alpha-2 code
+// @Tags Geographic
+// @Produce json
+// @Param country_code path string true "ISO 3166-1 alpha-2 country code"
+// @Success 200 {object} APIResponse{data=object} "Country details"
+// @Failure 404 {object} APIError "Country not found"
+// @Router /countries/{country_code} [get]
+func (h *Handlers) GetCountryByCode(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	countryCode := chi.URLParam(r, "country_code")
+	if countryCode == "" {
+		RespondBadRequest(w, r, "Country code is required")
+		return
+	}
+
+	row, err := h.db.Queries.GetCountryByCode(ctx, countryCode)
+	if err != nil {
+		slog.Error("failed to get country", "error", err, "code", countryCode)
+		RespondNotFound(w, r, "Country not found")
+		return
+	}
+	RespondJSON(w, r, http.StatusOK, row)
+}
+
+// GetContinents returns all continents with city counts
+// @Summary List continents
+// @Description Returns all continents with their city counts
+// @Tags Geographic
+// @Produce json
+// @Success 200 {object} APIResponse{data=[]object} "List of continents"
+// @Router /continents [get]
+func (h *Handlers) GetContinents(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	rows, err := h.db.Queries.GetContinents(ctx)
+	if err != nil {
+		slog.Error("failed to get continents", "error", err)
+		RespondInternalError(w, r, "Failed to get continents")
+		return
+	}
+	RespondJSON(w, r, http.StatusOK, rows)
+}
+
+// GetRegionsByCountry returns regions for a country
+// @Summary List regions by country
+// @Description Returns all regions/states for a given country code
+// @Tags Geographic
+// @Produce json
+// @Param country_code path string true "ISO 3166-1 alpha-2 country code"
+// @Success 200 {object} APIResponse{data=[]object} "List of regions"
+// @Router /countries/{country_code}/regions [get]
+func (h *Handlers) GetRegionsByCountry(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	countryCode := chi.URLParam(r, "country_code")
+	if countryCode == "" {
+		RespondBadRequest(w, r, "Country code is required")
+		return
+	}
+
+	rows, err := h.db.Queries.GetRegionsByCountry(ctx, countryCode)
+	if err != nil {
+		slog.Error("failed to get regions", "error", err, "country", countryCode)
+		RespondInternalError(w, r, "Failed to get regions")
+		return
+	}
+	RespondJSON(w, r, http.StatusOK, rows)
+}
+
+// GetDistrictsByCountry returns districts for a country
+// @Summary List districts by country
+// @Description Returns all districts for a given country code
+// @Tags Geographic
+// @Produce json
+// @Param country_code path string true "ISO 3166-1 alpha-2 country code"
+// @Success 200 {object} APIResponse{data=[]object} "List of districts"
+// @Router /countries/{country_code}/districts [get]
+func (h *Handlers) GetDistrictsByCountry(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	countryCode := chi.URLParam(r, "country_code")
+	if countryCode == "" {
+		RespondBadRequest(w, r, "Country code is required")
+		return
+	}
+
+	rows, err := h.db.Queries.GetDistrictsByCountry(ctx, countryCode)
+	if err != nil {
+		slog.Error("failed to get districts", "error", err, "country", countryCode)
+		RespondInternalError(w, r, "Failed to get districts")
+		return
+	}
+	RespondJSON(w, r, http.StatusOK, rows)
+}
+
+// GetDistrictsByRegion returns districts for a region
+// @Summary List districts by region
+// @Description Returns all districts for a given region ID
+// @Tags Geographic
+// @Produce json
+// @Param region_id path int true "Region ID"
+// @Success 200 {object} APIResponse{data=[]object} "List of districts"
+// @Router /regions/{region_id}/districts [get]
+func (h *Handlers) GetDistrictsByRegion(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	regionIDStr := chi.URLParam(r, "region_id")
+	if regionIDStr == "" {
+		RespondBadRequest(w, r, "Region ID is required")
+		return
+	}
+
+	regionID, err := strconv.ParseInt(regionIDStr, 10, 32)
+	if err != nil {
+		RespondBadRequest(w, r, "Invalid region ID")
+		return
+	}
+
+	rows, err := h.db.Queries.GetDistrictsByRegion(ctx, int32(regionID))
+	if err != nil {
+		slog.Error("failed to get districts", "error", err, "region_id", regionID)
+		RespondInternalError(w, r, "Failed to get districts")
+		return
+	}
+	RespondJSON(w, r, http.StatusOK, rows)
+}
+
+// Helper functions to convert SQLc rows to models.City
+
+func searchCitiesRowToCity(row sqlcgen.SearchCitiesRow) models.City {
+	city := models.City{
+		ID:          row.ID,
+		Name:        row.Name,
+		Country:     row.Country,
+		CountryCode: row.CountryCode,
+		Region:      &row.Region,
+		Latitude:    row.Latitude,
+		Longitude:   row.Longitude,
+		Timezone:    row.Timezone,
+		Continent:   &row.Continent,
+	}
+	if row.Population != nil {
+		pop := int(*row.Population)
+		city.Population = &pop
+	}
+	if row.ElevationM != nil {
+		elev := int(*row.ElevationM)
+		city.Elevation = &elev
+	}
+	city.DisplayName = buildDisplayName(city)
+	return city
+}
+
+func searchCitiesFuzzyRowToCity(row sqlcgen.SearchCitiesFuzzyRow) models.City {
+	city := models.City{
+		ID:          row.ID,
+		Name:        row.Name,
+		Country:     row.Country,
+		CountryCode: row.CountryCode,
+		Region:      &row.Region,
+		Latitude:    row.Latitude,
+		Longitude:   row.Longitude,
+		Timezone:    row.Timezone,
+		Continent:   &row.Continent,
+	}
+	if row.Population != nil {
+		pop := int(*row.Population)
+		city.Population = &pop
+	}
+	if row.ElevationM != nil {
+		elev := int(*row.ElevationM)
+		city.Elevation = &elev
+	}
+	city.DisplayName = buildDisplayName(city)
+	return city
+}
+
+func getCityByIDRowToCity(row sqlcgen.GetCityByIDRow) models.City {
+	city := models.City{
+		ID:          row.ID,
+		Name:        row.Name,
+		Country:     row.Country,
+		CountryCode: row.CountryCode,
+		Region:      &row.Region,
+		Latitude:    row.Latitude,
+		Longitude:   row.Longitude,
+		Timezone:    row.Timezone,
+		Continent:   &row.Continent,
+	}
+	if row.Population != nil {
+		pop := int(*row.Population)
+		city.Population = &pop
+	}
+	if row.ElevationM != nil {
+		elev := int(*row.ElevationM)
+		city.Elevation = &elev
+	}
+	city.DisplayName = buildDisplayName(city)
+	return city
+}
+
+func nearestCityRowToCity(row sqlcgen.GetNearestCityRow) models.City {
+	city := models.City{
+		ID:          row.ID,
+		Name:        row.Name,
+		Country:     row.Country,
+		CountryCode: row.CountryCode,
+		Region:      &row.Region,
+		Latitude:    row.Latitude,
+		Longitude:   row.Longitude,
+		Timezone:    row.Timezone,
+		Continent:   &row.Continent,
+	}
+	if row.Population != nil {
+		pop := int(*row.Population)
+		city.Population = &pop
+	}
+	if row.ElevationM != nil {
+		elev := int(*row.ElevationM)
+		city.Elevation = &elev
+	}
+	city.DisplayName = buildDisplayName(city)
+	return city
 }
 
 // buildDisplayName creates a formatted display name for a city
@@ -310,5 +466,13 @@ func buildDisplayName(city models.City) string {
 
 	parts = append(parts, city.Country)
 
-	return fmt.Sprintf("%s", strings.Join(parts, ", "))
+	return strings.Join(parts, ", ")
+}
+
+// nullableString returns a pointer to the string if non-empty, nil otherwise
+func nullableString(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
 }

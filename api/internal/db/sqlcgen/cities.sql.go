@@ -11,7 +11,7 @@ import (
 
 const countCities = `-- name: CountCities :one
 SELECT COUNT(*)
-FROM cities c
+FROM geo_cities c
 JOIN geo_regions r ON c.region_id = r.id
 JOIN geo_countries co ON r.country_id = co.id
 JOIN geo_continents ct ON co.continent_id = ct.id
@@ -23,18 +23,18 @@ WHERE 1=1
 `
 
 type CountCitiesParams struct {
-	Column1 string `json:"column_1"`
-	Column2 string `json:"column_2"`
-	Column3 string `json:"column_3"`
-	Column4 string `json:"column_4"`
+	ContinentCode *string `json:"continent_code"`
+	CountryCode   *string `json:"country_code"`
+	RegionCode    *string `json:"region_code"`
+	SearchName    *string `json:"search_name"`
 }
 
 func (q *Queries) CountCities(ctx context.Context, arg CountCitiesParams) (int64, error) {
 	row := q.db.QueryRow(ctx, countCities,
-		arg.Column1,
-		arg.Column2,
-		arg.Column3,
-		arg.Column4,
+		arg.ContinentCode,
+		arg.CountryCode,
+		arg.RegionCode,
+		arg.SearchName,
 	)
 	var count int64
 	err := row.Scan(&count)
@@ -42,7 +42,7 @@ func (q *Queries) CountCities(ctx context.Context, arg CountCitiesParams) (int64
 }
 
 const deleteAllCities = `-- name: DeleteAllCities :exec
-DELETE FROM cities
+DELETE FROM geo_cities
 `
 
 func (q *Queries) DeleteAllCities(ctx context.Context) error {
@@ -85,7 +85,7 @@ SELECT
     r.name as region,
     d.name as district,
     c.latitude, c.longitude, c.timezone, c.elevation_m
-FROM cities c
+FROM geo_cities c
 JOIN geo_regions r ON c.region_id = r.id
 JOIN geo_countries co ON r.country_id = co.id
 LEFT JOIN geo_districts d ON c.district_id = d.id
@@ -150,7 +150,7 @@ func (q *Queries) GetCitiesForCoverage(ctx context.Context, arg GetCitiesForCove
 
 const getCityByID = `-- name: GetCityByID :one
 SELECT
-    c.id, c.name, c.name_local, c.name_ascii,
+    c.id, c.name, c.name_ascii,
     co.id as country_id, c.region_id, c.district_id,
     co.code as country_code, co.name as country,
     r.name as region, r.code as region_code,
@@ -158,7 +158,7 @@ SELECT
     ct.code as continent_code, ct.name as continent,
     c.latitude, c.longitude, c.timezone,
     c.population, c.elevation_m, c.geonameid
-FROM cities c
+FROM geo_cities c
 JOIN geo_regions r ON c.region_id = r.id
 JOIN geo_countries co ON r.country_id = co.id
 JOIN geo_continents ct ON co.continent_id = ct.id
@@ -169,10 +169,9 @@ WHERE c.id = $1
 type GetCityByIDRow struct {
 	ID            string  `json:"id"`
 	Name          string  `json:"name"`
-	NameLocal     *string `json:"name_local"`
 	NameAscii     *string `json:"name_ascii"`
 	CountryID     int16   `json:"country_id"`
-	RegionID      int32   `json:"region_id"`
+	RegionID      *int32  `json:"region_id"`
 	DistrictID    *int32  `json:"district_id"`
 	CountryCode   string  `json:"country_code"`
 	Country       string  `json:"country"`
@@ -196,7 +195,6 @@ func (q *Queries) GetCityByID(ctx context.Context, id string) (GetCityByIDRow, e
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
-		&i.NameLocal,
 		&i.NameAscii,
 		&i.CountryID,
 		&i.RegionID,
@@ -221,13 +219,13 @@ func (q *Queries) GetCityByID(ctx context.Context, id string) (GetCityByIDRow, e
 
 const getCityByName = `-- name: GetCityByName :one
 SELECT
-    c.id, c.name, c.name_local,
+    c.id, c.name,
     co.code as country_code, co.name as country,
     r.name as region,
     ct.name as continent,
     c.latitude, c.longitude, c.timezone,
     c.population, c.elevation_m, c.geonameid
-FROM cities c
+FROM geo_cities c
 JOIN geo_regions r ON c.region_id = r.id
 JOIN geo_countries co ON r.country_id = co.id
 JOIN geo_continents ct ON co.continent_id = ct.id
@@ -238,7 +236,6 @@ LIMIT 1
 type GetCityByNameRow struct {
 	ID          string  `json:"id"`
 	Name        string  `json:"name"`
-	NameLocal   *string `json:"name_local"`
 	CountryCode string  `json:"country_code"`
 	Country     string  `json:"country"`
 	Region      string  `json:"region"`
@@ -257,7 +254,6 @@ func (q *Queries) GetCityByName(ctx context.Context, name string) (GetCityByName
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
-		&i.NameLocal,
 		&i.CountryCode,
 		&i.Country,
 		&i.Region,
@@ -278,7 +274,7 @@ SELECT ct.id, ct.code, ct.name, COUNT(c.id) as city_count
 FROM geo_continents ct
 LEFT JOIN geo_countries co ON co.continent_id = ct.id
 LEFT JOIN geo_regions r ON r.country_id = co.id
-LEFT JOIN cities c ON c.region_id = r.id
+LEFT JOIN geo_cities c ON c.region_id = r.id
 GROUP BY ct.id, ct.code, ct.name
 ORDER BY ct.name
 `
@@ -321,7 +317,7 @@ func (q *Queries) GetContinents(ctx context.Context) ([]GetContinentsRow, error)
 const getCountries = `-- name: GetCountries :many
 
 SELECT
-    co.id, co.code as country_code, co.code_iso3, co.name as country, co.name_local,
+    co.id, co.code as country_code, co.code_iso3, co.name as country,
     co.adm1_label, co.adm2_label, co.has_adm1, co.has_adm2, co.is_city_state,
     ct.code as continent_code, ct.name as continent
 FROM geo_countries co
@@ -334,7 +330,6 @@ type GetCountriesRow struct {
 	CountryCode   string  `json:"country_code"`
 	CodeIso3      *string `json:"code_iso3"`
 	Country       string  `json:"country"`
-	NameLocal     *string `json:"name_local"`
 	Adm1Label     *string `json:"adm1_label"`
 	Adm2Label     *string `json:"adm2_label"`
 	HasAdm1       *bool   `json:"has_adm1"`
@@ -361,7 +356,6 @@ func (q *Queries) GetCountries(ctx context.Context) ([]GetCountriesRow, error) {
 			&i.CountryCode,
 			&i.CodeIso3,
 			&i.Country,
-			&i.NameLocal,
 			&i.Adm1Label,
 			&i.Adm2Label,
 			&i.HasAdm1,
@@ -388,7 +382,7 @@ SELECT
 FROM geo_countries co
 JOIN geo_continents ct ON co.continent_id = ct.id
 LEFT JOIN geo_regions r ON r.country_id = co.id
-LEFT JOIN cities c ON c.region_id = r.id
+LEFT JOIN geo_cities c ON c.region_id = r.id
 WHERE ct.code = $1
 GROUP BY co.id, co.code, co.name, co.adm1_label, co.adm2_label, co.has_adm1, co.has_adm2
 ORDER BY co.name
@@ -436,9 +430,8 @@ func (q *Queries) GetCountriesByContinent(ctx context.Context, code string) ([]G
 
 const getCountryByCode = `-- name: GetCountryByCode :one
 SELECT
-    co.id, co.code, co.code_iso3, co.name, co.name_local,
+    co.id, co.code, co.code_iso3, co.name,
     co.adm1_label, co.adm2_label, co.has_adm1, co.has_adm2, co.is_city_state,
-    co.population, co.area_km2,
     ct.id as continent_id, ct.code as continent_code, ct.name as continent
 FROM geo_countries co
 JOIN geo_continents ct ON co.continent_id = ct.id
@@ -446,21 +439,18 @@ WHERE co.code = $1
 `
 
 type GetCountryByCodeRow struct {
-	ID            int16    `json:"id"`
-	Code          string   `json:"code"`
-	CodeIso3      *string  `json:"code_iso3"`
-	Name          string   `json:"name"`
-	NameLocal     *string  `json:"name_local"`
-	Adm1Label     *string  `json:"adm1_label"`
-	Adm2Label     *string  `json:"adm2_label"`
-	HasAdm1       *bool    `json:"has_adm1"`
-	HasAdm2       *bool    `json:"has_adm2"`
-	IsCityState   *bool    `json:"is_city_state"`
-	Population    *int64   `json:"population"`
-	AreaKm2       *float64 `json:"area_km2"`
-	ContinentID   int16    `json:"continent_id"`
-	ContinentCode string   `json:"continent_code"`
-	Continent     string   `json:"continent"`
+	ID            int16   `json:"id"`
+	Code          string  `json:"code"`
+	CodeIso3      *string `json:"code_iso3"`
+	Name          string  `json:"name"`
+	Adm1Label     *string `json:"adm1_label"`
+	Adm2Label     *string `json:"adm2_label"`
+	HasAdm1       *bool   `json:"has_adm1"`
+	HasAdm2       *bool   `json:"has_adm2"`
+	IsCityState   *bool   `json:"is_city_state"`
+	ContinentID   int16   `json:"continent_id"`
+	ContinentCode string  `json:"continent_code"`
+	Continent     string  `json:"continent"`
 }
 
 func (q *Queries) GetCountryByCode(ctx context.Context, code string) (GetCountryByCodeRow, error) {
@@ -471,14 +461,11 @@ func (q *Queries) GetCountryByCode(ctx context.Context, code string) (GetCountry
 		&i.Code,
 		&i.CodeIso3,
 		&i.Name,
-		&i.NameLocal,
 		&i.Adm1Label,
 		&i.Adm2Label,
 		&i.HasAdm1,
 		&i.HasAdm2,
 		&i.IsCityState,
-		&i.Population,
-		&i.AreaKm2,
 		&i.ContinentID,
 		&i.ContinentCode,
 		&i.Continent,
@@ -488,9 +475,8 @@ func (q *Queries) GetCountryByCode(ctx context.Context, code string) (GetCountry
 
 const getCountryByID = `-- name: GetCountryByID :one
 SELECT
-    co.id, co.code, co.code_iso3, co.name, co.name_local,
+    co.id, co.code, co.code_iso3, co.name,
     co.adm1_label, co.adm2_label, co.has_adm1, co.has_adm2, co.is_city_state,
-    co.population, co.area_km2,
     ct.id as continent_id, ct.code as continent_code, ct.name as continent
 FROM geo_countries co
 JOIN geo_continents ct ON co.continent_id = ct.id
@@ -498,21 +484,18 @@ WHERE co.id = $1
 `
 
 type GetCountryByIDRow struct {
-	ID            int16    `json:"id"`
-	Code          string   `json:"code"`
-	CodeIso3      *string  `json:"code_iso3"`
-	Name          string   `json:"name"`
-	NameLocal     *string  `json:"name_local"`
-	Adm1Label     *string  `json:"adm1_label"`
-	Adm2Label     *string  `json:"adm2_label"`
-	HasAdm1       *bool    `json:"has_adm1"`
-	HasAdm2       *bool    `json:"has_adm2"`
-	IsCityState   *bool    `json:"is_city_state"`
-	Population    *int64   `json:"population"`
-	AreaKm2       *float64 `json:"area_km2"`
-	ContinentID   int16    `json:"continent_id"`
-	ContinentCode string   `json:"continent_code"`
-	Continent     string   `json:"continent"`
+	ID            int16   `json:"id"`
+	Code          string  `json:"code"`
+	CodeIso3      *string `json:"code_iso3"`
+	Name          string  `json:"name"`
+	Adm1Label     *string `json:"adm1_label"`
+	Adm2Label     *string `json:"adm2_label"`
+	HasAdm1       *bool   `json:"has_adm1"`
+	HasAdm2       *bool   `json:"has_adm2"`
+	IsCityState   *bool   `json:"is_city_state"`
+	ContinentID   int16   `json:"continent_id"`
+	ContinentCode string  `json:"continent_code"`
+	Continent     string  `json:"continent"`
 }
 
 func (q *Queries) GetCountryByID(ctx context.Context, id int16) (GetCountryByIDRow, error) {
@@ -523,14 +506,11 @@ func (q *Queries) GetCountryByID(ctx context.Context, id int16) (GetCountryByIDR
 		&i.Code,
 		&i.CodeIso3,
 		&i.Name,
-		&i.NameLocal,
 		&i.Adm1Label,
 		&i.Adm2Label,
 		&i.HasAdm1,
 		&i.HasAdm2,
 		&i.IsCityState,
-		&i.Population,
-		&i.AreaKm2,
 		&i.ContinentID,
 		&i.ContinentCode,
 		&i.Continent,
@@ -540,7 +520,7 @@ func (q *Queries) GetCountryByID(ctx context.Context, id int16) (GetCountryByIDR
 
 const getDistrictByID = `-- name: GetDistrictByID :one
 SELECT
-    d.id, d.code, d.name, d.name_local, d.population, d.area_km2,
+    d.id, d.code, d.name,
     r.id as region_id, r.code as region_code, r.name as region,
     co.id as country_id, co.code as country_code, co.name as country
 FROM geo_districts d
@@ -550,18 +530,15 @@ WHERE d.id = $1
 `
 
 type GetDistrictByIDRow struct {
-	ID          int32    `json:"id"`
-	Code        string   `json:"code"`
-	Name        string   `json:"name"`
-	NameLocal   *string  `json:"name_local"`
-	Population  *int64   `json:"population"`
-	AreaKm2     *float64 `json:"area_km2"`
-	RegionID    int32    `json:"region_id"`
-	RegionCode  string   `json:"region_code"`
-	Region      string   `json:"region"`
-	CountryID   int16    `json:"country_id"`
-	CountryCode string   `json:"country_code"`
-	Country     string   `json:"country"`
+	ID          int32  `json:"id"`
+	Code        string `json:"code"`
+	Name        string `json:"name"`
+	RegionID    int32  `json:"region_id"`
+	RegionCode  string `json:"region_code"`
+	Region      string `json:"region"`
+	CountryID   int16  `json:"country_id"`
+	CountryCode string `json:"country_code"`
+	Country     string `json:"country"`
 }
 
 func (q *Queries) GetDistrictByID(ctx context.Context, id int32) (GetDistrictByIDRow, error) {
@@ -571,9 +548,6 @@ func (q *Queries) GetDistrictByID(ctx context.Context, id int32) (GetDistrictByI
 		&i.ID,
 		&i.Code,
 		&i.Name,
-		&i.NameLocal,
-		&i.Population,
-		&i.AreaKm2,
 		&i.RegionID,
 		&i.RegionCode,
 		&i.Region,
@@ -585,22 +559,21 @@ func (q *Queries) GetDistrictByID(ctx context.Context, id int32) (GetDistrictByI
 }
 
 const getDistrictByRegionAndCode = `-- name: GetDistrictByRegionAndCode :one
-SELECT d.id, d.region_id, d.code, d.name, d.name_local
+SELECT d.id, d.region_id, d.code, d.name
 FROM geo_districts d
 WHERE d.region_id = $1 AND d.code = $2
 `
 
 type GetDistrictByRegionAndCodeParams struct {
-	RegionID int32  `json:"region_id"`
+	RegionID *int32 `json:"region_id"`
 	Code     string `json:"code"`
 }
 
 type GetDistrictByRegionAndCodeRow struct {
-	ID        int32   `json:"id"`
-	RegionID  int32   `json:"region_id"`
-	Code      string  `json:"code"`
-	Name      string  `json:"name"`
-	NameLocal *string `json:"name_local"`
+	ID       int32  `json:"id"`
+	RegionID *int32 `json:"region_id"`
+	Code     string `json:"code"`
+	Name     string `json:"name"`
 }
 
 func (q *Queries) GetDistrictByRegionAndCode(ctx context.Context, arg GetDistrictByRegionAndCodeParams) (GetDistrictByRegionAndCodeRow, error) {
@@ -611,14 +584,13 @@ func (q *Queries) GetDistrictByRegionAndCode(ctx context.Context, arg GetDistric
 		&i.RegionID,
 		&i.Code,
 		&i.Name,
-		&i.NameLocal,
 	)
 	return i, err
 }
 
 const getDistrictsByCountry = `-- name: GetDistrictsByCountry :many
 SELECT
-    d.id, d.code, d.name, d.name_local, d.population, d.area_km2,
+    d.id, d.code, d.name,
     r.id as region_id, r.code as region_code, r.name as region
 FROM geo_districts d
 JOIN geo_regions r ON d.region_id = r.id
@@ -628,15 +600,12 @@ ORDER BY r.name, d.name
 `
 
 type GetDistrictsByCountryRow struct {
-	ID         int32    `json:"id"`
-	Code       string   `json:"code"`
-	Name       string   `json:"name"`
-	NameLocal  *string  `json:"name_local"`
-	Population *int64   `json:"population"`
-	AreaKm2    *float64 `json:"area_km2"`
-	RegionID   int32    `json:"region_id"`
-	RegionCode string   `json:"region_code"`
-	Region     string   `json:"region"`
+	ID         int32  `json:"id"`
+	Code       string `json:"code"`
+	Name       string `json:"name"`
+	RegionID   int32  `json:"region_id"`
+	RegionCode string `json:"region_code"`
+	Region     string `json:"region"`
 }
 
 func (q *Queries) GetDistrictsByCountry(ctx context.Context, code string) ([]GetDistrictsByCountryRow, error) {
@@ -652,9 +621,6 @@ func (q *Queries) GetDistrictsByCountry(ctx context.Context, code string) ([]Get
 			&i.ID,
 			&i.Code,
 			&i.Name,
-			&i.NameLocal,
-			&i.Population,
-			&i.AreaKm2,
 			&i.RegionID,
 			&i.RegionCode,
 			&i.Region,
@@ -671,19 +637,16 @@ func (q *Queries) GetDistrictsByCountry(ctx context.Context, code string) ([]Get
 
 const getDistrictsByRegion = `-- name: GetDistrictsByRegion :many
 
-SELECT d.id, d.code, d.name, d.name_local, d.population, d.area_km2
+SELECT d.id, d.code, d.name
 FROM geo_districts d
-WHERE d.region_id = $1
+WHERE d.region_id = $1::int
 ORDER BY d.name
 `
 
 type GetDistrictsByRegionRow struct {
-	ID         int32    `json:"id"`
-	Code       string   `json:"code"`
-	Name       string   `json:"name"`
-	NameLocal  *string  `json:"name_local"`
-	Population *int64   `json:"population"`
-	AreaKm2    *float64 `json:"area_km2"`
+	ID   int32  `json:"id"`
+	Code string `json:"code"`
+	Name string `json:"name"`
 }
 
 // ============================================================================
@@ -698,14 +661,7 @@ func (q *Queries) GetDistrictsByRegion(ctx context.Context, regionID int32) ([]G
 	items := []GetDistrictsByRegionRow{}
 	for rows.Next() {
 		var i GetDistrictsByRegionRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.Code,
-			&i.Name,
-			&i.NameLocal,
-			&i.Population,
-			&i.AreaKm2,
-		); err != nil {
+		if err := rows.Scan(&i.ID, &i.Code, &i.Name); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -716,8 +672,82 @@ func (q *Queries) GetDistrictsByRegion(ctx context.Context, regionID int32) ([]G
 	return items, nil
 }
 
+const getNearestCity = `-- name: GetNearestCity :one
+SELECT
+    c.id, c.name, c.name_ascii,
+    co.code as country_code, co.name as country,
+    r.id as region_id, r.code as region_code, r.name as region,
+    d.id as district_id, d.code as district_code, d.name as district,
+    ct.code as continent_code, ct.name as continent,
+    c.latitude, c.longitude, c.timezone,
+    c.population, c.elevation_m,
+    ST_Distance(c.location, ST_SetSRID(ST_MakePoint($1::float8, $2::float8), 4326)::geography)::float8 as distance_meters
+FROM geo_cities c
+JOIN geo_regions r ON c.region_id = r.id
+JOIN geo_countries co ON r.country_id = co.id
+JOIN geo_continents ct ON co.continent_id = ct.id
+LEFT JOIN geo_districts d ON c.district_id = d.id
+ORDER BY c.location <-> ST_SetSRID(ST_MakePoint($1::float8, $2::float8), 4326)::geography
+LIMIT 1
+`
+
+type GetNearestCityParams struct {
+	Longitude float64 `json:"longitude"`
+	Latitude  float64 `json:"latitude"`
+}
+
+type GetNearestCityRow struct {
+	ID             string  `json:"id"`
+	Name           string  `json:"name"`
+	NameAscii      *string `json:"name_ascii"`
+	CountryCode    string  `json:"country_code"`
+	Country        string  `json:"country"`
+	RegionID       int32   `json:"region_id"`
+	RegionCode     string  `json:"region_code"`
+	Region         string  `json:"region"`
+	DistrictID     *int32  `json:"district_id"`
+	DistrictCode   *string `json:"district_code"`
+	District       *string `json:"district"`
+	ContinentCode  string  `json:"continent_code"`
+	Continent      string  `json:"continent"`
+	Latitude       float64 `json:"latitude"`
+	Longitude      float64 `json:"longitude"`
+	Timezone       string  `json:"timezone"`
+	Population     *int32  `json:"population"`
+	ElevationM     *int32  `json:"elevation_m"`
+	DistanceMeters float64 `json:"distance_meters"`
+}
+
+// Find the nearest city to given coordinates using PostGIS
+func (q *Queries) GetNearestCity(ctx context.Context, arg GetNearestCityParams) (GetNearestCityRow, error) {
+	row := q.db.QueryRow(ctx, getNearestCity, arg.Longitude, arg.Latitude)
+	var i GetNearestCityRow
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.NameAscii,
+		&i.CountryCode,
+		&i.Country,
+		&i.RegionID,
+		&i.RegionCode,
+		&i.Region,
+		&i.DistrictID,
+		&i.DistrictCode,
+		&i.District,
+		&i.ContinentCode,
+		&i.Continent,
+		&i.Latitude,
+		&i.Longitude,
+		&i.Timezone,
+		&i.Population,
+		&i.ElevationM,
+		&i.DistanceMeters,
+	)
+	return i, err
+}
+
 const getRegionByCountryAndCode = `-- name: GetRegionByCountryAndCode :one
-SELECT r.id, r.country_id, r.code, r.name, r.name_local
+SELECT r.id, r.country_id, r.code, r.name
 FROM geo_regions r
 JOIN geo_countries co ON r.country_id = co.id
 WHERE co.code = $1 AND r.code = $2
@@ -729,11 +759,10 @@ type GetRegionByCountryAndCodeParams struct {
 }
 
 type GetRegionByCountryAndCodeRow struct {
-	ID        int32   `json:"id"`
-	CountryID int16   `json:"country_id"`
-	Code      string  `json:"code"`
-	Name      string  `json:"name"`
-	NameLocal *string `json:"name_local"`
+	ID        int32  `json:"id"`
+	CountryID *int16 `json:"country_id"`
+	Code      string `json:"code"`
+	Name      string `json:"name"`
 }
 
 func (q *Queries) GetRegionByCountryAndCode(ctx context.Context, arg GetRegionByCountryAndCodeParams) (GetRegionByCountryAndCodeRow, error) {
@@ -744,14 +773,13 @@ func (q *Queries) GetRegionByCountryAndCode(ctx context.Context, arg GetRegionBy
 		&i.CountryID,
 		&i.Code,
 		&i.Name,
-		&i.NameLocal,
 	)
 	return i, err
 }
 
 const getRegionByID = `-- name: GetRegionByID :one
 SELECT
-    r.id, r.code, r.name, r.name_local, r.population, r.area_km2,
+    r.id, r.code, r.name,
     co.id as country_id, co.code as country_code, co.name as country
 FROM geo_regions r
 JOIN geo_countries co ON r.country_id = co.id
@@ -759,15 +787,12 @@ WHERE r.id = $1
 `
 
 type GetRegionByIDRow struct {
-	ID          int32    `json:"id"`
-	Code        string   `json:"code"`
-	Name        string   `json:"name"`
-	NameLocal   *string  `json:"name_local"`
-	Population  *int64   `json:"population"`
-	AreaKm2     *float64 `json:"area_km2"`
-	CountryID   int16    `json:"country_id"`
-	CountryCode string   `json:"country_code"`
-	Country     string   `json:"country"`
+	ID          int32  `json:"id"`
+	Code        string `json:"code"`
+	Name        string `json:"name"`
+	CountryID   int16  `json:"country_id"`
+	CountryCode string `json:"country_code"`
+	Country     string `json:"country"`
 }
 
 func (q *Queries) GetRegionByID(ctx context.Context, id int32) (GetRegionByIDRow, error) {
@@ -777,9 +802,6 @@ func (q *Queries) GetRegionByID(ctx context.Context, id int32) (GetRegionByIDRow
 		&i.ID,
 		&i.Code,
 		&i.Name,
-		&i.NameLocal,
-		&i.Population,
-		&i.AreaKm2,
 		&i.CountryID,
 		&i.CountryCode,
 		&i.Country,
@@ -789,7 +811,7 @@ func (q *Queries) GetRegionByID(ctx context.Context, id int32) (GetRegionByIDRow
 
 const getRegionsByCountry = `-- name: GetRegionsByCountry :many
 
-SELECT r.id, r.code, r.name, r.name_local, r.population, r.area_km2
+SELECT r.id, r.code, r.name
 FROM geo_regions r
 JOIN geo_countries co ON r.country_id = co.id
 WHERE co.code = $1
@@ -797,12 +819,9 @@ ORDER BY r.name
 `
 
 type GetRegionsByCountryRow struct {
-	ID         int32    `json:"id"`
-	Code       string   `json:"code"`
-	Name       string   `json:"name"`
-	NameLocal  *string  `json:"name_local"`
-	Population *int64   `json:"population"`
-	AreaKm2    *float64 `json:"area_km2"`
+	ID   int32  `json:"id"`
+	Code string `json:"code"`
+	Name string `json:"name"`
 }
 
 // ============================================================================
@@ -817,14 +836,7 @@ func (q *Queries) GetRegionsByCountry(ctx context.Context, code string) ([]GetRe
 	items := []GetRegionsByCountryRow{}
 	for rows.Next() {
 		var i GetRegionsByCountryRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.Code,
-			&i.Name,
-			&i.NameLocal,
-			&i.Population,
-			&i.AreaKm2,
-		); err != nil {
+		if err := rows.Scan(&i.ID, &i.Code, &i.Name); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -836,22 +848,19 @@ func (q *Queries) GetRegionsByCountry(ctx context.Context, code string) ([]GetRe
 }
 
 const getRegionsByCountryID = `-- name: GetRegionsByCountryID :many
-SELECT r.id, r.code, r.name, r.name_local, r.population, r.area_km2
+SELECT r.id, r.code, r.name
 FROM geo_regions r
 WHERE r.country_id = $1
 ORDER BY r.name
 `
 
 type GetRegionsByCountryIDRow struct {
-	ID         int32    `json:"id"`
-	Code       string   `json:"code"`
-	Name       string   `json:"name"`
-	NameLocal  *string  `json:"name_local"`
-	Population *int64   `json:"population"`
-	AreaKm2    *float64 `json:"area_km2"`
+	ID   int32  `json:"id"`
+	Code string `json:"code"`
+	Name string `json:"name"`
 }
 
-func (q *Queries) GetRegionsByCountryID(ctx context.Context, countryID int16) ([]GetRegionsByCountryIDRow, error) {
+func (q *Queries) GetRegionsByCountryID(ctx context.Context, countryID *int16) ([]GetRegionsByCountryIDRow, error) {
 	rows, err := q.db.Query(ctx, getRegionsByCountryID, countryID)
 	if err != nil {
 		return nil, err
@@ -860,14 +869,7 @@ func (q *Queries) GetRegionsByCountryID(ctx context.Context, countryID int16) ([
 	items := []GetRegionsByCountryIDRow{}
 	for rows.Next() {
 		var i GetRegionsByCountryIDRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.Code,
-			&i.Name,
-			&i.NameLocal,
-			&i.Population,
-			&i.AreaKm2,
-		); err != nil {
+		if err := rows.Scan(&i.ID, &i.Code, &i.Name); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -879,17 +881,16 @@ func (q *Queries) GetRegionsByCountryID(ctx context.Context, countryID int16) ([
 }
 
 const insertCity = `-- name: InsertCity :one
-INSERT INTO cities (region_id, district_id, name, name_ascii, name_local, latitude, longitude, timezone, elevation_m, population, geonameid)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+INSERT INTO geo_cities (region_id, district_id, name, name_ascii, latitude, longitude, timezone, elevation_m, population, geonameid)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 RETURNING id
 `
 
 type InsertCityParams struct {
-	RegionID   int32   `json:"region_id"`
+	RegionID   *int32  `json:"region_id"`
 	DistrictID *int32  `json:"district_id"`
 	Name       string  `json:"name"`
 	NameAscii  *string `json:"name_ascii"`
-	NameLocal  *string `json:"name_local"`
 	Latitude   float64 `json:"latitude"`
 	Longitude  float64 `json:"longitude"`
 	Timezone   string  `json:"timezone"`
@@ -898,14 +899,12 @@ type InsertCityParams struct {
 	Geonameid  *int32  `json:"geonameid"`
 }
 
-// Note: country derived via region.country_id (not stored on city)
 func (q *Queries) InsertCity(ctx context.Context, arg InsertCityParams) (string, error) {
 	row := q.db.QueryRow(ctx, insertCity,
 		arg.RegionID,
 		arg.DistrictID,
 		arg.Name,
 		arg.NameAscii,
-		arg.NameLocal,
 		arg.Latitude,
 		arg.Longitude,
 		arg.Timezone,
@@ -920,8 +919,8 @@ func (q *Queries) InsertCity(ctx context.Context, arg InsertCityParams) (string,
 
 const insertCountry = `-- name: InsertCountry :one
 
-INSERT INTO geo_countries (code, code_iso3, name, name_local, continent_id, adm1_label, adm2_label, has_adm1, has_adm2, is_city_state)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+INSERT INTO geo_countries (code, code_iso3, name, continent_id, adm1_label, adm2_label, has_adm1, has_adm2, is_city_state)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 RETURNING id
 `
 
@@ -929,7 +928,6 @@ type InsertCountryParams struct {
 	Code        string  `json:"code"`
 	CodeIso3    *string `json:"code_iso3"`
 	Name        string  `json:"name"`
-	NameLocal   *string `json:"name_local"`
 	ContinentID int16   `json:"continent_id"`
 	Adm1Label   *string `json:"adm1_label"`
 	Adm2Label   *string `json:"adm2_label"`
@@ -946,7 +944,6 @@ func (q *Queries) InsertCountry(ctx context.Context, arg InsertCountryParams) (i
 		arg.Code,
 		arg.CodeIso3,
 		arg.Name,
-		arg.NameLocal,
 		arg.ContinentID,
 		arg.Adm1Label,
 		arg.Adm2Label,
@@ -960,24 +957,26 @@ func (q *Queries) InsertCountry(ctx context.Context, arg InsertCountryParams) (i
 }
 
 const insertDistrict = `-- name: InsertDistrict :one
-INSERT INTO geo_districts (region_id, code, name, name_local)
-VALUES ($1, $2, $3, $4)
+INSERT INTO geo_districts (region_id, continent_id, country_id, code, name)
+VALUES ($1, $2, $3, $4, $5)
 RETURNING id
 `
 
 type InsertDistrictParams struct {
-	RegionID  int32   `json:"region_id"`
-	Code      string  `json:"code"`
-	Name      string  `json:"name"`
-	NameLocal *string `json:"name_local"`
+	RegionID    *int32 `json:"region_id"`
+	ContinentID int16  `json:"continent_id"`
+	CountryID   *int16 `json:"country_id"`
+	Code        string `json:"code"`
+	Name        string `json:"name"`
 }
 
 func (q *Queries) InsertDistrict(ctx context.Context, arg InsertDistrictParams) (int32, error) {
 	row := q.db.QueryRow(ctx, insertDistrict,
 		arg.RegionID,
+		arg.ContinentID,
+		arg.CountryID,
 		arg.Code,
 		arg.Name,
-		arg.NameLocal,
 	)
 	var id int32
 	err := row.Scan(&id)
@@ -985,24 +984,24 @@ func (q *Queries) InsertDistrict(ctx context.Context, arg InsertDistrictParams) 
 }
 
 const insertRegion = `-- name: InsertRegion :one
-INSERT INTO geo_regions (country_id, code, name, name_local)
+INSERT INTO geo_regions (country_id, continent_id, code, name)
 VALUES ($1, $2, $3, $4)
 RETURNING id
 `
 
 type InsertRegionParams struct {
-	CountryID int16   `json:"country_id"`
-	Code      string  `json:"code"`
-	Name      string  `json:"name"`
-	NameLocal *string `json:"name_local"`
+	CountryID   *int16 `json:"country_id"`
+	ContinentID int16  `json:"continent_id"`
+	Code        string `json:"code"`
+	Name        string `json:"name"`
 }
 
 func (q *Queries) InsertRegion(ctx context.Context, arg InsertRegionParams) (int32, error) {
 	row := q.db.QueryRow(ctx, insertRegion,
 		arg.CountryID,
+		arg.ContinentID,
 		arg.Code,
 		arg.Name,
-		arg.NameLocal,
 	)
 	var id int32
 	err := row.Scan(&id)
@@ -1011,13 +1010,13 @@ func (q *Queries) InsertRegion(ctx context.Context, arg InsertRegionParams) (int
 
 const listCitiesByContinent = `-- name: ListCitiesByContinent :many
 SELECT
-    c.id, c.name, c.name_local,
+    c.id, c.name,
     co.code as country_code, co.name as country,
     r.name as region,
     ct.name as continent,
     c.latitude, c.longitude, c.timezone,
     c.population, c.elevation_m, c.geonameid
-FROM cities c
+FROM geo_cities c
 JOIN geo_regions r ON c.region_id = r.id
 JOIN geo_countries co ON r.country_id = co.id
 JOIN geo_continents ct ON co.continent_id = ct.id
@@ -1035,7 +1034,6 @@ type ListCitiesByContinentParams struct {
 type ListCitiesByContinentRow struct {
 	ID          string  `json:"id"`
 	Name        string  `json:"name"`
-	NameLocal   *string `json:"name_local"`
 	CountryCode string  `json:"country_code"`
 	Country     string  `json:"country"`
 	Region      string  `json:"region"`
@@ -1060,7 +1058,6 @@ func (q *Queries) ListCitiesByContinent(ctx context.Context, arg ListCitiesByCon
 		if err := rows.Scan(
 			&i.ID,
 			&i.Name,
-			&i.NameLocal,
 			&i.CountryCode,
 			&i.Country,
 			&i.Region,
@@ -1084,14 +1081,14 @@ func (q *Queries) ListCitiesByContinent(ctx context.Context, arg ListCitiesByCon
 
 const listCitiesByCountry = `-- name: ListCitiesByCountry :many
 SELECT
-    c.id, c.name, c.name_local,
+    c.id, c.name,
     co.code as country_code, co.name as country,
     r.name as region,
     d.name as district,
     ct.name as continent,
     c.latitude, c.longitude, c.timezone,
     c.population, c.elevation_m, c.geonameid
-FROM cities c
+FROM geo_cities c
 JOIN geo_regions r ON c.region_id = r.id
 JOIN geo_countries co ON r.country_id = co.id
 JOIN geo_continents ct ON co.continent_id = ct.id
@@ -1109,7 +1106,6 @@ type ListCitiesByCountryParams struct {
 type ListCitiesByCountryRow struct {
 	ID          string  `json:"id"`
 	Name        string  `json:"name"`
-	NameLocal   *string `json:"name_local"`
 	CountryCode string  `json:"country_code"`
 	Country     string  `json:"country"`
 	Region      string  `json:"region"`
@@ -1135,7 +1131,6 @@ func (q *Queries) ListCitiesByCountry(ctx context.Context, arg ListCitiesByCount
 		if err := rows.Scan(
 			&i.ID,
 			&i.Name,
-			&i.NameLocal,
 			&i.CountryCode,
 			&i.Country,
 			&i.Region,
@@ -1160,14 +1155,14 @@ func (q *Queries) ListCitiesByCountry(ctx context.Context, arg ListCitiesByCount
 
 const listCitiesByDistrict = `-- name: ListCitiesByDistrict :many
 SELECT
-    c.id, c.name, c.name_local,
+    c.id, c.name,
     co.code as country_code, co.name as country,
     r.name as region,
     d.name as district, d.code as district_code,
     ct.name as continent,
     c.latitude, c.longitude, c.timezone,
     c.population, c.elevation_m, c.geonameid
-FROM cities c
+FROM geo_cities c
 JOIN geo_regions r ON c.region_id = r.id
 JOIN geo_countries co ON r.country_id = co.id
 JOIN geo_continents ct ON co.continent_id = ct.id
@@ -1185,7 +1180,6 @@ type ListCitiesByDistrictParams struct {
 type ListCitiesByDistrictRow struct {
 	ID           string  `json:"id"`
 	Name         string  `json:"name"`
-	NameLocal    *string `json:"name_local"`
 	CountryCode  string  `json:"country_code"`
 	Country      string  `json:"country"`
 	Region       string  `json:"region"`
@@ -1212,7 +1206,6 @@ func (q *Queries) ListCitiesByDistrict(ctx context.Context, arg ListCitiesByDist
 		if err := rows.Scan(
 			&i.ID,
 			&i.Name,
-			&i.NameLocal,
 			&i.CountryCode,
 			&i.Country,
 			&i.Region,
@@ -1238,14 +1231,14 @@ func (q *Queries) ListCitiesByDistrict(ctx context.Context, arg ListCitiesByDist
 
 const listCitiesByRegion = `-- name: ListCitiesByRegion :many
 SELECT
-    c.id, c.name, c.name_local,
+    c.id, c.name,
     co.code as country_code, co.name as country,
     r.name as region, r.code as region_code,
     d.name as district,
     ct.name as continent,
     c.latitude, c.longitude, c.timezone,
     c.population, c.elevation_m, c.geonameid
-FROM cities c
+FROM geo_cities c
 JOIN geo_regions r ON c.region_id = r.id
 JOIN geo_countries co ON r.country_id = co.id
 JOIN geo_continents ct ON co.continent_id = ct.id
@@ -1263,7 +1256,6 @@ type ListCitiesByRegionParams struct {
 type ListCitiesByRegionRow struct {
 	ID          string  `json:"id"`
 	Name        string  `json:"name"`
-	NameLocal   *string `json:"name_local"`
 	CountryCode string  `json:"country_code"`
 	Country     string  `json:"country"`
 	Region      string  `json:"region"`
@@ -1290,7 +1282,6 @@ func (q *Queries) ListCitiesByRegion(ctx context.Context, arg ListCitiesByRegion
 		if err := rows.Scan(
 			&i.ID,
 			&i.Name,
-			&i.NameLocal,
 			&i.CountryCode,
 			&i.Country,
 			&i.Region,
@@ -1317,14 +1308,14 @@ func (q *Queries) ListCitiesByRegion(ctx context.Context, arg ListCitiesByRegion
 const searchCities = `-- name: SearchCities :many
 
 SELECT
-    c.id, c.name, c.name_local, c.name_ascii,
+    c.id, c.name, c.name_ascii,
     co.code as country_code, co.name as country,
     r.name as region, r.code as region_code,
     d.name as district, d.code as district_code,
     ct.code as continent_code, ct.name as continent,
     c.latitude, c.longitude, c.timezone,
     c.population, c.elevation_m, c.geonameid
-FROM cities c
+FROM geo_cities c
 JOIN geo_regions r ON c.region_id = r.id
 JOIN geo_countries co ON r.country_id = co.id
 JOIN geo_continents ct ON co.continent_id = ct.id
@@ -1335,22 +1326,21 @@ WHERE 1=1
   AND ($3::text IS NULL OR r.code = $3)
   AND ($4::text IS NULL OR c.name ILIKE '%' || $4 || '%')
 ORDER BY c.population DESC NULLS LAST, c.name
-LIMIT $5 OFFSET $6
+LIMIT $6 OFFSET $5
 `
 
 type SearchCitiesParams struct {
-	Column1 string `json:"column_1"`
-	Column2 string `json:"column_2"`
-	Column3 string `json:"column_3"`
-	Column4 string `json:"column_4"`
-	Limit   int32  `json:"limit"`
-	Offset  int32  `json:"offset"`
+	ContinentCode *string `json:"continent_code"`
+	CountryCode   *string `json:"country_code"`
+	RegionCode    *string `json:"region_code"`
+	SearchName    *string `json:"search_name"`
+	Offset        int32   `json:"offset"`
+	Limit         int32   `json:"limit"`
 }
 
 type SearchCitiesRow struct {
 	ID            string  `json:"id"`
 	Name          string  `json:"name"`
-	NameLocal     *string `json:"name_local"`
 	NameAscii     *string `json:"name_ascii"`
 	CountryCode   string  `json:"country_code"`
 	Country       string  `json:"country"`
@@ -1370,15 +1360,14 @@ type SearchCitiesRow struct {
 
 // Cities SQL Queries (5-Level Hierarchy)
 // Continent -> Country -> Region (ADM1) -> District (ADM2) -> City
-// Note: country derived via region (city.region_id → region.country_id)
 func (q *Queries) SearchCities(ctx context.Context, arg SearchCitiesParams) ([]SearchCitiesRow, error) {
 	rows, err := q.db.Query(ctx, searchCities,
-		arg.Column1,
-		arg.Column2,
-		arg.Column3,
-		arg.Column4,
-		arg.Limit,
+		arg.ContinentCode,
+		arg.CountryCode,
+		arg.RegionCode,
+		arg.SearchName,
 		arg.Offset,
+		arg.Limit,
 	)
 	if err != nil {
 		return nil, err
@@ -1390,7 +1379,6 @@ func (q *Queries) SearchCities(ctx context.Context, arg SearchCitiesParams) ([]S
 		if err := rows.Scan(
 			&i.ID,
 			&i.Name,
-			&i.NameLocal,
 			&i.NameAscii,
 			&i.CountryCode,
 			&i.Country,
@@ -1417,33 +1405,262 @@ func (q *Queries) SearchCities(ctx context.Context, arg SearchCitiesParams) ([]S
 	return items, nil
 }
 
+const searchCitiesFuzzy = `-- name: SearchCitiesFuzzy :many
+SELECT
+    c.id, c.name, c.name_ascii,
+    co.code as country_code, co.name as country,
+    r.id as region_id, r.code as region_code, r.name as region,
+    d.id as district_id, d.code as district_code, d.name as district,
+    ct.code as continent_code, ct.name as continent,
+    c.latitude, c.longitude, c.timezone,
+    c.population, c.elevation_m
+FROM geo_cities c
+JOIN geo_regions r ON c.region_id = r.id
+JOIN geo_countries co ON r.country_id = co.id
+JOIN geo_continents ct ON co.continent_id = ct.id
+LEFT JOIN geo_districts d ON c.district_id = d.id
+WHERE
+    ($1::text IS NULL OR ct.code = $1)
+    AND ($2::text IS NULL OR co.code = $2)
+    AND ($3::text IS NULL OR r.code = $3)
+    AND (
+        c.name_ascii ILIKE $4 || '%'
+        OR c.name ILIKE $4 || '%'
+        OR c.name_ascii % $4
+        OR c.name % $4
+    )
+ORDER BY
+    CASE WHEN c.name_ascii ILIKE $4 || '%' THEN 0
+         WHEN c.name ILIKE $4 || '%' THEN 1
+         ELSE 2 END,
+    similarity(c.name_ascii, $4) DESC,
+    c.population DESC NULLS LAST,
+    c.name ASC
+LIMIT $5
+`
+
+type SearchCitiesFuzzyParams struct {
+	ContinentCode *string `json:"continent_code"`
+	CountryCode   *string `json:"country_code"`
+	RegionCode    *string `json:"region_code"`
+	Search        *string `json:"search"`
+	Limit         int32   `json:"limit"`
+}
+
+type SearchCitiesFuzzyRow struct {
+	ID            string  `json:"id"`
+	Name          string  `json:"name"`
+	NameAscii     *string `json:"name_ascii"`
+	CountryCode   string  `json:"country_code"`
+	Country       string  `json:"country"`
+	RegionID      int32   `json:"region_id"`
+	RegionCode    string  `json:"region_code"`
+	Region        string  `json:"region"`
+	DistrictID    *int32  `json:"district_id"`
+	DistrictCode  *string `json:"district_code"`
+	District      *string `json:"district"`
+	ContinentCode string  `json:"continent_code"`
+	Continent     string  `json:"continent"`
+	Latitude      float64 `json:"latitude"`
+	Longitude     float64 `json:"longitude"`
+	Timezone      string  `json:"timezone"`
+	Population    *int32  `json:"population"`
+	ElevationM    *int32  `json:"elevation_m"`
+}
+
+// Search cities with fuzzy matching using pg_trgm
+func (q *Queries) SearchCitiesFuzzy(ctx context.Context, arg SearchCitiesFuzzyParams) ([]SearchCitiesFuzzyRow, error) {
+	rows, err := q.db.Query(ctx, searchCitiesFuzzy,
+		arg.ContinentCode,
+		arg.CountryCode,
+		arg.RegionCode,
+		arg.Search,
+		arg.Limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SearchCitiesFuzzyRow{}
+	for rows.Next() {
+		var i SearchCitiesFuzzyRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.NameAscii,
+			&i.CountryCode,
+			&i.Country,
+			&i.RegionID,
+			&i.RegionCode,
+			&i.Region,
+			&i.DistrictID,
+			&i.DistrictCode,
+			&i.District,
+			&i.ContinentCode,
+			&i.Continent,
+			&i.Latitude,
+			&i.Longitude,
+			&i.Timezone,
+			&i.Population,
+			&i.ElevationM,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchDistricts = `-- name: SearchDistricts :many
+SELECT
+    d.id, d.code, d.name,
+    r.id as region_id, r.code as region_code, r.name as region,
+    co.id as country_id, co.code as country_code, co.name as country,
+    COUNT(c.id) as city_count
+FROM geo_districts d
+JOIN geo_regions r ON d.region_id = r.id
+JOIN geo_countries co ON r.country_id = co.id
+LEFT JOIN geo_cities c ON c.district_id = d.id
+WHERE d.name ILIKE '%' || $1 || '%'
+GROUP BY d.id, d.code, d.name, r.id, r.code, r.name, co.id, co.code, co.name
+ORDER BY d.name
+LIMIT $2
+`
+
+type SearchDistrictsParams struct {
+	Column1 *string `json:"column_1"`
+	Limit   int32   `json:"limit"`
+}
+
+type SearchDistrictsRow struct {
+	ID          int32  `json:"id"`
+	Code        string `json:"code"`
+	Name        string `json:"name"`
+	RegionID    int32  `json:"region_id"`
+	RegionCode  string `json:"region_code"`
+	Region      string `json:"region"`
+	CountryID   int16  `json:"country_id"`
+	CountryCode string `json:"country_code"`
+	Country     string `json:"country"`
+	CityCount   int64  `json:"city_count"`
+}
+
+func (q *Queries) SearchDistricts(ctx context.Context, arg SearchDistrictsParams) ([]SearchDistrictsRow, error) {
+	rows, err := q.db.Query(ctx, searchDistricts, arg.Column1, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SearchDistrictsRow{}
+	for rows.Next() {
+		var i SearchDistrictsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Code,
+			&i.Name,
+			&i.RegionID,
+			&i.RegionCode,
+			&i.Region,
+			&i.CountryID,
+			&i.CountryCode,
+			&i.Country,
+			&i.CityCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchRegions = `-- name: SearchRegions :many
+SELECT
+    r.id, r.code, r.name,
+    co.id as country_id, co.code as country_code, co.name as country,
+    COUNT(c.id) as city_count
+FROM geo_regions r
+JOIN geo_countries co ON r.country_id = co.id
+LEFT JOIN geo_cities c ON c.region_id = r.id
+WHERE r.name ILIKE '%' || $1 || '%'
+GROUP BY r.id, r.code, r.name, co.id, co.code, co.name
+ORDER BY r.name
+LIMIT $2
+`
+
+type SearchRegionsParams struct {
+	Column1 *string `json:"column_1"`
+	Limit   int32   `json:"limit"`
+}
+
+type SearchRegionsRow struct {
+	ID          int32  `json:"id"`
+	Code        string `json:"code"`
+	Name        string `json:"name"`
+	CountryID   int16  `json:"country_id"`
+	CountryCode string `json:"country_code"`
+	Country     string `json:"country"`
+	CityCount   int64  `json:"city_count"`
+}
+
+func (q *Queries) SearchRegions(ctx context.Context, arg SearchRegionsParams) ([]SearchRegionsRow, error) {
+	rows, err := q.db.Query(ctx, searchRegions, arg.Column1, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SearchRegionsRow{}
+	for rows.Next() {
+		var i SearchRegionsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Code,
+			&i.Name,
+			&i.CountryID,
+			&i.CountryCode,
+			&i.Country,
+			&i.CityCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateCityHierarchy = `-- name: UpdateCityHierarchy :exec
-UPDATE cities
+UPDATE geo_cities
 SET region_id = $2, district_id = $3, updated_at = now()
 WHERE id = $1
 `
 
 type UpdateCityHierarchyParams struct {
 	ID         string `json:"id"`
-	RegionID   int32  `json:"region_id"`
+	RegionID   *int32 `json:"region_id"`
 	DistrictID *int32 `json:"district_id"`
 }
 
-// Note: country derived via region.country_id (not stored on city)
 func (q *Queries) UpdateCityHierarchy(ctx context.Context, arg UpdateCityHierarchyParams) error {
 	_, err := q.db.Exec(ctx, updateCityHierarchy, arg.ID, arg.RegionID, arg.DistrictID)
 	return err
 }
 
 const upsertCity = `-- name: UpsertCity :one
-INSERT INTO cities (region_id, district_id, name, name_ascii, name_local, latitude, longitude, timezone, elevation_m, population, geonameid)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+INSERT INTO geo_cities (region_id, district_id, name, name_ascii, latitude, longitude, timezone, elevation_m, population, geonameid)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 ON CONFLICT (geonameid) DO UPDATE SET
     region_id = EXCLUDED.region_id,
     district_id = EXCLUDED.district_id,
     name = EXCLUDED.name,
     name_ascii = EXCLUDED.name_ascii,
-    name_local = EXCLUDED.name_local,
     latitude = EXCLUDED.latitude,
     longitude = EXCLUDED.longitude,
     timezone = EXCLUDED.timezone,
@@ -1454,11 +1671,10 @@ RETURNING id
 `
 
 type UpsertCityParams struct {
-	RegionID   int32   `json:"region_id"`
+	RegionID   *int32  `json:"region_id"`
 	DistrictID *int32  `json:"district_id"`
 	Name       string  `json:"name"`
 	NameAscii  *string `json:"name_ascii"`
-	NameLocal  *string `json:"name_local"`
 	Latitude   float64 `json:"latitude"`
 	Longitude  float64 `json:"longitude"`
 	Timezone   string  `json:"timezone"`
@@ -1467,14 +1683,12 @@ type UpsertCityParams struct {
 	Geonameid  *int32  `json:"geonameid"`
 }
 
-// Note: country derived via region.country_id (not stored on city)
 func (q *Queries) UpsertCity(ctx context.Context, arg UpsertCityParams) (string, error) {
 	row := q.db.QueryRow(ctx, upsertCity,
 		arg.RegionID,
 		arg.DistrictID,
 		arg.Name,
 		arg.NameAscii,
-		arg.NameLocal,
 		arg.Latitude,
 		arg.Longitude,
 		arg.Timezone,

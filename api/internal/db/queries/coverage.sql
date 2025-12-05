@@ -17,7 +17,7 @@ LEFT JOIN geo_continents ct ON pc.continent_code = ct.code
 LEFT JOIN geo_countries co ON pc.country_id = co.id
 LEFT JOIN geo_regions r ON pc.region_id = r.id
 LEFT JOIN geo_districts d ON pc.district_id = d.id
-LEFT JOIN cities c ON pc.city_id = c.id
+LEFT JOIN geo_cities c ON pc.city_id = c.id
 WHERE pc.publisher_id = $1 AND pc.is_active = true
 ORDER BY
     CASE pc.coverage_level
@@ -94,18 +94,18 @@ SELECT COALESCE(SUM(
     CASE pc.coverage_level
         WHEN 'city' THEN 1
         WHEN 'district' THEN (
-            SELECT COUNT(*) FROM cities c WHERE c.district_id = pc.district_id
+            SELECT COUNT(*) FROM geo_cities c WHERE c.district_id = pc.district_id
         )
         WHEN 'region' THEN (
-            SELECT COUNT(*) FROM cities c WHERE c.region_id = pc.region_id
+            SELECT COUNT(*) FROM geo_cities c WHERE c.region_id = pc.region_id
         )
         WHEN 'country' THEN (
-            SELECT COUNT(*) FROM cities c
+            SELECT COUNT(*) FROM geo_cities c
             JOIN geo_regions r ON c.region_id = r.id
             WHERE r.country_id = pc.country_id
         )
         WHEN 'continent' THEN (
-            SELECT COUNT(*) FROM cities c
+            SELECT COUNT(*) FROM geo_cities c
             JOIN geo_regions r ON c.region_id = r.id
             JOIN geo_countries co ON r.country_id = co.id
             JOIN geo_continents ct ON co.continent_id = ct.id
@@ -136,7 +136,7 @@ JOIN publisher_coverage pc ON p.id = pc.publisher_id
 LEFT JOIN geo_countries co ON pc.country_id = co.id
 LEFT JOIN geo_regions r ON pc.region_id = r.id
 LEFT JOIN geo_districts d ON pc.district_id = d.id
-LEFT JOIN cities c ON pc.city_id = c.id
+LEFT JOIN geo_cities c ON pc.city_id = c.id
 LEFT JOIN geo_regions cr ON c.region_id = cr.id
 WHERE p.status = 'active'
   AND pc.is_active = true
@@ -156,7 +156,7 @@ SELECT DISTINCT
 FROM publishers p
 JOIN publisher_coverage pc ON p.id = pc.publisher_id
 LEFT JOIN geo_districts d ON pc.district_id = d.id
-LEFT JOIN cities c ON pc.city_id = c.id
+LEFT JOIN geo_cities c ON pc.city_id = c.id
 WHERE p.status = 'active'
   AND pc.is_active = true
   AND (

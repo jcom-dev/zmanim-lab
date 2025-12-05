@@ -6,9 +6,9 @@ import { MapPin, Search, X, Loader2, Globe, Map, Globe2, Building2 } from 'lucid
 import { cn } from '@/lib/utils';
 import { useApi } from '@/lib/api-client';
 
-// Type definitions
+// Type definitions - Updated for new ID-based schema
 export interface City {
-  id: string;
+  id: string; // UUID
   name: string;
   country: string;
   country_code: string;
@@ -20,19 +20,31 @@ export interface City {
 }
 
 export interface Country {
-  code: string;
-  name: string;
-  city_count: number;
+  id: number; // smallint
+  country_code: string;
+  country: string; // name alias
+  continent_code: string;
+  continent: string;
+  adm1_label?: string;
+  adm2_label?: string;
+  has_adm1?: boolean;
+  has_adm2?: boolean;
+  // For list endpoints with counts
+  city_count?: number;
 }
 
 export interface Region {
+  id: number; // integer
+  code: string;
   name: string;
-  country_code: string;
-  country_name: string;
-  city_count: number;
+  country_id?: number;
+  country_code?: string;
+  country_name?: string;
+  city_count?: number;
 }
 
 export interface Continent {
+  id: number;
   code: string;
   name: string;
   city_count: number;
@@ -42,10 +54,12 @@ export interface District {
   id: number;
   code: string;
   name: string;
-  region_id: number;
-  region_name: string;
-  country_code: string;
-  country_name: string;
+  region_id?: number;
+  region_code?: string;
+  region_name?: string;
+  country_id?: number;
+  country_code?: string;
+  country_name?: string;
   city_count?: number;
 }
 
@@ -134,12 +148,12 @@ export function CoverageSelector({
           );
           setCityResults(data?.cities || []);
         } else if (searchType === 'country') {
-          const data = await api.public.get<{ countries: Country[] }>('/countries');
-          const countries = data?.countries || [];
+          const data = await api.public.get<Country[]>('/countries');
+          const countries = data || [];
           // Filter by search query
           const filtered = countries.filter((c: Country) =>
-            c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            c.code.toLowerCase().includes(searchQuery.toLowerCase())
+            c.country.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            c.country_code.toLowerCase().includes(searchQuery.toLowerCase())
           );
           setCountryResults(filtered.slice(0, 10));
         } else if (searchType === 'region') {
@@ -153,8 +167,8 @@ export function CoverageSelector({
           );
           setDistrictResults(data?.districts || []);
         } else if (searchType === 'continent') {
-          const data = await api.public.get<{ continents: Continent[] }>('/continents');
-          const continents = data?.continents || [];
+          const data = await api.public.get<Continent[]>('/continents');
+          const continents = data || [];
           // Filter by search query
           const filtered = continents.filter((c: Continent) =>
             c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -214,16 +228,16 @@ export function CoverageSelector({
   const addCountry = useCallback((country: Country) => {
     addItem({
       type: 'country',
-      id: country.code,
-      name: country.name,
+      id: String(country.id),
+      name: country.country,
     });
   }, [addItem]);
 
   const addRegion = useCallback((region: Region) => {
     addItem({
       type: 'region',
-      id: `${region.country_code}-${region.name}`,
-      name: `${region.name}, ${region.country_name}`,
+      id: String(region.id),
+      name: `${region.name}${region.country_name ? `, ${region.country_name}` : ''}`,
     });
   }, [addItem]);
 
@@ -231,7 +245,7 @@ export function CoverageSelector({
     addItem({
       type: 'district',
       id: String(district.id),
-      name: `${district.name}, ${district.region_name}, ${district.country_name}`,
+      name: `${district.name}${district.region_name ? `, ${district.region_name}` : ''}${district.country_name ? `, ${district.country_name}` : ''}`,
     });
   }, [addItem]);
 
@@ -408,10 +422,10 @@ export function CoverageSelector({
             ) : searchType === 'country' && countryResults.length > 0 ? (
               <div className="py-1">
                 {countryResults.map((country) => {
-                  const isSelected = selectedItems.some((i) => i.id === country.code && i.type === 'country');
+                  const isSelected = selectedItems.some((i) => i.id === String(country.id) && i.type === 'country');
                   return (
                     <button
-                      key={country.code}
+                      key={country.id}
                       type="button"
                       onClick={() => !isSelected && addCountry(country)}
                       disabled={isSelected}
@@ -422,9 +436,9 @@ export function CoverageSelector({
                     >
                       <Globe className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
                       <div className="flex-1 min-w-0">
-                        <div className="font-medium truncate">{country.name}</div>
+                        <div className="font-medium truncate">{country.country}</div>
                         <div className="text-xs text-muted-foreground">
-                          {country.city_count.toLocaleString()} cities available
+                          {country.city_count ? `${country.city_count.toLocaleString()} cities available` : country.continent}
                         </div>
                       </div>
                       {isSelected && <span className="text-xs text-primary shrink-0">Added</span>}
@@ -435,11 +449,11 @@ export function CoverageSelector({
             ) : searchType === 'region' && regionResults.length > 0 ? (
               <div className="py-1">
                 {regionResults.map((region) => {
-                  const regionId = `${region.country_code}-${region.name}`;
+                  const regionId = String(region.id);
                   const isSelected = selectedItems.some((i) => i.id === regionId && i.type === 'region');
                   return (
                     <button
-                      key={regionId}
+                      key={region.id}
                       type="button"
                       onClick={() => !isSelected && addRegion(region)}
                       disabled={isSelected}
@@ -452,7 +466,7 @@ export function CoverageSelector({
                       <div className="flex-1 min-w-0">
                         <div className="font-medium truncate">{region.name}</div>
                         <div className="text-xs text-muted-foreground truncate">
-                          {region.country_name} · {region.city_count.toLocaleString()} cities
+                          {region.country_name ? `${region.country_name} · ` : ''}{region.city_count ? `${region.city_count.toLocaleString()} cities` : ''}
                         </div>
                       </div>
                       {isSelected && <span className="text-xs text-primary shrink-0">Added</span>}
@@ -480,7 +494,7 @@ export function CoverageSelector({
                       <div className="flex-1 min-w-0">
                         <div className="font-medium truncate">{district.name}</div>
                         <div className="text-xs text-muted-foreground truncate">
-                          {district.region_name}, {district.country_name}
+                          {district.region_name ? `${district.region_name}, ` : ''}{district.country_name || ''}
                           {district.city_count ? ` · ${district.city_count.toLocaleString()} cities` : ''}
                         </div>
                       </div>

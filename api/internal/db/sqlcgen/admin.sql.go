@@ -7,20 +7,10 @@ package sqlcgen
 
 import (
 	"context"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
-
-const acceptInvitation = `-- name: AcceptInvitation :exec
-UPDATE publisher_invitations
-SET status = 'accepted', accepted_at = NOW()
-WHERE id = $1
-`
-
-func (q *Queries) AcceptInvitation(ctx context.Context, id string) error {
-	_, err := q.db.Exec(ctx, acceptInvitation, id)
-	return err
-}
 
 const adminCountAlgorithms = `-- name: AdminCountAlgorithms :one
 SELECT COUNT(*)
@@ -104,7 +94,7 @@ SELECT
     (SELECT COUNT(*) FROM publishers WHERE status = 'active') as active_publishers,
     (SELECT COUNT(*) FROM publishers WHERE status = 'pending') as pending_publishers,
     (SELECT COUNT(*) FROM algorithms WHERE status = 'published') as published_algorithms,
-    (SELECT COUNT(*) FROM cities) as total_cities,
+    (SELECT COUNT(*) FROM geo_cities) as total_cities,
     (SELECT COUNT(*) FROM publisher_coverage WHERE is_active = true) as active_coverage_areas
 `
 
@@ -276,12 +266,12 @@ func (q *Queries) AdminUpdatePublisherStatus(ctx context.Context, arg AdminUpdat
 const countPendingInvitationsForEmail = `-- name: CountPendingInvitationsForEmail :one
 SELECT COUNT(*)
 FROM publisher_invitations
-WHERE publisher_id = $1 AND LOWER(email) = LOWER($2) AND status = 'pending'
+WHERE publisher_id = $1 AND LOWER(email) = LOWER($2) AND expires_at > NOW()
 `
 
 type CountPendingInvitationsForEmailParams struct {
-	PublisherID pgtype.UUID `json:"publisher_id"`
-	Lower       string      `json:"lower"`
+	PublisherID string `json:"publisher_id"`
+	Lower       string `json:"lower"`
 }
 
 func (q *Queries) CountPendingInvitationsForEmail(ctx context.Context, arg CountPendingInvitationsForEmailParams) (int64, error) {
@@ -292,25 +282,25 @@ func (q *Queries) CountPendingInvitationsForEmail(ctx context.Context, arg Count
 }
 
 const createInvitation = `-- name: CreateInvitation :one
-INSERT INTO publisher_invitations (publisher_id, email, token, status, invited_by, expires_at)
-VALUES ($1, $2, $3, 'pending', $4, $5)
+INSERT INTO publisher_invitations (publisher_id, email, role, token, expires_at)
+VALUES ($1, $2, $3, $4, $5)
 RETURNING id
 `
 
 type CreateInvitationParams struct {
-	PublisherID pgtype.UUID        `json:"publisher_id"`
-	Email       string             `json:"email"`
-	Token       string             `json:"token"`
-	InvitedBy   string             `json:"invited_by"`
-	ExpiresAt   pgtype.Timestamptz `json:"expires_at"`
+	PublisherID string    `json:"publisher_id"`
+	Email       string    `json:"email"`
+	Role        string    `json:"role"`
+	Token       string    `json:"token"`
+	ExpiresAt   time.Time `json:"expires_at"`
 }
 
 func (q *Queries) CreateInvitation(ctx context.Context, arg CreateInvitationParams) (string, error) {
 	row := q.db.QueryRow(ctx, createInvitation,
 		arg.PublisherID,
 		arg.Email,
+		arg.Role,
 		arg.Token,
-		arg.InvitedBy,
 		arg.ExpiresAt,
 	)
 	var id string
@@ -318,9 +308,19 @@ func (q *Queries) CreateInvitation(ctx context.Context, arg CreateInvitationPara
 	return id, err
 }
 
+const deleteExpiredInvitations = `-- name: DeleteExpiredInvitations :exec
+DELETE FROM publisher_invitations
+WHERE publisher_id = $1 AND expires_at <= NOW()
+`
+
+func (q *Queries) DeleteExpiredInvitations(ctx context.Context, publisherID string) error {
+	_, err := q.db.Exec(ctx, deleteExpiredInvitations, publisherID)
+	return err
+}
+
 const deleteInvitation = `-- name: DeleteInvitation :exec
 DELETE FROM publisher_invitations
-WHERE id = $1 AND status = 'pending'
+WHERE id = $1
 `
 
 func (q *Queries) DeleteInvitation(ctx context.Context, id string) error {
@@ -328,31 +328,61 @@ func (q *Queries) DeleteInvitation(ctx context.Context, id string) error {
 	return err
 }
 
-const expireInvitation = `-- name: ExpireInvitation :exec
-UPDATE publisher_invitations
-SET status = 'expired'
-WHERE id = $1
+const getExpiredInvitations = `-- name: GetExpiredInvitations :many
+SELECT id, email, role, expires_at, created_at
+FROM publisher_invitations
+WHERE publisher_id = $1 AND expires_at <= NOW()
+ORDER BY created_at DESC
 `
 
-func (q *Queries) ExpireInvitation(ctx context.Context, id string) error {
-	_, err := q.db.Exec(ctx, expireInvitation, id)
-	return err
+type GetExpiredInvitationsRow struct {
+	ID        string             `json:"id"`
+	Email     string             `json:"email"`
+	Role      string             `json:"role"`
+	ExpiresAt time.Time          `json:"expires_at"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) GetExpiredInvitations(ctx context.Context, publisherID string) ([]GetExpiredInvitationsRow, error) {
+	rows, err := q.db.Query(ctx, getExpiredInvitations, publisherID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetExpiredInvitationsRow{}
+	for rows.Next() {
+		var i GetExpiredInvitationsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Email,
+			&i.Role,
+			&i.ExpiresAt,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getInvitationByToken = `-- name: GetInvitationByToken :one
-SELECT pi.id, pi.publisher_id, pi.email, pi.status, pi.expires_at, p.name as publisher_name
+SELECT pi.id, pi.publisher_id, pi.email, pi.role, pi.expires_at, p.name as publisher_name
 FROM publisher_invitations pi
 JOIN publishers p ON pi.publisher_id = p.id
-WHERE pi.token = $1
+WHERE pi.token = $1 AND pi.expires_at > NOW()
 `
 
 type GetInvitationByTokenRow struct {
-	ID            string             `json:"id"`
-	PublisherID   pgtype.UUID        `json:"publisher_id"`
-	Email         string             `json:"email"`
-	Status        string             `json:"status"`
-	ExpiresAt     pgtype.Timestamptz `json:"expires_at"`
-	PublisherName string             `json:"publisher_name"`
+	ID            string    `json:"id"`
+	PublisherID   string    `json:"publisher_id"`
+	Email         string    `json:"email"`
+	Role          string    `json:"role"`
+	ExpiresAt     time.Time `json:"expires_at"`
+	PublisherName string    `json:"publisher_name"`
 }
 
 func (q *Queries) GetInvitationByToken(ctx context.Context, token string) (GetInvitationByTokenRow, error) {
@@ -362,7 +392,7 @@ func (q *Queries) GetInvitationByToken(ctx context.Context, token string) (GetIn
 		&i.ID,
 		&i.PublisherID,
 		&i.Email,
-		&i.Status,
+		&i.Role,
 		&i.ExpiresAt,
 		&i.PublisherName,
 	)
@@ -371,22 +401,23 @@ func (q *Queries) GetInvitationByToken(ctx context.Context, token string) (GetIn
 
 const getPendingInvitations = `-- name: GetPendingInvitations :many
 
-SELECT id, email, status, expires_at, created_at
+SELECT id, email, role, expires_at, created_at
 FROM publisher_invitations
-WHERE publisher_id = $1 AND status IN ('pending', 'expired')
+WHERE publisher_id = $1 AND expires_at > NOW()
 ORDER BY created_at DESC
 `
 
 type GetPendingInvitationsRow struct {
 	ID        string             `json:"id"`
 	Email     string             `json:"email"`
-	Status    string             `json:"status"`
-	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
+	Role      string             `json:"role"`
+	ExpiresAt time.Time          `json:"expires_at"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
 // Publisher Invitations --
-func (q *Queries) GetPendingInvitations(ctx context.Context, publisherID pgtype.UUID) ([]GetPendingInvitationsRow, error) {
+// Schema: id, publisher_id, email, role, token, expires_at, created_at
+func (q *Queries) GetPendingInvitations(ctx context.Context, publisherID string) ([]GetPendingInvitationsRow, error) {
 	rows, err := q.db.Query(ctx, getPendingInvitations, publisherID)
 	if err != nil {
 		return nil, err
@@ -398,7 +429,7 @@ func (q *Queries) GetPendingInvitations(ctx context.Context, publisherID pgtype.
 		if err := rows.Scan(
 			&i.ID,
 			&i.Email,
-			&i.Status,
+			&i.Role,
 			&i.ExpiresAt,
 			&i.CreatedAt,
 		); err != nil {
@@ -432,9 +463,9 @@ WHERE id = $3
 `
 
 type UpdateInvitationTokenParams struct {
-	Token     string             `json:"token"`
-	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
-	ID        string             `json:"id"`
+	Token     string    `json:"token"`
+	ExpiresAt time.Time `json:"expires_at"`
+	ID        string    `json:"id"`
 }
 
 func (q *Queries) UpdateInvitationToken(ctx context.Context, arg UpdateInvitationTokenParams) error {

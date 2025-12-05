@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { usePublisherContext } from '@/providers/PublisherContext';
-import { MapPin, Globe, Building2, Plus, Trash2, Loader2, Mountain, Map } from 'lucide-react';
+import { MapPin, Globe, Building2, Plus, Trash2, Loader2, Mountain, Map, Layers } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -32,14 +32,22 @@ import { CoverageMapDialog } from '@/components/shared/CoverageMapView';
 interface Coverage {
   id: string;
   publisher_id: string;
-  coverage_level: 'continent' | 'country' | 'region' | 'city';
+  coverage_level: 'continent' | 'country' | 'region' | 'district' | 'city';
+  // ID-based fields (new schema)
   continent_code: string | null;
+  country_id: number | null;
+  region_id: number | null;
+  district_id: number | null;
+  city_id: string | null; // UUID
+  // Display fields from joined geo tables
+  continent_name: string | null;
   country_code: string | null;
-  region: string | null;
-  city_id: string | null;
-  display_name: string;
-  city_name: string;
-  country: string;
+  country_name: string | null;
+  region_code: string | null;
+  region_name: string | null;
+  district_code: string | null;
+  district_name: string | null;
+  city_name: string | null;
   priority: number;
   is_active: boolean;
   created_at: string;
@@ -105,12 +113,14 @@ export default function PublisherCoveragePage() {
         if (item.type === 'continent') {
           body.continent_code = item.id;
         } else if (item.type === 'country') {
-          body.country_code = item.id;
+          // ID is now a numeric country_id
+          body.country_id = parseInt(item.id, 10);
         } else if (item.type === 'region') {
-          // Region ID is in format "CC-RegionName"
-          const [countryCode, ...regionParts] = item.id.split('-');
-          body.country_code = countryCode;
-          body.region = regionParts.join('-');
+          // ID is now a numeric region_id
+          body.region_id = parseInt(item.id, 10);
+        } else if (item.type === 'district') {
+          // ID is a numeric district_id
+          body.district_id = parseInt(item.id, 10);
         } else if (item.type === 'city') {
           // Handle quick-select cities with synthetic IDs
           if (item.id.startsWith('quick-')) {
@@ -177,6 +187,8 @@ export default function PublisherCoveragePage() {
         return <Globe className="w-4 h-4" />;
       case 'region':
         return <Building2 className="w-4 h-4" />;
+      case 'district':
+        return <Layers className="w-4 h-4" />;
       case 'city':
         return <MapPin className="w-4 h-4" />;
       default:
@@ -196,10 +208,21 @@ export default function PublisherCoveragePage() {
       setAddingCoverage(true);
 
       // Add each selected country from the map
+      // Map selections use country_code (ISO), so we need to lookup the country_id
       for (const item of selections) {
+        // Fetch country by code to get its numeric ID
+        const countryResponse = await api.public.get<{ id: number; code: string }>(
+          `/countries/${encodeURIComponent(item.id)}`
+        );
+
+        if (!countryResponse || !countryResponse.id) {
+          console.error('Could not find country:', item.id);
+          continue;
+        }
+
         const body: Record<string, unknown> = {
           coverage_level: 'country',
-          country_code: item.id,
+          country_id: countryResponse.id,
         };
 
         await api.post('/publisher/coverage', {
@@ -292,7 +315,13 @@ export default function PublisherCoveragePage() {
                     {getLevelIcon(item.coverage_level)}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="font-medium text-sm sm:text-base truncate">{item.display_name || item.city_name || item.country}</div>
+                    <div className="font-medium text-sm sm:text-base truncate">
+                      {item.coverage_level === 'continent' && item.continent_name}
+                      {item.coverage_level === 'country' && item.country_name}
+                      {item.coverage_level === 'region' && `${item.region_name}${item.country_name ? `, ${item.country_name}` : ''}`}
+                      {item.coverage_level === 'district' && `${item.district_name}${item.region_name ? `, ${item.region_name}` : ''}`}
+                      {item.coverage_level === 'city' && `${item.city_name}${item.region_name ? `, ${item.region_name}` : ''}${item.country_name ? `, ${item.country_name}` : ''}`}
+                    </div>
                     <div className="flex items-center gap-2 text-xs sm:text-sm text-muted-foreground flex-wrap">
                       <StatusTooltip
                         status={item.coverage_level}

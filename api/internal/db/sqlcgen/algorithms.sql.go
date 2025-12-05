@@ -24,21 +24,6 @@ func (q *Queries) ArchiveActiveAlgorithms(ctx context.Context, publisherID strin
 	return err
 }
 
-const completeOnboarding = `-- name: CompleteOnboarding :one
-UPDATE publisher_onboarding
-SET completed_at = NOW(),
-    last_updated_at = NOW()
-WHERE publisher_id = $1
-RETURNING id
-`
-
-func (q *Queries) CompleteOnboarding(ctx context.Context, publisherID string) (string, error) {
-	row := q.db.QueryRow(ctx, completeOnboarding, publisherID)
-	var id string
-	err := row.Scan(&id)
-	return id, err
-}
-
 const createAlgorithm = `-- name: CreateAlgorithm :one
 
 INSERT INTO algorithms (
@@ -77,8 +62,8 @@ func (q *Queries) CreateAlgorithm(ctx context.Context, arg CreateAlgorithmParams
 const createOnboardingState = `-- name: CreateOnboardingState :one
 INSERT INTO publisher_onboarding (publisher_id)
 VALUES ($1)
-RETURNING id, publisher_id, current_step, completed_steps, wizard_data,
-    started_at, last_updated_at, completed_at, skipped
+RETURNING id, publisher_id, profile_complete, algorithm_selected, zmanim_configured, coverage_set,
+    created_at, updated_at
 `
 
 func (q *Queries) CreateOnboardingState(ctx context.Context, publisherID string) (PublisherOnboarding, error) {
@@ -87,13 +72,12 @@ func (q *Queries) CreateOnboardingState(ctx context.Context, publisherID string)
 	err := row.Scan(
 		&i.ID,
 		&i.PublisherID,
-		&i.CurrentStep,
-		&i.CompletedSteps,
-		&i.WizardData,
-		&i.StartedAt,
-		&i.LastUpdatedAt,
-		&i.CompletedAt,
-		&i.Skipped,
+		&i.ProfileComplete,
+		&i.AlgorithmSelected,
+		&i.ZmanimConfigured,
+		&i.CoverageSet,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
@@ -276,26 +260,26 @@ func (q *Queries) GetAlgorithmVersions(ctx context.Context, publisherID string) 
 const getOnboardingState = `-- name: GetOnboardingState :one
 
 SELECT
-    id, publisher_id, current_step, completed_steps, wizard_data,
-    started_at, last_updated_at, completed_at, skipped
+    id, publisher_id, profile_complete, algorithm_selected, zmanim_configured, coverage_set,
+    created_at, updated_at
 FROM publisher_onboarding
 WHERE publisher_id = $1
 `
 
 // Onboarding related --
+// Schema: id, publisher_id, profile_complete, algorithm_selected, zmanim_configured, coverage_set, created_at, updated_at
 func (q *Queries) GetOnboardingState(ctx context.Context, publisherID string) (PublisherOnboarding, error) {
 	row := q.db.QueryRow(ctx, getOnboardingState, publisherID)
 	var i PublisherOnboarding
 	err := row.Scan(
 		&i.ID,
 		&i.PublisherID,
-		&i.CurrentStep,
-		&i.CompletedSteps,
-		&i.WizardData,
-		&i.StartedAt,
-		&i.LastUpdatedAt,
-		&i.CompletedAt,
-		&i.Skipped,
+		&i.ProfileComplete,
+		&i.AlgorithmSelected,
+		&i.ZmanimConfigured,
+		&i.CoverageSet,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
@@ -396,21 +380,6 @@ func (q *Queries) PublishAlgorithm(ctx context.Context, id string) (pgtype.Times
 	return updated_at, err
 }
 
-const skipOnboarding = `-- name: SkipOnboarding :one
-UPDATE publisher_onboarding
-SET skipped = true,
-    last_updated_at = NOW()
-WHERE publisher_id = $1
-RETURNING id
-`
-
-func (q *Queries) SkipOnboarding(ctx context.Context, publisherID string) (string, error) {
-	row := q.db.QueryRow(ctx, skipOnboarding, publisherID)
-	var id string
-	err := row.Scan(&id)
-	return id, err
-}
-
 const updateAlgorithmDraft = `-- name: UpdateAlgorithmDraft :one
 UPDATE algorithms
 SET configuration = $1,
@@ -446,42 +415,118 @@ func (q *Queries) UpdateAlgorithmDraft(ctx context.Context, arg UpdateAlgorithmD
 	return i, err
 }
 
-const updateOnboardingState = `-- name: UpdateOnboardingState :one
+const updateOnboardingAlgorithmSelected = `-- name: UpdateOnboardingAlgorithmSelected :one
 UPDATE publisher_onboarding
-SET current_step = COALESCE($2, current_step),
-    completed_steps = COALESCE($3, completed_steps),
-    wizard_data = COALESCE($4, wizard_data),
-    last_updated_at = NOW()
+SET algorithm_selected = $2, updated_at = NOW()
 WHERE publisher_id = $1
-RETURNING id, publisher_id, current_step, completed_steps, wizard_data,
-    started_at, last_updated_at, completed_at, skipped
+RETURNING id, publisher_id, profile_complete, algorithm_selected, zmanim_configured, coverage_set,
+    created_at, updated_at
 `
 
-type UpdateOnboardingStateParams struct {
-	PublisherID    string  `json:"publisher_id"`
-	CurrentStep    *int32  `json:"current_step"`
-	CompletedSteps []int32 `json:"completed_steps"`
-	WizardData     []byte  `json:"wizard_data"`
+type UpdateOnboardingAlgorithmSelectedParams struct {
+	PublisherID       string `json:"publisher_id"`
+	AlgorithmSelected *bool  `json:"algorithm_selected"`
 }
 
-func (q *Queries) UpdateOnboardingState(ctx context.Context, arg UpdateOnboardingStateParams) (PublisherOnboarding, error) {
-	row := q.db.QueryRow(ctx, updateOnboardingState,
-		arg.PublisherID,
-		arg.CurrentStep,
-		arg.CompletedSteps,
-		arg.WizardData,
-	)
+func (q *Queries) UpdateOnboardingAlgorithmSelected(ctx context.Context, arg UpdateOnboardingAlgorithmSelectedParams) (PublisherOnboarding, error) {
+	row := q.db.QueryRow(ctx, updateOnboardingAlgorithmSelected, arg.PublisherID, arg.AlgorithmSelected)
 	var i PublisherOnboarding
 	err := row.Scan(
 		&i.ID,
 		&i.PublisherID,
-		&i.CurrentStep,
-		&i.CompletedSteps,
-		&i.WizardData,
-		&i.StartedAt,
-		&i.LastUpdatedAt,
-		&i.CompletedAt,
-		&i.Skipped,
+		&i.ProfileComplete,
+		&i.AlgorithmSelected,
+		&i.ZmanimConfigured,
+		&i.CoverageSet,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateOnboardingCoverageSet = `-- name: UpdateOnboardingCoverageSet :one
+UPDATE publisher_onboarding
+SET coverage_set = $2, updated_at = NOW()
+WHERE publisher_id = $1
+RETURNING id, publisher_id, profile_complete, algorithm_selected, zmanim_configured, coverage_set,
+    created_at, updated_at
+`
+
+type UpdateOnboardingCoverageSetParams struct {
+	PublisherID string `json:"publisher_id"`
+	CoverageSet *bool  `json:"coverage_set"`
+}
+
+func (q *Queries) UpdateOnboardingCoverageSet(ctx context.Context, arg UpdateOnboardingCoverageSetParams) (PublisherOnboarding, error) {
+	row := q.db.QueryRow(ctx, updateOnboardingCoverageSet, arg.PublisherID, arg.CoverageSet)
+	var i PublisherOnboarding
+	err := row.Scan(
+		&i.ID,
+		&i.PublisherID,
+		&i.ProfileComplete,
+		&i.AlgorithmSelected,
+		&i.ZmanimConfigured,
+		&i.CoverageSet,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateOnboardingProfileComplete = `-- name: UpdateOnboardingProfileComplete :one
+UPDATE publisher_onboarding
+SET profile_complete = $2, updated_at = NOW()
+WHERE publisher_id = $1
+RETURNING id, publisher_id, profile_complete, algorithm_selected, zmanim_configured, coverage_set,
+    created_at, updated_at
+`
+
+type UpdateOnboardingProfileCompleteParams struct {
+	PublisherID     string `json:"publisher_id"`
+	ProfileComplete *bool  `json:"profile_complete"`
+}
+
+func (q *Queries) UpdateOnboardingProfileComplete(ctx context.Context, arg UpdateOnboardingProfileCompleteParams) (PublisherOnboarding, error) {
+	row := q.db.QueryRow(ctx, updateOnboardingProfileComplete, arg.PublisherID, arg.ProfileComplete)
+	var i PublisherOnboarding
+	err := row.Scan(
+		&i.ID,
+		&i.PublisherID,
+		&i.ProfileComplete,
+		&i.AlgorithmSelected,
+		&i.ZmanimConfigured,
+		&i.CoverageSet,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateOnboardingZmanimConfigured = `-- name: UpdateOnboardingZmanimConfigured :one
+UPDATE publisher_onboarding
+SET zmanim_configured = $2, updated_at = NOW()
+WHERE publisher_id = $1
+RETURNING id, publisher_id, profile_complete, algorithm_selected, zmanim_configured, coverage_set,
+    created_at, updated_at
+`
+
+type UpdateOnboardingZmanimConfiguredParams struct {
+	PublisherID      string `json:"publisher_id"`
+	ZmanimConfigured *bool  `json:"zmanim_configured"`
+}
+
+func (q *Queries) UpdateOnboardingZmanimConfigured(ctx context.Context, arg UpdateOnboardingZmanimConfiguredParams) (PublisherOnboarding, error) {
+	row := q.db.QueryRow(ctx, updateOnboardingZmanimConfigured, arg.PublisherID, arg.ZmanimConfigured)
+	var i PublisherOnboarding
+	err := row.Scan(
+		&i.ID,
+		&i.PublisherID,
+		&i.ProfileComplete,
+		&i.AlgorithmSelected,
+		&i.ZmanimConfigured,
+		&i.CoverageSet,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }

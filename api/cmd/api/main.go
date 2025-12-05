@@ -199,18 +199,24 @@ func main() {
 			// Cities - Global location system
 			r.Get("/cities", h.SearchCities)
 			r.Get("/cities/nearby", h.GetNearbyCity)
+			r.Get("/cities/{id}", h.GetCityByID)
 			r.Get("/cities/{cityId}/publishers", h.GetPublishersForCity)
 
-			// Continents, countries and regions for coverage selection
+			// Continents, countries, regions and districts for coverage selection
 			r.Get("/continents", h.GetContinents)
 			r.Get("/countries", h.GetCountries)
+			r.Get("/countries/{country_code}/regions", h.GetRegionsByCountry)
+			r.Get("/countries/{country_code}/districts", h.GetDistrictsByCountry)
+			r.Get("/countries/{country_code}", h.GetCountryByCode) // Must be after /regions and /districts
 			r.Get("/regions", h.GetRegions)
+			r.Get("/regions/{region_id}/districts", h.GetDistrictsByRegion)
 
 			// Geographic boundaries for map rendering
 			r.Get("/geo/boundaries/countries", h.GetCountryBoundaries)
 			r.Get("/geo/boundaries/regions", h.GetRegionBoundaries)
 			r.Get("/geo/boundaries/districts", h.GetDistrictBoundaries)
 			r.Get("/geo/boundaries/lookup", h.LookupPointLocation)
+			r.Get("/geo/boundaries/at-point", h.SmartLookupPointLocation) // Zoom-aware smart lookup
 			r.Get("/geo/boundaries/stats", h.GetBoundaryStats)
 
 			// Zmanim calculations

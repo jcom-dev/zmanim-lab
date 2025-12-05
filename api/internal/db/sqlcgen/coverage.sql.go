@@ -120,17 +120,32 @@ type CreateCoverageCityParams struct {
 	PublisherID string      `json:"publisher_id"`
 	CityID      pgtype.UUID `json:"city_id"`
 	Priority    *int32      `json:"priority"`
-	IsActive    *bool       `json:"is_active"`
+	IsActive    bool        `json:"is_active"`
 }
 
-func (q *Queries) CreateCoverageCity(ctx context.Context, arg CreateCoverageCityParams) (PublisherCoverage, error) {
+type CreateCoverageCityRow struct {
+	ID            string             `json:"id"`
+	PublisherID   string             `json:"publisher_id"`
+	CoverageLevel string             `json:"coverage_level"`
+	ContinentCode *string            `json:"continent_code"`
+	CountryID     *int16             `json:"country_id"`
+	RegionID      *int32             `json:"region_id"`
+	DistrictID    *int32             `json:"district_id"`
+	CityID        pgtype.UUID        `json:"city_id"`
+	Priority      *int32             `json:"priority"`
+	IsActive      bool               `json:"is_active"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) CreateCoverageCity(ctx context.Context, arg CreateCoverageCityParams) (CreateCoverageCityRow, error) {
 	row := q.db.QueryRow(ctx, createCoverageCity,
 		arg.PublisherID,
 		arg.CityID,
 		arg.Priority,
 		arg.IsActive,
 	)
-	var i PublisherCoverage
+	var i CreateCoverageCityRow
 	err := row.Scan(
 		&i.ID,
 		&i.PublisherID,
@@ -158,17 +173,32 @@ type CreateCoverageContinentParams struct {
 	PublisherID   string  `json:"publisher_id"`
 	ContinentCode *string `json:"continent_code"`
 	Priority      *int32  `json:"priority"`
-	IsActive      *bool   `json:"is_active"`
+	IsActive      bool    `json:"is_active"`
 }
 
-func (q *Queries) CreateCoverageContinent(ctx context.Context, arg CreateCoverageContinentParams) (PublisherCoverage, error) {
+type CreateCoverageContinentRow struct {
+	ID            string             `json:"id"`
+	PublisherID   string             `json:"publisher_id"`
+	CoverageLevel string             `json:"coverage_level"`
+	ContinentCode *string            `json:"continent_code"`
+	CountryID     *int16             `json:"country_id"`
+	RegionID      *int32             `json:"region_id"`
+	DistrictID    *int32             `json:"district_id"`
+	CityID        pgtype.UUID        `json:"city_id"`
+	Priority      *int32             `json:"priority"`
+	IsActive      bool               `json:"is_active"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) CreateCoverageContinent(ctx context.Context, arg CreateCoverageContinentParams) (CreateCoverageContinentRow, error) {
 	row := q.db.QueryRow(ctx, createCoverageContinent,
 		arg.PublisherID,
 		arg.ContinentCode,
 		arg.Priority,
 		arg.IsActive,
 	)
-	var i PublisherCoverage
+	var i CreateCoverageContinentRow
 	err := row.Scan(
 		&i.ID,
 		&i.PublisherID,
@@ -196,17 +226,32 @@ type CreateCoverageCountryParams struct {
 	PublisherID string `json:"publisher_id"`
 	CountryID   *int16 `json:"country_id"`
 	Priority    *int32 `json:"priority"`
-	IsActive    *bool  `json:"is_active"`
+	IsActive    bool   `json:"is_active"`
 }
 
-func (q *Queries) CreateCoverageCountry(ctx context.Context, arg CreateCoverageCountryParams) (PublisherCoverage, error) {
+type CreateCoverageCountryRow struct {
+	ID            string             `json:"id"`
+	PublisherID   string             `json:"publisher_id"`
+	CoverageLevel string             `json:"coverage_level"`
+	ContinentCode *string            `json:"continent_code"`
+	CountryID     *int16             `json:"country_id"`
+	RegionID      *int32             `json:"region_id"`
+	DistrictID    *int32             `json:"district_id"`
+	CityID        pgtype.UUID        `json:"city_id"`
+	Priority      *int32             `json:"priority"`
+	IsActive      bool               `json:"is_active"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) CreateCoverageCountry(ctx context.Context, arg CreateCoverageCountryParams) (CreateCoverageCountryRow, error) {
 	row := q.db.QueryRow(ctx, createCoverageCountry,
 		arg.PublisherID,
 		arg.CountryID,
 		arg.Priority,
 		arg.IsActive,
 	)
-	var i PublisherCoverage
+	var i CreateCoverageCountryRow
 	err := row.Scan(
 		&i.ID,
 		&i.PublisherID,
@@ -234,17 +279,32 @@ type CreateCoverageDistrictParams struct {
 	PublisherID string `json:"publisher_id"`
 	DistrictID  *int32 `json:"district_id"`
 	Priority    *int32 `json:"priority"`
-	IsActive    *bool  `json:"is_active"`
+	IsActive    bool   `json:"is_active"`
 }
 
-func (q *Queries) CreateCoverageDistrict(ctx context.Context, arg CreateCoverageDistrictParams) (PublisherCoverage, error) {
+type CreateCoverageDistrictRow struct {
+	ID            string             `json:"id"`
+	PublisherID   string             `json:"publisher_id"`
+	CoverageLevel string             `json:"coverage_level"`
+	ContinentCode *string            `json:"continent_code"`
+	CountryID     *int16             `json:"country_id"`
+	RegionID      *int32             `json:"region_id"`
+	DistrictID    *int32             `json:"district_id"`
+	CityID        pgtype.UUID        `json:"city_id"`
+	Priority      *int32             `json:"priority"`
+	IsActive      bool               `json:"is_active"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) CreateCoverageDistrict(ctx context.Context, arg CreateCoverageDistrictParams) (CreateCoverageDistrictRow, error) {
 	row := q.db.QueryRow(ctx, createCoverageDistrict,
 		arg.PublisherID,
 		arg.DistrictID,
 		arg.Priority,
 		arg.IsActive,
 	)
-	var i PublisherCoverage
+	var i CreateCoverageDistrictRow
 	err := row.Scan(
 		&i.ID,
 		&i.PublisherID,
@@ -272,17 +332,32 @@ type CreateCoverageRegionParams struct {
 	PublisherID string `json:"publisher_id"`
 	RegionID    *int32 `json:"region_id"`
 	Priority    *int32 `json:"priority"`
-	IsActive    *bool  `json:"is_active"`
+	IsActive    bool   `json:"is_active"`
 }
 
-func (q *Queries) CreateCoverageRegion(ctx context.Context, arg CreateCoverageRegionParams) (PublisherCoverage, error) {
+type CreateCoverageRegionRow struct {
+	ID            string             `json:"id"`
+	PublisherID   string             `json:"publisher_id"`
+	CoverageLevel string             `json:"coverage_level"`
+	ContinentCode *string            `json:"continent_code"`
+	CountryID     *int16             `json:"country_id"`
+	RegionID      *int32             `json:"region_id"`
+	DistrictID    *int32             `json:"district_id"`
+	CityID        pgtype.UUID        `json:"city_id"`
+	Priority      *int32             `json:"priority"`
+	IsActive      bool               `json:"is_active"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) CreateCoverageRegion(ctx context.Context, arg CreateCoverageRegionParams) (CreateCoverageRegionRow, error) {
 	row := q.db.QueryRow(ctx, createCoverageRegion,
 		arg.PublisherID,
 		arg.RegionID,
 		arg.Priority,
 		arg.IsActive,
 	)
-	var i PublisherCoverage
+	var i CreateCoverageRegionRow
 	err := row.Scan(
 		&i.ID,
 		&i.PublisherID,
@@ -325,18 +400,18 @@ SELECT COALESCE(SUM(
     CASE pc.coverage_level
         WHEN 'city' THEN 1
         WHEN 'district' THEN (
-            SELECT COUNT(*) FROM cities c WHERE c.district_id = pc.district_id
+            SELECT COUNT(*) FROM geo_cities c WHERE c.district_id = pc.district_id
         )
         WHEN 'region' THEN (
-            SELECT COUNT(*) FROM cities c WHERE c.region_id = pc.region_id
+            SELECT COUNT(*) FROM geo_cities c WHERE c.region_id = pc.region_id
         )
         WHEN 'country' THEN (
-            SELECT COUNT(*) FROM cities c
+            SELECT COUNT(*) FROM geo_cities c
             JOIN geo_regions r ON c.region_id = r.id
             WHERE r.country_id = pc.country_id
         )
         WHEN 'continent' THEN (
-            SELECT COUNT(*) FROM cities c
+            SELECT COUNT(*) FROM geo_cities c
             JOIN geo_regions r ON c.region_id = r.id
             JOIN geo_countries co ON r.country_id = co.id
             JOIN geo_continents ct ON co.continent_id = ct.id
@@ -388,7 +463,7 @@ LEFT JOIN geo_continents ct ON pc.continent_code = ct.code
 LEFT JOIN geo_countries co ON pc.country_id = co.id
 LEFT JOIN geo_regions r ON pc.region_id = r.id
 LEFT JOIN geo_districts d ON pc.district_id = d.id
-LEFT JOIN cities c ON pc.city_id = c.id
+LEFT JOIN geo_cities c ON pc.city_id = c.id
 WHERE pc.publisher_id = $1 AND pc.is_active = true
 ORDER BY
     CASE pc.coverage_level
@@ -411,7 +486,7 @@ type GetPublisherCoverageRow struct {
 	DistrictID    *int32             `json:"district_id"`
 	CityID        pgtype.UUID        `json:"city_id"`
 	Priority      *int32             `json:"priority"`
-	IsActive      *bool              `json:"is_active"`
+	IsActive      bool               `json:"is_active"`
 	CreatedAt     pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
 	ContinentName *string            `json:"continent_name"`
@@ -476,9 +551,24 @@ FROM publisher_coverage pc
 WHERE pc.id = $1
 `
 
-func (q *Queries) GetPublisherCoverageByID(ctx context.Context, id string) (PublisherCoverage, error) {
+type GetPublisherCoverageByIDRow struct {
+	ID            string             `json:"id"`
+	PublisherID   string             `json:"publisher_id"`
+	CoverageLevel string             `json:"coverage_level"`
+	ContinentCode *string            `json:"continent_code"`
+	CountryID     *int16             `json:"country_id"`
+	RegionID      *int32             `json:"region_id"`
+	DistrictID    *int32             `json:"district_id"`
+	CityID        pgtype.UUID        `json:"city_id"`
+	Priority      *int32             `json:"priority"`
+	IsActive      bool               `json:"is_active"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) GetPublisherCoverageByID(ctx context.Context, id string) (GetPublisherCoverageByIDRow, error) {
 	row := q.db.QueryRow(ctx, getPublisherCoverageByID, id)
-	var i PublisherCoverage
+	var i GetPublisherCoverageByIDRow
 	err := row.Scan(
 		&i.ID,
 		&i.PublisherID,
@@ -505,7 +595,7 @@ JOIN publisher_coverage pc ON p.id = pc.publisher_id
 LEFT JOIN geo_countries co ON pc.country_id = co.id
 LEFT JOIN geo_regions r ON pc.region_id = r.id
 LEFT JOIN geo_districts d ON pc.district_id = d.id
-LEFT JOIN cities c ON pc.city_id = c.id
+LEFT JOIN geo_cities c ON pc.city_id = c.id
 LEFT JOIN geo_regions cr ON c.region_id = cr.id
 WHERE p.status = 'active'
   AND pc.is_active = true
@@ -563,7 +653,7 @@ SELECT DISTINCT
 FROM publishers p
 JOIN publisher_coverage pc ON p.id = pc.publisher_id
 LEFT JOIN geo_districts d ON pc.district_id = d.id
-LEFT JOIN cities c ON pc.city_id = c.id
+LEFT JOIN geo_cities c ON pc.city_id = c.id
 WHERE p.status = 'active'
   AND pc.is_active = true
   AND (
@@ -649,12 +739,27 @@ RETURNING id, publisher_id, coverage_level, continent_code, country_id, region_i
 
 type UpdateCoverageActiveParams struct {
 	ID       string `json:"id"`
-	IsActive *bool  `json:"is_active"`
+	IsActive bool   `json:"is_active"`
 }
 
-func (q *Queries) UpdateCoverageActive(ctx context.Context, arg UpdateCoverageActiveParams) (PublisherCoverage, error) {
+type UpdateCoverageActiveRow struct {
+	ID            string             `json:"id"`
+	PublisherID   string             `json:"publisher_id"`
+	CoverageLevel string             `json:"coverage_level"`
+	ContinentCode *string            `json:"continent_code"`
+	CountryID     *int16             `json:"country_id"`
+	RegionID      *int32             `json:"region_id"`
+	DistrictID    *int32             `json:"district_id"`
+	CityID        pgtype.UUID        `json:"city_id"`
+	Priority      *int32             `json:"priority"`
+	IsActive      bool               `json:"is_active"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) UpdateCoverageActive(ctx context.Context, arg UpdateCoverageActiveParams) (UpdateCoverageActiveRow, error) {
 	row := q.db.QueryRow(ctx, updateCoverageActive, arg.ID, arg.IsActive)
-	var i PublisherCoverage
+	var i UpdateCoverageActiveRow
 	err := row.Scan(
 		&i.ID,
 		&i.PublisherID,
@@ -684,9 +789,24 @@ type UpdateCoveragePriorityParams struct {
 	Priority *int32 `json:"priority"`
 }
 
-func (q *Queries) UpdateCoveragePriority(ctx context.Context, arg UpdateCoveragePriorityParams) (PublisherCoverage, error) {
+type UpdateCoveragePriorityRow struct {
+	ID            string             `json:"id"`
+	PublisherID   string             `json:"publisher_id"`
+	CoverageLevel string             `json:"coverage_level"`
+	ContinentCode *string            `json:"continent_code"`
+	CountryID     *int16             `json:"country_id"`
+	RegionID      *int32             `json:"region_id"`
+	DistrictID    *int32             `json:"district_id"`
+	CityID        pgtype.UUID        `json:"city_id"`
+	Priority      *int32             `json:"priority"`
+	IsActive      bool               `json:"is_active"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) UpdateCoveragePriority(ctx context.Context, arg UpdateCoveragePriorityParams) (UpdateCoveragePriorityRow, error) {
 	row := q.db.QueryRow(ctx, updateCoveragePriority, arg.ID, arg.Priority)
-	var i PublisherCoverage
+	var i UpdateCoveragePriorityRow
 	err := row.Scan(
 		&i.ID,
 		&i.PublisherID,

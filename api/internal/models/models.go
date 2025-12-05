@@ -195,32 +195,40 @@ type HealthResponse struct {
 	Version  string `json:"version"`
 }
 
-// PublisherCoverage represents a publisher's coverage area at continent, country, region, or city level
+// PublisherCoverage represents a publisher's coverage area at continent, country, region, district, or city level
+// Uses hierarchical IDs: continent_code, country_id, region_id, district_id, city_id
 type PublisherCoverage struct {
 	ID            string    `json:"id"`
 	PublisherID   string    `json:"publisher_id"`
-	CoverageLevel string    `json:"coverage_level"` // continent, country, region, city
+	CoverageLevel string    `json:"coverage_level"` // continent, country, region, district, city
 	ContinentCode *string   `json:"continent_code,omitempty"`
-	CountryCode   *string   `json:"country_code,omitempty"`
-	Region        *string   `json:"region,omitempty"`
-	CityID        *string   `json:"city_id,omitempty"`
+	CountryID     *int16    `json:"country_id,omitempty"`
+	RegionID      *int32    `json:"region_id,omitempty"`
+	DistrictID    *int32    `json:"district_id,omitempty"`
+	CityID        *string   `json:"city_id,omitempty"` // UUID string
 	Priority      int       `json:"priority"`
 	IsActive      bool      `json:"is_active"`
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`
-	// Computed fields for display
-	DisplayName string `json:"display_name,omitempty"`
-	CityName    string `json:"city_name,omitempty"`
-	Country     string `json:"country,omitempty"`
+	// Computed fields for display (from joined geo tables)
+	ContinentName *string `json:"continent_name,omitempty"`
+	CountryCode   *string `json:"country_code,omitempty"`
+	CountryName   *string `json:"country_name,omitempty"`
+	RegionCode    *string `json:"region_code,omitempty"`
+	RegionName    *string `json:"region_name,omitempty"`
+	DistrictCode  *string `json:"district_code,omitempty"`
+	DistrictName  *string `json:"district_name,omitempty"`
+	CityName      *string `json:"city_name,omitempty"`
 }
 
 // PublisherCoverageCreateRequest represents a request to create coverage
 type PublisherCoverageCreateRequest struct {
-	CoverageLevel string  `json:"coverage_level"` // continent, country, region, city
+	CoverageLevel string  `json:"coverage_level"` // continent, country, region, district, city
 	ContinentCode *string `json:"continent_code,omitempty"`
-	CountryCode   *string `json:"country_code,omitempty"`
-	Region        *string `json:"region,omitempty"`
-	CityID        *string `json:"city_id,omitempty"`
+	CountryID     *int16  `json:"country_id,omitempty"`
+	RegionID      *int32  `json:"region_id,omitempty"`
+	DistrictID    *int32  `json:"district_id,omitempty"`
+	CityID        *string `json:"city_id,omitempty"` // UUID string
 	Priority      *int    `json:"priority,omitempty"`
 }
 

@@ -145,7 +145,7 @@ type CreatePublisherZmanParams struct {
 	Dependencies          []string    `json:"dependencies"`
 	MasterZmanID          pgtype.UUID `json:"master_zman_id"`
 	LinkedPublisherZmanID pgtype.UUID `json:"linked_publisher_zman_id"`
-	SourceType            *string     `json:"source_type"`
+	SourceType            string      `json:"source_type"`
 }
 
 type CreatePublisherZmanRow struct {
@@ -166,7 +166,7 @@ type CreatePublisherZmanRow struct {
 	Dependencies          []string           `json:"dependencies"`
 	MasterZmanID          pgtype.UUID        `json:"master_zman_id"`
 	LinkedPublisherZmanID pgtype.UUID        `json:"linked_publisher_zman_id"`
-	SourceType            *string            `json:"source_type"`
+	SourceType            string             `json:"source_type"`
 	CreatedAt             pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
 }
@@ -267,7 +267,7 @@ type GetPublisherZmanByIDRow struct {
 	Dependencies          []string           `json:"dependencies"`
 	MasterZmanID          pgtype.UUID        `json:"master_zman_id"`
 	LinkedPublisherZmanID pgtype.UUID        `json:"linked_publisher_zman_id"`
-	SourceType            *string            `json:"source_type"`
+	SourceType            string             `json:"source_type"`
 	DeletedAt             pgtype.Timestamptz `json:"deleted_at"`
 	CreatedAt             pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
@@ -360,7 +360,7 @@ type GetPublisherZmanByKeyRow struct {
 	UpdatedAt                 pgtype.Timestamptz `json:"updated_at"`
 	MasterZmanID              pgtype.UUID        `json:"master_zman_id"`
 	LinkedPublisherZmanID     pgtype.UUID        `json:"linked_publisher_zman_id"`
-	SourceType                *string            `json:"source_type"`
+	SourceType                string             `json:"source_type"`
 	SourceHebrewName          string             `json:"source_hebrew_name"`
 	SourceEnglishName         string             `json:"source_english_name"`
 	SourceTransliteration     *string            `json:"source_transliteration"`
@@ -577,7 +577,7 @@ type GetPublisherZmanimRow struct {
 	UpdatedAt                 pgtype.Timestamptz `json:"updated_at"`
 	MasterZmanID              pgtype.UUID        `json:"master_zman_id"`
 	LinkedPublisherZmanID     pgtype.UUID        `json:"linked_publisher_zman_id"`
-	SourceType                *string            `json:"source_type"`
+	SourceType                string             `json:"source_type"`
 	SourceHebrewName          string             `json:"source_hebrew_name"`
 	SourceEnglishName         string             `json:"source_english_name"`
 	SourceTransliteration     *string            `json:"source_transliteration"`
@@ -684,15 +684,15 @@ type GetPublisherZmanimForLinkingParams struct {
 }
 
 type GetPublisherZmanimForLinkingRow struct {
-	ID            string  `json:"id"`
-	PublisherID   string  `json:"publisher_id"`
-	ZmanKey       string  `json:"zman_key"`
-	HebrewName    string  `json:"hebrew_name"`
-	EnglishName   string  `json:"english_name"`
-	FormulaDsl    string  `json:"formula_dsl"`
-	Category      string  `json:"category"`
-	SourceType    *string `json:"source_type"`
-	PublisherName string  `json:"publisher_name"`
+	ID            string `json:"id"`
+	PublisherID   string `json:"publisher_id"`
+	ZmanKey       string `json:"zman_key"`
+	HebrewName    string `json:"hebrew_name"`
+	EnglishName   string `json:"english_name"`
+	FormulaDsl    string `json:"formula_dsl"`
+	Category      string `json:"category"`
+	SourceType    string `json:"source_type"`
+	PublisherName string `json:"publisher_name"`
 }
 
 // Get published zmanim from a specific publisher for copying/linking

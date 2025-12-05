@@ -13,22 +13,21 @@ import (
 
 // CreateAliasRequest is the request body for creating/updating an alias
 type CreateAliasRequest struct {
-	CustomHebrewName      string  `json:"custom_hebrew_name"`
-	CustomEnglishName     string  `json:"custom_english_name"`
-	CustomTransliteration *string `json:"custom_transliteration,omitempty"`
+	AliasHebrew          string  `json:"alias_hebrew"`
+	AliasEnglish         *string `json:"alias_english,omitempty"`
+	AliasTransliteration *string `json:"alias_transliteration,omitempty"`
 }
 
 // AliasResponse is the response for a single alias
 type AliasResponse struct {
-	ID                    string  `json:"id"`
-	ZmanKey               string  `json:"zman_key"`
-	CustomHebrewName      string  `json:"custom_hebrew_name"`
-	CustomEnglishName     string  `json:"custom_english_name"`
-	CustomTransliteration *string `json:"custom_transliteration,omitempty"`
-	CanonicalHebrewName   string  `json:"canonical_hebrew_name"`
-	CanonicalEnglishName  string  `json:"canonical_english_name"`
-	CreatedAt             string  `json:"created_at"`
-	UpdatedAt             string  `json:"updated_at"`
+	ID                   string  `json:"id"`
+	ZmanKey              string  `json:"zman_key"`
+	AliasHebrew          string  `json:"alias_hebrew"`
+	AliasEnglish         *string `json:"alias_english,omitempty"`
+	AliasTransliteration *string `json:"alias_transliteration,omitempty"`
+	CanonicalHebrewName  string  `json:"canonical_hebrew_name"`
+	CanonicalEnglishName string  `json:"canonical_english_name"`
+	CreatedAt            string  `json:"created_at"`
 }
 
 // AliasListResponse is the response for listing aliases
@@ -37,6 +36,7 @@ type AliasListResponse struct {
 }
 
 // CreateOrUpdateAlias handles PUT /api/v1/publisher/zmanim/{zmanKey}/alias
+// Creates a new alias or updates existing one (deletes old, creates new)
 func (h *Handlers) CreateOrUpdateAlias(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -61,25 +61,35 @@ func (h *Handlers) CreateOrUpdateAlias(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Step 4: Validate inputs
-	if req.CustomHebrewName == "" || req.CustomEnglishName == "" {
-		RespondValidationError(w, r, "Hebrew and English names are required", nil)
+	if req.AliasHebrew == "" {
+		RespondValidationError(w, r, "Hebrew alias is required", nil)
 		return
 	}
 
-	// Step 5: Execute business logic - upsert the alias
-	alias, err := h.db.Queries.UpsertPublisherZmanAlias(ctx, sqlcgen.UpsertPublisherZmanAliasParams{
-		PublisherID:           pc.PublisherID,
-		ZmanKey:               zmanKey,
-		CustomHebrewName:      req.CustomHebrewName,
-		CustomEnglishName:     req.CustomEnglishName,
-		CustomTransliteration: req.CustomTransliteration,
+	// Step 5: Delete existing alias (if any) and create new one
+	// First delete any existing primary alias for this zman
+	_ = h.db.Queries.DeletePublisherZmanAliasByZmanKey(ctx, sqlcgen.DeletePublisherZmanAliasByZmanKeyParams{
+		PublisherID: pc.PublisherID,
+		ZmanKey:     zmanKey,
+	})
+
+	// Create new alias
+	alias, err := h.db.Queries.CreatePublisherZmanAlias(ctx, sqlcgen.CreatePublisherZmanAliasParams{
+		PublisherID:          pc.PublisherID,
+		ZmanKey:              zmanKey,
+		AliasHebrew:          req.AliasHebrew,
+		AliasEnglish:         req.AliasEnglish,
+		AliasTransliteration: req.AliasTransliteration,
+		Context:              nil,
+		IsPrimary:            true,
+		SortOrder:            intPtr(0),
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			RespondNotFound(w, r, "Zman not found in your published zmanim")
 			return
 		}
-		slog.Error("failed to upsert alias", "error", err, "publisher_id", pc.PublisherID, "zman_key", zmanKey)
+		slog.Error("failed to create alias", "error", err, "publisher_id", pc.PublisherID, "zman_key", zmanKey)
 		RespondInternalError(w, r, "Failed to save alias")
 		return
 	}
@@ -90,22 +100,21 @@ func (h *Handlers) CreateOrUpdateAlias(w http.ResponseWriter, r *http.Request) {
 		ZmanKey:     zmanKey,
 	})
 	if err != nil {
-		slog.Error("failed to get alias after upsert", "error", err, "publisher_id", pc.PublisherID)
+		slog.Error("failed to get alias after create", "error", err, "publisher_id", pc.PublisherID)
 		RespondInternalError(w, r, "Failed to retrieve alias")
 		return
 	}
 
 	// Step 6: Respond
 	response := AliasResponse{
-		ID:                    alias.ID,
-		ZmanKey:               fullAlias.ZmanKey,
-		CustomHebrewName:      fullAlias.CustomHebrewName,
-		CustomEnglishName:     fullAlias.CustomEnglishName,
-		CustomTransliteration: fullAlias.CustomTransliteration,
-		CanonicalHebrewName:   fullAlias.CanonicalHebrewName,
-		CanonicalEnglishName:  fullAlias.CanonicalEnglishName,
-		CreatedAt:             alias.CreatedAt.Time.Format("2006-01-02T15:04:05Z"),
-		UpdatedAt:             alias.UpdatedAt.Time.Format("2006-01-02T15:04:05Z"),
+		ID:                   alias.ID,
+		ZmanKey:              fullAlias.ZmanKey,
+		AliasHebrew:          fullAlias.AliasHebrew,
+		AliasEnglish:         fullAlias.AliasEnglish,
+		AliasTransliteration: fullAlias.AliasTransliteration,
+		CanonicalHebrewName:  fullAlias.CanonicalHebrewName,
+		CanonicalEnglishName: fullAlias.CanonicalEnglishName,
+		CreatedAt:            alias.CreatedAt.Format("2006-01-02T15:04:05Z"),
 	}
 
 	RespondJSON(w, r, http.StatusOK, response)
@@ -148,15 +157,14 @@ func (h *Handlers) GetAlias(w http.ResponseWriter, r *http.Request) {
 
 	// Step 6: Respond
 	response := AliasResponse{
-		ID:                    alias.ID,
-		ZmanKey:               alias.ZmanKey,
-		CustomHebrewName:      alias.CustomHebrewName,
-		CustomEnglishName:     alias.CustomEnglishName,
-		CustomTransliteration: alias.CustomTransliteration,
-		CanonicalHebrewName:   alias.CanonicalHebrewName,
-		CanonicalEnglishName:  alias.CanonicalEnglishName,
-		CreatedAt:             alias.CreatedAt.Time.Format("2006-01-02T15:04:05Z"),
-		UpdatedAt:             alias.UpdatedAt.Time.Format("2006-01-02T15:04:05Z"),
+		ID:                   alias.ID,
+		ZmanKey:              alias.ZmanKey,
+		AliasHebrew:          alias.AliasHebrew,
+		AliasEnglish:         alias.AliasEnglish,
+		AliasTransliteration: alias.AliasTransliteration,
+		CanonicalHebrewName:  alias.CanonicalHebrewName,
+		CanonicalEnglishName: alias.CanonicalEnglishName,
+		CreatedAt:            alias.CreatedAt.Format("2006-01-02T15:04:05Z"),
 	}
 
 	RespondJSON(w, r, http.StatusOK, response)
@@ -182,7 +190,7 @@ func (h *Handlers) DeleteAlias(w http.ResponseWriter, r *http.Request) {
 	// Step 3-4: No request body to parse or validate
 
 	// Step 5: Execute business logic
-	err := h.db.Queries.DeletePublisherZmanAlias(ctx, sqlcgen.DeletePublisherZmanAliasParams{
+	err := h.db.Queries.DeletePublisherZmanAliasByZmanKey(ctx, sqlcgen.DeletePublisherZmanAliasByZmanKeyParams{
 		PublisherID: pc.PublisherID,
 		ZmanKey:     zmanKey,
 	})
@@ -223,17 +231,21 @@ func (h *Handlers) ListAliases(w http.ResponseWriter, r *http.Request) {
 
 	for _, alias := range aliases {
 		response.Aliases = append(response.Aliases, AliasResponse{
-			ID:                    alias.ID,
-			ZmanKey:               alias.ZmanKey,
-			CustomHebrewName:      alias.CustomHebrewName,
-			CustomEnglishName:     alias.CustomEnglishName,
-			CustomTransliteration: alias.CustomTransliteration,
-			CanonicalHebrewName:   alias.CanonicalHebrewName,
-			CanonicalEnglishName:  alias.CanonicalEnglishName,
-			CreatedAt:             alias.CreatedAt.Time.Format("2006-01-02T15:04:05Z"),
-			UpdatedAt:             alias.UpdatedAt.Time.Format("2006-01-02T15:04:05Z"),
+			ID:                   alias.ID,
+			ZmanKey:              alias.ZmanKey,
+			AliasHebrew:          alias.AliasHebrew,
+			AliasEnglish:         alias.AliasEnglish,
+			AliasTransliteration: alias.AliasTransliteration,
+			CanonicalHebrewName:  alias.CanonicalHebrewName,
+			CanonicalEnglishName: alias.CanonicalEnglishName,
+			CreatedAt:            alias.CreatedAt.Format("2006-01-02T15:04:05Z"),
 		})
 	}
 
 	RespondJSON(w, r, http.StatusOK, response)
+}
+
+// Helper to create int pointer
+func intPtr(i int32) *int32 {
+	return &i
 }

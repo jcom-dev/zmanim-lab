@@ -781,7 +781,7 @@ func getPublisherZmanimRowToPublisherZman(z sqlcgen.GetPublisherZmanimRow) Publi
 		Tags:                      tags,
 		MasterZmanID:              masterZmanID,
 		LinkedPublisherZmanID:     linkedPublisherZmanID,
-		SourceType:                z.SourceType,
+		SourceType:                &z.SourceType,
 		IsLinked:                  z.IsLinked,
 		LinkedSourcePublisherName: linkedSourcePublisherName,
 		LinkedSourceIsDeleted:     z.LinkedSourceIsDeleted,
@@ -851,7 +851,7 @@ func getPublisherZmanByKeyRowToPublisherZman(z sqlcgen.GetPublisherZmanByKeyRow)
 		UpdatedAt:                 z.UpdatedAt.Time,
 		MasterZmanID:              masterZmanID,
 		LinkedPublisherZmanID:     linkedPublisherZmanID,
-		SourceType:                z.SourceType,
+		SourceType:                &z.SourceType,
 		IsLinked:                  z.IsLinked,
 		LinkedSourcePublisherName: linkedSourcePublisherName,
 		SourceHebrewName:          sourceHebrewName,
@@ -1451,8 +1451,8 @@ func sqlcTemplateToZmanimTemplate(t sqlcgen.ZmanimTemplate) ZmanimTemplate {
 		Category:    t.Category,
 		Description: t.Description,
 		IsRequired:  t.IsRequired,
-		CreatedAt:   t.CreatedAt.Time,
-		UpdatedAt:   t.UpdatedAt.Time,
+		CreatedAt:   t.CreatedAt,
+		UpdatedAt:   t.UpdatedAt,
 	}
 }
 

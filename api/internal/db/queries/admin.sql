@@ -38,7 +38,7 @@ SELECT
     (SELECT COUNT(*) FROM publishers WHERE status = 'active') as active_publishers,
     (SELECT COUNT(*) FROM publishers WHERE status = 'pending') as pending_publishers,
     (SELECT COUNT(*) FROM algorithms WHERE status = 'published') as published_algorithms,
-    (SELECT COUNT(*) FROM cities) as total_cities,
+    (SELECT COUNT(*) FROM geo_cities) as total_cities,
     (SELECT COUNT(*) FROM publisher_coverage WHERE is_active = true) as active_coverage_areas;
 
 -- Admin Algorithm Management --
@@ -60,22 +60,29 @@ FROM algorithms
 WHERE ($1::text IS NULL OR status = $1);
 
 -- Publisher Invitations --
+-- Schema: id, publisher_id, email, role, token, expires_at, created_at
 
 -- name: GetPendingInvitations :many
-SELECT id, email, status, expires_at, created_at
+SELECT id, email, role, expires_at, created_at
 FROM publisher_invitations
-WHERE publisher_id = $1 AND status IN ('pending', 'expired')
+WHERE publisher_id = $1 AND expires_at > NOW()
+ORDER BY created_at DESC;
+
+-- name: GetExpiredInvitations :many
+SELECT id, email, role, expires_at, created_at
+FROM publisher_invitations
+WHERE publisher_id = $1 AND expires_at <= NOW()
 ORDER BY created_at DESC;
 
 -- name: GetInvitationByToken :one
-SELECT pi.id, pi.publisher_id, pi.email, pi.status, pi.expires_at, p.name as publisher_name
+SELECT pi.id, pi.publisher_id, pi.email, pi.role, pi.expires_at, p.name as publisher_name
 FROM publisher_invitations pi
 JOIN publishers p ON pi.publisher_id = p.id
-WHERE pi.token = $1;
+WHERE pi.token = $1 AND pi.expires_at > NOW();
 
 -- name: CreateInvitation :one
-INSERT INTO publisher_invitations (publisher_id, email, token, status, invited_by, expires_at)
-VALUES ($1, $2, $3, 'pending', $4, $5)
+INSERT INTO publisher_invitations (publisher_id, email, role, token, expires_at)
+VALUES ($1, $2, $3, $4, $5)
 RETURNING id;
 
 -- name: UpdateInvitationToken :exec
@@ -83,24 +90,18 @@ UPDATE publisher_invitations
 SET token = $1, expires_at = $2
 WHERE id = $3;
 
--- name: AcceptInvitation :exec
-UPDATE publisher_invitations
-SET status = 'accepted', accepted_at = NOW()
-WHERE id = $1;
-
--- name: ExpireInvitation :exec
-UPDATE publisher_invitations
-SET status = 'expired'
-WHERE id = $1;
-
 -- name: DeleteInvitation :exec
 DELETE FROM publisher_invitations
-WHERE id = $1 AND status = 'pending';
+WHERE id = $1;
+
+-- name: DeleteExpiredInvitations :exec
+DELETE FROM publisher_invitations
+WHERE publisher_id = $1 AND expires_at <= NOW();
 
 -- name: CountPendingInvitationsForEmail :one
 SELECT COUNT(*)
 FROM publisher_invitations
-WHERE publisher_id = $1 AND LOWER(email) = LOWER($2) AND status = 'pending';
+WHERE publisher_id = $1 AND LOWER(email) = LOWER($2) AND expires_at > NOW();
 
 -- Team Management --
 
