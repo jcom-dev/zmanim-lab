@@ -106,7 +106,7 @@ DECLARE
     v_updated integer := 0;
     v_unmatched integer := 0;
 BEGIN
-    ALTER TABLE cities DISABLE TRIGGER validate_city_hierarchy_trigger;
+    ALTER TABLE cities DISABLE TRIGGER trg_validate_city_hierarchy;
 
     WITH matches AS (
         UPDATE cities c
@@ -126,7 +126,7 @@ BEGIN
         WHERE ST_Contains(cb.boundary::geometry, c.location::geometry)
     );
 
-    ALTER TABLE cities ENABLE TRIGGER validate_city_hierarchy_trigger;
+    ALTER TABLE cities ENABLE TRIGGER trg_validate_city_hierarchy;
 
     RETURN QUERY SELECT v_updated, v_unmatched;
 END;
@@ -139,7 +139,7 @@ DECLARE
     v_updated integer := 0;
     v_unmatched integer := 0;
 BEGIN
-    ALTER TABLE cities DISABLE TRIGGER validate_city_hierarchy_trigger;
+    ALTER TABLE cities DISABLE TRIGGER trg_validate_city_hierarchy;
 
     WITH matches AS (
         UPDATE cities c
@@ -166,7 +166,7 @@ BEGIN
           AND r.country_id = c.country_id
     );
 
-    ALTER TABLE cities ENABLE TRIGGER validate_city_hierarchy_trigger;
+    ALTER TABLE cities ENABLE TRIGGER trg_validate_city_hierarchy;
 
     RETURN QUERY SELECT v_updated, v_unmatched;
 END;
@@ -179,7 +179,7 @@ DECLARE
     v_updated integer := 0;
     v_unmatched integer := 0;
 BEGIN
-    ALTER TABLE cities DISABLE TRIGGER validate_city_hierarchy_trigger;
+    ALTER TABLE cities DISABLE TRIGGER trg_validate_city_hierarchy;
 
     WITH matches AS (
         UPDATE cities c
@@ -208,7 +208,7 @@ BEGIN
           AND d.region_id = c.region_id
     );
 
-    ALTER TABLE cities ENABLE TRIGGER validate_city_hierarchy_trigger;
+    ALTER TABLE cities ENABLE TRIGGER trg_validate_city_hierarchy;
 
     RETURN QUERY SELECT v_updated, v_unmatched;
 END;
@@ -469,6 +469,20 @@ END;
 $$;
 
 -- ============================================================================
+-- LANGUAGES TABLE (for multi-language name support)
+-- ============================================================================
+
+CREATE TABLE public.languages (
+    code varchar(3) NOT NULL,
+    name text NOT NULL,
+    native_name text,
+    script varchar(4),
+    direction varchar(3) DEFAULT 'ltr',
+    is_active boolean DEFAULT true
+);
+COMMENT ON TABLE public.languages IS 'ISO 639-3 language codes for multi-language name support';
+
+-- ============================================================================
 -- GEOGRAPHIC TABLES (Level 0-3)
 -- ============================================================================
 
@@ -488,15 +502,12 @@ CREATE TABLE public.geo_countries (
     code varchar(2) NOT NULL,
     code_iso3 varchar(3),
     name text NOT NULL,
-    name_local text,
     continent_id smallint NOT NULL,
     adm1_label text DEFAULT 'Region',
     adm2_label text DEFAULT 'District',
     has_adm1 boolean DEFAULT true,
     has_adm2 boolean DEFAULT false,
     is_city_state boolean DEFAULT false,
-    population bigint,
-    area_km2 double precision,
     created_at timestamptz DEFAULT now(),
     updated_at timestamptz DEFAULT now(),
     wof_id bigint
@@ -508,9 +519,6 @@ CREATE TABLE public.geo_regions (
     country_id smallint,
     code text NOT NULL,
     name text NOT NULL,
-    name_local text,
-    population bigint,
-    area_km2 double precision,
     created_at timestamptz DEFAULT now(),
     updated_at timestamptz DEFAULT now(),
     wof_id bigint,
@@ -523,9 +531,6 @@ CREATE TABLE public.geo_districts (
     region_id integer,
     code text NOT NULL,
     name text NOT NULL,
-    name_local text,
-    population bigint,
-    area_km2 double precision,
     created_at timestamptz DEFAULT now(),
     updated_at timestamptz DEFAULT now(),
     wof_id bigint,
@@ -540,7 +545,6 @@ CREATE TABLE public.cities (
     district_id integer,
     name text NOT NULL,
     name_ascii text,
-    name_local text,
     latitude double precision NOT NULL,
     longitude double precision NOT NULL,
     location geography(Point,4326) GENERATED ALWAYS AS ((st_setsrid(st_makepoint(longitude, latitude), 4326))::geography) STORED,
@@ -555,6 +559,25 @@ CREATE TABLE public.cities (
     country_id integer
 );
 COMMENT ON TABLE public.cities IS 'Level 4: Cities with coordinates for zmanim calculations';
+
+-- ============================================================================
+-- GEO NAMES TABLE (multi-language support)
+-- ============================================================================
+
+CREATE TABLE public.geo_names (
+    id bigint NOT NULL GENERATED ALWAYS AS IDENTITY,
+    entity_type varchar(20) NOT NULL,
+    entity_id text NOT NULL,
+    language_code varchar(3) NOT NULL,
+    name text NOT NULL,
+    is_preferred boolean DEFAULT true,
+    source varchar(20) DEFAULT 'wof',
+    created_at timestamptz DEFAULT now()
+);
+COMMENT ON TABLE public.geo_names IS 'Multi-language names for geographic entities';
+COMMENT ON COLUMN public.geo_names.entity_type IS 'continent, country, region, district, city';
+COMMENT ON COLUMN public.geo_names.entity_id IS 'ID of the entity (text to support both integer and uuid)';
+COMMENT ON COLUMN public.geo_names.is_preferred IS 'True if this is the preferred name for this language';
 
 -- Boundary tables
 CREATE TABLE public.geo_country_boundaries (
@@ -1122,46 +1145,124 @@ CREATE TABLE public.explanation_cache (
 
 CREATE FUNCTION public.validate_city_hierarchy() RETURNS trigger
     LANGUAGE plpgsql AS $$
+DECLARE
+    v_district_region_id integer;
+    v_district_country_id smallint;
+    v_district_continent_id smallint;
+    v_region_country_id smallint;
+    v_region_continent_id smallint;
+    v_country_continent_id smallint;
 BEGIN
+    -- Continent is mandatory
+    IF NEW.continent_id IS NULL THEN
+        RAISE EXCEPTION 'City must have continent_id';
+    END IF;
+
+    -- If district is set, validate it matches other set fields
     IF NEW.district_id IS NOT NULL THEN
-        IF NEW.region_id IS NULL OR NEW.country_id IS NULL OR NEW.continent_id IS NULL THEN
-            RAISE EXCEPTION 'City with district must have region, country and continent';
+        SELECT region_id, country_id, continent_id
+        INTO v_district_region_id, v_district_country_id, v_district_continent_id
+        FROM geo_districts WHERE id = NEW.district_id;
+
+        IF NEW.region_id IS NOT NULL AND v_district_region_id IS NOT NULL AND NEW.region_id != v_district_region_id THEN
+            RAISE EXCEPTION 'City region_id does not match district region_id';
         END IF;
-    ELSIF NEW.region_id IS NOT NULL THEN
-        IF NEW.country_id IS NULL OR NEW.continent_id IS NULL THEN
-            RAISE EXCEPTION 'City with region must have country and continent';
+        IF NEW.country_id IS NOT NULL AND v_district_country_id IS NOT NULL AND NEW.country_id != v_district_country_id THEN
+            RAISE EXCEPTION 'City country_id does not match district country_id';
         END IF;
-    ELSIF NEW.country_id IS NOT NULL THEN
-        IF NEW.continent_id IS NULL THEN
-            RAISE EXCEPTION 'City with country must have continent';
+        IF v_district_continent_id IS NOT NULL AND NEW.continent_id != v_district_continent_id THEN
+            RAISE EXCEPTION 'City continent_id does not match district continent_id';
         END IF;
     END IF;
+
+    -- If region is set, validate it matches other set fields
+    IF NEW.region_id IS NOT NULL THEN
+        SELECT country_id, continent_id
+        INTO v_region_country_id, v_region_continent_id
+        FROM geo_regions WHERE id = NEW.region_id;
+
+        IF NEW.country_id IS NOT NULL AND v_region_country_id IS NOT NULL AND NEW.country_id != v_region_country_id THEN
+            RAISE EXCEPTION 'City country_id does not match region country_id';
+        END IF;
+        IF v_region_continent_id IS NOT NULL AND NEW.continent_id != v_region_continent_id THEN
+            RAISE EXCEPTION 'City continent_id does not match region continent_id';
+        END IF;
+    END IF;
+
+    -- If country is set, validate continent matches
+    IF NEW.country_id IS NOT NULL THEN
+        SELECT continent_id INTO v_country_continent_id
+        FROM geo_countries WHERE id = NEW.country_id;
+
+        IF v_country_continent_id IS NOT NULL AND NEW.continent_id != v_country_continent_id THEN
+            RAISE EXCEPTION 'City continent_id does not match country continent_id';
+        END IF;
+    END IF;
+
     RETURN NEW;
 END;
 $$;
 
 CREATE FUNCTION public.validate_district_hierarchy() RETURNS trigger
     LANGUAGE plpgsql AS $$
+DECLARE
+    v_region_country_id smallint;
+    v_region_continent_id smallint;
+    v_country_continent_id smallint;
 BEGIN
+    -- Continent is mandatory
+    IF NEW.continent_id IS NULL THEN
+        RAISE EXCEPTION 'District must have continent_id';
+    END IF;
+
+    -- If region is set, validate it matches other set fields
     IF NEW.region_id IS NOT NULL THEN
-        IF NEW.country_id IS NULL OR NEW.continent_id IS NULL THEN
-            RAISE EXCEPTION 'District with region must have country and continent';
+        SELECT country_id, continent_id
+        INTO v_region_country_id, v_region_continent_id
+        FROM geo_regions WHERE id = NEW.region_id;
+
+        IF NEW.country_id IS NOT NULL AND v_region_country_id IS NOT NULL AND NEW.country_id != v_region_country_id THEN
+            RAISE EXCEPTION 'District country_id does not match region country_id';
         END IF;
-    ELSIF NEW.country_id IS NOT NULL THEN
-        IF NEW.continent_id IS NULL THEN
-            RAISE EXCEPTION 'District with country must have continent';
+        IF v_region_continent_id IS NOT NULL AND NEW.continent_id != v_region_continent_id THEN
+            RAISE EXCEPTION 'District continent_id does not match region continent_id';
         END IF;
     END IF;
+
+    -- If country is set, validate continent matches
+    IF NEW.country_id IS NOT NULL THEN
+        SELECT continent_id INTO v_country_continent_id
+        FROM geo_countries WHERE id = NEW.country_id;
+
+        IF v_country_continent_id IS NOT NULL AND NEW.continent_id != v_country_continent_id THEN
+            RAISE EXCEPTION 'District continent_id does not match country continent_id';
+        END IF;
+    END IF;
+
     RETURN NEW;
 END;
 $$;
 
 CREATE FUNCTION public.validate_region_hierarchy() RETURNS trigger
     LANGUAGE plpgsql AS $$
+DECLARE
+    v_country_continent_id smallint;
 BEGIN
-    IF NEW.country_id IS NOT NULL AND NEW.continent_id IS NULL THEN
-        RAISE EXCEPTION 'Region with country must have continent';
+    -- Continent is mandatory
+    IF NEW.continent_id IS NULL THEN
+        RAISE EXCEPTION 'Region must have continent_id';
     END IF;
+
+    -- If country is set, validate continent matches
+    IF NEW.country_id IS NOT NULL THEN
+        SELECT continent_id INTO v_country_continent_id
+        FROM geo_countries WHERE id = NEW.country_id;
+
+        IF v_country_continent_id IS NOT NULL AND NEW.continent_id != v_country_continent_id THEN
+            RAISE EXCEPTION 'Region continent_id does not match country continent_id';
+        END IF;
+    END IF;
+
     RETURN NEW;
 END;
 $$;
@@ -1180,6 +1281,7 @@ ALTER TABLE ONLY public.astronomical_primitives ADD CONSTRAINT astronomical_prim
 ALTER TABLE ONLY public.astronomical_primitives ADD CONSTRAINT astronomical_primitives_variable_name_key UNIQUE (variable_name);
 ALTER TABLE ONLY public.cities ADD CONSTRAINT cities_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY public.cities ADD CONSTRAINT cities_geonameid_key UNIQUE (geonameid);
+ALTER TABLE ONLY public.cities ADD CONSTRAINT cities_wof_id_key UNIQUE (wof_id);
 ALTER TABLE ONLY public.day_types ADD CONSTRAINT day_types_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY public.day_types ADD CONSTRAINT day_types_name_key UNIQUE (name);
 ALTER TABLE ONLY public.display_groups ADD CONSTRAINT display_groups_pkey PRIMARY KEY (id);
@@ -1192,19 +1294,25 @@ ALTER TABLE ONLY public.geo_boundary_imports ADD CONSTRAINT geo_boundary_imports
 ALTER TABLE ONLY public.geo_boundary_imports ADD CONSTRAINT geo_boundary_imports_source_level_key UNIQUE (source, level, country_code);
 ALTER TABLE ONLY public.geo_continents ADD CONSTRAINT geo_continents_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY public.geo_continents ADD CONSTRAINT geo_continents_code_key UNIQUE (code);
+ALTER TABLE ONLY public.geo_continents ADD CONSTRAINT geo_continents_wof_id_key UNIQUE (wof_id);
 ALTER TABLE ONLY public.geo_countries ADD CONSTRAINT geo_countries_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY public.geo_countries ADD CONSTRAINT geo_countries_code_key UNIQUE (code);
+ALTER TABLE ONLY public.geo_names ADD CONSTRAINT geo_names_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.geo_names ADD CONSTRAINT geo_names_unique UNIQUE (entity_type, entity_id, language_code);
 ALTER TABLE ONLY public.geo_country_boundaries ADD CONSTRAINT geo_country_boundaries_pkey PRIMARY KEY (country_id);
 ALTER TABLE ONLY public.geo_district_boundaries ADD CONSTRAINT geo_district_boundaries_pkey PRIMARY KEY (district_id);
 ALTER TABLE ONLY public.geo_districts ADD CONSTRAINT geo_districts_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY public.geo_districts ADD CONSTRAINT geo_districts_region_id_code_key UNIQUE (region_id, code);
+ALTER TABLE ONLY public.geo_districts ADD CONSTRAINT geo_districts_wof_id_key UNIQUE (wof_id);
 ALTER TABLE ONLY public.geo_name_mappings ADD CONSTRAINT geo_name_mappings_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY public.geo_name_mappings ADD CONSTRAINT geo_name_mappings_level_source_key UNIQUE (level, source, source_name, source_country_code);
 ALTER TABLE ONLY public.geo_region_boundaries ADD CONSTRAINT geo_region_boundaries_pkey PRIMARY KEY (region_id);
 ALTER TABLE ONLY public.geo_regions ADD CONSTRAINT geo_regions_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY public.geo_regions ADD CONSTRAINT geo_regions_country_id_code_key UNIQUE (country_id, code);
+ALTER TABLE ONLY public.geo_regions ADD CONSTRAINT geo_regions_wof_id_key UNIQUE (wof_id);
 ALTER TABLE ONLY public.jewish_events ADD CONSTRAINT jewish_events_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY public.jewish_events ADD CONSTRAINT jewish_events_code_key UNIQUE (code);
+ALTER TABLE ONLY public.languages ADD CONSTRAINT languages_pkey PRIMARY KEY (code);
 ALTER TABLE ONLY public.master_zman_day_types ADD CONSTRAINT master_zman_day_types_pkey PRIMARY KEY (master_zman_id, day_type_id);
 ALTER TABLE ONLY public.master_zman_events ADD CONSTRAINT master_zman_events_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY public.master_zman_events ADD CONSTRAINT master_zman_events_unique UNIQUE (master_zman_id, jewish_event_id);
@@ -1266,6 +1374,7 @@ ALTER TABLE ONLY public.geo_district_boundaries ADD CONSTRAINT geo_district_boun
 ALTER TABLE ONLY public.geo_districts ADD CONSTRAINT geo_districts_continent_id_fkey FOREIGN KEY (continent_id) REFERENCES public.geo_continents(id);
 ALTER TABLE ONLY public.geo_districts ADD CONSTRAINT geo_districts_country_id_fkey FOREIGN KEY (country_id) REFERENCES public.geo_countries(id);
 ALTER TABLE ONLY public.geo_districts ADD CONSTRAINT geo_districts_region_id_fkey FOREIGN KEY (region_id) REFERENCES public.geo_regions(id) ON DELETE CASCADE;
+ALTER TABLE ONLY public.geo_names ADD CONSTRAINT geo_names_language_code_fkey FOREIGN KEY (language_code) REFERENCES public.languages(code) ON DELETE CASCADE;
 ALTER TABLE ONLY public.geo_region_boundaries ADD CONSTRAINT geo_region_boundaries_region_id_fkey FOREIGN KEY (region_id) REFERENCES public.geo_regions(id) ON DELETE CASCADE;
 ALTER TABLE ONLY public.geo_regions ADD CONSTRAINT geo_regions_continent_id_fkey FOREIGN KEY (continent_id) REFERENCES public.geo_continents(id);
 ALTER TABLE ONLY public.geo_regions ADD CONSTRAINT geo_regions_country_id_fkey FOREIGN KEY (country_id) REFERENCES public.geo_countries(id) ON DELETE CASCADE;
@@ -1373,6 +1482,11 @@ CREATE INDEX idx_geo_regions_continent ON public.geo_regions USING btree (contin
 CREATE INDEX idx_geo_regions_country ON public.geo_regions USING btree (country_id);
 CREATE INDEX idx_geo_regions_name_trgm ON public.geo_regions USING gin (name gin_trgm_ops);
 CREATE INDEX idx_geo_regions_wof_id ON public.geo_regions USING btree (wof_id) WHERE (wof_id IS NOT NULL);
+
+-- Geo names (multi-language)
+CREATE INDEX idx_geo_names_entity ON public.geo_names USING btree (entity_type, entity_id);
+CREATE INDEX idx_geo_names_language ON public.geo_names USING btree (language_code);
+CREATE INDEX idx_geo_names_name_trgm ON public.geo_names USING gin (name gin_trgm_ops);
 
 -- Geo boundaries
 CREATE INDEX idx_country_boundaries_centroid ON public.geo_country_boundaries USING gist (centroid);

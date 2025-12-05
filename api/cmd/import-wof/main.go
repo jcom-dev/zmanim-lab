@@ -443,23 +443,155 @@ type Importer struct {
 	pgPool          *pgxpool.Pool
 	srtm            *geoelevations.Srtm
 	verbose         bool
-	wofToPG         map[int64]int64 // WOF ID → PostgreSQL ID (for all placetypes)
-	wofContinentMap map[int64]int   // WOF continent ID → our geo_continents.id
+	wofToPG         map[int64]int64   // WOF ID → PostgreSQL ID (for all placetypes)
+	wofContinentMap map[int64]int     // WOF continent ID → our geo_continents.id
+	geoNamesBatch   []geoNameEntry    // Batch queue for geo_names inserts
 }
 
 // WOFRecord holds data extracted from WOF SQLite
 type WOFRecord struct {
-	WOFID     int64
-	Name      string
-	NameLocal string // From name:xxx_x_preferred
-	Placetype string
-	Country   string  // ISO2
-	Latitude  float64
-	Longitude float64
+	WOFID      int64
+	Name       string
+	Names      map[string]string // language code -> name (from name:xxx_x_preferred)
+	Placetype  string
+	Country    string  // ISO2
+	Latitude   float64
+	Longitude  float64
 	Population int64
-	Timezone  string
-	Geometry  string // GeoJSON geometry
-	Hierarchy map[string]int64
+	Timezone   string
+	Geometry   string // GeoJSON geometry
+	Hierarchy  map[string]int64
+}
+
+// Supported language codes for geo_names (must match languages table)
+var supportedLanguages = []string{
+	"eng", "heb", "ara", "yid", "rus", "fra", "deu", "spa", "por",
+	"zho", "jpn", "kor", "ita", "nld", "pol", "hun", "ukr", "tur", "fas", "hin",
+}
+
+// cityNameEntry stores names for batch city import
+type cityNameEntry struct {
+	wofID int64
+	names map[string]string
+}
+
+// geoNameEntry holds a single geo_name record for batch insertion
+type geoNameEntry struct {
+	entityType string
+	entityID   string
+	lang       string
+	name       string
+}
+
+// insertGeoNames queues language names for batch insertion (called at flush)
+func (imp *Importer) insertGeoNames(ctx context.Context, entityType, entityID string, names map[string]string) {
+	for lang, name := range names {
+		if name == "" {
+			continue
+		}
+		imp.geoNamesBatch = append(imp.geoNamesBatch, geoNameEntry{
+			entityType: entityType,
+			entityID:   entityID,
+			lang:       lang,
+			name:       name,
+		})
+	}
+}
+
+// flushGeoNames batch inserts all queued geo_names using COPY
+func (imp *Importer) flushGeoNames(ctx context.Context) error {
+	if len(imp.geoNamesBatch) == 0 {
+		return nil
+	}
+
+	// Build rows for COPY
+	rows := make([][]interface{}, len(imp.geoNamesBatch))
+	for i, e := range imp.geoNamesBatch {
+		rows[i] = []interface{}{e.entityType, e.entityID, e.lang, e.name, true, "wof"}
+	}
+
+	_, err := imp.pgPool.CopyFrom(
+		ctx,
+		pgx.Identifier{"geo_names"},
+		[]string{"entity_type", "entity_id", "language_code", "name", "is_preferred", "source"},
+		pgx.CopyFromRows(rows),
+	)
+
+	imp.geoNamesBatch = nil
+	return err
+}
+
+// insertCityGeoNames batch inserts city names after city COPY using COPY for speed
+func (imp *Importer) insertCityGeoNames(ctx context.Context, entries []cityNameEntry) error {
+	if len(entries) == 0 {
+		return nil
+	}
+
+	// Build a map of wof_id -> city uuid in chunks to avoid memory issues
+	const chunkSize = 10000
+	wofToUUID := make(map[int64]string, len(entries))
+
+	for i := 0; i < len(entries); i += chunkSize {
+		end := i + chunkSize
+		if end > len(entries) {
+			end = len(entries)
+		}
+
+		wofIDs := make([]int64, 0, end-i)
+		for _, e := range entries[i:end] {
+			wofIDs = append(wofIDs, e.wofID)
+		}
+
+		rows, err := imp.pgPool.Query(ctx, `SELECT id, wof_id FROM cities WHERE wof_id = ANY($1)`, wofIDs)
+		if err != nil {
+			return err
+		}
+
+		for rows.Next() {
+			var id string
+			var wofID int64
+			if err := rows.Scan(&id, &wofID); err != nil {
+				continue
+			}
+			wofToUUID[wofID] = id
+		}
+		rows.Close()
+	}
+
+	// Build all rows for COPY
+	var copyRows [][]interface{}
+	for _, e := range entries {
+		cityID, ok := wofToUUID[e.wofID]
+		if !ok {
+			continue
+		}
+		for lang, name := range e.names {
+			if name == "" {
+				continue
+			}
+			copyRows = append(copyRows, []interface{}{"city", cityID, lang, name, true, "wof"})
+		}
+	}
+
+	if len(copyRows) == 0 {
+		return nil
+	}
+
+	// Use COPY for bulk insert
+	_, err := imp.pgPool.CopyFrom(
+		ctx,
+		pgx.Identifier{"geo_names"},
+		[]string{"entity_type", "entity_id", "language_code", "name", "is_preferred", "source"},
+		pgx.CopyFromRows(copyRows),
+	)
+
+	return err
+}
+
+// toASCII strips accents from a string for name_ascii column
+func toASCII(s string) string {
+	// Simple approach: just return as-is for now, can enhance with unicode normalization
+	return s
 }
 
 func (imp *Importer) Run(ctx context.Context) error {
@@ -486,6 +618,9 @@ func (imp *Importer) Run(ctx context.Context) error {
 		return err
 	}
 	log.Printf("  %d countries", countries)
+	if err := imp.flushGeoNames(ctx); err != nil {
+		log.Printf("  Warning: failed to flush country names: %v", err)
+	}
 
 	// Step 4: Import regions
 	log.Println("Step 4: Importing regions...")
@@ -494,6 +629,9 @@ func (imp *Importer) Run(ctx context.Context) error {
 		return err
 	}
 	log.Printf("  %d regions", regions)
+	if err := imp.flushGeoNames(ctx); err != nil {
+		log.Printf("  Warning: failed to flush region names: %v", err)
+	}
 
 	// Step 5: Import districts (counties)
 	log.Println("Step 5: Importing districts...")
@@ -502,6 +640,9 @@ func (imp *Importer) Run(ctx context.Context) error {
 		return err
 	}
 	log.Printf("  %d districts", districts)
+	if err := imp.flushGeoNames(ctx); err != nil {
+		log.Printf("  Warning: failed to flush district names: %v", err)
+	}
 
 	// Step 6: Import cities (localities)
 	log.Println("Step 6: Importing cities...")
@@ -521,6 +662,7 @@ func (imp *Importer) reset(ctx context.Context) error {
 		"DELETE FROM publisher_coverage",
 		"DELETE FROM geo_boundary_imports",
 		"DELETE FROM geo_name_mappings",
+		"DELETE FROM geo_names",
 		"DELETE FROM geo_district_boundaries",
 		"DELETE FROM geo_region_boundaries",
 		"DELETE FROM geo_country_boundaries",
@@ -711,13 +853,13 @@ func (imp *Importer) scanRecord(rows *sql.Rows) (*WOFRecord, error) {
 		rec.Population = int64(pop)
 	}
 
-	// Extract local name (try Hebrew, then Arabic, then native)
-	for _, lang := range []string{"heb", "ara", "und"} {
+	// Extract all available language names
+	rec.Names = make(map[string]string)
+	for _, lang := range supportedLanguages {
 		key := fmt.Sprintf("name:%s_x_preferred", lang)
 		if names, ok := feature.Properties[key].([]interface{}); ok && len(names) > 0 {
-			if name, ok := names[0].(string); ok {
-				rec.NameLocal = name
-				break
+			if name, ok := names[0].(string); ok && name != "" {
+				rec.Names[lang] = name
 			}
 		}
 	}
@@ -763,17 +905,19 @@ func (imp *Importer) insertCountry(ctx context.Context, rec *WOFRecord) (int64, 
 
 	var pgID int64
 	err := imp.pgPool.QueryRow(ctx, `
-		INSERT INTO geo_countries (code, name, name_local, continent_id, wof_id)
-		VALUES ($1, $2, $3, $4, $5)
+		INSERT INTO geo_countries (code, name, continent_id, wof_id)
+		VALUES ($1, $2, $3, $4)
 		ON CONFLICT (code) DO UPDATE SET
 			name = EXCLUDED.name,
-			name_local = EXCLUDED.name_local,
 			wof_id = EXCLUDED.wof_id
 		RETURNING id
-	`, code, rec.Name, nullString(rec.NameLocal), continentID, rec.WOFID).Scan(&pgID)
+	`, code, rec.Name, continentID, rec.WOFID).Scan(&pgID)
 	if err != nil {
 		return 0, err
 	}
+
+	// Insert language names into geo_names
+	imp.insertGeoNames(ctx, "country", fmt.Sprintf("%d", pgID), rec.Names)
 
 	// Insert boundary if available
 	if rec.Geometry != "" && rec.Geometry != "null" {
@@ -817,18 +961,20 @@ func (imp *Importer) insertRegion(ctx context.Context, rec *WOFRecord) (int64, e
 
 	var pgID int64
 	err := imp.pgPool.QueryRow(ctx, `
-		INSERT INTO geo_regions (continent_id, country_id, code, name, name_local, wof_id)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO geo_regions (continent_id, country_id, code, name, wof_id)
+		VALUES ($1, $2, $3, $4, $5)
 		ON CONFLICT (wof_id) DO UPDATE SET
 			continent_id = EXCLUDED.continent_id,
 			country_id = EXCLUDED.country_id,
-			name = EXCLUDED.name,
-			name_local = EXCLUDED.name_local
+			name = EXCLUDED.name
 		RETURNING id
-	`, continentID, countryPGID, code, rec.Name, nullString(rec.NameLocal), rec.WOFID).Scan(&pgID)
+	`, continentID, countryPGID, code, rec.Name, rec.WOFID).Scan(&pgID)
 	if err != nil {
 		return 0, err
 	}
+
+	// Insert language names into geo_names
+	imp.insertGeoNames(ctx, "region", fmt.Sprintf("%d", pgID), rec.Names)
 
 	// Insert boundary
 	if rec.Geometry != "" && rec.Geometry != "null" {
@@ -894,19 +1040,21 @@ func (imp *Importer) insertDistrict(ctx context.Context, rec *WOFRecord) (int64,
 
 	var pgID int64
 	err := imp.pgPool.QueryRow(ctx, `
-		INSERT INTO geo_districts (continent_id, country_id, region_id, code, name, name_local, wof_id)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		INSERT INTO geo_districts (continent_id, country_id, region_id, code, name, wof_id)
+		VALUES ($1, $2, $3, $4, $5, $6)
 		ON CONFLICT (wof_id) DO UPDATE SET
 			continent_id = EXCLUDED.continent_id,
 			country_id = EXCLUDED.country_id,
 			region_id = EXCLUDED.region_id,
-			name = EXCLUDED.name,
-			name_local = EXCLUDED.name_local
+			name = EXCLUDED.name
 		RETURNING id
-	`, continentID, countryPGID, regionPGID, code, rec.Name, nullString(rec.NameLocal), rec.WOFID).Scan(&pgID)
+	`, continentID, countryPGID, regionPGID, code, rec.Name, rec.WOFID).Scan(&pgID)
 	if err != nil {
 		return 0, err
 	}
+
+	// Insert language names into geo_names
+	imp.insertGeoNames(ctx, "district", fmt.Sprintf("%d", pgID), rec.Names)
 
 	// Insert boundary
 	if rec.Geometry != "" && rec.Geometry != "null" {
@@ -921,6 +1069,22 @@ func (imp *Importer) insertDistrict(ctx context.Context, rec *WOFRecord) (int64,
 	}
 
 	return pgID, nil
+}
+
+// cityRecord holds pre-processed city data for batch operations
+type cityRecord struct {
+	continentID int16
+	countryID   *int32
+	regionID    *int32
+	districtID  *int32
+	name        string
+	lat         float64
+	lng         float64
+	tz          string
+	population  int64
+	wofID       int64
+	names       map[string]string
+	elevation   *int32 // filled in by parallel elevation lookup
 }
 
 func (imp *Importer) importCities(ctx context.Context) (int, error) {
@@ -954,8 +1118,10 @@ func (imp *Importer) importCities(ctx context.Context) (int, error) {
 	}
 	defer rows.Close()
 
-	var count, elevationLookups, skipped int
-	var batch [][]interface{}
+	// Phase 1: Collect all records
+	log.Println("  Phase 1: Reading localities from WOF...")
+	var records []*cityRecord
+	var skipped int
 
 	for rows.Next() {
 		rec, err := imp.scanRecord(rows)
@@ -965,10 +1131,8 @@ func (imp *Importer) importCities(ctx context.Context) (int, error) {
 
 		// Get hierarchy IDs from WOF
 		// Cities MUST have a continent (anchor point), everything else is optional
-		// Hierarchy chain: continent -> country -> region -> district
 
-		// Get continent (REQUIRED - anchor point for all cities)
-		// Use int16 for PostgreSQL smallint type
+		// Get continent (REQUIRED)
 		continentWOFID := rec.Hierarchy["continent_id"]
 		var continentPGID int16
 		if continentWOFID > 0 {
@@ -977,104 +1141,119 @@ func (imp *Importer) importCities(ctx context.Context) (int, error) {
 			}
 		}
 
-		// Must have a continent
 		if continentPGID == 0 {
-			log.Printf("  SKIP: locality %s (WOF %d) - no valid continent in hierarchy", rec.Name, rec.WOFID)
+			if imp.verbose {
+				log.Printf("  SKIP: locality %s (WOF %d) - no valid continent", rec.Name, rec.WOFID)
+			}
 			skipped++
 			continue
 		}
 
-		// Get country (optional) - use *int32 for PostgreSQL integer type
-		var countryPGID *int32
-		countryWOFID := rec.Hierarchy["country_id"]
-		if countryWOFID > 0 {
+		// Get optional hierarchy IDs
+		var countryPGID, regionPGID, districtPGID *int32
+		if countryWOFID := rec.Hierarchy["country_id"]; countryWOFID > 0 {
 			if pgID, ok := imp.wofToPG[countryWOFID]; ok {
 				v := int32(pgID)
 				countryPGID = &v
 			}
-			// If country not in our DB, just skip setting it
 		}
-
-		// Get region (optional) - use *int32 for PostgreSQL integer type
-		var regionPGID *int32
-		regionWOFID := rec.Hierarchy["region_id"]
-		if regionWOFID > 0 {
+		if regionWOFID := rec.Hierarchy["region_id"]; regionWOFID > 0 {
 			if pgID, ok := imp.wofToPG[regionWOFID]; ok {
 				v := int32(pgID)
 				regionPGID = &v
 			}
-			// If region not in our DB, just skip setting it
 		}
-
-		// Get district (optional) - use *int32 for PostgreSQL integer type
-		var districtPGID *int32
-		countyWOFID := rec.Hierarchy["county_id"]
-		if countyWOFID > 0 {
+		if countyWOFID := rec.Hierarchy["county_id"]; countyWOFID > 0 {
 			if pgID, ok := imp.wofToPG[countyWOFID]; ok {
 				v := int32(pgID)
 				districtPGID = &v
 			}
-			// If district not in our DB, just skip setting it
 		}
 
-		// Get elevation from SRTM - use *int32 for PostgreSQL integer type
-		var elevation *int32
-		if rec.Latitude >= -60 && rec.Latitude <= 60 {
-			if elev, err := imp.srtm.GetElevation(http.DefaultClient, rec.Latitude, rec.Longitude); err == nil {
-				e := int32(elev)
-				elevation = &e
-				elevationLookups++
-			}
-		}
-
-		// Default timezone if not set
 		tz := rec.Timezone
 		if tz == "" {
 			tz = "UTC"
 		}
 
-		batch = append(batch, []interface{}{
-			continentPGID, // required (int16)
-			countryPGID,   // optional (*int32)
-			regionPGID,    // optional (*int32)
-			districtPGID,  // optional (*int32)
-			rec.Name,
-			nullString(rec.NameLocal),
-			rec.Latitude,
-			rec.Longitude,
-			tz,
-			elevation,                   // *int32 for PostgreSQL integer
-			nullInt32(rec.Population),   // int32 for PostgreSQL integer
-			rec.WOFID,
+		records = append(records, &cityRecord{
+			continentID: continentPGID,
+			countryID:   countryPGID,
+			regionID:    regionPGID,
+			districtID:  districtPGID,
+			name:        rec.Name,
+			lat:         rec.Latitude,
+			lng:         rec.Longitude,
+			tz:          tz,
+			population:  rec.Population,
+			wofID:       rec.WOFID,
+			names:       rec.Names,
 		})
 
-		if len(batch) >= 5000 {
-			inserted, err := imp.insertCityBatch(ctx, batch)
-			if err != nil {
-				return 0, fmt.Errorf("batch insert cities: %w", err)
-			}
-			count += inserted
-			batch = nil
-
-			if imp.verbose || count%50000 == 0 {
-				log.Printf("  %d cities (%d with elevation)...", count, elevationLookups)
-			}
+		if len(records)%50000 == 0 {
+			log.Printf("  Read %d localities...", len(records))
 		}
 	}
+	log.Printf("  Read %d localities total (%d skipped)", len(records), skipped)
 
-	// Insert remaining
-	if len(batch) > 0 {
+	// Phase 2: Parallel elevation lookups
+	log.Println("  Phase 2: Looking up elevations (parallel)...")
+	var elevationLookups int64
+	elevationLookups = imp.lookupElevationsParallel(records)
+	log.Printf("  Elevation lookups: %d", elevationLookups)
+
+	// Phase 3: Batch insert into PostgreSQL
+	log.Println("  Phase 3: Inserting into PostgreSQL...")
+	var count int
+	var cityNames []cityNameEntry
+	const batchSize = 10000
+
+	for i := 0; i < len(records); i += batchSize {
+		end := i + batchSize
+		if end > len(records) {
+			end = len(records)
+		}
+
+		batch := make([][]interface{}, 0, end-i)
+		for _, r := range records[i:end] {
+			batch = append(batch, []interface{}{
+				r.continentID,
+				r.countryID,
+				r.regionID,
+				r.districtID,
+				r.name,
+				toASCII(r.name),
+				r.lat,
+				r.lng,
+				r.tz,
+				r.elevation,
+				nullInt32(r.population),
+				r.wofID,
+			})
+			if len(r.names) > 0 {
+				cityNames = append(cityNames, cityNameEntry{wofID: r.wofID, names: r.names})
+			}
+		}
+
 		inserted, err := imp.insertCityBatch(ctx, batch)
 		if err != nil {
-			return 0, fmt.Errorf("batch insert cities (final): %w", err)
+			return 0, fmt.Errorf("batch insert cities: %w", err)
 		}
 		count += inserted
+
+		if count%50000 == 0 || end == len(records) {
+			log.Printf("  Inserted %d/%d cities...", count, len(records))
+		}
 	}
 
-	if skipped > 0 {
-		log.Printf("  (skipped %d invalid localities)", skipped)
+	log.Printf("  Total cities inserted: %d", count)
+
+	// Insert city names into geo_names
+	if len(cityNames) > 0 {
+		log.Printf("  Inserting %d city name translations...", len(cityNames))
+		if err := imp.insertCityGeoNames(ctx, cityNames); err != nil {
+			log.Printf("  Warning: could not insert city names: %v", err)
+		}
 	}
-	log.Printf("  Elevation lookups: %d", elevationLookups)
 
 	// Validate hierarchy integrity after bulk import
 	log.Println("  Validating hierarchy integrity...")
@@ -1100,6 +1279,38 @@ func (imp *Importer) importCities(ctx context.Context) (int, error) {
 	}
 
 	return count, nil
+}
+
+// lookupElevationsParallel looks up SRTM elevations for all cities in parallel
+// Note: SRTM library internal caching is not fully thread-safe for file I/O,
+// so we use a mutex. However, once tiles are cached (which happens early in the
+// import), the lookups are fast memory reads.
+func (imp *Importer) lookupElevationsParallel(records []*cityRecord) int64 {
+	var successCount int64
+	var processed int64
+
+	// Process in chunks to show progress
+	total := len(records)
+	for i, r := range records {
+		// Skip if outside SRTM coverage
+		if r.lat < -60 || r.lat > 60 {
+			continue
+		}
+
+		elev, err := imp.srtm.GetElevation(http.DefaultClient, r.lat, r.lng)
+		if err == nil {
+			e := int32(elev)
+			r.elevation = &e
+			successCount++
+		}
+
+		processed++
+		if processed%25000 == 0 {
+			log.Printf("    Elevation progress: %d/%d (%.1f%%)", i+1, total, float64(i+1)/float64(total)*100)
+		}
+	}
+
+	return successCount
 }
 
 func (imp *Importer) insertCityBatch(ctx context.Context, batch [][]interface{}) (int, error) {

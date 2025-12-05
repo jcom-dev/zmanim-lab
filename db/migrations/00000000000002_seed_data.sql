@@ -2,6 +2,32 @@
 -- Description: Core reference data for Zmanim Lab (no publisher data)
 
 -- ============================================================================
+-- LANGUAGES (ISO 639-3 codes used by WOF)
+-- ============================================================================
+INSERT INTO languages (code, name, native_name, script, direction, is_active) VALUES
+('eng', 'English', 'English', 'Latn', 'ltr', true),
+('heb', 'Hebrew', 'עברית', 'Hebr', 'rtl', true),
+('ara', 'Arabic', 'العربية', 'Arab', 'rtl', true),
+('yid', 'Yiddish', 'ייִדיש', 'Hebr', 'rtl', true),
+('rus', 'Russian', 'Русский', 'Cyrl', 'ltr', true),
+('fra', 'French', 'Français', 'Latn', 'ltr', true),
+('deu', 'German', 'Deutsch', 'Latn', 'ltr', true),
+('spa', 'Spanish', 'Español', 'Latn', 'ltr', true),
+('por', 'Portuguese', 'Português', 'Latn', 'ltr', true),
+('zho', 'Chinese', '中文', 'Hans', 'ltr', true),
+('jpn', 'Japanese', '日本語', 'Jpan', 'ltr', true),
+('kor', 'Korean', '한국어', 'Kore', 'ltr', true),
+('ita', 'Italian', 'Italiano', 'Latn', 'ltr', true),
+('nld', 'Dutch', 'Nederlands', 'Latn', 'ltr', true),
+('pol', 'Polish', 'Polski', 'Latn', 'ltr', true),
+('hun', 'Hungarian', 'Magyar', 'Latn', 'ltr', true),
+('ukr', 'Ukrainian', 'Українська', 'Cyrl', 'ltr', true),
+('tur', 'Turkish', 'Türkçe', 'Latn', 'ltr', true),
+('fas', 'Persian', 'فارسی', 'Arab', 'rtl', true),
+('hin', 'Hindi', 'हिन्दी', 'Deva', 'ltr', true),
+('und', 'Undetermined', NULL, NULL, 'ltr', true);
+
+-- ============================================================================
 -- DAY TYPES
 -- ============================================================================
 INSERT INTO day_types (id, name, display_name_hebrew, display_name_english, description, parent_type, sort_order) VALUES
