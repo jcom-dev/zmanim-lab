@@ -498,30 +498,31 @@ func (imp *Importer) insertGeoNames(ctx context.Context, entityType, entityID st
 	}
 }
 
-// flushGeoNames batch inserts all queued geo_names using COPY
+// flushGeoNames batch inserts all queued geo_names using batch INSERT with ON CONFLICT
 func (imp *Importer) flushGeoNames(ctx context.Context) error {
 	if len(imp.geoNamesBatch) == 0 {
 		return nil
 	}
 
-	// Build rows for COPY
-	rows := make([][]interface{}, len(imp.geoNamesBatch))
-	for i, e := range imp.geoNamesBatch {
-		rows[i] = []interface{}{e.entityType, e.entityID, e.lang, e.name, true, "wof"}
+	// Use batch INSERT with ON CONFLICT for upsert support
+	batch := &pgx.Batch{}
+	for _, e := range imp.geoNamesBatch {
+		batch.Queue(`
+			INSERT INTO geo_names (entity_type, entity_id, language_code, name, is_preferred, source)
+			VALUES ($1, $2, $3, $4, true, 'wof')
+			ON CONFLICT (entity_type, entity_id, language_code) DO UPDATE SET
+				name = EXCLUDED.name
+		`, e.entityType, e.entityID, e.lang, e.name)
 	}
 
-	_, err := imp.pgPool.CopyFrom(
-		ctx,
-		pgx.Identifier{"geo_names"},
-		[]string{"entity_type", "entity_id", "language_code", "name", "is_preferred", "source"},
-		pgx.CopyFromRows(rows),
-	)
+	br := imp.pgPool.SendBatch(ctx, batch)
+	err := br.Close()
 
 	imp.geoNamesBatch = nil
 	return err
 }
 
-// insertCityGeoNames batch inserts city names after city COPY using COPY for speed
+// insertCityGeoNames batch inserts city names using batch INSERT with ON CONFLICT
 func (imp *Importer) insertCityGeoNames(ctx context.Context, entries []cityNameEntry) error {
 	if len(entries) == 0 {
 		return nil
@@ -558,8 +559,11 @@ func (imp *Importer) insertCityGeoNames(ctx context.Context, entries []cityNameE
 		rows.Close()
 	}
 
-	// Build all rows for COPY
-	var copyRows [][]interface{}
+	// Use batch INSERT with ON CONFLICT (process in chunks to avoid memory issues)
+	const batchSize = 5000
+	batch := &pgx.Batch{}
+	batchCount := 0
+
 	for _, e := range entries {
 		cityID, ok := wofToUUID[e.wofID]
 		if !ok {
@@ -569,23 +573,35 @@ func (imp *Importer) insertCityGeoNames(ctx context.Context, entries []cityNameE
 			if name == "" {
 				continue
 			}
-			copyRows = append(copyRows, []interface{}{"city", cityID, lang, name, true, "wof"})
+			batch.Queue(`
+				INSERT INTO geo_names (entity_type, entity_id, language_code, name, is_preferred, source)
+				VALUES ($1, $2, $3, $4, true, 'wof')
+				ON CONFLICT (entity_type, entity_id, language_code) DO UPDATE SET
+					name = EXCLUDED.name
+			`, "city", cityID, lang, name)
+			batchCount++
+
+			// Flush batch periodically
+			if batchCount >= batchSize {
+				br := imp.pgPool.SendBatch(ctx, batch)
+				if err := br.Close(); err != nil {
+					return err
+				}
+				batch = &pgx.Batch{}
+				batchCount = 0
+			}
 		}
 	}
 
-	if len(copyRows) == 0 {
-		return nil
+	// Flush remaining
+	if batchCount > 0 {
+		br := imp.pgPool.SendBatch(ctx, batch)
+		if err := br.Close(); err != nil {
+			return err
+		}
 	}
 
-	// Use COPY for bulk insert
-	_, err := imp.pgPool.CopyFrom(
-		ctx,
-		pgx.Identifier{"geo_names"},
-		[]string{"entity_type", "entity_id", "language_code", "name", "is_preferred", "source"},
-		pgx.CopyFromRows(copyRows),
-	)
-
-	return err
+	return nil
 }
 
 // toASCII strips accents from a string for name_ascii column
