@@ -1,6 +1,11 @@
 -- Seed Data Migration
 -- Generated from database dump on 2025-12-31
+<<<<<<< Updated upstream
+=======
+--
+>>>>>>> Stashed changes
 -- This migration populates core reference/lookup tables with initial configuration data.
+--
 -- EXCLUDED FROM THIS SEED:
 -- - Geography data (geo_* tables) - imported separately via import scripts
 -- - AI/RAG indexed content (ai_content_sources) - generated dynamically
@@ -11,34 +16,79 @@
 -- ============================================
 -- algorithm_statuses (3 rows)
 -- ============================================
+--
+-- PostgreSQL database dump
+--
 
+\restrict AaRcJs1vcSLZYrpeT74jscP18vsHktm5Xcep2W0IeXPVMCKMctyk4ktM9mX96Sz
 
+-- Dumped from database version 17.7
+-- Dumped by pg_dump version 17.7 (Ubuntu 17.7-3.pgdg24.04+1)
 
+SET statement_timeout = 0;
+SET lock_timeout = 0;
+SET idle_in_transaction_session_timeout = 0;
+SET transaction_timeout = 0;
+SET client_encoding = 'UTF8';
+SET standard_conforming_strings = on;
+SELECT pg_catalog.set_config('search_path', '', false);
+SET check_function_bodies = false;
+SET xmloption = content;
+SET client_min_messages = warning;
+SET row_security = off;
 
+--
 -- Data for Name: algorithm_statuses; Type: TABLE DATA; Schema: public; Owner: -
+--
 
 INSERT INTO public.algorithm_statuses (id, key, display_name_hebrew, display_name_english, description, color, sort_order, created_at) OVERRIDING SYSTEM VALUE VALUES (1, 'draft', 'טיוטה', 'Draft', 'Work in progress', '#6B7280', 1, '2025-12-14 19:08:39.781625+00') ON CONFLICT DO NOTHING;
 INSERT INTO public.algorithm_statuses (id, key, display_name_hebrew, display_name_english, description, color, sort_order, created_at) OVERRIDING SYSTEM VALUE VALUES (2, 'active', 'פעיל', 'Active', 'Currently in use', '#22C55E', 2, '2025-12-14 19:08:39.781625+00') ON CONFLICT DO NOTHING;
 INSERT INTO public.algorithm_statuses (id, key, display_name_hebrew, display_name_english, description, color, sort_order, created_at) OVERRIDING SYSTEM VALUE VALUES (3, 'archived', 'בארכיון', 'Archived', 'No longer in use', '#9CA3AF', 3, '2025-12-14 19:08:39.781625+00') ON CONFLICT DO NOTHING;
 
 
+--
 -- Name: algorithm_statuses_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
+--
+
+SELECT pg_catalog.setval('public.algorithm_statuses_id_seq', 1, false);
 
 SELECT setval('public.algorithm_statuses_id_seq', (SELECT COALESCE(MAX(id), 1) FROM public.algorithm_statuses));
 
 
+--
+-- PostgreSQL database dump complete
+--
 
-
+\unrestrict AaRcJs1vcSLZYrpeT74jscP18vsHktm5Xcep2W0IeXPVMCKMctyk4ktM9mX96Sz
 
 
 -- ============================================
 -- algorithm_templates (4 rows)
 -- ============================================
+--
+-- PostgreSQL database dump
+--
 
+\restrict GwXVhcZDUjDUuAunKP9S75ogTGn2F8OMvBaDoWpy3Zq6pRaQlNcFkEO0OWoyCS5
 
+-- Dumped from database version 17.7
+-- Dumped by pg_dump version 17.7 (Ubuntu 17.7-3.pgdg24.04+1)
 
+SET statement_timeout = 0;
+SET lock_timeout = 0;
+SET idle_in_transaction_session_timeout = 0;
+SET transaction_timeout = 0;
+SET client_encoding = 'UTF8';
+SET standard_conforming_strings = on;
+SELECT pg_catalog.set_config('search_path', '', false);
+SET check_function_bodies = false;
+SET xmloption = content;
+SET client_min_messages = warning;
+SET row_security = off;
 
+--
 -- Data for Name: algorithm_templates; Type: TABLE DATA; Schema: public; Owner: -
+--
 
 INSERT INTO public.algorithm_templates (id, template_key, name, description, configuration, sort_order, is_active, created_at, updated_at) VALUES (135, 'gra', 'GRA (Vilna Gaon)', 'Standard calculation based on the Vilna Gaon. Uses sunrise to sunset for proportional hours.', '{"name": "GRA", "zmanim": {"tzais": {"method": "solar_angle", "params": {"degrees": 8.5}}, "sunset": {"method": "sunset", "params": {}}, "chatzos": {"method": "midpoint", "params": {"end": "sunset", "start": "sunrise"}}, "sunrise": {"method": "sunrise", "params": {}}, "misheyakir": {"method": "solar_angle", "params": {"degrees": 11.5}}, "mincha_gedola": {"method": "proportional", "params": {"base": "gra", "hours": 6.5}}, "mincha_ketana": {"method": "proportional", "params": {"base": "gra", "hours": 9.5}}, "plag_hamincha": {"method": "proportional", "params": {"base": "gra", "hours": 10.75}}, "alos_hashachar": {"method": "solar_angle", "params": {"degrees": 16.1}}, "sof_zman_shma_gra": {"method": "proportional", "params": {"base": "gra", "hours": 3.0}}, "sof_zman_tfila_gra": {"method": "proportional", "params": {"base": "gra", "hours": 4.0}}}, "description": "Vilna Gaon standard calculation"}', 1, true, '2025-12-14 19:08:39.832933+00', '2025-12-14 19:08:39.832933+00') ON CONFLICT DO NOTHING;
 INSERT INTO public.algorithm_templates (id, template_key, name, description, configuration, sort_order, is_active, created_at, updated_at) VALUES (279, 'mga', 'MGA (Magen Avraham)', 'Magen Avraham calculation. Uses 72 minutes before sunrise to 72 minutes after sunset for proportional hours.', '{"name": "MGA", "zmanim": {"sunset": {"method": "sunset", "params": {}}, "chatzos": {"method": "midpoint", "params": {"end": "sunset", "start": "sunrise"}}, "sunrise": {"method": "sunrise", "params": {}}, "tzeis_72": {"method": "fixed_minutes", "params": {"from": "sunset", "minutes": 72.0}}, "misheyakir": {"method": "solar_angle", "params": {"degrees": 11.5}}, "mincha_gedola": {"method": "proportional", "params": {"base": "mga", "hours": 6.5}}, "mincha_ketana": {"method": "proportional", "params": {"base": "mga", "hours": 9.5}}, "plag_hamincha": {"method": "proportional", "params": {"base": "mga", "hours": 10.75}}, "alos_hashachar": {"method": "fixed_minutes", "params": {"from": "sunrise", "minutes": -72.0}}, "sof_zman_shma_mga": {"method": "proportional", "params": {"base": "mga", "hours": 3.0}}, "sof_zman_tfila_mga": {"method": "proportional", "params": {"base": "mga", "hours": 4.0}}}, "description": "Magen Avraham calculation"}', 2, true, '2025-12-14 19:08:39.832933+00', '2025-12-14 19:08:39.832933+00') ON CONFLICT DO NOTHING;
@@ -46,8 +96,11 @@ INSERT INTO public.algorithm_templates (id, template_key, name, description, con
 INSERT INTO public.algorithm_templates (id, template_key, name, description, configuration, sort_order, is_active, created_at, updated_at) VALUES (232, 'custom', 'Custom', 'Start with basic times and customize each zman according to your minhag.', '{"name": "Custom", "zmanim": {"sunset": {"method": "sunset", "params": {}}, "chatzos": {"method": "midpoint", "params": {"end": "sunset", "start": "sunrise"}}, "sunrise": {"method": "sunrise", "params": {}}}, "description": "Custom algorithm"}', 4, true, '2025-12-14 19:08:39.832933+00', '2025-12-14 19:08:39.832933+00') ON CONFLICT DO NOTHING;
 
 
+--
 -- Name: algorithm_templates_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
+--
 
+<<<<<<< Updated upstream
 SELECT setval('public.algorithm_templates_id_seq', (SELECT COALESCE(MAX(id), 1) FROM public.algorithm_templates));
 
 
@@ -1237,4 +1290,14 @@ SELECT setval('public.geo_region_types_id_seq', (SELECT COALESCE(MAX(id), 1) FRO
 
 
 
+=======
+SELECT pg_catalog.setval('public.algorithm_templates_id_seq', 1, false);
+
+
+--
+-- PostgreSQL database dump complete
+--
+
+\unrestrict GwXVhcZDUjDUuAunKP9S75ogTGn2F8OMvBaDoWpy3Zq6pRaQlNcFkEO0OWoyCS5
+>>>>>>> Stashed changes
 
